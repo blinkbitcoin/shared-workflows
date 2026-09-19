@@ -8,6 +8,9 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  # `gh workflow run` in the dispatch step below. Top-level because the
+  # release-please job carries no block of its own.
+  actions: write
 jobs:
   release-please:
     name: Release PR
@@ -24,6 +27,10 @@ jobs:
       # this one is the npm package, which releases on its own cadence.
       dev_config_released: ${{ steps.release.outputs['packages/dev-config--release_created'] }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
       # A release PR opened with GITHUB_TOKEN gets a pull_request CI run that
       # GitHub creates but never gives a job, and marks failed the moment the
       # PR merges - a red run on every release since 0.3.1, executing nothing.
@@ -60,6 +67,22 @@ jobs:
         env:
           PATHS_RELEASED: ${{ steps.release.outputs.paths_released }}
         run: echo "paths_released=${PATHS_RELEASED:-none}" >> "$GITHUB_STEP_SUMMARY"
+
+      # The release PR is opened with GITHUB_TOKEN, so its own pull_request
+      # run never gets a job (see the App step above for the full story and
+      # the way to make that run real). workflow_dispatch is the one event
+      # that token still fires: start self-ci.yml on the PR's branch by name,
+      # once per release PR the push created or updated (separate-pull-requests:
+      # one per package). The branch is read in the script, not with
+      # fromJSON() in `env:` - the runner validates a step's env even when
+      # its `if` is false, and fromJSON('') is an error.
+      - name: Run CI on the release PR
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRS_JSON: ${{ steps.release.outputs.prs }}
+        run: bash scripts/self/dispatch-release-pr-ci.sh
   major-tag:
     name: Major tag
     needs: release-please

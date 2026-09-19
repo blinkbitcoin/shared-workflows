@@ -7,6 +7,10 @@ on:
   # help - GitHub creates the run before it reads this file. See
   # self-release.yml for why that run has no jobs, and for the fix.
   pull_request:
+  # Started by name from self-release.yml on the release PR's branch: the one
+  # event GitHub still fires for a PR opened with GITHUB_TOKEN. The pr-title
+  # job is gated on the pull_request event and is skipped here.
+  workflow_dispatch:
 permissions: { contents: read }
 concurrency:
   group: self-ci-${{ github.ref }}
