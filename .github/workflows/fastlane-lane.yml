@@ -127,6 +127,14 @@ on:
       PLAY_SERVICE_ACCOUNT_JSON:
         description: Google Play service account JSON (raw)
         required: false
+      # Huawei AppGallery Connect API client. Both halves are secrets: the
+      # client id is one half of the credential pair, and env-json is printed.
+      HUAWEI_CLIENT_ID:
+        description: AppGallery Connect API client id
+        required: false
+      HUAWEI_CLIENT_SECRET:
+        description: AppGallery Connect API client secret
+        required: false
       # App Review contact and demo-account details. These are secrets, not
       # `env-json` configuration: env-json values are printed to the log, and a
       # reviewer demo login is a real credential.
@@ -243,6 +251,8 @@ jobs:
           ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
           ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          HUAWEI_CLIENT_ID: ${{ secrets.HUAWEI_CLIENT_ID }}
+          HUAWEI_CLIENT_SECRET: ${{ secrets.HUAWEI_CLIENT_SECRET }}
           APP_REVIEW_EMAIL: ${{ secrets.APP_REVIEW_EMAIL }}
           APP_REVIEW_FIRST_NAME: ${{ secrets.APP_REVIEW_FIRST_NAME }}
           APP_REVIEW_LAST_NAME: ${{ secrets.APP_REVIEW_LAST_NAME }}
