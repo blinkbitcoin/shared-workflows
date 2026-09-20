@@ -245,6 +245,17 @@ template_lanes() {
   done <<<"$declared"
 }
 
+# The template's upload_huawei lane reads these straight out of the
+# environment, and a caller cannot pass a secret this reusable workflow has
+# not declared - so both halves of the AppGallery client have to be here.
+@test "fastlane-lane declares the Huawei AppGallery client pair" {
+  declared="$(yq -r '.on.workflow_call.secrets | keys | .[]' "$REPO_ROOT/.github/workflows/fastlane-lane.yml")"
+  for name in HUAWEI_CLIENT_ID HUAWEI_CLIENT_SECRET; do
+    grep -qxF "$name" <<<"$declared" \
+      || fail "fastlane-lane.yml does not declare $name"
+  done
+}
+
 # The fixture above is a snapshot of a file that lives in another repo, and a
 # snapshot has no way to notice that it has fallen behind: it had drifted to 368
 # lines against a real file of 457 before anything looked. This is what makes the
