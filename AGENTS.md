@@ -118,6 +118,14 @@ Every row is a make target; nothing here is run through a package manager.
   one goes away only when the PR is opened by the RELEASE_TAGGER App (the
   guarded step in `self-release.yml`; needs the App's two secrets on this
   repo).
+- **No vague abbreviations, anywhere a human reads.** Write the word:
+  identifiers, organisation, credentials, repository, configuration,
+  environment. This applies to prose, plans, commit messages, comments and
+  names alike. Keep an abbreviation only when it is the industry's own name
+  for the thing (App Store Connect's `ASC_`, OTA, 2FA, API, JSON, CI, CD) and
+  expand an uncommon one on first use. A prefix made of the family's initials
+  was rejected for exactly this reason; so was "ids" for identifiers in a
+  status message.
 - **Docs ship with the code.** Adding or removing a `##`-documented make target
   without updating the command table above is a hard failure.
 
