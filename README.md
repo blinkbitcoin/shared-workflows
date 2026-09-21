@@ -42,6 +42,9 @@ flowchart LR
   subgraph here [shared-workflows @v0]
     checks[Checks] --> unit[Unit] --> e2e[E2E]
     prepare[Prepare] --> build[Build and sign] --> ship[Upload and release]
+    ship --> lane["fastlane-lane<br/>a store lane"]
+    ship --> rel["github-release"]
+    ship --> ota["expo-ota-publish"]
   end
   caller --> checks
   caller --> prepare

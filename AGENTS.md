@@ -118,6 +118,30 @@ Every row is a make target; nothing here is run through a package manager.
   one goes away only when the PR is opened by the RELEASE_TAGGER App (the
   guarded step in `self-release.yml`; needs the App's two secrets on this
   repo).
+
+  The chain, end to end:
+
+  ```mermaid
+  sequenceDiagram
+    autonumber
+    participant main as main
+    participant rel as self-release.yml
+    participant pr as release PR branch
+    participant ci as self-ci.yml
+    participant tags as tags and packages
+    main->>rel: push to main
+    rel->>rel: mint an App token when both RELEASE_TAGGER secrets exist, else use GITHUB_TOKEN
+    rel->>pr: release-please opens or updates the release PR
+    rel->>ci: dispatch-release-pr-ci.sh starts self-ci.yml on the PR branch
+    ci-->>pr: the green dispatched run is the signal
+    Note over pr: the pull_request run GitHub creates for a GITHUB_TOKEN-opened PR gets no job and is noise
+    pr->>main: squash merge
+    main->>rel: push to main
+    rel->>tags: release_created, tag vX.Y.Z and its release
+    rel->>tags: major-tag job moves v0 and the minor tag to that commit
+    rel->>tags: publish-dev-config job publishes the npm package, when it released too
+  ```
+
 - **No vague abbreviations, anywhere a human reads.** Write the word:
   identifiers, organisation, credentials, repository, configuration,
   environment. This applies to prose, plans, commit messages, comments and
