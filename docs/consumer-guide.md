@@ -30,6 +30,39 @@ available and is the recommended pin going forward. `@v0` and `@v1` behave
 identically in kind — both are moving tags re-pointed on release — the only
 difference is which major line you're tracking.
 
+A release here is four steps and one force-pushed tag:
+
+```mermaid
+flowchart TD
+  merged["feat or fix merged on main"]
+  release["self-release.yml, release-please job"]
+  pr["release PR: chore(main) release X.Y.Z"]
+  tag["tag vX.Y.Z and its GitHub release"]
+  major["major-tag job, scripts/self/tag-major.sh"]
+  moving["v0 and v0.&lt;minor&gt;"]
+  consumer["a consumer pinned @v0"]
+  run["the consumer's next run"]
+  merged -->|"push to main"| release
+  release -->|"opens or updates"| pr
+  pr -->|"squash merge, push to main"| release
+  release -->|"release_created is true"| tag
+  tag -->|"tag_name"| major
+  major -->|"git push -f to that commit"| moving
+  moving -->|"the tag is resolved when a run starts"| consumer
+  consumer -->|"no commit of its own"| run
+```
+
+**A `v0` move can change an app's next continuous-delivery run with nothing
+committed on the app's side.** The pin is resolved when a run starts, so the
+first consumer run after a release here executes the new code — a push that
+touches one line of copy can fail in a build step that changed in this
+repository an hour earlier. Two consequences worth acting on: after a release
+here, the family watches the template's `CD / Internal` run, which is the first
+real execution of the reusable release workflows (no gate in this repository can
+execute them — see `AGENTS.md`); and a repository that wants to decide when it
+moves pins `@v0.<minor>` or a full commit sha instead of `@v0`, and moves the
+pin as a reviewed commit.
+
 ### Moving to a version that added `docs-check`
 
 `checks.yml`'s `docs-check` input defaults to **on**, and `run-script.sh` fails
@@ -272,6 +305,38 @@ jobs:
 `secrets: inherit` is never used anywhere in this family (Part B's release
 workflows follow the same rule for their own, larger secret sets) — every
 secret a reusable workflow needs is declared and passed explicitly.
+
+Three separate channels carry configuration into a release job, and they are
+not interchangeable:
+
+```mermaid
+flowchart LR
+  secrets["secrets:"]
+  buildenv["build-env input"]
+  envjson["env-json input"]
+  validate["scripts/lib/env-validate.mjs"]
+  refused(["step fails, nothing published"])
+  laneenv["the job's environment"]
+  files["files at mode 600<br/>under the runner's temp directory"]
+  secrets -->|"masked by GitHub, never printed"| laneenv
+  secrets -->|"base64 or raw, through decode-secrets.sh"| files
+  files -->|"only the path, as ..._PATH"| laneenv
+  buildenv --> validate
+  envjson --> validate
+  validate -->|"credential-shaped or reserved name"| refused
+  validate -->|"accepted, written to GITHUB_ENV and visible in the run log"| laneenv
+```
+
+`build-env` and `env-json` are workflow inputs: GitHub neither masks nor hides
+them, so their values are readable by anyone who can read the run. The
+validator refuses any name ending in `KEY`, `TOKEN`, `PASSWORD`, `PASSPHRASE`,
+`SECRET`, `CREDENTIAL` or `CREDENTIALS`, plus four known credential names the
+suffix rule alone would miss — `PLAY_SERVICE_ACCOUNT_JSON`,
+`ASC_KEY_P8_BASE64`, `ANDROID_UPLOAD_KEYSTORE_BASE64` and
+`MATCH_GIT_BASIC_AUTHORIZATION` — and it refuses the names the family and the
+runner own (`WORKFLOWS_`, `GITHUB_`, `RUNNER_`, `ACTIONS_`, `LD_`, `DYLD_`,
+`PATH`, `HOME`, `NODE_OPTIONS`). A refusal fails the step with the offending
+key named, rather than publishing it.
 
 ## Inputs, outputs and secrets per workflow
 
@@ -655,13 +720,68 @@ the top, no `concurrency` (the caller owns it), self-checkout into `.workflows/`
 every `run:` a single `bash "$WORKFLOWS_DIR/scripts/..."` line, and **every secret
 declared `required: false`** so a caller only passes the ones its stage needs.
 
-The pipeline they compose into:
+The call graph, as the template's own callers wire it (solid edges are
+`uses:` calls, labelled with what the call carries; dotted edges are artifacts
+moving through the run):
 
+```mermaid
+flowchart LR
+  subgraph app["the app repo"]
+    internal["release-internal.yml"]
+    beta["release-beta.yml"]
+    prod["release-production.yml"]
+    hotfix["ota-hotfix.yml"]
+    listing["store-metadata.yml"]
+  end
+  subgraph shared["shared-workflows @v0"]
+    prepare["expo-prepare.yml"]
+    ios["expo-build-ios.yml"]
+    android["expo-build-android.yml"]
+    lane["fastlane-lane.yml"]
+    release["github-release.yml"]
+    ota["expo-ota-publish.yml"]
+  end
+  artifacts[("the run's artifacts")]
+  internal -->|"stage internal, reserve-tag, require-green ci.yml"| prepare
+  internal -->|"version, build-number"| ios
+  internal -->|"version, build-number"| android
+  internal -->|"lane upload_internal, artifacts *"| lane
+  internal -->|"create-prerelease vX.Y.Z-build.N, assets *"| release
+  internal -->|"channel internal, baseline-tag vX.Y.Z-build.N"| ota
+  beta -->|"release-tag vX.Y.Z"| prepare
+  beta -->|"lane promote_beta, artifacts release-meta"| lane
+  beta -->|"promote vX.Y.Z, from-tag vX.Y.Z-build.N, delete-source"| release
+  beta -->|"channel beta, baseline-tag vX.Y.Z"| ota
+  prod -->|"release-tag vX.Y.Z"| prepare
+  prod -->|"lane release_production, then phased, rollout or halt"| lane
+  prod -->|"latest vX.Y.Z, then append"| release
+  prod -->|"channel production, baseline-tag vX.Y.Z"| ota
+  hotfix -->|"channel and rollout from the dispatch, baseline-tag resolved"| ota
+  listing -->|"lane pull_metadata or sync_metadata"| lane
+  prepare -.->|"uploads release-meta"| artifacts
+  artifacts -.->|"release-meta: build-info.json, store notes"| ios
+  artifacts -.->|"release-meta: build-info.json, store notes"| android
+  ios -.->|"uploads ios-ipa, ios-dsym"| artifacts
+  android -.->|"uploads android-aab, android-apk, android-mapping"| artifacts
+  artifacts -.->|"merged into WORKFLOWS_ASSETS_DIR"| lane
+  artifacts -.->|"attached as the release's assets, plus SHA256SUMS"| release
 ```
-expo-prepare ──► expo-build-ios     ──┐
-             └─► expo-build-android ──┴─► github-release ──► fastlane-lane (store upload/promote)
-                                                          └─► expo-ota-publish
-```
+
+Nothing in the figure is a fixed order between the six: each caller decides its
+own `needs:` chain, and the three tiers chain them differently. In
+`release-internal.yml` the store uploads run **before** the pre-release, and the
+pre-release names the two build jobs directly rather than the uploads, so a
+repository with store uploads off still publishes every artifact.
+`release-beta.yml` builds nothing at all: it promotes the binaries the internal
+run already produced, then moves the release onto `vX.Y.Z` with
+`mode: promote` and `from-tag` pointing at the build pre-release.
+`release-production.yml` adds the staged-rollout lanes (`phased`, `rollout`,
+`halt`), each its own `fastlane-lane.yml` call on the same tag — and, left out
+of the figure because it is not a release workflow, a final `web.yml` call
+that deploys the Pages site for the same tag. Two callers
+never prepare anything: `ota-hotfix.yml` resolves a baseline tag in a job of its
+own and calls only `expo-ota-publish.yml`, and `store-metadata.yml` calls only
+`fastlane-lane.yml`, once per platform.
 
 `expo-prepare` is the only job that decides *what* the release is; every later
 job is handed `version` / `build-number` and the `release-meta` artifact rather
@@ -808,6 +928,49 @@ names from a committed copy of the template's `shared.rb`
 (`test/fixtures/consumer-min/fastlane/lanes/shared.rb`) and compares the two sets
 in both directions, so a rename on either side fails here instead of in a store
 submission.
+
+**Inside the job.** Nine steps, in this order; the labels are what each step
+hands the next.
+
+```mermaid
+flowchart TD
+  consumer["Checkout consumer"]
+  shared["Checkout shared-workflows"]
+  envpub["env-publish.sh"]
+  setup["Setup composite action"]
+  download["Download artifacts"]
+  buildenv["build-env.sh"]
+  envjson["env-json.sh"]
+  decode["decode-secrets.sh"]
+  fastlane["fastlane.sh PLATFORM LANE"]
+  fastfile["the consumer's Fastfile"]
+  assets[("WORKFLOWS_ASSETS_DIR")]
+  secretsdir[("RUNNER_TEMP/secrets, mode 700")]
+  consumer -->|"the app's working tree at ref"| shared
+  shared -->|"this repo at job.workflow_sha, under .workflows/"| envpub
+  envpub -->|"WORKFLOWS_OUT and the four output directories, into GITHUB_ENV"| setup
+  setup -->|"mise tools, Ruby with bundler-cache when ruby is true, WORKFLOWS_DIR"| download
+  download -->|"pattern from artifacts, merge-multiple, one flat directory"| assets
+  download --> buildenv
+  buildenv -->|"validated build-env keys, into GITHUB_ENV"| envjson
+  envjson -->|"validated env-json keys, into GITHUB_ENV"| decode
+  decode -->|"upload.keystore, play-service-account.json, asc-key.p8, each mode 600"| secretsdir
+  decode -->|"ANDROID_UPLOAD_KEYSTORE_PATH, PLAY_SERVICE_ACCOUNT_JSON_PATH, ASC_KEY_P8_PATH"| fastlane
+  assets -->|"WORKFLOWS_OUTPUT_DIR, BUILD_INFO_FILE, RELEASE_NOTES_STORE_FILE, STORE_NOTES_JSON point here"| fastlane
+  fastlane -->|"bundle exec fastlane PLATFORM LANE, plus lane-args"| fastfile
+```
+
+Three details in there are the ones that bite. The shared checkout is pinned to
+`job.workflow_sha`, so every script the job runs comes from the same commit as
+the workflow file — a job can never straddle two versions of this repo.
+`merge-multiple: true` is what keeps `$WORKFLOWS_ASSETS_DIR/<scheme>.ipa` at a
+stable path no matter which artifact carried it, because a lane is given file
+paths and not artifact names. And `decode-secrets.sh` never passes a decoded
+secret onward as a value: it writes a `600` file under the runner's temporary
+directory and publishes only that file's path, which is why
+`ASC_KEY_P8_BASE64` is *also* handed to the lane step directly (the lanes read
+the base64 key content, so a path alone would make the Fastfile's `ENV.fetch`
+raise).
 
 ### `github-release.yml`
 

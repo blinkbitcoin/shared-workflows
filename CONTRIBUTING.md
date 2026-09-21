@@ -33,6 +33,16 @@ on demand with the same invocation `scripts/checks/commitlint.sh` uses in CI.
 - Name the branch for the change (`ci/hooks-and-hygiene`, `fix/metro-prewarm`).
 - Rebase on `main` rather than merging it back in; the squash merge discards
   the branch history anyway.
+- **Several dependent pull requests go through `gh stack`** (the
+  [`github/gh-stack`](https://github.com/github/gh-stack) GitHub CLI
+  extension), never hand-stacked branches kept in line with manual rebases. One
+  branch per reviewable change, each based on the one below it; `gh stack`
+  owns the restacking after a review comment lands in the middle, and writes
+  the "part N of M" navigation into each pull request body. A hand-stacked
+  chain loses that: the rebase after every change to a lower branch is manual,
+  a missed one silently puts a reviewed commit back into the next pull
+  request's diff, and the reviewer has no way to see where in the stack they
+  are.
 
 ## Commits and PR titles
 
