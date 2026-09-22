@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.2.0...dev-config-v0.3.0) (2026-09-22)
+
+
+### Features
+
+* **checks:** answer "would these workflows work here?" without spending runners ([#56](https://github.com/blinkbitcoin/shared-workflows/issues/56)) ([f614b79](https://github.com/blinkbitcoin/shared-workflows/commit/f614b79108fdbf7a866fa08e9038e16ea8dc9397))
+
 ## [0.2.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.1.0...dev-config-v0.2.0) (2026-09-22)
 
 
