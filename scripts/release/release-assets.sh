@@ -38,6 +38,7 @@
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/release-env.sh"
+source "$(dirname "$0")/../lib/body-section.sh"
 require_cmd gh
 
 mode="${1:?usage: release-assets.sh create-prerelease|promote|latest|append}"
@@ -318,47 +319,17 @@ case "$mode" in
     release_exists || die "release $tag does not exist - nothing to append to"
     [ "${#notes_args[@]}" -eq 2 ] || die "append needs NOTES_FILE pointing at an existing section file"
     title="${APPEND_TITLE:-Update}"
-    heading="## $title"
     # Re-running a failed job is the ordinary way an Actions failure is
     # recovered (it is why the asset upload uses --clobber), so append has to be
-    # idempotent too.
-    #
-    # The block is delimited by HTML-comment markers, not by "the heading down to
-    # the next `## `". The notes file routinely *starts* with a `## ` heading -
-    # notes.sh's fallback writes `## <version> (<build>)` and a release-please
-    # body starts with `## [x.y.z](...)` - so a heading scan stops at the notes'
-    # own heading and leaves their tail behind, stacking a little more of it on
-    # every re-run. Markers bound the block regardless of its content.
-    begin_marker="<!-- workflows:append:$title -->"
-    end_marker="<!-- /workflows:append:$title -->"
+    # idempotent too: the block is stripped and re-added, never stacked. The
+    # marker format and the strip live in scripts/lib/body-section.sh, shared
+    # with the release PR body (pr-notes.sh).
     gh release view "$tag" --json body --jq '.body' > "$body_file"
-    if grep -qxF "$begin_marker" "$body_file"; then
-      awk -v b="$begin_marker" -v e="$end_marker" '
-        $0 == b { skipping = 1; next }
-        skipping && $0 == e { skipping = 0; next }
-        !skipping { print }
-      ' "$body_file" > "$stripped_file"
-    else
-      # Migration path: a body appended by a version of this script that
-      # predates the markers has no begin marker, so fall back to the old
-      # heading scan once. The next run is marker-delimited like any other.
-      awk -v heading="$heading" '
-        $0 == heading { skipping = 1; next }
-        skipping && /^## / { skipping = 0 }
-        !skipping { print }
-      ' "$body_file" > "$stripped_file"
-    fi
-    # Trailing blank lines would otherwise accumulate one pair per re-run.
     {
-      awk 'BEGIN { blank = 0 }
-        /^[[:space:]]*$/ { blank++; next }
-        { while (blank-- > 0) print ""; blank = 0; print }
-      ' "$stripped_file"
-      printf '\n%s\n%s\n\n' "$begin_marker" "$heading"
-      cat "$NOTES_FILE"
-      printf '%s\n' "$end_marker"
-    } > "$body_file"
-    gh release edit "$tag" --notes-file "$body_file"
+      strip_section_block "$body_file" "$title"
+      render_section_block "$title" "$NOTES_FILE"
+    } > "$stripped_file"
+    gh release edit "$tag" --notes-file "$stripped_file"
     # No upload_assets here, deliberately. `append` records what a store action
     # did (a rollout percentage, a halt) from a job that has no binaries staged:
     # an upload would attach nothing and, worse, regenerate SHA256SUMS over
