@@ -83,7 +83,7 @@ it is the one worth checking before you move the pin.
 
 ## The contract check
 
-`checks.yml`'s first job runs one script — `check-consumer-contract` — against
+`checks.yml`'s `Contract` job runs one script — `check-consumer-contract` — against
 your repository and reports **everything** this family will need from it, before
 any of the gates that would each die on their own.
 
@@ -115,7 +115,7 @@ first: a repository that never calls `e2e.yml` is not told it is missing
 `.maestro/`, and a gate you passed `false` for is not a finding.
 
 A toggle wired to an expression — `typecheck: ${{ vars.TYPECHECK }}` — is
-neither. This job gates every other job in `checks.yml`, so blocking ten of
+neither. This job gates the nine gate jobs in `checks.yml`, so blocking all of
 them because a repository variable could not be read here would be a false
 failure, and staying quiet would hide a real one. Such a finding is reported as
 degraded and never blocks, with the reason saying so.
@@ -459,8 +459,10 @@ flowchart LR
 
 `build-env` and `env-json` are workflow inputs: GitHub neither masks nor hides
 them, so their values are readable by anyone who can read the run. The
-validator refuses any name ending in `KEY`, `TOKEN`, `PASSWORD`, `PASSPHRASE`,
-`SECRET`, `CREDENTIAL` or `CREDENTIALS`, plus four known credential names the
+validator refuses any name whose last underscore-separated word is `KEY`,
+`TOKEN`, `PASSWORD`, `PASSPHRASE`, `SECRET`, `CREDENTIAL` or `CREDENTIALS` —
+the boundary is `^` or `_`, so `API_KEY` is refused and `MONKEY` is not — plus
+four known credential names the
 suffix rule alone would miss — `PLAY_SERVICE_ACCOUNT_JSON`,
 `ASC_KEY_P8_BASE64`, `ANDROID_UPLOAD_KEYSTORE_BASE64` and
 `MATCH_GIT_BASIC_AUTHORIZATION` — and it refuses the names the family and the
@@ -472,9 +474,10 @@ key named, rather than publishing it.
 
 Every table below is read from the workflow's own `on.workflow_call` block —
 `working-directory`, `linux-runner`, `macos-runner` and `native-cache-version`
-are common to every workflow (present even when unused, "carried for
-input-set consistency across the family," so all five files can share one
-mental model).
+are carried by every workflow that takes inputs at all (present even when
+unused, "carried for input-set consistency across the family," so they share
+one mental model). The exception is `pr-closed.yml`, which declares
+`workflow_call: {}` and takes nothing.
 
 ### `checks.yml`
 
@@ -511,8 +514,8 @@ mental model).
 | `docs-only-detection` | `true` | Classify the change as docs-only — on a `pull_request` **and** on a `push` |
 | `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern (`^docs/\|\.md$\|(^\|/)LICENSE$\|^\.github/ISSUE_TEMPLATE/\|^\.github/PULL_REQUEST_TEMPLATE`), not a replacement for it |
 
-Jobs: `Changes`, `Code`, `Generated`, `Docs`, `Dependencies`, `Prebuild`,
-`Secrets`, `Release`, `Tooling`, `Commits` — grouped by **who acts on a
+Jobs: `Changes`, `Contract`, `Code`, `Generated`, `Docs`, `Dependencies`,
+`Prebuild`, `Secrets`, `Release`, `Tooling`, `Commits` — grouped by **who acts on a
 failure**, not by what is cheapest to run. A red `Dependencies` means a
 vulnerability, a licence problem or an SDK drift and belongs to whoever owns
 operations; a red `Code` is a lint error and belongs to the author. They used to
@@ -1128,7 +1131,7 @@ Creates or moves a GitHub release and attaches the fixed asset set.
 
 Outputs: `url`. Secrets: `RELEASE_TAGGER_APP_ID`,
 `RELEASE_TAGGER_APP_PRIVATE_KEY` (both optional). When they are set the job
-mints a GitHub App token with `actions/create-github-app-token@v2`; otherwise
+mints a GitHub App token with `actions/create-github-app-token@v3`; otherwise
 it uses the caller's `GITHUB_TOKEN`. **That choice is not cosmetic**: a release
 created with `GITHUB_TOKEN` does not trigger other workflows, so a downstream
 `release: published` caller (e.g. `web.yml`'s Pages deploy) never fires. The
@@ -1793,7 +1796,7 @@ each one lives so a future edit doesn't quietly regress it.
 | An OTA update whose native fingerprint differs from the installed binary crashes every user on the channel on launch | `scripts/ota/fingerprint-gate.sh` compares per platform and dies on any mismatch (and on a `build-info.json` with no `fingerprint` block); `test/fingerprint-gate.bats` |
 | A promotion must not ship a binary whose own build never went green | `scripts/release/require-green-run.sh` (polls `gh run list`; failure, cancellation, skip and "no run at all" are each fatal); `test/require-green-run.bats` |
 | A decoded signing secret must never be world-readable, and a truncated one must not silently become an empty key file | `scripts/release/decode-secrets.sh` creates each file `600` inside a `700` directory *before* writing, and dies on a zero-byte decode; `test/decode-secrets.bats` |
-| A release created with `GITHUB_TOKEN` does not trigger the `release: published` workflows that depend on it | `github-release.yml` mints an `actions/create-github-app-token@v2` token when `RELEASE_TAGGER_APP_ID`/`RELEASE_TAGGER_APP_PRIVATE_KEY` are set |
+| A release created with `GITHUB_TOKEN` does not trigger the `release: published` workflows that depend on it | `github-release.yml` mints an `actions/create-github-app-token@v3` token when `RELEASE_TAGGER_APP_ID`/`RELEASE_TAGGER_APP_PRIVATE_KEY` are set |
 | An Android crash report is unreadable forever without that build's mapping file | `expo-build-android.yml` uploads `android-mapping` (and the apk) with `if: !cancelled()`, so a failed `verify` still yields them |
 | An OTA gate wired to a same-run artifact silently stops guarding, because `download-artifact` only sees the current run | `scripts/ota/baseline.sh` fetches the baseline `build-info.json` from the `baseline-tag` release's **assets** via `gh release download`; a missing tag or asset is fatal |
 | A lane fails in `before_all` when any of the five contract variables is empty — including the other platform's ids | All five are required inputs on the three lane-running workflows; `test/workflow-shape.bats` asserts every `fastlane.sh` step receives them |

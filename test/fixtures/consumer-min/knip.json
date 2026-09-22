@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "_comment": "The knip half of the ignore list in docs/consumer-guide.md, in its `ignore` form. The template uses the other answer the guide allows - project/entry globs that never reach into a sibling directory - so between the two, both are represented.",
+  "entry": ["app.config.ts"],
+  "project": ["**/*.ts"],
+  "ignore": [".workflows/**"]
+}

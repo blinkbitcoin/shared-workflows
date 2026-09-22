@@ -1,7 +1,12 @@
 <!--
 Env contract for scripts/native/* and scripts/e2e/*. Every variable is optional
-and defaulted; a consumer sets only what differs. Task 9 copies this table into
-docs/consumer-guide.md - keep the two in sync by copying, not by rewording.
+and defaulted; a consumer sets only what differs.
+
+This table lives here and nowhere else. An earlier note said it was copied into
+docs/consumer-guide.md and to keep the two in sync - it never was, and there is
+nothing there to sync with. The guide covers the consumer-facing half of this
+surface (the E2E hooks contract, suite-timeout-minutes); the variables below are
+for someone running these scripts directly.
 -->
 
 # Native build and E2E device scripts
@@ -9,7 +14,7 @@ docs/consumer-guide.md - keep the two in sync by copying, not by rewording.
 Two families, one env contract:
 
 - `scripts/native/*` turns a checkout into a runnable app (`prebuild.sh`, `pods.sh`, `ios-build.sh`, `ios-pack.sh`, `android-build.sh`).
-- `scripts/e2e/*` drives a device and the Maestro suite (`metro-start.sh`, `metro-wait.sh`, `ios-simulator.sh`, `android-emulator.sh`, `app-launch.sh`, `maestro-bound.sh`, `ios-maestro.sh`, `android-maestro.sh`, `collect-forensics.sh`).
+- `scripts/e2e/*` drives a device and the Maestro suite (`metro-start.sh`, `metro-wait.sh`, `ios-simulator.sh`, `android-emulator.sh`, `app-launch.sh`, `maestro-bound.sh`, `ios-maestro.sh`, `android-maestro.sh`, `collect-forensics.sh`), plus three that the workflows call around them: `env-publish.sh`, `run-hook.sh` (the consumer's setup/teardown hooks) and `step-timeout.sh` (the step bound derived from `suite-timeout-minutes`).
 
 All of them run from the repo that hosts these scripts and act on the *consumer*
 checkout resolved by `consumer_root` (`$GITHUB_WORKSPACE/$WORKING_DIRECTORY`).

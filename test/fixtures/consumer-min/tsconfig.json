@@ -1,0 +1,5 @@
+{
+  "_comment": "`exclude` carries `.workflows` - the tsconfig half of the ignore list in docs/consumer-guide.md. Without it, tsc walks into the checked-out shared-workflows tree.",
+  "compilerOptions": { "strict": true, "noEmit": true },
+  "exclude": [".workflows", "node_modules"]
+}
