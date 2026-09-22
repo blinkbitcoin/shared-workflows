@@ -1,6 +1,6 @@
 {
   "name": "@blinkbitcoin/dev-config",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The shared developer-tooling baseline: the pinned tool table and the checks that enforce it.",
   "license": "MIT",
   "type": "module",

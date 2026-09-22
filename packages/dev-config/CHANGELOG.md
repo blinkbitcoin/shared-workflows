@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.1.0...dev-config-v0.2.0) (2026-09-22)
+
+
+### Features
+
+* **checks:** report the whole consumer contract in one job, not one red at a time ([#51](https://github.com/blinkbitcoin/shared-workflows/issues/51)) ([2975b2f](https://github.com/blinkbitcoin/shared-workflows/commit/2975b2f79ed268b93d809d8d7bed9c94474679e9))
+
 ## [0.1.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.1.0...dev-config-v0.1.0) (2026-09-17)
 
 
