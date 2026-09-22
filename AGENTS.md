@@ -25,10 +25,12 @@ scripts/native/     prebuild, pods, iOS/Android builds and packaging
 scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version/notes resolution, fastlane invocation, release assets
 scripts/web/        web export, Playwright install and run
-scripts/self/       this repo's own gates (check-versions, tag-major)
+scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
+                    dispatch-release-pr-ci, render-contract-table)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
-docs/               consumer-guide, cache-keys, forensics, runners
+docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
+                    forensics, runners
 ```
 
 ## Commands
@@ -38,7 +40,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Target | |
 |---|---|
 | `make hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
-| `make check` | Everything self-ci runs: the five gates below |
+| `make check` | Everything self-ci runs: the seven gates below |
 | `make shellcheck` | shellcheck every script under `scripts/` (bash strict) |
 | `make actionlint` | Lint the workflows and composite actions |
 | `make test` | The bats suite over the pure scripts |
@@ -109,7 +111,7 @@ Every row is a make target; nothing here is run through a package manager.
   release self test tooling web workflows`. Squash merges take the PR title as
   the commit message, so `pr-title.yml` lints the title too.
 - **Releases are release-please's job.** `self-release.yml` cuts the version
-  and re-points the moving `v0`/`v0.1` tags through
+  and re-points the moving `v0`/`v0.<minor>` tags through
   `scripts/self/tag-major.sh`; never move a tag or edit a version by hand.
   Each release PR it opens carries two CI runs: a red `pull_request` run that
   GitHub creates for a `GITHUB_TOKEN`-opened PR and never gives a job, and a
@@ -160,7 +162,8 @@ Every row is a make target; nothing here is run through a package manager.
 | Pure bash scripts | `test/*.bats` | `make test` |
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
-| The consumer contract (guide ↔ fixtures ↔ real caller) | `test/consumer-contract.bats` | `make test` |
+| The consumer contract (guide ↔ fixtures ↔ real caller) | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
+| Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | Parity with the consumer's own copy of a shared script | `test/resolve-version.bats`, `test/build-info.bats`, `test/workflow-shape.bats` | `make test` **with `WORKFLOWS_TEMPLATE_DIR` set** |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
@@ -175,7 +178,7 @@ WORKFLOWS_CONSUMER_ROOT=~/Dev/blink/react-native-mobile-template \
 ```
 
 `WORKFLOWS_CONSUMER_ROOT` is what `consumer-contract.bats` reads; `WORKFLOWS_TEMPLATE_DIR`
-is what the parity cases read. **Without them four cases skip**, saying `parity
+is what the parity cases read. **Without them seven cases skip**, saying `parity
 NOT verified` rather than implying the copies agree. `WORKFLOWS_PARITY_REQUIRED=1`
 turns such a skip into a failure, which is what makes the CI job honest.
 

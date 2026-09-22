@@ -46,15 +46,19 @@ check that never goes green.
 
 Two of the names are house inventions rather than conventions — `check:docs`
 and `deps:licenses` — and they are the two most likely to surprise you, because
-nothing else in the JavaScript world calls them that. They are also the two with
-no fallback, so they fail rather than degrade.
+nothing else in the JavaScript world calls them that.
+
+Seven have no fallback at all and fail rather than degrade: those two plus
+`typecheck`, `lint`, `format:check`, `knip` and `spell`. The table below marks
+each one.
 
 ## Start from the smallest working consumer
 
 [`test/fixtures/consumer-min/`](../test/fixtures/consumer-min) is the smallest
 repository that satisfies this contract: a `package.json` whose every contract
-script is a no-op, a twelve-line `.mise.toml`, an `app.config.ts`, and the
-caller workflows from the consumer guide. It exists so the contract can be
+script is a no-op, an eleven-line `.mise.toml`, an `app.config.ts`, the seven
+[`.workflows/` ignore entries](consumer-guide.md#workflows-ignore-list-for-consumers),
+and the caller workflows from the consumer guide. It exists so the contract can be
 tested without a real app, which makes it exactly the right thing to copy from
 when you are wiring one up — replace each no-op with what your repository
 actually does, and delete the callers you do not want.

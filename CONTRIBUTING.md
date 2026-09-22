@@ -6,7 +6,7 @@ table and the rules CI enforces. This file covers the workflow around a change.
 ## Setup
 
 ```sh
-mise trust && mise install   # shellcheck, actionlint, bats, yq, node, typos, lefthook
+mise trust && mise install   # node, pnpm, shellcheck, actionlint, bats, yq, typos, lefthook, act
 make hooks                   # install the git hooks (once per clone, see below)
 make check                   # verify the toolchain by running every gate
 ```
@@ -65,7 +65,7 @@ their pin. Mark breaking changes with `!` (`feat(workflows)!: ...`) or a
 ## Before you push
 
 ```sh
-make check   # shellcheck, actionlint, bats, check-versions, typos
+make check   # shellcheck, actionlint, bats, test-package, check-versions, tool-versions, typos
 ```
 
 The `pre-push` hook runs exactly that, and `pre-commit` runs a faster subset on
@@ -75,13 +75,16 @@ gate on every PR. Escape hatches exist for genuinely broken tooling
 (`git commit --no-verify`, `LEFTHOOK=0 git push`), and personal additions go in
 a gitignored `lefthook-local.yml` rather than in `lefthook.yml`.
 
-### The parity cases, and the four skips you will see
+### The parity cases, and the seven skips you will see
 
-Several cases compare a script here against the consumer's own copy of it —
-`resolve-version.sh`, `build-info.sh`, and the App Review names the fastlane
-lanes read. This repo serves any consumer, so it has no business guessing where
-one sits on your machine: without a checkout to point at, those cases **skip**,
-and say `parity NOT verified` rather than implying the two copies agree.
+Seven cases need a real consumer checkout. Five compare something here against
+the consumer's own copy of it — `resolve-version.sh`, `build-info.sh`, the App
+Review names the fastlane lanes read, and the two that hold the consumer's
+`make ci` / `make check` to the gates CI runs. The other two check that the
+consumer satisfies the contract at all. This repo serves any consumer, so it
+has no business guessing where one sits on your machine: without a checkout to
+point at, those cases **skip**, and say `parity NOT verified` rather than
+implying the two copies agree.
 
 Point them at a checkout to run them:
 
@@ -163,5 +166,5 @@ say so in the PR body — the pin is the only thing standing between a mistake
 here and every consumer's CI.
 
 Releases are automated: release-please keeps a release PR open on `main`, and
-squash-merging it cuts the version and re-points the moving `v0`/`v0.1` tags.
+squash-merging it cuts the version and re-points the moving `v0`/`v0.<minor>` tags.
 Never move a tag or edit a version by hand.

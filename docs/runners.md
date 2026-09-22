@@ -19,9 +19,9 @@ long as Android, and public repos have their own concurrency caps on macOS
 jobs. That is a scheduling argument, not a cost one, and it is the only reason
 to think twice.
 
-`macos-runner` (default `macos-26`) is a workflow input on every family
-member, so a caller can pin an older or newer image without editing this
-repo. Consumers that want a repo-wide override without touching every caller
+`macos-runner` (default `macos-26`) is a workflow input on every family member
+that takes inputs at all — the exception is `pr-closed.yml`, which takes none —
+so a caller can pin an older or newer image without editing this repo. Consumers that want a repo-wide override without touching every caller
 workflow can instead read it from a repo variable:
 
 ```yaml

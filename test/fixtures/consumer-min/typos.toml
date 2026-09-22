@@ -1,0 +1,3 @@
+# The typos half of the `.workflows/` ignore list in docs/consumer-guide.md.
+[files]
+extend-exclude = [".workflows/"]

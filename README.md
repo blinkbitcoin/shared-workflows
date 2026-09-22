@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub>15 reusable workflows · 85 scripts · 572 tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->15<!--/count--> reusable workflows · <!--count:scripts-->89<!--/count--> scripts · <!--count:tests-->551<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -20,7 +20,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
-seventy shell scripts: install an Android SDK, boot an emulator that does not
+<!--count:shell-scripts-->87<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
 hang, wait for Metro, hash the native inputs so a build cache means something,
 decode signing secrets without leaving them on disk, upload a build and then
 prove that the artifact uploaded is the one that was built.
@@ -110,9 +110,13 @@ Every job checks the *consumer* repo out, then checks *this* repo out into
 scripts through `$WORKFLOWS_DIR`. A caller never references anything under
 `scripts/` directly, and a job can never straddle two versions of this repo.
 
-What runs inside is the consumer's own `package.json` script wherever it has
-one — `pnpm lint` belongs to the app repo — with a script here as the fallback.
-CI runs what a developer runs locally, and logs which of the two it picked.
+What runs inside is the consumer's own `package.json` script — `pnpm lint`
+belongs to the app repo, and CI runs what a developer runs locally. Five gates
+also have a fallback here for a consumer that ships no script of its own
+(`i18n:check`, `codegen:check`, `deps:check`, `deps:audit`, `check:ci`), and
+those log which of the two they picked. The rest have none: a missing script is
+a failed gate, with a message saying so. See
+[Script contract](docs/consumer-guide.md#script-contract).
 
 ## Every workflow and its jobs
 
@@ -125,6 +129,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | Job            | What it checks                                                               |
 | -------------- | ---------------------------------------------------------------------------- |
 | `Changes`      | Classifies the diff. Its `docs-only` output is what lets the other jobs skip |
+| `Contract`     | Every requirement of this family the consumer does not meet, in one report  |
 | `Code`         | Typecheck, lint, format, knip, spell — what `make check-code` runs           |
 | `Generated`    | i18n catalogs and GraphQL codegen match the sources they come from           |
 | `Docs`         | Doc freshness, command tables, table widths, mermaid blocks parse            |
@@ -169,14 +174,14 @@ same sha, which is how a release refuses to build on a red `main`.
 | `self-ci.yml`      | `Check`<br>`Parity`<br>`PR title` | actionlint, shellcheck, bats, version agreement, spell; then this repo against a real consumer |
 | `self-smoke.yml`   | `Checks`<br>`Unit`<br>`E2E`       | Runs the family against a real consumer repo. Weekly, and on dispatch                          |
 | `self-act-smoke.yml` | `Prepare`<br>`Build Android` | The Linux release jobs against the template, run on a laptop with act (`make smoke-local`). Dispatch-only, never run on GitHub |
-| `self-release.yml` | `Release PR`<br>`Major tag`       | release-please maintains the version PR; on release, `v0` and `v0.1` move                      |
+| `self-release.yml` | `Release PR`<br>`Major tag`<br>`Publish dev-config` | release-please maintains the version PR; on release, `v0` and `v0.<minor>` move and the npm package publishes |
 
 ## Repository layout
 
 | Path                   | Responsibility                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/`   | The 19 workflows above. Thin: a workflow wires inputs and calls a script                                                  |
-| `.github/actions/`     | Five composite actions — `setup`, `maestro`, `native-key`, `free-disk`, `forensics` — the steps repeated across workflows |
+| `.github/workflows/`   | The <!--count:workflows-->19<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
+| `.github/actions/`     | <!--count:actions-->5<!--/count--> composite actions — `setup`, `maestro`, `native-key`, `free-disk`, `forensics` — the steps repeated across workflows |
 | `scripts/checks/`      | A gate each: audit, codegen, commitlint, expo-doctor, i18n; plus the scripts that pick the consumer's over this repo's    |
 | `scripts/ci/`          | Runner plumbing: Android SDK, KVM, disk pressure, pnpm store, badges, cancel-runs, tool versions                          |
 | `scripts/e2e/`         | The E2E machine: simulator and emulator boot, Metro start and wait, Maestro run, timeouts, forensics collection           |
@@ -185,12 +190,12 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/ota/`         | Fingerprint baseline and gate, export, publish, smoke                                                                     |
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
-| `scripts/self/`        | This repo's own upkeep: version agreement, moving the major tag                                                           |
-| `test/`                | 62 bats files, 531 tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table |
+| `test/`                | <!--count:bats-files-->63<!--/count--> bats files, <!--count:tests-->551<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
-| `docs/`                | The consumer guide and the three explainers                                                                               |
+| `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
-## The tool table
+## The pinned tool versions
 
 CI is shared by reference; the tools a developer runs are not. A pre-commit
 hook and a CI gate have to run the *same* `typos` binary or a commit passes
@@ -203,18 +208,22 @@ version rather than reading a provisioner's config, so it works the same under
 mise here and under a Nix flake elsewhere:
 
 ```sh
-npx check-tool-versions                    # every tool in the table
-npx check-tool-versions typos shellcheck   # only the ones this repo uses
+# --package, because the binary lives in a scoped package on GitHub Packages:
+# a bare `npx check-tool-versions` resolves an unrelated name on public npm.
+npx --package=@blinkbitcoin/dev-config check-tool-versions
+npx --package=@blinkbitcoin/dev-config check-tool-versions typos shellcheck
 ```
 
-`make check-versions` binds the table to `scripts/lib/versions.sh` and
-`.mise.toml`, so a version cannot be changed in one file and forgotten in the
-others.
+`make check-versions` binds `versions.json` to `scripts/lib/versions.sh` and
+`.mise.toml` for the five tools the workflows install themselves (`actionlint`,
+`shellcheck`, `yq`, `typos`, `lefthook`), and one-way for `bats`, `node` and
+`pnpm`. It is not a whole-file check: `act` is pinned in `.mise.toml` alone and
+is checked by nothing.
 
 ## Pinning
 
 Pin `@v0`. It is a moving tag that `self-release.yml` re-points at each
-release, so fixes arrive without editing eleven caller files, and a breaking
+release, so fixes arrive without editing every caller file, and a breaking
 change arrives as `@v1` rather than as a red build on a Monday morning. Pin a
 full version instead when every change should be reviewed before it lands —
 [Versioning](docs/consumer-guide.md#versioning) covers both.

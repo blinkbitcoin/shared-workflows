@@ -1,0 +1,5 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+  "_comment": "Minimal, and here for one reason: `!**/.workflows` is the Biome half of the ignore list in docs/consumer-guide.md. Every job checks shared-workflows out beside the consumer, and a tool that globs the whole tree lints files the consumer does not own.",
+  "files": { "includes": ["**", "!**/.workflows"] }
+}

@@ -1,0 +1,5 @@
+# The git half of the `.workflows/` ignore list in docs/consumer-guide.md.
+# Not strictly required - the setup action writes .git/info/exclude, which is
+# local-only - but recommended so every clone ignores it, not just CI.
+/.workflows
+node_modules/
