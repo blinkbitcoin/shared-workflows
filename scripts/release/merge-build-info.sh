@@ -54,12 +54,22 @@ for f in "${overlays[@]}"; do log "overlay: $f"; done
 BUILD_INFO_BASE="$base" node --input-type=module -e '
 import { readFileSync, writeFileSync } from "node:fs";
 const base = process.env.BUILD_INFO_BASE;
-const info = JSON.parse(readFileSync(base, "utf8"));
+// A file that is not JSON is a wrong artifact or a truncated download, and the
+// reader must say which file rather than answering with a node stack trace.
+const readJson = (f) => {
+  try {
+    return JSON.parse(readFileSync(f, "utf8"));
+  } catch (error) {
+    console.error(`::error::${f} is not readable as JSON: ${error.message}`);
+    process.exit(1);
+  }
+};
+const info = readJson(base);
 info.artifacts = { ...(info.artifacts ?? {}) };
 // slice(1): with `node -e`, argv is [execPath, ...args] - there is no script
 // path in it, so the usual slice(2) would silently drop the first overlay.
 for (const f of process.argv.slice(1)) {
-  const overlay = JSON.parse(readFileSync(f, "utf8"));
+  const overlay = readJson(f);
   // Only artifacts: see the header. A platform copy is a snapshot of the base
   // record and must not be able to put a stale sha or stage back on it.
   info.artifacts = { ...info.artifacts, ...(overlay.artifacts ?? {}) };

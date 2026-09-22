@@ -147,6 +147,44 @@ what wants it, which input switches it off, whether a fallback exists, and the
 fix. The tables in this document and the checker read the same file, so a
 requirement cannot be true in one and absent from the other.
 
+## When something is missing
+
+Two shapes of failure, and which one you get is deliberate.
+
+**The contract check** above reports everything at once, before any gate runs.
+That is the one to read first.
+
+**A gate that fails on its own** carries the fix with it. Where the cause is
+something your repository does not provide, the annotation has three lines:
+
+```
+::error::consumer package.json has no "check:docs" script, and no check:docs binary in node_modules/.bin
+Fix: add a "check:docs" script, or switch the gate that calls it off in your caller - run
+check-consumer-contract for which input that is, and for everything else this repository is missing
+Contract: .../docs/consumer-guide.md#script-contract
+```
+
+Four places used to fail without any of that, and no longer do:
+
+| Was | Now |
+| --- | --- |
+| No mise config: `jdx/mise-action` installs nothing and succeeds, so the first symptom was `missing command: pnpm` two steps later | The `setup` action checks for a mise config, a `package.json` and a `pnpm-lock.yaml` **before** mise-action, and names whichever is absent |
+| A lockfile out of date with `package.json`: pnpm's own `ERR_PNPM_OUTDATED_LOCKFILE`, which names nothing about this family | The same error, wrapped with what to run and why CI installs frozen |
+| A `pnpm-lock.yaml` this family cannot read (anything but v9 at the repository root): `native-hash.sh` hashed **nothing** and produced a cache key that no longer tracked dependency versions — silently | Fatal, naming the shape it expected. A native dependency bump restoring a stale build is not a failure anyone would notice |
+| `.github/codeql/codeql-config.yml` absent: `codeql-action/init` failed on a path it could not read | The config file is passed only when it exists. CodeQL still runs, on its own defaults, and the contract check reports the difference as degraded |
+
+**Lane inputs are checked at the start of the job, not inside the lane.** All
+five of `APP_VERSION`, `APP_BUILD_NUMBER`, `IOS_BUNDLE_ID`, `IOS_SCHEME` and
+`ANDROID_PACKAGE` are `required: true` inputs, and that is weaker than it reads:
+a caller passes them as `${{ vars.IOS_BUNDLE_ID }}`, an unset repository
+variable interpolates to the empty string, and an empty string satisfies
+`required`. The only thing that rejected an empty value was your own Fastfile's
+`before_all` — which a repository adopting these workflows may not have at all,
+and which on the iOS lane only runs after prebuild and pod install, on a runner
+billing at ten times the Linux rate. `expo-build-ios.yml`,
+`expo-build-android.yml` and `fastlane-lane.yml` now assert all five as their
+first step, naming the repository variable to set.
+
 ## Consumer `ci.yml`
 
 ```yaml

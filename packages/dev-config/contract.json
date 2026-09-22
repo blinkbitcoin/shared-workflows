@@ -385,8 +385,8 @@
       "neededBy": "codeql.yml (config-file)",
       "toggle": null,
       "defaultOn": true,
-      "severity": "required",
-      "fix": "Add .github/codeql/codeql-config.yml, or pass config-file: '' in your caller. codeql-action/init fails on a config path it cannot read, and its error does not mention this family.",
+      "severity": "degrades",
+      "fix": "Add .github/codeql/codeql-config.yml, or pass config-file: '' in your caller. Without it the analysis still runs, on CodeQL's own defaults - so your path exclusions and the alert-suppression pack that makes an inline // codeql[rule-id] marker count are not applied.",
       "guide": "codeqlyml"
     },
 

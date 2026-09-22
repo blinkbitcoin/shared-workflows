@@ -3,6 +3,31 @@
 # shellcheck shell=bash
 log() { printf '%s\n' "$*" >&2; }
 die() { printf '::error::%s\n' "$*" >&2; exit 1; }
+# die_fix WHAT FIX [ANCHOR] - die with the remediation and the contract beside it.
+#
+# `die` is right for a failure whose fix is obvious from the message, and most
+# of the ~140 in this repo are exactly that. This is for the other kind: the
+# boundary where the consumer's repository does not provide something this
+# family needs. There the reader is often adopting these workflows, may never
+# have seen this repo, and "missing command: pnpm" is a true sentence that does
+# not help - the fix is a file they have not written yet.
+#
+# One annotation, not three. A GitHub annotation renders `%0A` as a line break,
+# so the whole thing stays attached to the step that failed instead of
+# scattering notices elsewhere in the log. `%25` first: the encoding is
+# percent-based, so escaping the percent sign after the newlines would eat them.
+die_fix() {
+  local what="$1" fix="$2" anchor="${3:-}"
+  local url="https://github.com/blinkbitcoin/shared-workflows/blob/v0/docs/consumer-guide.md"
+  [ -n "$anchor" ] && url="$url#$anchor"
+  local body="$what
+Fix: $fix
+Contract: $url"
+  body="${body//\%/%25}"
+  body="${body//$'\n'/%0A}"
+  printf '::error::%s\n' "$body" >&2
+  exit 1
+}
 group() { printf '::group::%s\n' "$*"; }
 endgroup() { printf '::endgroup::\n'; }
 gh_output() { if [ -n "${GITHUB_OUTPUT:-}" ]; then printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; else printf '%s=%s\n' "$1" "$2"; fi; }

@@ -164,6 +164,14 @@ jobs:
           persist-credentials: false
       - name: Free disk space
         uses: ./.workflows/.github/actions/free-disk
+      # Before anything is installed or built. All five are `required: true`
+      # inputs, and that is weaker than it reads: a caller passes them as
+      # `${{ vars.X }}`, an unset repository variable is the empty string, and
+      # an empty string satisfies `required`. The consumer's Fastfile rejects
+      # empty values in before_all - but only if it has that before_all, and
+      # only after prebuild and pod install have already been paid for.
+      - name: Check the lane inputs
+        run: bash ".workflows/scripts/release/require-inputs.sh"
       - name: Publish WORKFLOWS_DIR environment
         run: bash ".workflows/scripts/release/env-publish.sh"
       - name: Setup
