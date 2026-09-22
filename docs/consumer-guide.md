@@ -5,10 +5,16 @@ this repo.
 
 ## 60-second start
 
+0. Run `npx --package=@blinkbitcoin/dev-config check-consumer-contract` in your
+   repo to see what this family will need from it — see [The contract
+   check](#the-contract-check). `checks.yml` runs the same thing on every push.
 1. Add `.github/workflows/ci.yml` (below) to your app repo.
 2. Make sure your `package.json` has the scripts listed in [Script
-   contract](#script-contract) — everything is optional and defaulted; a
-   missing script only fails the check that calls it.
+   contract](#script-contract). Most of the toggles that call them default to
+   **on**, so "optional" means "you can switch the gate off in your caller", not
+   "you can leave it out and nothing happens": a repository with none of them
+   goes red on nine checks at once. Step 0 tells you which, and `--skeleton`
+   prints both ways out.
 3. Push. `checks` and `unit` run on every PR; `e2e` (Android by default) runs
    after them.
 4. Add `web.yml`, `pr-closed.yml`, `pr-title.yml` if you want those too (all
@@ -72,6 +78,74 @@ script to `package.json`, or pass `docs-check: false` in the caller. This is
 the first default-on toggle whose script name is a house invention rather than
 a near-universal convention (`typecheck`, `lint`, `format:check`, `spell`), so
 it is the one worth checking before you move the pin.
+
+## The contract check
+
+`checks.yml`'s first job runs one script — `check-consumer-contract` — against
+your repository and reports **everything** this family will need from it, before
+any of the gates that would each die on their own.
+
+It exists because the gates are good at explaining one failure and structurally
+incapable of explaining nine. Each runs in its own job and stops at the first
+thing it cannot find, so a repository that does not yet satisfy the contract
+learns it serially: a screen of parallel reds, each correct, and then the next
+missing piece one push later. The check collapses that into a single report.
+
+```
+FAIL  check:docs: no "check:docs" script in package.json. Fix: Add a "check:docs"
+      script deciding what 'docs are in order' means for your repository, or pass
+      docs-check: false in your caller.
+warn  deps:audit: no "deps:audit" script in package.json. Fix: Without a
+      "deps:audit" script, shared-workflows runs its own scripts/checks/audit.sh,
+      which is `pnpm audit` alone - no lockfile provenance check.
+```
+
+Two levels, and the difference matters:
+
+- **blocked** — a gate you asked for cannot run. The job fails.
+- **degraded** — this repo has a fallback, so the gate still runs, just not the
+  one you defined. The job does not fail. `deps:check`, `deps:audit`,
+  `check:ci`, `i18n:check` and `codegen:check` are the five that degrade; see
+  [Script contract](#script-contract) for why that seam exists.
+
+**It only reports what applies to you.** It reads your own `.github/workflows/`
+first: a repository that never calls `e2e.yml` is not told it is missing
+`.maestro/`, and a gate you passed `false` for is not a finding.
+
+A toggle wired to an expression — `typecheck: ${{ vars.TYPECHECK }}` — is
+neither. This job gates every other job in `checks.yml`, so blocking ten of
+them because a repository variable could not be read here would be a false
+failure, and staying quiet would hide a real one. Such a finding is reported as
+degraded and never blocks, with the reason saying so.
+
+It runs **before** the `setup` action, which is the point: a missing `.mise.toml`
+or `pnpm-lock.yaml` is exactly the kind of thing that otherwise surfaces as
+`missing command: pnpm`, several steps away from its cause. So it uses nothing
+but the runner's own node — no pnpm, no installed dependencies.
+
+### Running it yourself
+
+It ships in [`@blinkbitcoin/dev-config`](../packages/dev-config), so you can get
+the same report before you push:
+
+```sh
+pnpm add -D @blinkbitcoin/dev-config
+pnpm exec check-consumer-contract              # this repository
+pnpm exec check-consumer-contract --skeleton   # ...and the package.json and
+                                               #    caller changes that clear it
+```
+
+`--json` gives the same findings machine-readably. `--profile checks,unit`
+overrides the workflows it infers from your callers, which is what to use before
+you have written a caller at all.
+
+### The contract is data
+
+Every requirement lives in
+[`packages/dev-config/contract.json`](../packages/dev-config/contract.json) —
+what wants it, which input switches it off, whether a fallback exists, and the
+fix. The tables in this document and the checker read the same file, so a
+requirement cannot be true in one and absent from the other.
 
 ## Consumer `ci.yml`
 
@@ -376,6 +450,7 @@ mental model).
 | `prebuild-check` | `false` | Run the consumer's `check-prebuild`: prebuild both platforms into a temp dir and assert the config plugins produced what they should. **Minutes, not seconds** — enable it where the coverage earns the wall clock (on `main`, on a release, behind a label), not on every PR |
 | `bundle-secrets` | `false` | Run the consumer's `check:bundle-secrets`: export the bundle and assert no non-public key leaked into it. **Minutes, not seconds**, same advice as above |
 | `release-checks` | `false` | Install Ruby (`ruby/setup-ruby@v1`, `bundler-cache: true`) and run the consumer's `check:release` script — the Fastfile/Gemfile and release-config validation behind the template's `make check-release`. Off by default because a repo with no release setup has no such script |
+| `contract-check` | `true` | Report every unmet requirement of this family in one place, before the gates that would each die on their own — see [The contract check](#the-contract-check). `false` makes the step a no-op; the job itself still runs, because every other job in this workflow `needs:` it |
 | `docs-only-detection` | `true` | Classify the change as docs-only — on a `pull_request` **and** on a `push` |
 | `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern (`^docs/\|\.md$\|(^\|/)LICENSE$\|^\.github/ISSUE_TEMPLATE/\|^\.github/PULL_REQUEST_TEMPLATE`), not a replacement for it |
 
@@ -1498,7 +1573,7 @@ line for line, both repos read on the same date):
 | `codegen` | `scripts/checks/codegen.sh`, the fallback when a consumer ships no `codegen:check` | yes |
 | `deps:check` | `checks.yml` (`expo-doctor` toggle) — preferred over `scripts/checks/expo-doctor.sh` | yes (`expo install --check && expo-doctor`) |
 | `deps:audit` | `checks.yml` (`audit` toggle) — preferred over `scripts/checks/audit.sh` | yes (`pnpm audit --prod` + lockfile provenance) |
-| `check:ci` | `checks.yml` (`actionlint`/`shellcheck` toggles) — preferred over `scripts/ci/lint-ci.sh` | not yet in the template; the fallback runs |
+| `check:ci` | `checks.yml` (`actionlint`/`shellcheck` toggles) — preferred over `scripts/ci/lint-ci.sh` | yes (`make check-ci`) |
 | commitlint binary | `scripts/checks/commitlint.sh` (`commitlint` toggle, `pr-title.yml`) | n/a — `pnpm exec commitlint` when `@commitlint/cli` is a devDependency (it is), else `npx` with a pinned fallback config |
 | `test` | `unit.yml` (`test-script`, used when `coverage: false`) | yes |
 | `test:coverage` | `unit.yml` (`coverage-script`, default path) | yes |
@@ -1506,7 +1581,7 @@ line for line, both repos read on the same date):
 | `build:web` | `web.yml` (`export-script`) | yes |
 | `deps:licenses` | `checks.yml` (`licenses` toggle, on by default) | yes (`node scripts/check-licenses.mjs`) |
 | `check-prebuild` | `checks.yml` (`prebuild-check` toggle, **off** by default) | yes — expensive, so the template does not enable the toggle |
-| `check:bundle-secrets` | `checks.yml` (`bundle-secrets` toggle, **off** by default) | not yet in the template |
+| `check:bundle-secrets` | `checks.yml` (`bundle-secrets` toggle, **off** by default) | yes (`make bundle-secrets-check`) — the toggle stays off because it is minutes, not seconds |
 | `check:release` | `checks.yml` (`release-checks` toggle, off by default) | **opt-in** — only a consumer with a release setup ships it; the toggle stays `false` otherwise |
 | `badges:render` | `badges.yml` (`render-script`) | yes (`node scripts/badges/render.mjs`, driven by the `BADGE_*` environment above) |
 | `test:e2e:web` | `web.yml` (`e2e-script`) | yes (`bash scripts/e2e/web.sh`, which honors `PLAYWRIGHT_SKIP_EXPORT` — see [the Playwright / export contract](#the-playwright--export-contract)) |
@@ -1616,8 +1691,11 @@ whole tree:
 
 The template carries all seven: `biome.json` (`files.includes` →
 `"!**/.workflows"`), `eslint.config.mjs` (`ignores` → `'.workflows/**'`),
-`tsconfig.json` (`exclude` → `".workflows"`), `knip.json` (`ignore` →
-`".workflows/**"`), `typos.toml` (`[files] extend-exclude` → `".workflows/"`),
+`tsconfig.json` (`exclude` → `".workflows"`), `knip.json` (**the second
+answer**: its `project` and `entry` globs are all rooted — `src/**`,
+`plugins/**`, `scripts/**/*.mjs` — so none of them reaches into a sibling
+directory and there is nothing to exclude), `typos.toml`
+(`[files] extend-exclude` → `".workflows/"`),
 `jest.config.ts` (`testPathIgnorePatterns` → `'/\.workflows/'`) and `.gitignore`
 (`/.workflows`). Copy that set when bootstrapping a new consumer.
 

@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub>14 reusable workflows · 79 scripts · 433 tests · one pinned tag · one npm package</sub>
+<sub>15 reusable workflows · 85 scripts · 572 tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -173,7 +173,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Path                   | Responsibility                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/`   | The 17 workflows above. Thin: a workflow wires inputs and calls a script                                                  |
+| `.github/workflows/`   | The 19 workflows above. Thin: a workflow wires inputs and calls a script                                                  |
 | `.github/actions/`     | Five composite actions — `setup`, `maestro`, `native-key`, `free-disk`, `forensics` — the steps repeated across workflows |
 | `scripts/checks/`      | A gate each: audit, codegen, commitlint, expo-doctor, i18n; plus the scripts that pick the consumer's over this repo's    |
 | `scripts/ci/`          | Runner plumbing: Android SDK, KVM, disk pressure, pnpm store, badges, cancel-runs, tool versions                          |
@@ -184,8 +184,8 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, moving the major tag                                                           |
-| `test/`                | 61 bats files, 513 tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
-| `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table and the checks that enforce it, for repos to install                   |
+| `test/`                | 62 bats files, 531 tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide and the three explainers                                                                               |
 
 ## The tool table
@@ -218,6 +218,13 @@ full version instead when every change should be reviewed before it lands —
 [Versioning](docs/consumer-guide.md#versioning) covers both.
 
 ## What a consumer provides
+
+Run `npx --package=@blinkbitcoin/dev-config check-consumer-contract` in your
+repo for the list, checked rather than read: it reports every requirement of
+the workflows your callers actually name, with a fix per finding.
+`checks.yml` runs the same check as its first job, so an adopting repository
+gets one explanatory failure instead of nine parallel ones. See
+[the contract check](docs/consumer-guide.md#the-contract-check).
 
 **No secrets.** Every workflow here runs on `github.token`. Store credentials
 only ever enter the release workflows a repo chooses to call, from that repo's

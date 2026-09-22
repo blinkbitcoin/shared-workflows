@@ -13,7 +13,7 @@
 // Nix. Running `node --version` proves what a developer and CI will actually
 // run, under any provisioner.
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -64,7 +64,23 @@ export function formatResult(result) {
   return `  MISMATCH ${name} is ${found ?? 'unreadable'}, baseline pins ${want}`;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+// `realpathSync`, not `path.resolve` alone: node resolves symlinks when it loads
+// a module, so `import.meta.url` is the real path while `process.argv[1]` is
+// what the caller typed. A package manager installs a `bin` entry into
+// node_modules/.bin as a link, so the advertised `pnpm exec check-tool-versions`
+// made the two differ - and this guard then said "imported": no output, exit 0,
+// a version gate that silently passed. Only `node packages/.../bin/x.mjs`, the
+// path `make tool-versions` happens to use, ever ran.
+function runAsProgram() {
+  if (!process.argv[1]) return false;
+  try {
+    return fileURLToPath(import.meta.url) === realpathSync(path.resolve(process.argv[1]));
+  } catch {
+    return false;
+  }
+}
+
+if (runAsProgram()) {
   const table = readTable();
   const names = process.argv.slice(2);
   const wanted = names.length > 0 ? names : Object.keys(table.tools);

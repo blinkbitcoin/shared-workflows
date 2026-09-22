@@ -3,7 +3,7 @@
     "Minimal consumer fixture for test/consumer-contract.bats. Every script this",
     "workflow family calls is present as a no-op so the contract can be asserted",
     "on any machine, including self-ci, without a live consumer checkout.",
-    "Shape mirrors blinkbitcoin/react-native-mobile-template @ ca4d2ad: same",
+    "Shape mirrors blinkbitcoin/react-native-mobile-template: same",
     "script names, `knip` as a devDependency and deliberately NOT as a script",
     "(a script named `knip` fails expo-doctor's package.json check).",
     "Point WORKFLOWS_CONSUMER_ROOT at a real checkout to assert against that instead."
@@ -49,6 +49,8 @@
     "deps:audit": "node -e 0",
     "deps:licenses": "node -e 0",
     "check-prebuild": "node -e 0",
-    "check-bundle-secrets": "node -e 0"
+    "check-bundle-secrets": "node -e 0",
+    "check:bundle-secrets": "node -e 0",
+    "check:ci": "node -e 0"
   }
 }
