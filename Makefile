@@ -23,8 +23,15 @@ check-versions: ## Fail when workflow defaults disagree with scripts/lib/version
 	$(MISE) bash scripts/self/check-versions.sh
 tool-versions: ## Fail when an installed tool is not the version the baseline pins
 	$(MISE) node packages/dev-config/bin/check-tool-versions.mjs
-test-package: ## node:test for packages/dev-config
-	$(MISE) node --test "packages/dev-config/**/*.test.mjs"
+# Thresholds set at the measured baseline, so they ratchet rather than fail on
+# arrival. They are a floor against regression, not a claim that the rest is
+# untested: the uncovered ranges are the CLI entry points, which test/*.bats
+# exercises by running the binaries. Raise these when a change covers more;
+# never lower them to make a change fit.
+test-package: ## node:test for packages/dev-config, with coverage thresholds
+	$(MISE) node --test --experimental-test-coverage \
+		--test-coverage-lines=77 --test-coverage-branches=86 --test-coverage-functions=73 \
+		"packages/dev-config/**/*.test.mjs"
 spell: ## typos over the whole repo
 	$(MISE) typos
 check: shellcheck actionlint test test-package check-versions tool-versions spell ## Everything self-ci runs

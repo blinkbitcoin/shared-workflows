@@ -75,6 +75,28 @@ gate on every PR. Escape hatches exist for genuinely broken tooling
 (`git commit --no-verify`, `LEFTHOOK=0 git push`), and personal additions go in
 a gitignored `lefthook-local.yml` rather than in `lefthook.yml`.
 
+### A new script needs a test
+
+`test/script-coverage.bats` fails when a script under `scripts/` or
+`packages/dev-config/bin/` is executed by no test. Nothing enforced that before,
+which is how sixteen scripts came to have no coverage at all — three of them in
+the `setup` action, on the path of every job of every workflow.
+
+"Executed" means a test runs it, not that a test mentions it. Ten scripts were
+named only by tests that read their source — a grep for a pattern, an assertion
+about a comment — which reads as coverage in a listing while asserting nothing
+about behaviour.
+
+If a script genuinely cannot run from a bats suite, add it to `ALLOWED` in that
+file **with the reason**. The list is checked both ways: an entry naming a
+script that no longer exists fails, and so does an entry for a script that has
+since gained a test. An allowlist that outlives what it excuses is where
+coverage goes to be forgotten.
+
+`make test-package` carries coverage thresholds for the Node package, set at the
+measured baseline so they ratchet. Raise them when a change covers more; never
+lower them to make a change fit.
+
 ### Numbers in the docs
 
 A count in a doc — how many scripts, how many tests — is marked so a test can
