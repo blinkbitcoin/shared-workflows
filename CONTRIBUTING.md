@@ -75,6 +75,26 @@ gate on every PR. Escape hatches exist for genuinely broken tooling
 (`git commit --no-verify`, `LEFTHOOK=0 git push`), and personal additions go in
 a gitignored `lefthook-local.yml` rather than in `lefthook.yml`.
 
+### Numbers in the docs
+
+A count in a doc — how many scripts, how many tests — is marked so a test can
+check it:
+
+```markdown
+<sub><!--count:scripts-->12<!--/count--> scripts · <!--count:tests-->34<!--/count--> tests</sub>
+```
+
+`test/docs-facts.bats` derives each one from the repository and fails when they
+disagree. The numbers above are made up: a marker inside a fenced block is an
+example, and the extractor strips fences before it looks. HTML comments do not render, so the docs read normally. An unmarked
+number is not checked — marking one is how you opt in — but the counts the
+README leads with are marked and a case fails if a marker disappears.
+
+The same file holds job lists to `yq '.jobs[].name'` and any
+`owner/action@vN` a doc names to the version the workflows really pin. Both
+were wrong when it was written: the `Contract` job was in no table, and the
+guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
+
 ### The parity cases, and the seven skips you will see
 
 Seven cases need a real consumer checkout. Five compare something here against
