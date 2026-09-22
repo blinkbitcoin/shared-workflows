@@ -166,6 +166,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
+| That every script is executed by some test, or allow-listed with a reason | `test/script-coverage.bats` | `make test` |
 | Parity with the consumer's own copy of a shared script | `test/resolve-version.bats`, `test/build-info.bats`, `test/workflow-shape.bats` | `make test` **with `WORKFLOWS_TEMPLATE_DIR` set** |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
 
