@@ -149,6 +149,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 
 | Workflow                 | Jobs                 | What it does                                                                                                 |
 | ------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `release-pr-notes.yml`   | `Store Notes`        | Drafts the store notes into the release PR body, once, for a human to review before the release is cut       |
 | `expo-prepare.yml`       | `Prepare`            | Version, build number, native fingerprint, `build-info.json` and store notes, as one `release-meta` artifact |
 | `expo-build-ios.yml`     | `Build`              | Prebuild, pods, `fastlane ios build` then `verify`; uploads the IPA and dSYMs                                |
 | `expo-build-android.yml` | `Build`              | Prebuild, `fastlane android build` then `verify`; uploads the AAB, APK and mapping                           |
@@ -178,12 +179,12 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/ci/`          | Runner plumbing: Android SDK, KVM, disk pressure, pnpm store, badges, cancel-runs, tool versions                          |
 | `scripts/e2e/`         | The E2E machine: simulator and emulator boot, Metro start and wait, Maestro run, timeouts, forensics collection           |
 | `scripts/native/`      | Prebuild, pods, and the iOS and Android build and packaging steps                                                         |
-| `scripts/release/`     | Version resolution, fingerprints, build info, store notes, assets, hashes, secret decoding, the green-run gate            |
+| `scripts/release/`     | Version resolution, fingerprints, build info, store notes (and their draft into the release PR), assets, hashes, secrets |
 | `scripts/ota/`         | Fingerprint baseline and gate, export, publish, smoke                                                                     |
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
-| `scripts/lib/`         | Shared bash: common helpers, env building and validation, git cleanliness, the single pinned tool-version table           |
+| `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, moving the major tag                                                           |
-| `test/`                | 51 bats files, 435 tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | 61 bats files, 513 tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table and the checks that enforce it, for repos to install                   |
 | `docs/`                | The consumer guide and the three explainers                                                                               |
 

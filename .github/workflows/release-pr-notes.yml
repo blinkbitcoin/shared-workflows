@@ -1,0 +1,128 @@
+name: Release PR Notes
+# Draft the store release notes into a release-please PR body, once, for a
+# human to review with the version bump before the release is cut.
+#
+# release-please builds the GitHub release body from the text between the two
+# `---` lines of the merged PR body, so a `## Store notes` block written before
+# the closing rule reaches the release verbatim, and the release lanes read
+# that section back as the store text (expo-prepare's notes step with
+# `release-tag`). The block is marker-delimited and identical to what
+# github-release.yml's `append` mode writes, so a later append replaces it
+# in place rather than stacking a second heading.
+#
+# release-please rewrites the whole PR body on every push to main, and skips
+# the rewrite only when nothing changed - a body carrying this block always
+# differs from what it generates, so every push to main now updates the
+# release PR. The caller runs this job on every run that reports a PR, and
+# the script strips its own previous block before generating.
+#
+# Not part of self-act-smoke.yml: it needs a real PR to edit.
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Consumer repository (defaults to the caller's repository)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref to check out; pass the release PR's head branch so the prompt template and generator are the ones under release
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for every job in this workflow
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'v1'
+      pr-number:
+        description: Number of the release PR whose body receives the section (release-please's `pr` output, parsed in the caller's shell)
+        type: string
+        required: true
+      section-title:
+        description: Heading of the section written into the PR body; must match the `append-title` the release workflows use for the same section
+        type: string
+        default: 'Store notes'
+      notes-locales:
+        description: "Locales the consumer's scripts/release/notes.mjs should emit store notes for; store metadata locale names (en-US, de-DE), not language codes"
+        type: string
+        default: 'en-US'
+      build-env:
+        description: Flat JSON object of non-secret environment variables published before the notes generator runs (the LLM provider and model, STORE_NOTES_INCLUDE_CHANGELOG)
+        type: string
+        default: '{}'
+    secrets:
+      consumer-token:
+        description: Token for a private consumer checkout, and for editing the PR when the caller's GITHUB_TOKEN may not (defaults to github.token)
+        required: false
+      ANTHROPIC_API_KEY:
+        description: API key for the consumer's notes.mjs when it drafts store notes with Claude; unset simply means no LLM pass
+        required: false
+      OPENAI_API_KEY:
+        description: API key for the consumer's notes.mjs when it drafts store notes with an OpenAI-compatible endpoint
+        required: false
+permissions:
+  contents: read
+jobs:
+  notes:
+    name: Store Notes
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 15
+    # `gh pr edit` writes the PR body; the calling job must grant the same.
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      WORKING_DIRECTORY: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+          # fetch-depth: 0 for the commit-subject fallback, which reads the
+          # v* tags when the consumer ships no generator.
+          fetch-depth: 0
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Publish WORKFLOWS_DIR environment
+        run: bash ".workflows/scripts/release/env-publish.sh"
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
+      # No pnpm install: the consumer's generator has no runtime dependencies
+      # by contract (docs/consumer-guide.md, script contract), and the job only
+      # needs the node the consumer's .mise.toml pins.
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Store notes into the release PR
+        env:
+          GH_TOKEN: ${{ secrets.consumer-token || github.token }}
+          GH_REPO: ${{ inputs.repository || github.repository }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          SECTION_TITLE: ${{ inputs.section-title }}
+          NOTES_LOCALES: ${{ inputs.notes-locales }}
+          # The consumer's notes.mjs may draft store notes with an LLM; the
+          # provider/model live in build-env, only the keys are secrets.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bash "$WORKFLOWS_DIR/scripts/release/pr-notes.sh" "$PR_NUMBER"

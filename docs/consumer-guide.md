@@ -712,9 +712,9 @@ same rule somewhere else still shows up.
 
 ## Release workflows
 
-Six more reusable workflows cover the release path: version/notes preparation,
-signed store builds, arbitrary fastlane lanes, the GitHub release, and OTA
-publishing. They are strictly opt-in — nothing in `ci.yml` calls them — and
+Seven more reusable workflows cover the release path: the store notes drafted
+into the release PR, version/notes preparation, signed store builds, arbitrary
+fastlane lanes, the GitHub release, and OTA publishing. They are strictly opt-in — nothing in `ci.yml` calls them — and
 they follow every rule the workflows above do: `permissions: contents: read` at
 the top, no `concurrency` (the caller owns it), self-checkout into `.workflows/`,
 every `run:` a single `bash "$WORKFLOWS_DIR/scripts/..."` line, and **every secret
@@ -727,6 +727,7 @@ moving through the run):
 ```mermaid
 flowchart LR
   subgraph app["the app repo"]
+    releasepr["release-please.yml"]
     internal["release-internal.yml"]
     beta["release-beta.yml"]
     prod["release-production.yml"]
@@ -734,6 +735,7 @@ flowchart LR
     listing["store-metadata.yml"]
   end
   subgraph shared["shared-workflows @v0"]
+    prnotes["release-pr-notes.yml"]
     prepare["expo-prepare.yml"]
     ios["expo-build-ios.yml"]
     android["expo-build-android.yml"]
@@ -742,6 +744,7 @@ flowchart LR
     ota["expo-ota-publish.yml"]
   end
   artifacts[("the run's artifacts")]
+  releasepr -->|"pr-number, ref the release branch"| prnotes
   internal -->|"stage internal, reserve-tag, require-green ci.yml"| prepare
   internal -->|"version, build-number"| ios
   internal -->|"version, build-number"| android
@@ -767,7 +770,7 @@ flowchart LR
   artifacts -.->|"attached as the release's assets, plus SHA256SUMS"| release
 ```
 
-Nothing in the figure is a fixed order between the six: each caller decides its
+Nothing in the figure is a fixed order between the seven: each caller decides its
 own `needs:` chain, and the three tiers chain them differently. In
 `release-internal.yml` the store uploads run **before** the pre-release, and the
 pre-release names the two build jobs directly rather than the uploads, so a
@@ -1042,10 +1045,85 @@ way to read a stack trace from it and they die with the runner otherwise.
 > script and this note together. A wrong token name fails as an auth error, not
 > as a flag error.
 
+### `release-pr-notes.yml`
+
+Drafts the store release notes into a release-please PR body, once, for a
+human to review with the version bump. The section it writes is what the
+release lanes later ship: release-please builds the GitHub release body from
+the text between the two `---` lines of the merged PR body, and
+`expo-prepare.yml` with `release-tag` reads the `## Store notes` section of
+that body back verbatim (`notes.mjs --body-section`), so beta and production
+never regenerate what was reviewed.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Pass the release PR's head branch as `ref`, so the prompt template and the generator are the ones under release. `macos-runner` and `native-cache-version` are unused here |
+| `pr-number` | (required) | The release PR whose body receives the section: release-please's `pr` output, parsed in the caller's shell (`jq -r '.number // empty'`), never with `fromJSON()` in a step `env:` - the runner validates that even when the step's `if` is false, and the output is empty on a push that opens no PR |
+| `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `github-release.yml` `append` replaces the block in place |
+| `notes-locales` | `en-US` | Locales handed to the consumer's `scripts/release/notes.mjs`; store metadata locale names, not language codes |
+| `build-env` | `{}` | Non-secret environment for the generator: `RELEASE_NOTES_LLM_PROVIDER`, `RELEASE_NOTES_LLM_MODEL`, `OPENAI_BASE_URL`, `STORE_NOTES_INCLUDE_CHANGELOG` - see [`build-env`](#build-env) |
+
+No outputs. Secrets: `consumer-token`, `ANTHROPIC_API_KEY` and
+`OPENAI_API_KEY` (all optional; the two keys only matter when the consumer's
+generator drafts with an LLM, and without a generator the section is the
+commit-subject fallback, with a warning). The job declares
+`permissions: contents: read, pull-requests: write`, which the calling job
+must grant.
+
+The block is marker-delimited (`<!-- workflows:append:Store notes -->` …
+`<!-- /workflows:append:Store notes -->`) and byte-identical to what
+`github-release.yml`'s `append` mode writes: both come from
+`scripts/lib/body-section.sh`. It sits before the closing `---` of the PR
+body, after the changelog, and a body without such a rule gets it appended.
+Every run strips its own previous block before generating, so a stale draft
+never feeds the next one, and a run whose result equals the current body edits
+nothing. The generated text is refused - the job fails - if it carries a line
+of dashes or an HTML tag, since either would change how release-please splits
+the body.
+
+Two consequences a caller signs up for:
+
+- **Every push to `main` now rewrites the release PR.** release-please skips
+  its update only when the regenerated body equals the existing one, and a
+  body carrying this block always differs. A caller that also dispatches CI on
+  the release PR will see that CI run on every push too.
+- **A hand edit to the section survives only until the next push to `main`.**
+  Edit the prompt template instead (the next push regenerates), or edit the
+  GitHub release body after merging and before the beta run's Prepare reads it.
+
+The template's `release-please.yml` calls it as a second job:
+
+```yaml
+  store-notes:
+    name: Store Notes
+    needs: release-please
+    if: ${{ needs.release-please.outputs.pr-number != '' }}
+    uses: blinkbitcoin/shared-workflows/.github/workflows/release-pr-notes.yml@v0
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      pr-number: ${{ needs.release-please.outputs.pr-number }}
+      ref: ${{ needs.release-please.outputs.pr-branch }}
+      build-env: >-
+        {"STORE_NOTES_INCLUDE_CHANGELOG":"${{ vars.STORE_NOTES_INCLUDE_CHANGELOG }}",
+         "RELEASE_NOTES_LLM_PROVIDER":"${{ vars.RELEASE_NOTES_LLM_PROVIDER }}",
+         "RELEASE_NOTES_LLM_MODEL":"${{ vars.RELEASE_NOTES_LLM_MODEL }}",
+         "OPENAI_BASE_URL":"${{ vars.OPENAI_BASE_URL }}"}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+where the first job exposes `pr-number` and `pr-branch` from release-please's
+`pr` output, parsed in the shell. Nothing downstream waits on this job: the
+beta and web dispatches live in the first job, so a red `Store Notes` never
+withholds a release, and `gh run rerun --failed` re-drafts the section.
+
 ### `build-env`
 
-`expo-prepare.yml`, `expo-build-ios.yml`, `expo-build-android.yml` and
-`fastlane-lane.yml` take a `build-env` input: a flat JSON object of **non-secret**
+`expo-prepare.yml`, `expo-build-ios.yml`, `expo-build-android.yml`,
+`fastlane-lane.yml` and `release-pr-notes.yml` take a `build-env` input: a flat JSON object of **non-secret**
 environment variables, published to `$GITHUB_ENV` before prebuild, the lanes and
 the consumer scripts run. It is the only way a caller can get a value into those
 places — nothing else in the family forwards arbitrary environment.
@@ -1101,7 +1179,8 @@ applied, so `sentry_auth_token` is refused exactly as `SENTRY_AUTH_TOKEN` is.
 
 So `RELEASE_NOTES_LLM_PROVIDER` / `RELEASE_NOTES_LLM_MODEL` /
 `OPENAI_BASE_URL` / `STORE_NOTES_INCLUDE_CHANGELOG` go in `build-env`, while
-`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are declared secrets on `expo-prepare.yml`.
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are declared secrets on
+`expo-prepare.yml` and `release-pr-notes.yml`.
 
 ### Preparing from a release tag
 
