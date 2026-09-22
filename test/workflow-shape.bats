@@ -22,7 +22,7 @@ setup() {
 @test "every reusable workflow this family publishes is present" {
   for w in checks unit e2e web badges pr-closed pr-title codeql \
     expo-prepare expo-build-ios expo-build-android \
-    fastlane-lane github-release expo-ota-publish; do
+    fastlane-lane github-release expo-ota-publish release-pr-notes; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
       return 1
@@ -275,7 +275,7 @@ $(names "$real")"
 }
 
 @test "every workflow that runs prebuild, a lane or the notes generator accepts build-env" {
-  for w in expo-prepare expo-build-ios expo-build-android fastlane-lane; do
+  for w in expo-prepare expo-build-ios expo-build-android fastlane-lane release-pr-notes; do
     f="$REPO_ROOT/.github/workflows/$w.yml"
     have=$(yq -r '.on.workflow_call.inputs | has("build-env")' "$f")
     [ "$have" = "true" ] || fail "$w.yml does not declare a build-env input"
