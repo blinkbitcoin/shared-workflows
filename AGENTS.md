@@ -40,14 +40,16 @@ Every row is a make target; nothing here is run through a package manager.
 | Target | |
 |---|---|
 | `make hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
-| `make check` | Everything self-ci runs: the seven gates below |
+| `make check` | Everything self-ci runs: the nine gates below |
 | `make shellcheck` | shellcheck every script under `scripts/` (bash strict) |
 | `make actionlint` | Lint the workflows and composite actions |
+| `make zizmor` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`) |
 | `make test` | The bats suite over the pure scripts |
 | `make test-package` | `node:test` over `packages/dev-config` |
 | `make check-versions` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
 | `make tool-versions` | Fail when an installed tool is not the version `packages/dev-config/versions.json` pins |
 | `make spell` | typos over the whole repo |
+| `make secrets` | Scan the whole git history for committed secrets (gitleaks) |
 | `make smoke-local` | Prepare against the template with nektos/act — Docker and a pushed branch required; not part of `check` (CONTRIBUTING.md, "Running the release pipeline locally") |
 | `make smoke-local-android` | `smoke-local`, then the unsigned Android build |
 | `make help` | Show every target with its description |
@@ -180,7 +182,7 @@ WORKFLOWS_CONSUMER_ROOT=~/Dev/blink/react-native-mobile-template \
 ```
 
 `WORKFLOWS_CONSUMER_ROOT` is what `consumer-contract.bats` reads; `WORKFLOWS_TEMPLATE_DIR`
-is what the parity cases read. **Without them seven cases skip**, saying `parity
+is what the parity cases read. **Without them eight cases skip**, saying `parity
 NOT verified` rather than implying the copies agree. `WORKFLOWS_PARITY_REQUIRED=1`
 turns such a skip into a failure, which is what makes the CI job honest.
 

@@ -23,12 +23,14 @@ grep -q "yq = \"$YQ_VERSION\"" .mise.toml || { echo "::error::.mise.toml yq != $
 grep -qE '^bats = "[0-9]+\.[0-9]+\.[0-9]+"$' .mise.toml || { echo "::error::.mise.toml bats must be pinned to an exact version"; fail=1; }
 grep -q "typos = \"$TYPOS_VERSION\"" .mise.toml || { echo "::error::.mise.toml typos != $TYPOS_VERSION"; fail=1; }
 grep -q "lefthook = \"$LEFTHOOK_VERSION\"" .mise.toml || { echo "::error::.mise.toml lefthook != $LEFTHOOK_VERSION"; fail=1; }
+grep -q "zizmor = \"$ZIZMOR_VERSION\"" .mise.toml || { echo "::error::.mise.toml zizmor != $ZIZMOR_VERSION"; fail=1; }
+grep -q "gitleaks = \"$GITLEAKS_VERSION\"" .mise.toml || { echo "::error::.mise.toml gitleaks != $GITLEAKS_VERSION"; fail=1; }
 
 # The package ships versions.json to consumers, who have neither this file nor
 # .mise.toml. Bind the two tables here so a tool version still lives in exactly
 # one place - the bug this whole check exists to prevent, one level up.
 table=packages/dev-config/versions.json
-for pair in "actionlint:$ACTIONLINT_VERSION" "shellcheck:$SHELLCHECK_VERSION" "yq:$YQ_VERSION" "typos:$TYPOS_VERSION" "lefthook:$LEFTHOOK_VERSION"; do
+for pair in "actionlint:$ACTIONLINT_VERSION" "shellcheck:$SHELLCHECK_VERSION" "yq:$YQ_VERSION" "typos:$TYPOS_VERSION" "lefthook:$LEFTHOOK_VERSION" "zizmor:$ZIZMOR_VERSION" "gitleaks:$GITLEAKS_VERSION"; do
   tool=${pair%%:*}
   want=${pair#*:}
   got=$(yq -r ".tools.\"$tool\".version" "$table")

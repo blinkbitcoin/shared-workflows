@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->15<!--/count--> reusable workflows · <!--count:scripts-->89<!--/count--> scripts · <!--count:tests-->618<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->15<!--/count--> reusable workflows · <!--count:scripts-->90<!--/count--> scripts · <!--count:tests-->625<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -20,7 +20,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
-<!--count:shell-scripts-->87<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
+<!--count:shell-scripts-->88<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
 hang, wait for Metro, hash the native inputs so a build cache means something,
 decode signing secrets without leaving them on disk, upload a build and then
 prove that the artifact uploaded is the one that was built.
@@ -137,7 +137,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | `Prebuild`     | Both platforms prebuild, and the config plugins emit what they claim         |
 | `Secrets`      | No non-public key reaches the exported JS bundle                             |
 | `Release`      | Ruby syntax, fastlane lane parse, lane unit tests                            |
-| `Tooling`      | actionlint and shellcheck over the CI itself                                 |
+| `Tooling`      | actionlint, shellcheck and zizmor over the CI; gitleaks over the history     |
 | `Commits`      | commitlint over the PR's commits                                             |
 
 ### The rest, on a pull request or a push
@@ -191,7 +191,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table |
-| `test/`                | <!--count:bats-files-->70<!--/count--> bats files, <!--count:tests-->618<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->71<!--/count--> bats files, <!--count:tests-->625<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
@@ -215,8 +215,8 @@ npx --package=@blinkbitcoin/dev-config check-tool-versions typos shellcheck
 ```
 
 `make check-versions` binds `versions.json` to `scripts/lib/versions.sh` and
-`.mise.toml` for the five tools the workflows install themselves (`actionlint`,
-`shellcheck`, `yq`, `typos`, `lefthook`), and one-way for `bats`, `node` and
+`.mise.toml` for the seven tools the workflows install themselves (`actionlint`,
+`shellcheck`, `yq`, `typos`, `lefthook`, `zizmor`, `gitleaks`), and one-way for `bats`, `node` and
 `pnpm`. It is not a whole-file check: `act` is pinned in `.mise.toml` alone and
 is checked by nothing.
 

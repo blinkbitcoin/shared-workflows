@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # A release has a week to be yanked before it is proposed here. Security
+    # updates are exempt from the cooldown and still arrive at once.
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:

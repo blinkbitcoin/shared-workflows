@@ -5,17 +5,20 @@ on:
 concurrency:
   group: self-release-${{ github.ref }}
   cancel-in-progress: false
+# Read-only at the top: each job asks for what it writes, so a job added later
+# starts with nothing rather than inheriting release rights.
 permissions:
-  contents: write
-  pull-requests: write
-  # `gh workflow run` in the dispatch step below. Top-level because the
-  # release-please job carries no block of its own.
-  actions: write
+  contents: read
 jobs:
   release-please:
     name: Release PR
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      # `gh workflow run` in the dispatch step below.
+      actions: write
     env:
       # Job-level on purpose: a step's `if` cannot read that step's own env.
       HAVE_RELEASE_TAGGER_APP: ${{ secrets.RELEASE_TAGGER_APP_ID != '' && secrets.RELEASE_TAGGER_APP_PRIVATE_KEY != '' }}
@@ -49,6 +52,11 @@ jobs:
         with:
           app-id: ${{ secrets.RELEASE_TAGGER_APP_ID }}
           private-key: ${{ secrets.RELEASE_TAGGER_APP_PRIVATE_KEY }}
+          # Only what release-please does with it: the release PR, its labels,
+          # the tag and the GitHub release. Without these the token carries
+          # every permission the App's installation has.
+          permission-contents: write
+          permission-pull-requests: write
       - name: Release please
         id: release
         uses: googleapis/release-please-action@v5

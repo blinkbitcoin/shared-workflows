@@ -6,7 +6,7 @@ table and the rules CI enforces. This file covers the workflow around a change.
 ## Setup
 
 ```sh
-mise trust && mise install   # node, pnpm, shellcheck, actionlint, bats, yq, typos, lefthook, act
+mise trust && mise install   # node, pnpm, shellcheck, actionlint, zizmor, gitleaks, bats, yq, typos, lefthook, act
 make hooks                   # install the git hooks (once per clone, see below)
 make check                   # verify the toolchain by running every gate
 ```
@@ -65,12 +65,12 @@ their pin. Mark breaking changes with `!` (`feat(workflows)!: ...`) or a
 ## Before you push
 
 ```sh
-make check   # shellcheck, actionlint, bats, test-package, check-versions, tool-versions, typos
+make check   # shellcheck, actionlint, zizmor, bats, test-package, check-versions, tool-versions, typos, gitleaks
 ```
 
 The `pre-push` hook runs exactly that, and `pre-commit` runs a faster subset on
-staged files (shellcheck, actionlint when anything under `.github/` is staged,
-typos). They are a safety net, not a substitute: `self-ci.yml` runs the same
+staged files (shellcheck, actionlint and zizmor when anything under `.github/`
+is staged, typos, gitleaks over the staged diff). They are a safety net, not a substitute: `self-ci.yml` runs the same
 gate on every PR. Escape hatches exist for genuinely broken tooling
 (`git commit --no-verify`, `LEFTHOOK=0 git push`), and personal additions go in
 a gitignored `lefthook-local.yml` rather than in `lefthook.yml`.
@@ -117,11 +117,11 @@ The same file holds job lists to `yq '.jobs[].name'` and any
 were wrong when it was written: the `Contract` job was in no table, and the
 guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
 
-### The parity cases, and the seven skips you will see
+### The parity cases, and the eight skips you will see
 
-Seven cases need a real consumer checkout. Five compare something here against
+Eight cases need a real consumer checkout. Six compare something here against
 the consumer's own copy of it — `resolve-version.sh`, `build-info.sh`, the App
-Review names the fastlane lanes read, and the two that hold the consumer's
+Review names the fastlane lanes read, and the three that hold the consumer's
 `make ci` / `make check` to the gates CI runs. The other two check that the
 consumer satisfies the contract at all. This repo serves any consumer, so it
 has no business guessing where one sits on your machine: without a checkout to

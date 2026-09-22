@@ -383,6 +383,75 @@ developer cannot run locally with one command."
   done
 }
 
+# Every script name any CI step can run, opt-in steps included: the names the
+# steps spell out, the defaults of the `*-script` inputs the unit workflow
+# spells them through, and the run-consumer-or.sh names.
+all_ci_script_names() {
+  local f
+  {
+    for f in checks unit; do
+      yq -r '.jobs[].steps[]?
+        | select((.run? // "") | test("run-script.sh|run-consumer-or.sh"))
+        | (.env.SCRIPT_NAME // "")' "$REPO_ROOT/.github/workflows/$f.yml"
+      yq -r '.on.workflow_call.inputs | to_entries[]
+        | select(.key | test("-script$")) | .value.default' "$REPO_ROOT/.github/workflows/$f.yml"
+    done
+    grep -oE "run-consumer-or\.sh\" '[^']+'" "$REPO_ROOT/.github/workflows/checks.yml" |
+      sed "s/.*'\\(.*\\)'/\\1/"
+  } | grep -v '^$' | grep -v '\${{' | sort -u
+}
+
+# The recipe lines of one make target, and only that target's.
+target_recipe() {
+  MAKE_TARGET="$1" node -e '
+const fs = require("node:fs");
+let current = null;
+for (const line of fs.readFileSync(process.argv[1], "utf8").split("\n")) {
+  const m = /^([A-Za-z0-9_-]+):([^=]*)$/.exec(line);
+  if (m) { current = m[1]; continue; }
+  if (current === process.env.MAKE_TARGET && /^\s/.test(line)) console.log(line);
+}
+' "$CONSUMER/Makefile"
+}
+
+# The generic form of the case above, which checks a hand-kept list of markers
+# and so could only catch the orphans someone thought to list. The template's
+# skills tests and its empty-coverage check both ran in `make ci` and in no CI
+# job, and neither was on the list. Here every target `make ci` reaches that
+# has a recipe of its own must be one CI runs: by name (`check-docs` is
+# `check:docs`), or because every pnpm script its recipe runs is one CI runs.
+@test "every target make ci reaches with a recipe of its own is run by some CI step" {
+  require_consumer
+  command -v yq >/dev/null || skip "yq not installed"
+  [ -f "$CONSUMER/Makefile" ] || parity_skip "no Makefile at $CONSUMER - cannot compare the two gate sets"
+
+  names="$(all_ci_script_names)"
+  [ "$(grep -c . <<<"$names")" -ge 10 ] \
+    || fail "parsed only '$names' from the workflow YAML - has the step shape changed?"
+  dashed="$(tr ':' '-' <<<"$names")"
+
+  orphans=()
+  while IFS= read -r target; do
+    [ -n "$target" ] || continue
+    recipe="$(target_recipe "$target")"
+    # An aggregate (`check: check-code check-gen ...`) has no recipe; each of
+    # its prerequisites is visited on its own.
+    [ -n "$recipe" ] || continue
+    grep -qxF -- "$target" <<<"$dashed" && continue
+    scripts="$(grep -oE 'pnpm (run )?[A-Za-z0-9:_-]+' <<<"$recipe" | awk '{print $NF}')"
+    if [ -z "$scripts" ]; then
+      orphans+=("$target")
+      continue
+    fi
+    while IFS= read -r s; do
+      grep -qxF -- "$s" <<<"$names" || orphans+=("$target (pnpm $s)")
+    done <<<"$scripts"
+  done < <(make_reachable ci)
+
+  [ "${#orphans[@]}" -eq 0 ] || fail "\`make ci\` in $CONSUMER runs these, and no CI step does: ${orphans[*]}
+Fold the gate into a script CI already runs, or give it a CI step."
+}
+
 # --- a caller must grant what the workflow it calls asks for -----------------
 #
 # GitHub only ever lets a called workflow NARROW the caller's token, never widen
