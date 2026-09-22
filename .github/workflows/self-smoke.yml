@@ -18,6 +18,10 @@ on:
         description: Run the Android E2E suite
         type: boolean
         default: true
+      contract-only:
+        description: Only check the target's contract, then stop (seconds, no runners spent on gates)
+        type: boolean
+        default: false
   schedule:
     # Weekly, Monday 06:17 UTC. Odd minute to avoid the top-of-hour GitHub
     # Actions cron stampede.
@@ -41,7 +45,12 @@ jobs:
     with:
       repository: ${{ inputs.repository || 'blinkbitcoin/react-native-mobile-template' }}
       ref: ${{ inputs.ref || 'main' }}
+      # `github.event_name ==` rather than `inputs.contract-only` alone: on the
+      # schedule trigger there is no inputs context, and the cron run must be
+      # the full suite. Same reasoning as the e2e toggles below.
+      contract-only: ${{ github.event_name == 'workflow_dispatch' && inputs.contract-only }}
   unit:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.contract-only }}
     name: Unit
     uses: ./.github/workflows/unit.yml
     with:
@@ -49,6 +58,7 @@ jobs:
       ref: ${{ inputs.ref || 'main' }}
   e2e:
     name: E2E
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.contract-only }}
     uses: ./.github/workflows/e2e.yml
     with:
       repository: ${{ inputs.repository || 'blinkbitcoin/react-native-mobile-template' }}
