@@ -13,6 +13,27 @@ setup() { source "$REPO_ROOT/scripts/lib/common.sh"; }
 @test "die exits 1 with an ::error annotation" {
   run die "boom"; [ "$status" -eq 1 ]; [[ "$output" == *"::error::boom"* ]] || fail "assertion failed; output: $output"
 }
+@test "die_fix carries the remediation and the contract in one annotation" {
+  run die_fix "no mise config in /repo" "add a .mise.toml" "60-second-start"
+  [ "$status" -eq 1 ] || fail "die_fix must exit 1; status: $status"
+  # One annotation, not three: a second ::error:: would detach from the step.
+  [ "$(printf '%s\n' "$output" | grep -c '::error::')" -eq 1 ] || fail "expected one annotation: $output"
+  contains "$output" "no mise config in /repo" || fail "$output"
+  contains "$output" "%0AFix: add a .mise.toml" || fail "the fix is not on its own line: $output"
+  contains "$output" "consumer-guide.md#60-second-start" || fail "no contract link: $output"
+}
+@test "die_fix without an anchor links the guide itself, not a dangling #" {
+  run die_fix "something" "do the thing"
+  contains "$output" "Contract: https://github.com/blinkbitcoin/shared-workflows/blob/v0/docs/consumer-guide.md" || fail "expected a guide link: $output"
+  not_contains "$output" "consumer-guide.md#" || fail "an empty anchor leaked: $output"
+}
+@test "die_fix escapes a percent sign so it cannot eat the line breaks" {
+  # The annotation encoding is percent-based. Escaping %25 after inserting the
+  # %0A newlines would turn each of them into a literal "%0A" in the log.
+  run die_fix "coverage fell to 90% of the threshold" "raise it"
+  contains "$output" "90%25 of the threshold" || fail "$output"
+  contains "$output" "%0AFix: raise it" || fail "the newlines did not survive: $output"
+}
 @test "gh_env_once appends key=value once, even called twice with the same GITHUB_ENV" {
   GITHUB_ENV="$BATS_TEST_TMPDIR/env"; export GITHUB_ENV
   : > "$GITHUB_ENV"

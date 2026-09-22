@@ -7,6 +7,17 @@ source "$(dirname "$0")/../lib/common.sh"
 root="${1:-$(consumer_root)}"
 require_cmd yq shasum
 lock="$root/pnpm-lock.yaml"; [ -f "$lock" ] || die "no pnpm-lock.yaml in $root"
+# Assert the shape before reading it. Every query below is `.importers["."]…`,
+# which is lockfile v9. On an older lockfile - or a workspace whose root is not
+# "." - those queries return nothing and `// {}` turns that into an empty list
+# WITHOUT an error: the hash is then computed from the config files alone, the
+# cache key stops tracking dependency versions entirely, and a native dependency
+# bump silently restores a stale build. A wrong answer no one is told about is
+# worse than a failure, so this is fatal rather than a warning.
+yq -e '.importers["."]' "$lock" >/dev/null 2>&1 || die_fix \
+  "$lock has no importers[\".\"] - this reads a pnpm lockfile v9 written at the repository root" \
+  "upgrade the lockfile with a current pnpm (pnpm install), or, for a workspace whose app is not at the root, point working-directory at the package that owns pnpm-lock.yaml" \
+  "60-second-start"
 deps=$(yq -r '.importers["."].dependencies // {} | to_entries[] | (.key + "@" + .value.version)' "$lock")
 # The prefix test below is intentionally unanchored at the end (no trailing
 # `/` or `$`), so it also matches e.g. expo-doctor and react-native-web, not

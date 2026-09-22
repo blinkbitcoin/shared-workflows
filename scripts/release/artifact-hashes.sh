@@ -60,7 +60,17 @@ aab_sha=""
 BUILD_INFO_SRC="$src" BUILD_INFO_DEST="$dest" APK_SHA256="$apk_sha" AAB_SHA256="$aab_sha" \
   node --input-type=module -e '
 import { readFileSync, writeFileSync } from "node:fs";
-const info = JSON.parse(readFileSync(process.env.BUILD_INFO_SRC, "utf8"));
+// A file that is not JSON is a wrong artifact or a truncated download, and the
+// reader must say which file rather than answering with a node stack trace.
+const readJson = (f) => {
+  try {
+    return JSON.parse(readFileSync(f, "utf8"));
+  } catch (error) {
+    console.error(`::error::${f} is not readable as JSON: ${error.message}`);
+    process.exit(1);
+  }
+};
+const info = readJson(process.env.BUILD_INFO_SRC);
 // Merged, not replaced: build-info.json ships an `artifacts` object precisely
 // so each stage can add what it knows without dropping what another wrote.
 info.artifacts = { ...(info.artifacts ?? {}) };

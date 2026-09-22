@@ -124,7 +124,21 @@ jobs:
           # The suite, the alert-suppression pack (what makes an inline
           # `// codeql[rule-id]` marker count) and the path exclusions all live
           # in the consumer's config file, so local and CI cannot diverge.
-          config-file: ${{ inputs.config-file }}
+          #
+          # Passed only when it exists. codeql-action/init fails outright on a
+          # config path it cannot read, with its own message naming neither this
+          # workflow family nor what the file is for - and this workflow is
+          # informational by design (a caller must not make it a required
+          # check), so dying on a file the consumer never had is the wrong
+          # trade. Empty means CodeQL's own defaults: the analysis still runs,
+          # without the consumer's exclusions or suppression pack. That
+          # difference is reported, not hidden - `checks.yml`'s contract job
+          # names a missing config file as a degraded requirement.
+          #
+          # `A && B || C` yields B when A is truthy: `inputs.config-file` is a
+          # non-empty string, so the middle operand can never be the falsy one
+          # that makes this idiom bite.
+          config-file: ${{ hashFiles(inputs.config-file) != '' && inputs.config-file || '' }}
       - name: Analyze
         uses: github/codeql-action/analyze@v4
         with:
