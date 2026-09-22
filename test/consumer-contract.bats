@@ -173,7 +173,7 @@ on_block() {
   missing=()
   for wf in checks unit e2e web badges pr-title codeql \
     expo-prepare expo-build-ios expo-build-android \
-    fastlane-lane github-release expo-ota-publish; do
+    fastlane-lane github-release expo-ota-publish release-pr-notes; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     [ -n "$section" ] || fail "no '### \`$wf.yml\`' section in docs/consumer-guide.md"
@@ -188,6 +188,32 @@ on_block() {
     done <<<"$inputs"
   done
   [ "${#missing[@]}" -eq 0 ] || fail "undocumented inputs: ${missing[*]}"
+}
+
+@test "every input the guide documents still exists in that workflow" {
+  # The other direction. The case above catches an input added to a workflow and
+  # never written down; this one catches a row left behind when an input is
+  # removed or renamed - a phantom a reader would try to pass.
+  command -v yq >/dev/null || skip "yq not installed"
+  phantom=()
+  for wf in checks unit e2e web badges pr-title codeql \
+    expo-prepare expo-build-ios expo-build-android \
+    fastlane-lane github-release expo-ota-publish release-pr-notes; do
+    file="$REPO_ROOT/.github/workflows/$wf.yml"
+    section="$(guide_section "$wf.yml")"
+    inputs="$(yq -r '.on.workflow_call.inputs | keys | .[]' "$file")"
+    # Only the first column of a table row: prose and "Meaning" cells name
+    # plenty of things that are not inputs of this workflow.
+    while read -r row; do
+      name="$(sed -E 's/^\| `([a-z0-9-]+)`.*/\1/' <<<"$row")"
+      [ "$name" != "$row" ] || continue
+      # Rows that list several inputs at once ("`repository`, `ref`, ...") are
+      # the common quintet, documented as a group on purpose.
+      case "$row" in *'`, `'*) continue ;; esac
+      grep -qxF "$name" <<<"$inputs" || phantom+=("$wf.yml:$name")
+    done <<<"$(grep -E '^\| `[a-z0-9-]+` \|' <<<"$section")"
+  done
+  [ "${#phantom[@]}" -eq 0 ] || fail "the guide documents inputs that no longer exist: ${phantom[*]}"
 }
 
 @test "pr-closed.yml really declares no workflow_call inputs" {
