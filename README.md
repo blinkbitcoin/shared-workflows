@@ -54,7 +54,9 @@ flowchart LR
 
 - **Adopting it in an app repo** — [Calling it](#calling-it) is the caller to
   copy, [Pinning](#pinning) explains why `@v0` moves, [What a consumer
-  provides](#what-a-consumer-provides) is the short list of settings.
+  provides](#what-a-consumer-provides) is the short list of settings. For an app
+  that was **not** generated from the template,
+  [adopting-an-existing-repo.md](docs/adopting-an-existing-repo.md) is the page.
 - **Debugging a red run** — [Every workflow and its
   jobs](#every-workflow-and-its-jobs) says which job owns the failure,
   [forensics.md](docs/forensics.md) is what a failed E2E run left behind,
@@ -241,6 +243,10 @@ Two optional secrets. `RELEASE_PLEASE_TOKEN`, because a PR opened with
 merge. And `consumer-token`, only when the smoke target is private.
 
 ## Documentation
+
+[**Adopting it in an existing app**](docs/adopting-an-existing-repo.md) is the
+page for a repository that was not generated from the template: what it has to
+provide, per workflow it calls, and the two ways to satisfy each gate.
 
 [**Consumer guide**](docs/consumer-guide.md) is the contract: every input,
 output and secret, the full caller examples, and the gotchas encoded here so

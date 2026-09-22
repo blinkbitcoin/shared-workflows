@@ -119,6 +119,15 @@ on:
           the job still runs, because every other job needs it (see the job).
         type: boolean
         default: true
+      contract-only:
+        description: >-
+          Run the contract check and nothing else. For a repository that is
+          still being wired up: it answers "would these workflows work here?"
+          in seconds, without spending runners on gates that cannot pass yet.
+          A run under this flag gates nothing, so it says so - the job logs a
+          warning and the summary names it. Not a setting to leave on.
+        type: boolean
+        default: false
       docs-only-detection:
         description: Classify the PR as docs-only so callers can skip downstream jobs
         type: boolean
@@ -211,10 +220,12 @@ jobs:
         if: ${{ inputs.contract-check }}
         env:
           WORKING_DIRECTORY: ${{ inputs.working-directory }}
+          WORKFLOWS_CONTRACT_ONLY: ${{ inputs.contract-only }}
         run: bash ".workflows/scripts/ci/contract-check.sh"
   code:
     name: Code
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -268,6 +279,7 @@ jobs:
   generated:
     name: Generated
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -301,6 +313,7 @@ jobs:
   docs:
     name: Docs
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -336,6 +349,7 @@ jobs:
   dependencies:
     name: Dependencies
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -407,6 +421,7 @@ jobs:
   prebuild:
     name: Prebuild
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 30
     steps:
@@ -436,6 +451,7 @@ jobs:
   bundle-secrets:
     name: Secrets
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 25
     steps:
@@ -468,6 +484,7 @@ jobs:
   release:
     name: Release
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -509,6 +526,7 @@ jobs:
   tooling:
     name: Tooling
     needs: contract
+    if: ${{ !inputs.contract-only }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -538,7 +556,7 @@ jobs:
   commits:
     name: Commits
     needs: contract
-    if: ${{ inputs.commitlint && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
+    if: ${{ !inputs.contract-only && ( inputs.commitlint && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' ) }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 5
     steps:

@@ -8,6 +8,8 @@ this repo.
 0. Run `npx --package=@blinkbitcoin/dev-config check-consumer-contract` in your
    repo to see what this family will need from it — see [The contract
    check](#the-contract-check). `checks.yml` runs the same thing on every push.
+   If your app was **not** generated from the template, start at
+   [adopting-an-existing-repo.md](adopting-an-existing-repo.md) instead.
 1. Add `.github/workflows/ci.yml` (below) to your app repo.
 2. Make sure your `package.json` has the scripts listed in [Script
    contract](#script-contract). Most of the toggles that call them default to
@@ -138,6 +140,22 @@ pnpm exec check-consumer-contract --skeleton   # ...and the package.json and
 `--json` gives the same findings machine-readably. `--profile checks,unit`
 overrides the workflows it infers from your callers, which is what to use before
 you have written a caller at all.
+
+### Trying it against a real run
+
+`check-consumer-contract` predicts; the [Smoke](../.github/workflows/self-smoke.yml)
+workflow in this repository actually runs. It takes any repository and ref, so
+you can point it at yours before you have committed a caller at all:
+
+```sh
+gh workflow run self-smoke.yml -R blinkbitcoin/shared-workflows \
+  -f repository=your-org/your-app -f ref=main -f contract-only=true
+```
+
+`contract-only=true` stops after the contract check — seconds, and no runners
+spent on gates that cannot pass yet. Drop it for the full suite (Checks, Unit
+and the Android E2E). A private target needs a `SMOKE_TOKEN` secret; see
+[Secrets policy](#secrets-policy).
 
 ### The contract is data
 
@@ -488,6 +506,7 @@ mental model).
 | `prebuild-check` | `false` | Run the consumer's `check-prebuild`: prebuild both platforms into a temp dir and assert the config plugins produced what they should. **Minutes, not seconds** — enable it where the coverage earns the wall clock (on `main`, on a release, behind a label), not on every PR |
 | `bundle-secrets` | `false` | Run the consumer's `check:bundle-secrets`: export the bundle and assert no non-public key leaked into it. **Minutes, not seconds**, same advice as above |
 | `release-checks` | `false` | Install Ruby (`ruby/setup-ruby@v1`, `bundler-cache: true`) and run the consumer's `check:release` script — the Fastfile/Gemfile and release-config validation behind the template's `make check-release`. Off by default because a repo with no release setup has no such script |
+| `contract-only` | `false` | Run the contract check and **nothing else** — for a repository still being wired up, it answers "would these workflows work here?" in seconds instead of runner-minutes. A run under this flag gates nothing, so it says so: the job logs a warning and the summary names it. Not a setting to leave on |
 | `contract-check` | `true` | Report every unmet requirement of this family in one place, before the gates that would each die on their own — see [The contract check](#the-contract-check). `false` makes the step a no-op; the job itself still runs, because every other job in this workflow `needs:` it |
 | `docs-only-detection` | `true` | Classify the change as docs-only — on a `pull_request` **and** on a `push` |
 | `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern (`^docs/\|\.md$\|(^\|/)LICENSE$\|^\.github/ISSUE_TEMPLATE/\|^\.github/PULL_REQUEST_TEMPLATE`), not a replacement for it |
@@ -1735,7 +1754,12 @@ answer**: its `project` and `entry` globs are all rooted — `src/**`,
 directory and there is nothing to exclude), `typos.toml`
 (`[files] extend-exclude` → `".workflows/"`),
 `jest.config.ts` (`testPathIgnorePatterns` → `'/\.workflows/'`) and `.gitignore`
-(`/.workflows`). Copy that set when bootstrapping a new consumer.
+(`/.workflows`). Copy that set when bootstrapping a new consumer —
+[`test/fixtures/consumer-min/`](../test/fixtures/consumer-min) carries it along
+with every contract script as a no-op, which makes it the smallest repository
+that satisfies this contract and the right thing to copy from. The contract
+check reports any of the seven you are missing, and skips the ones whose config
+file you do not have.
 
 Jest joined the list the day this repo grew its first test files. The lesson
 generalises: anything this repo adds under a path a consumer's tooling globs is

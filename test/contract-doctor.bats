@@ -249,3 +249,70 @@ JSON
   run node "$bin/check-consumer-contract" --root "$TMP" --profile checks
   contains "$output" "package.json" || fail "check-consumer-contract printed nothing through a symlink: $output"
 }
+
+# --- the adoption doc ---------------------------------------------------
+#
+# docs/adopting-an-existing-repo.md is the page for a repository that was never
+# generated from the template. Its requirement table is generated from
+# contract.json rather than written, because a hand-kept adoption checklist is
+# right on the day it is written and wrong six months later.
+
+@test "the adoption doc's table is what the renderer produces from contract.json" {
+  local doc="$REPO_ROOT/docs/adopting-an-existing-repo.md"
+  run node "$REPO_ROOT/scripts/self/render-contract-table.mjs"
+  [ "$status" -eq 0 ] || fail "the renderer failed: $output"
+  printf '%s\n' "$output" > "$BATS_TEST_TMPDIR/rendered.md"
+  diff -u "$doc" "$BATS_TEST_TMPDIR/rendered.md" \
+    || fail "the adoption doc is out of date - run: node scripts/self/render-contract-table.mjs --write"
+}
+
+@test "the adoption doc names every workflow a consumer can call" {
+  # A profile added to the contract with no section here means a consumer
+  # calling that workflow reads a page that silently omits its requirements.
+  local doc="$REPO_ROOT/docs/adopting-an-existing-repo.md"
+  run node -e '
+    const fs = require("fs");
+    const contract = require(`${process.env.REPO_ROOT}/packages/dev-config/contract.json`);
+    const doc = fs.readFileSync(`${process.env.REPO_ROOT}/docs/adopting-an-existing-repo.md`, "utf8");
+    const used = new Set(contract.requirements.map((r) => r.profile));
+    const missing = [...used].filter((p) => !new RegExp(`### If you call .*${p}`).test(doc));
+    if (missing.length > 0) throw new Error(`no section for: ${missing.join(", ")}`);
+  '
+  [ "$status" -eq 0 ] || fail "$output"
+}
+
+@test "a contract-only run gates nothing, and says so" {
+  # Opt-in and useful, but a green Checks that ran no gate is exactly the shape
+  # of result someone reads as "it passed".
+  local ws="$BATS_TEST_TMPDIR/ws"
+  mkdir -p "$ws/.github/workflows"
+  printf '{"name":"app","scripts":{}}\n' > "$ws/package.json"
+  ln -s "$REPO_ROOT" "$ws/.workflows"
+  local summary="$BATS_TEST_TMPDIR/summary.md"
+  : > "$summary"
+
+  cd "$ws"
+  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." WORKFLOWS_CONTRACT_ONLY=true \
+    GITHUB_STEP_SUMMARY="$summary" run bash ".workflows/scripts/ci/contract-check.sh"
+  contains "$output" "::warning::contract-only run" || fail "no warning: $output"
+  contains "$output" "NO gate ran" || fail "$output"
+  run cat "$summary"
+  contains "$output" "Contract-only run" || fail "the summary does not say it: $output"
+}
+
+@test "contract-only is off by default, and every gate job honours it" {
+  run node -e '
+    const text = require("fs").readFileSync(process.env.CHECKS, "utf8");
+    const block = text.split(/^      contract-only:$/m)[1].split(/^      [a-z]/m)[0];
+    if (!/default: false/.test(block)) throw new Error("contract-only must default to false");
+    const names = [...text.matchAll(/^  ([a-z][a-z0-9-]*):$/gm)].map((m) => m[1]);
+    const exempt = new Set(["contract", "changes"]);
+    const missing = names.filter((name) => {
+      if (exempt.has(name)) return false;
+      const body = text.split(new RegExp(`^  ${name}:$`, "m"))[1].split(/^  [a-z][a-z0-9-]*:$/m)[0];
+      return !/!inputs\.contract-only/.test(body);
+    });
+    if (missing.length > 0) throw new Error(`gate jobs that ignore contract-only: ${missing.join(", ")}`);
+  '
+  [ "$status" -eq 0 ] || fail "$output"
+}
