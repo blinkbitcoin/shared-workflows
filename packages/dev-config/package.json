@@ -14,15 +14,19 @@
   },
   "files": [
     "bin",
+    "contract.json",
     "versions.json",
     "README.md"
   ],
   "exports": {
     "./versions.json": "./versions.json",
-    "./check-tool-versions": "./bin/check-tool-versions.mjs"
+    "./contract.json": "./contract.json",
+    "./check-tool-versions": "./bin/check-tool-versions.mjs",
+    "./check-consumer-contract": "./bin/check-consumer-contract.mjs"
   },
   "bin": {
-    "check-tool-versions": "./bin/check-tool-versions.mjs"
+    "check-tool-versions": "./bin/check-tool-versions.mjs",
+    "check-consumer-contract": "./bin/check-consumer-contract.mjs"
   },
   "engines": {
     "node": ">=20"

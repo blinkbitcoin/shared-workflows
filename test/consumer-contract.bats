@@ -18,6 +18,8 @@
 load test_helper
 
 GUIDE="$REPO_ROOT/docs/consumer-guide.md"
+# Exported: the contract-table cases at the bottom read it from node's process.env.
+export GUIDE
 CONSUMER="${WORKFLOWS_CONSUMER_ROOT:-$FIXTURES/consumer-min}"
 
 require_consumer() {
@@ -397,4 +399,98 @@ A called workflow cannot widen the caller's token - this run would die as a star
       done < <(callee_permissions "$wf")
     done < <(yq -r '.jobs | to_entries[] | select(.value.uses != null) | .key + "\t" + .value.uses' "$f")
   done
+}
+
+# --- the contract table --------------------------------------------------
+#
+# packages/dev-config/contract.json is what the checker reads and what the
+# adoption docs are written from. The guide's own tables are the prose version
+# of the same facts. Two statements of one contract drift; these hold them
+# together in both directions.
+
+@test "every consumer script the contract table names appears in the guide's script table" {
+  run node -e '
+    const fs = require("fs");
+    const contract = require(`${process.env.REPO_ROOT}/packages/dev-config/contract.json`);
+    const guide = fs.readFileSync(process.env.GUIDE, "utf8");
+    const table = guide.split("## Script contract")[1] ?? "";
+    const missing = contract.requirements
+      .filter((r) => r.kind === "package-script" || r.kind === "script-or-dep")
+      .map((r) => r.target)
+      .filter((name) => !table.includes(`\`${name}\``));
+    if (missing.length > 0) {
+      throw new Error(`in contract.json but not in the script table of the guide: ${missing.join(", ")}`);
+    }
+  '
+  [ "$status" -eq 0 ] || fail "$output"
+}
+
+@test "every workflow input the contract table gates on exists in that workflow" {
+  # A toggle renamed in a workflow and not here would silently make a
+  # requirement unconditional - the exact failure this file exists to prevent.
+  run node -e '
+    const fs = require("fs");
+    const root = process.env.REPO_ROOT;
+    const contract = require(`${root}/packages/dev-config/contract.json`);
+    const wrong = [];
+    for (const req of contract.requirements) {
+      if (!req.toggle) continue;
+      const [workflow, input] = req.toggle.split(":");
+      const text = fs.readFileSync(`${root}/.github/workflows/${workflow}`, "utf8");
+      const block = text.split(/^    secrets:$|^    outputs:$/m)[0];
+      if (!new RegExp(`^      ${input}:$`, "m").test(block)) {
+        wrong.push(`${req.id} gates on ${req.toggle}, which ${workflow} does not declare`);
+      }
+    }
+    if (wrong.length > 0) throw new Error(wrong.join("; "));
+  '
+  [ "$status" -eq 0 ] || fail "$output"
+}
+
+@test "the contract table agrees with each workflow about that input's default" {
+  # `defaultOn` decides whether an absent script is a finding at all. A default
+  # flipped in the workflow and not here makes the report wrong in the one
+  # direction that matters: silence about a gate that is in fact running.
+  run node -e '
+    const fs = require("fs");
+    const root = process.env.REPO_ROOT;
+    const contract = require(`${root}/packages/dev-config/contract.json`);
+    const wrong = [];
+    for (const req of contract.requirements) {
+      if (!req.toggle) continue;
+      const [workflow, input] = req.toggle.split(":");
+      const text = fs.readFileSync(`${root}/.github/workflows/${workflow}`, "utf8");
+      const after = text.split(new RegExp(`^      ${input}:$`, "m"))[1] ?? "";
+      const declared = /^        default: (true|false)$/m.exec(after.split(/^      [a-z]/m)[0]);
+      if (!declared) continue;
+      const on = declared[1] === "true";
+      if (on !== req.defaultOn) {
+        wrong.push(`${req.id}: contract says defaultOn=${req.defaultOn}, ${workflow} defaults ${input} to ${declared[1]}`);
+      }
+    }
+    if (wrong.length > 0) throw new Error(wrong.join("; "));
+  '
+  [ "$status" -eq 0 ] || fail "$output"
+}
+
+@test "every guide anchor the contract table points at exists in the guide" {
+  run node -e '
+    const fs = require("fs");
+    const contract = require(`${process.env.REPO_ROOT}/packages/dev-config/contract.json`);
+    const guide = fs.readFileSync(process.env.GUIDE, "utf8");
+    // GitHub derives an anchor by lowercasing a heading, dropping anything but
+    // word characters, spaces and hyphens, then replacing EACH remaining space
+    // with a hyphen - not each run of them. "The Playwright / export contract"
+    // becomes the-playwright--export-contract, with two hyphens where the
+    // slash was, and a /\s+/ collapse here would report the guide as linking
+    // to an anchor it does not have when in fact it links correctly.
+    const anchors = new Set(
+      [...guide.matchAll(/^#+ (.+)$/gm)].map(([, h]) =>
+        h.toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s/g, "-"),
+      ),
+    );
+    const missing = [...new Set(contract.requirements.map((r) => r.guide))].filter((a) => !anchors.has(a));
+    if (missing.length > 0) throw new Error(`contract.json points at anchors the guide does not have: ${missing.join(", ")}`);
+  '
+  [ "$status" -eq 0 ] || fail "$output"
 }

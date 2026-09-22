@@ -112,6 +112,13 @@ on:
         description: Run the consumer's `check:release` script (Fastfile/Gemfile lint, release config validation); needs Ruby, so it is off by default
         type: boolean
         default: false
+      contract-check:
+        description: >-
+          Report every unmet requirement of this family in one place, before the
+          gates that would each die on their own. Off makes the step a no-op;
+          the job still runs, because every other job needs it (see the job).
+        type: boolean
+        default: true
       docs-only-detection:
         description: Classify the PR as docs-only so callers can skip downstream jobs
         type: boolean
@@ -172,8 +179,42 @@ jobs:
           # replace the built-in ^docs/|\.md$|... pattern.
           DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}
         run: bash ".workflows/scripts/ci/changed-class.sh" "$BASE_SHA" "$HEAD_SHA"
+  contract:
+    name: Contract
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 5
+    # No `if:` on the job, deliberately, even though `contract-check` can turn
+    # this off. Every other job in this workflow `needs:` this one, and a job
+    # whose dependency was *skipped* is skipped too - so an `if:` here would
+    # make `contract-check: false` skip the entire Checks workflow, and a
+    # skipped job counts as passing for a required check. The toggle gates the
+    # step instead; what is left is two checkouts, which is seconds.
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      # No setup: this runs *before* the toolchain exists, which is the point.
+      # A consumer with no mise config or no lockfile fails inside setup with
+      # `missing command: pnpm`, several steps removed from the cause. The
+      # checker is dependency-free node, so the runner image's own node runs it.
+      - name: Check the consumer contract
+        if: ${{ inputs.contract-check }}
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        run: bash ".workflows/scripts/ci/contract-check.sh"
   code:
     name: Code
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -226,6 +267,7 @@ jobs:
       # architecture without touching docs".
   generated:
     name: Generated
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -258,6 +300,7 @@ jobs:
       # gap on its own; it is here so one gate has one implementation.
   docs:
     name: Docs
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -292,6 +335,7 @@ jobs:
       # same gate, and for these five they were not.
   dependencies:
     name: Dependencies
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -362,6 +406,7 @@ jobs:
       # a release, or behind a label - rather than a cost every PR pays.
   prebuild:
     name: Prebuild
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 30
     steps:
@@ -390,6 +435,7 @@ jobs:
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
   bundle-secrets:
     name: Secrets
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 25
     steps:
@@ -421,6 +467,7 @@ jobs:
       # use; `bundler-cache: true` makes the repeat cost near zero.
   release:
     name: Release
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -461,6 +508,7 @@ jobs:
       # ships check:ci owns that decision itself, which is the point of the seam.
   tooling:
     name: Tooling
+    needs: contract
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -489,6 +537,7 @@ jobs:
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:ci' scripts/ci/lint-ci.sh
   commits:
     name: Commits
+    needs: contract
     if: ${{ inputs.commitlint && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 5
