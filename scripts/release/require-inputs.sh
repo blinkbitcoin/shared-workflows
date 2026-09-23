@@ -30,7 +30,7 @@ done
 if [ "${#missing[@]}" -gt 0 ]; then
   die_fix \
     "these lane inputs are empty: ${missing[*]} - every lane on both platforms asserts all five in before_all, whichever platform it builds" \
-    "APP_VERSION and APP_BUILD_NUMBER come from expo-prepare's outputs; IOS_BUNDLE_ID, IOS_SCHEME and ANDROID_PACKAGE come from repository variables of the same name. An unset repository variable is the empty string, and an empty string satisfies a required: true input - which is why this is checked here rather than trusted" \
+    "APP_VERSION and APP_BUILD_NUMBER come from build-prepare's outputs; IOS_BUNDLE_ID, IOS_SCHEME and ANDROID_PACKAGE come from repository variables of the same name. An unset repository variable is the empty string, and an empty string satisfies a required: true input - which is why this is checked here rather than trusted" \
     "the-five-fastfile-contract-variables"
 fi
 

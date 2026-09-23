@@ -141,7 +141,7 @@ export function readCallers(root, io = defaultIo) {
 }
 
 /**
- * Which reusable workflows this repository actually calls, e.g. `checks.yml`.
+ * Which reusable workflows this repository actually calls, e.g. `check-code.yml`.
  * This is what makes the report honest: a repo with no e2e caller must not be
  * told it is missing `.maestro/`.
  */
@@ -215,7 +215,7 @@ function stripQuotes(value) {
  * `true`, `false`, or `'unknown'` for a toggle wired to an expression.
  *
  * `'unknown'` is its own answer rather than a guess in either direction. This
- * job blocks every other job in checks.yml, so treating `${{ vars.X }}` as on
+ * job blocks every other job in check-code.yml, so treating `${{ vars.X }}` as on
  * would let a repository that legitimately has that gate off be blocked by a
  * requirement it does not have - a false failure on ten jobs, from a value we
  * cannot read. Treating it as off would be the opposite mistake, and silence
@@ -236,13 +236,13 @@ export function toggleOn(req, inputs) {
 export function activeProfiles(uses, override) {
   if (override && override.length > 0) return new Set(override);
   const active = new Set();
-  if (uses.has('checks.yml')) active.add('checks');
-  if (uses.has('unit.yml')) active.add('unit');
-  if (uses.has('e2e.yml')) active.add('e2e');
-  if (uses.has('web.yml')) active.add('web');
-  if (uses.has('badges.yml')) active.add('badges');
-  if (uses.has('codeql.yml')) active.add('codeql');
-  for (const name of ['expo-prepare.yml', 'expo-build-ios.yml', 'expo-build-android.yml', 'fastlane-lane.yml', 'expo-ota-publish.yml']) {
+  if (uses.has('check-code.yml')) active.add('checks');
+  if (uses.has('check-unit.yml')) active.add('unit');
+  if (uses.has('check-e2e.yml')) active.add('e2e');
+  if (uses.has('build-web.yml')) active.add('web');
+  if (uses.has('publish-badges.yml')) active.add('badges');
+  if (uses.has('check-codeql.yml')) active.add('codeql');
+  for (const name of ['build-prepare.yml', 'build-ios.yml', 'build-android.yml', 'publish-store.yml', 'publish-ota.yml']) {
     if (uses.has(name)) active.add('release');
   }
   // No caller found at all: a repository being checked before it has written
@@ -383,7 +383,7 @@ export function checkRequirement(req, consumer) {
       const unknown = [...read].filter((n) => !req.target.includes(n)).sort();
       return unknown.length === 0
         ? ok(`${read.size} ${prefix}* names`)
-        : missing(`the lanes read ${unknown.join(', ')}, which fastlane-lane.yml does not pass`);
+        : missing(`the lanes read ${unknown.join(', ')}, which publish-store.yml does not pass`);
     }
 
     default:
@@ -433,7 +433,7 @@ export function readMakefile(root, io = defaultIo) {
 
 /**
  * The package scripts CI runs for this caller, from the contract itself: every
- * script requirement of the checks and unit workflows whose workflow is called
+ * script requirement of the check-code and check-unit workflows whose workflow is called
  * and whose toggle is on. `on` holds the toggles known to be on; `maybe` adds
  * the ones wired to an expression, so neither direction of the gate-set check
  * fails on a value it cannot read.

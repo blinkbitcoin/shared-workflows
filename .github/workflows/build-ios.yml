@@ -39,11 +39,11 @@ on:
         type: string
         default: ''
       version:
-        description: App version to stamp into the build (wire it to expo-prepare's `version` output)
+        description: App version to stamp into the build (wire it to build-prepare's `version` output)
         type: string
         required: true
       build-number:
-        description: Build number to stamp into the build (wire it to expo-prepare's `build-number` output)
+        description: Build number to stamp into the build (wire it to build-prepare's `build-number` output)
         type: string
         required: true
       stage:
@@ -76,7 +76,7 @@ on:
         type: boolean
         default: true
       release-meta-artifact:
-        description: Artifact produced by expo-prepare that carries build-info.json and the store notes
+        description: Artifact produced by build-prepare that carries build-info.json and the store notes
         type: string
         default: 'release-meta'
       ipa-artifact:
@@ -173,7 +173,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          # Ruby unconditionally here (unlike e2e.yml, which installs it only on
+          # Ruby unconditionally here (unlike check-e2e.yml, which installs it only on
           # a cache miss): fastlane is the whole point of this job.
           ruby: 'true'
       - name: Decode secrets

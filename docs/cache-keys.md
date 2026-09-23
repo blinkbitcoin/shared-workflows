@@ -25,7 +25,7 @@ waits on a dependency install. It folds together:
    deliberately not picked up — if you have one, add it via
    `native-extra-globs`.
 3. The contents of every file matched by the `native-extra-globs` input
-   (`e2e.yml` input of the same name, threaded into the `native-key` action) —
+   (`check-e2e.yml` input of the same name, threaded into the `native-key` action) —
    space-separated, consumer-relative shell globs, e.g.
    `fastlane/*.rb android/keystores/*`. No recursive `**` (these scripts run
    under macOS's bash 3.2, which has no `globstar`). The glob *string* itself is
@@ -35,15 +35,15 @@ waits on a dependency install. It folds together:
 
 | Cache | Key | Produced by | Used in |
 | --- | --- | --- | --- |
-| iOS app (`.app` + `ios/*.xcworkspace`) | `ios-app-{ver}-{os}-{arch}-xcode{x}-{hash}[-env{8hex}]-{configuration}` (exact; `{x}` is the `xcode` input or `default`; `-env{8hex}` is a digest of `build-env` and is absent when that input is empty, because the `.app` embeds `EXPO_PUBLIC_*` at bundle time; `e2e.yml` appends `ios-configuration`) | `native-key` action → `scripts/ci/native-keys.sh` (`ios-key` output) | `e2e.yml` job `build-ios`, `actions/cache/restore@v6` + `actions/cache/save@v6` |
-| Android debug APK | `android-apk-{ver}-{hash}` (exact) | `native-key` action → `scripts/ci/native-keys.sh` (`android-key` output) | `e2e.yml` job `build-android`, restore + save |
-| CocoaPods (`ios/Pods`, `~/Library/Caches/CocoaPods`) | `pods-{os}-{hash}`, restore-keys prefix `pods-{os}-` | `native-key` action → `scripts/ci/native-keys.sh` (`pods-key` output) | `e2e.yml` job `build-ios` and `expo-build-ios.yml` job `build`, `actions/cache@v6` (a prefix hit is fine: `pod install` reconciles) |
+| iOS app (`.app` + `ios/*.xcworkspace`) | `ios-app-{ver}-{os}-{arch}-xcode{x}-{hash}[-env{8hex}]-{configuration}` (exact; `{x}` is the `xcode` input or `default`; `-env{8hex}` is a digest of `build-env` and is absent when that input is empty, because the `.app` embeds `EXPO_PUBLIC_*` at bundle time; `check-e2e.yml` appends `ios-configuration`) | `native-key` action → `scripts/ci/native-keys.sh` (`ios-key` output) | `check-e2e.yml` job `build-ios`, `actions/cache/restore@v6` + `actions/cache/save@v6` |
+| Android debug APK | `android-apk-{ver}-{hash}` (exact) | `native-key` action → `scripts/ci/native-keys.sh` (`android-key` output) | `check-e2e.yml` job `build-android`, restore + save |
+| CocoaPods (`ios/Pods`, `~/Library/Caches/CocoaPods`) | `pods-{os}-{hash}`, restore-keys prefix `pods-{os}-` | `native-key` action → `scripts/ci/native-keys.sh` (`pods-key` output) | `check-e2e.yml` job `build-ios` and `build-ios.yml` job `build`, `actions/cache@v6` (a prefix hit is fine: `pod install` reconciles) |
 | pnpm store | `pnpm-{os}-{hashFiles('**/pnpm-lock.yaml')}`, restore-keys prefix `pnpm-{os}-` | `setup` action (path from `scripts/ci/pnpm-store-path.sh`) | every workflow that runs `setup` |
-| Maestro CLI (`~/.maestro`, excluding `tests/` and `logs/`) | `maestro-{os}-{version}-v2` | `maestro` action (version = its `version` input, pinned to `MAESTRO_VERSION`) | `e2e.yml` jobs `ios`, `android` |
-| Android system image | `sysimg-{ver}-{api}-default-x86_64` | `e2e.yml` job `android` (`{api}` = `android-api-level`) | `actions/cache@v6` over `$ANDROID_SDK_DIR/system-images/android-{api}` |
-| AVD + adb keys | `avd-{ver}-{api}-x86_64-default-hidedialogs` | `e2e.yml` job `android` | `actions/cache@v6` over `~/.android/avd/*`, `~/.android/adb*`; a miss bakes a snapshot via `scripts/e2e/android-emulator.sh snapshot-bake` |
-| Playwright browsers | `playwright-{os}-{pwversion}` | `web.yml` job `playwright` (version from `scripts/web/playwright-cache-key.sh`, which wraps `scripts/web/playwright-version.sh`) | `web.yml` playwright job |
-| Gradle | managed by `gradle/actions/setup-gradle` | that action | `e2e.yml` job `build-android` and `expo-build-android.yml`; only the `default-branch` ref writes it, every other ref reads it |
+| Maestro CLI (`~/.maestro`, excluding `tests/` and `logs/`) | `maestro-{os}-{version}-v2` | `maestro` action (version = its `version` input, pinned to `MAESTRO_VERSION`) | `check-e2e.yml` jobs `ios`, `android` |
+| Android system image | `sysimg-{ver}-{api}-default-x86_64` | `check-e2e.yml` job `android` (`{api}` = `android-api-level`) | `actions/cache@v6` over `$ANDROID_SDK_DIR/system-images/android-{api}` |
+| AVD + adb keys | `avd-{ver}-{api}-x86_64-default-hidedialogs` | `check-e2e.yml` job `android` | `actions/cache@v6` over `~/.android/avd/*`, `~/.android/adb*`; a miss bakes a snapshot via `scripts/e2e/android-emulator.sh snapshot-bake` |
+| Playwright browsers | `playwright-{os}-{pwversion}` | `build-web.yml` job `playwright` (version from `scripts/web/playwright-cache-key.sh`, which wraps `scripts/web/playwright-version.sh`) | `build-web.yml` playwright job |
+| Gradle | managed by `gradle/actions/setup-gradle` | that action | `check-e2e.yml` job `build-android` and `build-android.yml`; only the `default-branch` ref writes it, every other ref reads it |
 | mise tools | managed by `jdx/mise-action` (`cache: true`) | that action | `setup` and `native-key` actions |
 
 Notes:

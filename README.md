@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->15<!--/count--> reusable workflows · <!--count:scripts-->90<!--/count--> scripts · <!--count:tests-->618<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->15<!--/count--> reusable workflows · <!--count:scripts-->90<!--/count--> scripts · <!--count:tests-->619<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -42,9 +42,9 @@ flowchart LR
   subgraph here [shared-workflows @v0]
     checks[Checks] --> unit[Unit] --> e2e[E2E]
     prepare[Prepare] --> build[Build and sign] --> ship[Upload and release]
-    ship --> lane["fastlane-lane<br/>a store lane"]
-    ship --> rel["github-release"]
-    ship --> ota["expo-ota-publish"]
+    ship --> lane["publish-store<br/>a store lane"]
+    ship --> rel["publish-github-release"]
+    ship --> ota["publish-ota"]
   end
   caller --> checks
   caller --> prepare
@@ -83,17 +83,17 @@ concurrency:
 jobs:
   checks:
     name: Checks
-    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
   unit:
     name: Unit
     needs: checks
     if: ${{ needs.checks.outputs.docs-only != 'true' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
   e2e:
     name: E2E
     needs: [checks, unit]
     if: ${{ needs.checks.outputs.docs-only != 'true' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/e2e.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
 ```
 
 That is the trimmed version. The full one — `workflow_dispatch`, the `labeled`
@@ -124,7 +124,7 @@ Job names are what the Actions graph shows, so they are listed here next to
 what makes them fail. A consumer's run renders `<caller job name> / <job name
 below>` — `Checks / Dependencies`, `E2E / Build Android`.
 
-### `checks.yml` — the gates
+### `check-code.yml` — the gates
 
 | Job            | What it checks                                                               |
 | -------------- | ---------------------------------------------------------------------------- |
@@ -144,11 +144,11 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 
 | Workflow        | Jobs                                               | What it does                                                             |
 | --------------- | -------------------------------------------------- | ------------------------------------------------------------------------ |
-| `unit.yml`      | `Tests`                                            | Jest with coverage thresholds; uploads the report                        |
-| `e2e.yml`       | `Build iOS` → `iOS`<br>`Build Android` → `Android` | A cached native build per platform, then boot, Metro, Maestro, forensics |
-| `web.yml`       | `Build`<br>`E2E`<br>`Deploy`                       | Expo web export, the browser suite against it, GitHub Pages              |
-| `badges.yml`    | `Publish`                                          | Unit, E2E and coverage badges pushed to `gh-pages/badges/<branch>/`      |
-| `codeql.yml`    | `Changes`<br>`Analyze`                             | CodeQL on the consumer's query suite. Informational, never required      |
+| `check-unit.yml`      | `Tests`                                            | Jest with coverage thresholds; uploads the report                        |
+| `check-e2e.yml`       | `Build iOS` → `iOS`<br>`Build Android` → `Android` | A cached native build per platform, then boot, Metro, Maestro, forensics |
+| `build-web.yml`       | `Build`<br>`E2E`<br>`Deploy`                       | Expo web export, the browser suite against it, GitHub Pages              |
+| `publish-badges.yml`    | `Publish`                                          | Unit, E2E and coverage badges pushed to `gh-pages/badges/<branch>/`      |
+| `check-codeql.yml`    | `Changes`<br>`Analyze`                             | CodeQL on the consumer's query suite. Informational, never required      |
 | `pr-title.yml`  | `Title`                                            | Conventional Commits lint on the PR title                                |
 | `pr-closed.yml` | `Cancel runs`<br>`Clean badges`                    | Cancels the closed PR's in-flight runs, deletes its badges               |
 
@@ -156,15 +156,15 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 
 | Workflow                 | Jobs                 | What it does                                                                                                 |
 | ------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `release-pr-notes.yml`   | `Store Notes`        | Drafts the store notes into the release PR body, once, for a human to review before the release is cut       |
-| `expo-prepare.yml`       | `Prepare`            | Version, build number, native fingerprint, `build-info.json` and store notes, as one `release-meta` artifact |
-| `expo-build-ios.yml`     | `Build`              | Prebuild, pods, `fastlane ios build` then `verify`; uploads the IPA and dSYMs                                |
-| `expo-build-android.yml` | `Build`              | Prebuild, `fastlane android build` then `verify`; uploads the AAB, APK and mapping                           |
-| `fastlane-lane.yml`      | `Store`              | One store operation: upload, promote, staged rollout or halt (a fastlane *lane*)                               |
-| `github-release.yml`     | `Publish`            | Creates or moves a release with a fixed asset set and `SHA256SUMS`                                           |
-| `expo-ota-publish.yml`   | `Publish`            | Publishes an OTA update only when the native fingerprint is unchanged                                        |
+| `pr-release-notes.yml`   | `Store Notes`        | Drafts the store notes into the release PR body, once, for a human to review before the release is cut       |
+| `build-prepare.yml`       | `Prepare`            | Version, build number, native fingerprint, `build-info.json` and store notes, as one `release-meta` artifact |
+| `build-ios.yml`     | `Build`              | Prebuild, pods, `fastlane ios build` then `verify`; uploads the IPA and dSYMs                                |
+| `build-android.yml` | `Build`              | Prebuild, `fastlane android build` then `verify`; uploads the AAB, APK and mapping                           |
+| `publish-store.yml`      | `Store`              | One store operation: upload, promote, staged rollout or halt (a fastlane *lane*)                               |
+| `publish-github-release.yml`     | `Publish`            | Creates or moves a release with a fixed asset set and `SHA256SUMS`                                           |
+| `publish-ota.yml`   | `Publish`            | Publishes an OTA update only when the native fingerprint is unchanged                                        |
 
-`expo-prepare.yml` can also block until a named CI workflow is green for the
+`build-prepare.yml` can also block until a named CI workflow is green for the
 same sha, which is how a release refuses to build on a red `main`.
 
 ### This repo's own
@@ -191,7 +191,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table |
-| `test/`                | <!--count:bats-files-->71<!--/count--> bats files, <!--count:tests-->618<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->71<!--/count--> bats files, <!--count:tests-->619<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
@@ -233,7 +233,7 @@ full version instead when every change should be reviewed before it lands —
 Run `npx --package=@blinkbitcoin/dev-config check-consumer-contract` in your
 repo for the list, checked rather than read: it reports every requirement of
 the workflows your callers actually name, with a fix per finding.
-`checks.yml` runs the same check as its first job, so an adopting repository
+`check-code.yml` runs the same check as its first job, so an adopting repository
 gets one explanatory failure instead of nine parallel ones. See
 [the contract check](docs/consumer-guide.md#the-contract-check).
 

@@ -13,7 +13,7 @@ root="$(consumer_root)"
 cd "$root"
 
 # A shallow clone scans only the commits it has, which reads as a clean history
-# when it is not one. The checks workflow fetches everything for this step.
+# when it is not one. The check-code workflow fetches everything for this step.
 if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
   die "secrets.sh: $root is a shallow clone, so the history scan would miss commits - check out with fetch-depth: 0"
 fi

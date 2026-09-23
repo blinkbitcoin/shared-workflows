@@ -27,7 +27,7 @@ workflow=.github/workflows/self-act-smoke.yml
 
 docker info >/dev/null 2>&1 || die "docker is not running - act needs a Docker daemon"
 
-# expo-prepare checks out this repository into .workflows *from GitHub*, at the
+# build-prepare checks out this repository into .workflows *from GitHub*, at the
 # ref act derives from the local HEAD, and actions/checkout then verifies that
 # the ref still points at the local sha. A branch that is not pushed, or has
 # moved since, fails inside the job with a confusing "does not point to the

@@ -7,7 +7,7 @@ base="${1:-}"
 head="${2:?usage: changed-class.sh BASE_SHA HEAD_SHA}"
 # DOCS_GLOBS *replaces* the default pattern (the escape hatch for a consumer
 # whose docs live nowhere near docs/); DOCS_GLOBS_EXTRA *adds* alternatives to
-# whichever pattern is in force. checks.yml's `docs-globs` input is wired to
+# whichever pattern is in force. check-code.yml's `docs-globs` input is wired to
 # DOCS_GLOBS_EXTRA, because "extra alternatives" is what it promises - passing
 # it as a replacement would silently stop treating docs/ and **.md as docs and
 # run the full suite on every docs-only PR.

@@ -7,7 +7,7 @@ an app that exists, was never generated from that template, and would like some
 of these workflows anyway.
 
 It is a supported case. A repository is allowed to use part of this family —
-`checks.yml` and `unit.yml` with nothing else is a perfectly good adoption, and
+`check-code.yml` and `check-unit.yml` with nothing else is a perfectly good adoption, and
 nothing here will tell you that you are missing Maestro flows for an E2E
 workflow you never called.
 
@@ -20,7 +20,7 @@ npx --package=@blinkbitcoin/dev-config check-consumer-contract --skeleton
 That prints what *your* repository is missing, with a fix per finding, and the
 `package.json` fragment and caller toggles that would clear it. The table below
 is the same information in the abstract; the command is the same information
-about you. `checks.yml` runs it as its first job, so this is also what CI will
+about you. `check-code.yml` runs it as its first job, so this is also what CI will
 say.
 
 Before you have written a caller it has nothing to infer from, so name the
@@ -78,34 +78,34 @@ is a warning in the report, not a failure. See
 
 <!-- contract-table:start -->
 
-### If you call `checks.yml`
+### If you call `check-code.yml`
 
 | What | You need | Why |
 | --- | --- | --- |
 | `node` and `pnpm` in your mise config | required | the setup action, in every job of every workflow |
-| `ruby` in your mise config | only if you set `release-checks: true` | checks.yml (release-checks), and every fastlane lane workflow |
+| `ruby` in your mise config | only if you set `release-checks: true` | check-code.yml (release-checks), and every fastlane lane workflow |
 | `package.json` | required | every script gate, through scripts/checks/run-script.sh |
 | `pnpm-lock.yaml` | required | the setup action (pnpm install --frozen-lockfile), and scripts/ci/native-hash.sh |
-| `typecheck` | required, or pass `typecheck: false` | checks.yml (typecheck) |
-| `lint` | required, or pass `lint: false` | checks.yml (lint) |
-| `format:check` | required, or pass `format: false` | checks.yml (format) |
-| `knip` | required, or pass `knip: false` | checks.yml (knip) |
-| `spell` | required, or pass `spell: false` | checks.yml (spell) |
-| `check:docs` | required, or pass `docs-check: false` | checks.yml (docs-check) |
-| `deps:licenses` | required, or pass `licenses: false` | checks.yml (licenses) |
-| `deps:check` | optional — a fallback runs | checks.yml (expo-doctor) |
-| `deps:audit` | optional — a fallback runs | checks.yml (audit) |
-| `check:ci` | optional — a fallback runs | checks.yml (actionlint, shellcheck) |
-| `check:secrets` | optional — a fallback runs | checks.yml (secret-scan) |
-| `i18n:check` | optional — a fallback runs | checks.yml (i18n) |
-| `codegen:check` | optional — a fallback runs | checks.yml (graphql-codegen) |
-| `check-prebuild` | only if you set `prebuild-check: true` | checks.yml (prebuild-check) |
-| `check:bundle-secrets` | only if you set `bundle-secrets: true` | checks.yml (bundle-secrets) |
-| `check:release` | only if you set `release-checks: true` | checks.yml (release-checks) |
-| `@commitlint/cli` | optional — a fallback runs | checks.yml (commitlint), pr-title.yml |
-| `Gemfile` | only if you set `release-checks: true` | checks.yml (release-checks) via bundler-cache, and scripts/release/fastlane.sh |
-| every gate CI runs, reachable from `make ci` | required | checks.yml and unit.yml, against your Makefile |
-| every gate `make ci` runs, run by CI | required | your Makefile, against checks.yml and unit.yml |
+| `typecheck` | required, or pass `typecheck: false` | check-code.yml (typecheck) |
+| `lint` | required, or pass `lint: false` | check-code.yml (lint) |
+| `format:check` | required, or pass `format: false` | check-code.yml (format) |
+| `knip` | required, or pass `knip: false` | check-code.yml (knip) |
+| `spell` | required, or pass `spell: false` | check-code.yml (spell) |
+| `check:docs` | required, or pass `docs-check: false` | check-code.yml (docs-check) |
+| `deps:licenses` | required, or pass `licenses: false` | check-code.yml (licenses) |
+| `deps:check` | optional — a fallback runs | check-code.yml (expo-doctor) |
+| `deps:audit` | optional — a fallback runs | check-code.yml (audit) |
+| `check:ci` | optional — a fallback runs | check-code.yml (actionlint, shellcheck) |
+| `check:secrets` | optional — a fallback runs | check-code.yml (secret-scan) |
+| `i18n:check` | optional — a fallback runs | check-code.yml (i18n) |
+| `codegen:check` | optional — a fallback runs | check-code.yml (graphql-codegen) |
+| `check-prebuild` | only if you set `prebuild-check: true` | check-code.yml (prebuild-check) |
+| `check:bundle-secrets` | only if you set `bundle-secrets: true` | check-code.yml (bundle-secrets) |
+| `check:release` | only if you set `release-checks: true` | check-code.yml (release-checks) |
+| `@commitlint/cli` | optional — a fallback runs | check-code.yml (commitlint), pr-title.yml |
+| `Gemfile` | only if you set `release-checks: true` | check-code.yml (release-checks) via bundler-cache, and scripts/release/fastlane.sh |
+| every gate CI runs, reachable from `make ci` | required | check-code.yml and check-unit.yml, against your Makefile |
+| every gate `make ci` runs, run by CI | required | your Makefile, against check-code.yml and check-unit.yml |
 | `biome.json` | optional — a fallback runs | your own lint gate, which walks the whole tree |
 | `eslint.config.mjs` | optional — a fallback runs | your own lint gate, which walks the whole tree |
 | `tsconfig.json` | optional — a fallback runs | your own typecheck gate |
@@ -113,53 +113,53 @@ is a warning in the report, not a failure. See
 | `typos.toml` | optional — a fallback runs | your own spell gate |
 | `.gitignore` | optional — a fallback runs | your own working tree |
 
-### If you call `unit.yml`
+### If you call `check-unit.yml`
 
 | What | You need | Why |
 | --- | --- | --- |
-| `test:coverage` | required, or pass `coverage: false` | unit.yml (coverage-script) |
-| `test:scripts` | required | unit.yml (scripts-test-script) |
-| `jest.config.ts` | optional — a fallback runs | unit.yml, which runs your test script over the whole tree |
+| `test:coverage` | required, or pass `coverage: false` | check-unit.yml (coverage-script) |
+| `test:scripts` | required | check-unit.yml (scripts-test-script) |
+| `jest.config.ts` | optional — a fallback runs | check-unit.yml, which runs your test script over the whole tree |
 
-### If you call `e2e.yml`
-
-| What | You need | Why |
-| --- | --- | --- |
-| `app.config.ts`, `app.config.js`, `app.config.cjs` or `app.json` | required | e2e.yml and every build workflow, through scripts/lib/expo-config.sh |
-| `.maestro` | required | e2e.yml (maestro-flows) |
-| `e2e.yml:e2e-setup-script` and `e2e.yml:e2e-teardown-script` | required | e2e.yml, through scripts/e2e/run-hook.sh |
-
-### If you call `web.yml`
+### If you call `check-e2e.yml`
 
 | What | You need | Why |
 | --- | --- | --- |
-| `build:web` | required | web.yml (export-script) |
-| `test:e2e:web` | required, or pass `playwright: false` | web.yml (e2e-script) |
-| `@playwright/test` | required, or pass `playwright: false` | web.yml, through scripts/web/playwright-version.sh |
+| `app.config.ts`, `app.config.js`, `app.config.cjs` or `app.json` | required | check-e2e.yml and every build workflow, through scripts/lib/expo-config.sh |
+| `.maestro` | required | check-e2e.yml (maestro-flows) |
+| `check-e2e.yml:e2e-setup-script` and `check-e2e.yml:e2e-teardown-script` | required | check-e2e.yml, through scripts/e2e/run-hook.sh |
 
-### If you call `badges.yml`
-
-| What | You need | Why |
-| --- | --- | --- |
-| `badges:render` | required | badges.yml (render-script) |
-
-### If you call `codeql.yml`
+### If you call `build-web.yml`
 
 | What | You need | Why |
 | --- | --- | --- |
-| `.github/codeql/codeql-config.yml` | optional — a fallback runs | codeql.yml (config-file) |
+| `build:web` | required | build-web.yml (export-script) |
+| `test:e2e:web` | required, or pass `playwright: false` | build-web.yml (e2e-script) |
+| `@playwright/test` | required, or pass `playwright: false` | build-web.yml, through scripts/web/playwright-version.sh |
+
+### If you call `publish-badges.yml`
+
+| What | You need | Why |
+| --- | --- | --- |
+| `badges:render` | required | publish-badges.yml (render-script) |
+
+### If you call `check-codeql.yml`
+
+| What | You need | Why |
+| --- | --- | --- |
+| `.github/codeql/codeql-config.yml` | optional — a fallback runs | check-codeql.yml (config-file) |
 
 ### If you call the release workflows
 
 | What | You need | Why |
 | --- | --- | --- |
-| `fastlane/Fastfile` | required | expo-build-ios.yml, expo-build-android.yml, fastlane-lane.yml |
-| the `ios:build`, `ios:verify`, `android:build` and `android:verify` lanes | required | expo-build-ios.yml, expo-build-android.yml |
-| lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_NOTES` and `APP_REVIEW_PHONE` | required | fastlane-lane.yml, which passes exactly these as secrets |
+| `fastlane/Fastfile` | required | build-ios.yml, build-android.yml, publish-store.yml |
+| the `ios:build`, `ios:verify`, `android:build` and `android:verify` lanes | required | build-ios.yml, build-android.yml |
+| lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_NOTES` and `APP_REVIEW_PHONE` | required | publish-store.yml, which passes exactly these as secrets |
 | `scripts/release/verify-ios.sh` | required | the ios verify lane |
 | `scripts/release/verify-android.sh` | required | the android verify lane |
-| `scripts/release/notes.mjs` | optional — a fallback runs | expo-prepare.yml, through scripts/release/notes.sh |
-| `@expo/fingerprint` | required | expo-prepare.yml and expo-ota-publish.yml, through scripts/lib/release-env.sh |
+| `scripts/release/notes.mjs` | optional — a fallback runs | build-prepare.yml, through scripts/release/notes.sh |
+| `@expo/fingerprint` | required | build-prepare.yml and publish-ota.yml, through scripts/lib/release-env.sh |
 
 <!-- contract-table:end -->
 
@@ -179,9 +179,9 @@ our files is the usual first symptom. The
 entries; the report checks all seven, and skips the ones whose config file you
 do not have.
 
-**Expo.** `e2e.yml` and every release workflow prebuild an Expo app and read
+**Expo.** `check-e2e.yml` and every release workflow prebuild an Expo app and read
 `expo config --json` for the app name, scheme, bundle identifier and package.
-They are Expo-specific in a way `checks.yml` and `unit.yml` are not. A React
+They are Expo-specific in a way `check-code.yml` and `check-unit.yml` are not. A React
 Native app that is not an Expo app can use the first two and should not call the
 rest.
 

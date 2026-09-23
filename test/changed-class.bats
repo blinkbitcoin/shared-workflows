@@ -117,14 +117,14 @@ commit_file() {
   grep -qF "::notice::" <<<"$output" || fail "expected a ::notice:: annotation, got: $output"
 }
 
-# checks.yml now passes github.event.before on a push, so the classifier sees
+# check-code.yml now passes github.event.before on a push, so the classifier sees
 # push-shaped ranges too. A merge to main that only moved docs must skip the
 # matrix exactly as the PR that preceded it did.
 #
 # Honest label: this case is documentation, not a guard. The script never cared
 # which event produced its two shas, so it passes against the pre-fix script
 # too. What actually has to hold is the BASE_SHA expression, and that is pinned
-# by workflow-shape.bats ("checks.yml classifies pushes too").
+# by workflow-shape.bats ("check-code.yml classifies pushes too").
 @test "docs-only=true for a push-shaped range (previous tip -> new tip) of only docs/" {
   commit_file "src/a.ts"
   before=$(git -C "$repo" rev-parse HEAD)

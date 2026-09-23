@@ -46,7 +46,7 @@ on:
         type: string
         required: true
       docs-only:
-        description: checks.yml's docs-only output; 'true' skips this job, because the jobs the badges describe never ran
+        description: check-code.yml's docs-only output; 'true' skips this job, because the jobs the badges describe never ran
         type: string
         default: 'false'
       unit-label:
@@ -58,7 +58,7 @@ on:
         type: string
         default: 'E2E'
       coverage-artifact:
-        description: Artifact holding the consumer's coverage/ directory (unit.yml uploads it as `coverage`); downloaded only when the unit job succeeded
+        description: Artifact holding the consumer's coverage/ directory (check-unit.yml uploads it as `coverage`); downloaded only when the unit job succeeded
         type: string
         default: 'coverage'
       render-script:

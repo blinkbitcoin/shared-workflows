@@ -120,7 +120,7 @@ guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
 ### How consumers are held to the contract
 
 This repository never checks out a consumer, in CI or in a test. The direction
-is the other way round: each consumer's `checks.yml` run starts with a
+is the other way round: each consumer's `check-code.yml` run starts with a
 `Contract` job, which reads [`packages/dev-config/contract.json`](packages/dev-config/contract.json)
 from the exact version of this repository that consumer calls and checks the
 consumer against it. A consumer that has drifted fails **its own** PR, and a
@@ -134,7 +134,7 @@ That puts a rule that spans repositories in one of two places:
   `packages/dev-config/bin/check-consumer-contract.mjs`. That covers package scripts,
   files, lanes, the rule that `make ci` and CI run the same gates in both
   directions, and the rule that the lanes read only the `APP_REVIEW_*` names
-  `fastlane-lane.yml` passes. Its tests use in-memory fixture consumers,
+  `publish-store.yml` passes. Its tests use in-memory fixture consumers,
   aligned and misaligned.
 - **The consumer's own tests**, when the consumer ships a copy of a script
   from here (`resolve-version.sh`, `build-info.sh`). Its CI has this repository
@@ -148,7 +148,7 @@ script a checks or unit step runs has a requirement, gated on that step's input.
 `make check` cannot execute a reusable workflow, and neither can the PR's CI:
 the workflows only ever run inside a consumer. v0.6.0 shipped a Prepare job
 that exited 127 on every consumer's next push with every gate green. Before a
-change to `expo-prepare.yml` or `expo-build-android.yml` goes out, run the
+change to `build-prepare.yml` or `build-android.yml` goes out, run the
 Linux half of a consumer's internal release here with [nektos/act]:
 
 ```sh
@@ -156,7 +156,7 @@ make smoke-local           # Prepare, against the template at main (~2 min)
 make smoke-local-android   # Prepare, then the unsigned Android build (much longer)
 ```
 
-It needs Docker running and the current branch **pushed**: expo-prepare checks
+It needs Docker running and the current branch **pushed**: build-prepare checks
 this repository out into `.workflows` from GitHub at the local HEAD, so the
 working tree itself is not what runs, the pushed commit is. The script refuses
 an unpushed or detached HEAD rather than letting the job fail inside act.
@@ -181,7 +181,7 @@ job" log on GitHub before merging.
   the fixtures under `test/fixtures/consumer-min/` updated in the same commit.
   `test/consumer-contract.bats` keeps the guide's examples and the fixtures
   byte-identical.
-- **A new gate** - a step in `checks.yml` or `unit.yml` that runs a consumer
+- **A new gate** - a step in `check-code.yml` or `check-unit.yml` that runs a consumer
   script - needs its requirement in `contract.json`, gated on the step's input;
   `test/consumer-contract.bats` fails until it has one. From the next release,
   every consumer's `Contract` job then requires `make ci` to reach it, and fails

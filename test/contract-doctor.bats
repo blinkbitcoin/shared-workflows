@@ -9,7 +9,7 @@ load test_helper
 DOCTOR="$REPO_ROOT/packages/dev-config/bin/check-consumer-contract.mjs"
 # Exported, not just set: the two workflow-shape cases below read it from
 # node's process.env. Set in the file body so it is there for every case.
-CHECKS="$REPO_ROOT/.github/workflows/checks.yml"
+CHECKS="$REPO_ROOT/.github/workflows/check-code.yml"
 export CHECKS
 
 setup() {
@@ -30,7 +30,7 @@ write_caller() {
 }
 
 @test "a repository that satisfies nothing is told everything at once, not one thing at a time" {
-  write_caller checks.yml unit.yml
+  write_caller check-code.yml check-unit.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
 
   run node "$DOCTOR" --root "$TMP"
@@ -47,7 +47,7 @@ write_caller() {
 }
 
 @test "every finding names what to do about it" {
-  write_caller checks.yml
+  write_caller check-code.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
   run node "$DOCTOR" --root "$TMP"
   while IFS= read -r line; do
@@ -60,7 +60,7 @@ write_caller() {
 @test "a workflow the repository does not call produces no findings" {
   # A repo that only runs Checks must never be told it is missing .maestro/ or a
   # Fastfile. Being wrong in this direction is what makes a report ignorable.
-  write_caller checks.yml
+  write_caller check-code.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
   run node "$DOCTOR" --root "$TMP"
   not_contains "$output" ".maestro" || fail "e2e findings leaked into a checks-only repo: $output"
@@ -70,7 +70,7 @@ write_caller() {
 @test "a gate the caller switched off is not reported against it" {
   {
     printf 'name: CI\non: [push]\njobs:\n  checks:\n    name: Checks\n'
-    printf '    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0\n'
+    printf '    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n'
     printf '    with:\n      docs-check: false\n      licenses: false\n'
   } > "$TMP/.github/workflows/ci.yml"
   printf '{"name":"app"}\n' > "$TMP/package.json"
@@ -81,7 +81,7 @@ write_caller() {
 }
 
 @test "a missing fallback gate degrades and does not block" {
-  write_caller checks.yml
+  write_caller check-code.yml
   cat > "$TMP/package.json" <<'JSON'
 {
   "name": "app",
@@ -102,7 +102,7 @@ JSON
 }
 
 @test "the job summary is written when the runner provides one" {
-  write_caller checks.yml
+  write_caller check-code.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
   local summary="$BATS_TEST_TMPDIR/summary.md"
   : > "$summary"
@@ -115,7 +115,7 @@ JSON
 }
 
 @test "--json reports every requirement with its level" {
-  write_caller checks.yml
+  write_caller check-code.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
   # stdout only: the ::error:: annotation goes to stderr, and a consumer piping
   # this into jq must get JSON and nothing else.
@@ -151,7 +151,7 @@ JSON
   [ "$status" -eq 0 ] || fail "$output"
 }
 
-@test "every gate job in checks.yml waits for the contract job" {
+@test "every gate job in check-code.yml waits for the contract job" {
   # The whole value is that one explanatory red replaces nine confusing ones.
   # A gate job that does not wait still produces its own.
   run node -e '
@@ -172,7 +172,7 @@ JSON
   # The failure this whole file exists to replace. A checker that answers a
   # malformed package.json with a SyntaxError and eight frames of node internals
   # is no better than the gate it runs ahead of.
-  write_caller checks.yml
+  write_caller check-code.yml
   printf '{ "name": "x",, }' > "$TMP/package.json"
   run node "$DOCTOR" --root "$TMP"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status"
@@ -210,7 +210,7 @@ JSON
   local ws="$BATS_TEST_TMPDIR/ws"
   mkdir -p "$ws/.github/workflows"
   printf '{"name":"app"}\n' > "$ws/package.json"
-  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0\n' \
+  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' \
     > "$ws/.github/workflows/ci.yml"
   ln -s "$REPO_ROOT" "$ws/.workflows"
 
@@ -261,12 +261,15 @@ JSON
   # A profile added to the contract with no section here means a consumer
   # calling that workflow reads a page that silently omits its requirements.
   local doc="$REPO_ROOT/docs/adopting-an-existing-repo.md"
-  run node -e '
-    const fs = require("fs");
-    const contract = require(`${process.env.REPO_ROOT}/packages/dev-config/contract.json`);
-    const doc = fs.readFileSync(`${process.env.REPO_ROOT}/docs/adopting-an-existing-repo.md`, "utf8");
+  run node --input-type=module -e '
+    import fs from "node:fs";
+    const root = process.env.REPO_ROOT;
+    const { PROFILE_TITLE } = await import(`${root}/scripts/self/render-contract-table.mjs`);
+    const contract = JSON.parse(fs.readFileSync(`${root}/packages/dev-config/contract.json`, "utf8"));
+    const doc = fs.readFileSync(`${root}/docs/adopting-an-existing-repo.md`, "utf8");
     const used = new Set(contract.requirements.map((r) => r.profile));
-    const missing = [...used].filter((p) => !new RegExp(`### If you call .*${p}`).test(doc));
+    // A profile names a workflow by its title (`check-code.yml` for checks), not by itself.
+    const missing = [...used].filter((p) => !doc.includes(`### If you call ${PROFILE_TITLE[p] ?? p}`));
     if (missing.length > 0) throw new Error(`no section for: ${missing.join(", ")}`);
   '
   [ "$status" -eq 0 ] || fail "$output"

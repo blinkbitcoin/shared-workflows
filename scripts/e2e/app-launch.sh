@@ -33,7 +33,7 @@ log "launching $app_id on $platform (dev-client=$WORKFLOWS_DEV_CLIENT)"
 
 # The bundle request Metro logs is the launch's receipt; anything before it can
 # be an app that started and died on the launcher.
-# A Release iOS build embeds its bundle and never asks Metro for one, so e2e.yml
+# A Release iOS build embeds its bundle and never asks Metro for one, so check-e2e.yml
 # does not start Metro for it - there is no metro.log to read, and demanding one
 # would fail the launch it is supposed to watch.
 needs_metro=true

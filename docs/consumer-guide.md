@@ -7,7 +7,7 @@ this repo.
 
 0. Run `npx --package=@blinkbitcoin/dev-config check-consumer-contract` in your
    repo to see what this family will need from it — see [The contract
-   check](#the-contract-check). `checks.yml` runs the same thing on every push.
+   check](#the-contract-check). `check-code.yml` runs the same thing on every push.
    If your app was **not** generated from the template, start at
    [adopting-an-existing-repo.md](adopting-an-existing-repo.md) instead.
 1. Add `.github/workflows/ci.yml` (below) to your app repo.
@@ -19,8 +19,8 @@ this repo.
    prints both ways out.
 3. Push. `checks` and `unit` run on every PR; `e2e` (Android by default) runs
    after them.
-4. Add `web.yml`, `pr-closed.yml`, `pr-title.yml` if you want those too (all
-   three below).
+4. Add `ci-web.yml`, `ci-pr-closed.yml`, `ci-pr-title.yml` if you want those too (all
+   three below). They call `build-web.yml`, `pr-closed.yml` and `pr-title.yml`.
 
 That's it — every job self-checks-out this repo into `.workflows/` and reaches its
 scripts through `$WORKFLOWS_DIR`; you never reference anything under `scripts/` or
@@ -73,7 +73,7 @@ pin as a reviewed commit.
 
 ### Moving to a version that added `docs-check`
 
-`checks.yml`'s `docs-check` input defaults to **on**, and `run-script.sh` fails
+`check-code.yml`'s `docs-check` input defaults to **on**, and `run-script.sh` fails
 hard when the named script is absent. So adopting a version of this repo that
 carries it means one of two things in the consumer: add a `"check:docs"`
 script to `package.json`, or pass `docs-check: false` in the caller. This is
@@ -83,7 +83,7 @@ it is the one worth checking before you move the pin.
 
 ## The contract check
 
-`checks.yml`'s `Contract` job runs one script — `check-consumer-contract` — against
+`check-code.yml`'s `Contract` job runs one script — `check-consumer-contract` — against
 your repository and reports **everything** this family will need from it, before
 any of the gates that would each die on their own.
 
@@ -120,7 +120,7 @@ holds `contract.json` to its own workflows:
 flowchart LR
   subgraph app["your repository"]
     pr["a push or a PR"]
-    caller["ci.yml calls checks.yml@v0"]
+    caller["ci.yml calls check-code.yml@v0"]
     tree["package.json, Makefile, .mise.toml,<br/>the callers' with: toggles, fastlane/"]
   end
   subgraph run["your Checks run"]
@@ -148,19 +148,19 @@ Beyond scripts and files, it holds two things together that only your
 repository can see:
 
 - **`make ci` and CI run the same gates**, in both directions. Every package
-  script the checks and unit workflows run for your caller must be reachable
+  script the check-code and check-unit workflows run for your caller must be reachable
   from `make ci`. Every target `make ci` reaches with a recipe of its own must
   be run by CI, named like a script CI runs or running only pnpm scripts CI
   runs. No `Makefile` or no `ci` target, and both are skipped.
-- **Your lanes read only the `APP_REVIEW_*` names `fastlane-lane.yml` passes.**
+- **Your lanes read only the `APP_REVIEW_*` names `publish-store.yml` passes.**
   A name it does not pass is always empty on a runner.
 
 **It only reports what applies to you.** It reads your own `.github/workflows/`
-first: a repository that never calls `e2e.yml` is not told it is missing
+first: a repository that never calls `check-e2e.yml` is not told it is missing
 `.maestro/`, and a gate you passed `false` for is not a finding.
 
 A toggle wired to an expression — `typecheck: ${{ vars.TYPECHECK }}` — is
-neither. This job gates the nine gate jobs in `checks.yml`, so blocking all of
+neither. This job gates the nine gate jobs in `check-code.yml`, so blocking all of
 them because a repository variable could not be read here would be a false
 failure, and staying quiet would hide a real one. Such a finding is reported as
 degraded and never blocks, with the reason saying so.
@@ -244,8 +244,8 @@ variable interpolates to the empty string, and an empty string satisfies
 `required`. The only thing that rejected an empty value was your own Fastfile's
 `before_all` — which a repository adopting these workflows may not have at all,
 and which on the iOS lane only runs after prebuild and pod install, on a runner
-billing at ten times the Linux rate. `expo-build-ios.yml`,
-`expo-build-android.yml` and `fastlane-lane.yml` now assert all five as their
+billing at ten times the Linux rate. `build-ios.yml`,
+`build-android.yml` and `publish-store.yml` now assert all five as their
 first step, naming the repository variable to set.
 
 ## Consumer `ci.yml`
@@ -257,7 +257,7 @@ on:
     branches: [main]
     # No paths-ignore: it would be a second, narrower docs rule that already
     # disagrees with the classifier's (it misses LICENSE and the issue/PR
-    # templates). checks.yml's `changes` job is the single source - it
+    # templates). check-code.yml's `changes` job is the single source - it
     # classifies pushes too, so a docs-only merge still skips unit and e2e.
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -270,18 +270,18 @@ concurrency:
 jobs:
   checks:
     name: Checks
-    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
   unit:
     name: Unit
     needs: checks
     if: ${{ needs.checks.outputs.docs-only != 'true' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
   e2e:
     name: E2E
     # `unit` as well as `checks`: a failed unit run then never reaches E2E.
     needs: [checks, unit]
     if: ${{ needs.checks.outputs.docs-only != 'true' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/e2e.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
     with:
       # iOS is opt-in because macOS bills at 10x on a private repo. On a
       # public repo standard runners are free, macOS included, so set the repo
@@ -299,7 +299,7 @@ jobs:
     # always(), so a red Unit still gets a red badge. A cancelled upstream job
     # says nothing about the branch, and a docs-only change never ran the jobs
     # the badges describe - in both cases the published badges stay as they are.
-    # badges.yml itself also skips release events and fork PRs (no push token).
+    # publish-badges.yml itself also skips release events and fork PRs (no push token).
     if: >-
       always() &&
       needs.checks.result != 'cancelled' &&
@@ -308,7 +308,7 @@ jobs:
       needs.checks.outputs.docs-only != 'true'
     permissions:
       contents: write # publish-badges.sh pushes the gh-pages branch
-    uses: blinkbitcoin/shared-workflows/.github/workflows/badges.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-badges.yml@v0
     with:
       unit-result: ${{ needs.unit.result }}
       e2e-result: ${{ needs.e2e.result }}
@@ -329,14 +329,14 @@ Notes:
   reusable workflows set it (a called workflow's `concurrency` would fight the
   caller's). Cancel in-flight runs on every branch except `main` (a `main`
   push after a merge should never be cancelled by the next one).
-- `docs-only` (from `checks.yml`'s `changes` job) lets `unit` and `e2e` skip
+- `docs-only` (from `check-code.yml`'s `changes` job) lets `unit` and `e2e` skip
   entirely on a docs-only diff; wire it into any other downstream job you add.
   A skipped job counts as passing for required checks, unlike a workflow that
   never ran — which is exactly why the classifier, not the trigger, does the
   skipping.
 - **No `paths-ignore` on `push`.** It used to be there, back when the
   classifier only ever saw `pull_request.base.sha` and so classified nothing on
-  a push. `checks.yml` now derives its base from `github.event.before` on a
+  a push. `check-code.yml` now derives its base from `github.event.before` on a
   push, so one rule covers both events: a PR and the merge that follows it get
   the same answer. A `paths-ignore` list would be a second, narrower docs rule
   living next to it, and it already disagreed — it misses `LICENSE` and the
@@ -350,9 +350,9 @@ Notes:
   red Unit still gets a red badge, and it is the only job here that needs
   `contents: write` (granted on the job, not at the top of the file). What it
   publishes, what it skips and the GitHub Pages constraint that goes with it
-  are in [`badges.yml`](#badgesyml).
+  are in [`publish-badges.yml`](#publish-badgesyml).
 - **What a docs-only change still costs.** Only `unit` and `e2e` skip.
-  `checks.yml`'s own `code` job has no `docs-only` gate, so a documentation
+  `check-code.yml`'s own `code` job has no `docs-only` gate, so a documentation
   push to `main` still runs typecheck, lint, format, knip, spell, `check:docs`
   and audit — which is the point: those are the checks a documentation change
   can break (a typo, a reflowed table, a dead link in a doc knip tracks, a
@@ -360,10 +360,10 @@ Notes:
   trigger lost its `paths-ignore` the workflow did not run at all on such a
   push, so it also never caught them.
 
-## `web.yml`, `pr-closed.yml`, `pr-title.yml` callers
+## `build-web.yml`, `pr-closed.yml`, `pr-title.yml` callers
 
 ```yaml
-# .github/workflows/web.yml — only add this if the app has a web target
+# .github/workflows/ci-web.yml — only add this if the app has a web target
 name: CI / Web
 on:
   pull_request:
@@ -378,7 +378,7 @@ concurrency:
 jobs:
   web:
     name: Export
-    uses: blinkbitcoin/shared-workflows/.github/workflows/web.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-web.yml@v0
     permissions:
       contents: read
       # The called workflow's `deploy` job needs these; a called job can only
@@ -396,7 +396,7 @@ jobs:
       deploy: ${{ github.event_name == 'release' }}
 ```
 
-Notes on the `web.yml` caller:
+Notes on the `build-web.yml` caller:
 
 - **The deploy trigger is `release: published`, not a tag push.**
   `github.ref_type == 'tag'` is not a usable signal here: a `pull_request`- or
@@ -411,12 +411,12 @@ Notes on the `web.yml` caller:
   slot and the empty one in the `||` slot, as above.
 - **`permissions` on the job, not just the workflow.** A called workflow's
   jobs can only narrow the caller's token, never widen it, so `pages: write`
-  and `id-token: write` (needed by `web.yml`'s `deploy` job) must be granted
+  and `id-token: write` (needed by `build-web.yml`'s `deploy` job) must be granted
   on the calling job. `contents: read` is repeated there because naming
   `permissions:` at all resets the unnamed scopes to `none`.
 
 ```yaml
-# .github/workflows/pr-closed.yml
+# .github/workflows/ci-pr-closed.yml
 name: CI / PR Closed
 on:
   pull_request:
@@ -431,7 +431,7 @@ jobs:
 ```
 
 ```yaml
-# .github/workflows/pr-title.yml
+# .github/workflows/ci-pr-title.yml
 name: CI / PR Title
 on:
   pull_request:
@@ -443,7 +443,7 @@ jobs:
     name: Title
     # `edited` also fires for a body-only edit; only re-lint when the title
     # itself changed (`opened`/`synchronize` are already covered by ci.yml's
-    # checks.yml `commitlint` toggle, which lints the same PR title).
+    # check-code.yml `commitlint` toggle, which lints the same PR title).
     if: github.event.changes.title != null
     uses: blinkbitcoin/shared-workflows/.github/workflows/pr-title.yml@v0
 ```
@@ -470,7 +470,7 @@ read access to the target repo) and pass it through:
 ```yaml
 jobs:
   checks:
-    uses: ./.github/workflows/checks.yml
+    uses: ./.github/workflows/check-code.yml
     secrets:
       consumer-token: ${{ secrets.SMOKE_TOKEN }}
     with:
@@ -524,7 +524,7 @@ unused, "carried for input-set consistency across the family," so they share
 one mental model). The exception is `pr-closed.yml`, which declares
 `workflow_call: {}` and takes nothing.
 
-### `checks.yml`
+### `check-code.yml`
 
 | Input | Default | Meaning |
 | --- | --- | --- |
@@ -617,7 +617,7 @@ in the run's summary; it just does not fail the job. If you suppress an
 advisory instead, suppress it where the dependency is — `auditConfig.ignoreGhsas`
 in your `pnpm-workspace.yaml` — with a per-entry reason next to the id.
 
-### `unit.yml`
+### `check-unit.yml`
 
 | Input | Default | Meaning |
 | --- | --- | --- |
@@ -630,7 +630,7 @@ in your `pnpm-workspace.yaml` — with a per-entry reason next to the id.
 
 No outputs. Secrets: `consumer-token` (optional).
 
-### `e2e.yml`
+### `check-e2e.yml`
 
 | Input | Default | Meaning |
 | --- | --- | --- |
@@ -658,7 +658,7 @@ No outputs. Secrets: `consumer-token` (optional).
 Outputs: `ios-result`, `android-result` (`success`/`failure`/`cancelled`/`skipped`).
 Secrets: `consumer-token` (optional).
 
-### `web.yml`
+### `build-web.yml`
 
 | Input | Default | Meaning |
 | --- | --- | --- |
@@ -685,7 +685,7 @@ Outputs: `page-url` (empty unless `deploy` is true). Secrets: `consumer-token`
 
 No outputs. Secrets: `consumer-token` (optional). Lints
 `github.event.pull_request.title` against Conventional Commits on whatever
-`pull_request` event the caller wires it to. `checks.yml`'s `commitlint`
+`pull_request` event the caller wires it to. `check-code.yml`'s `commitlint`
 toggle already lints the same title on `opened`/`synchronize`, so the caller
 above only adds `edited` (guarded by `github.event.changes.title != null`, since
 `edited` also fires for a body-only edit).
@@ -695,12 +695,12 @@ above only adds `edited` (guarded by `github.event.changes.title != null`, since
 `on.workflow_call: {}` — no inputs, outputs or secrets. The caller must grant
 `permissions: actions: write` for the cancel step and `contents: write` for the
 `badges-cleanup` job, which removes the closed branch's `badges/<branch>/`
-directory from `gh-pages` (see [`badges.yml`](#badgesyml)). A fork PR skips the
+directory from `gh-pages` (see [`publish-badges.yml`](#publish-badgesyml)). A fork PR skips the
 cleanup job: its run has no token that could push to the base repository, and
-`badges.yml` skipped it on the way in for the same reason, so there is nothing
+`publish-badges.yml` skipped it on the way in for the same reason, so there is nothing
 to remove.
 
-### `badges.yml`
+### `publish-badges.yml`
 
 Renders and publishes this branch's CI badges to the consumer's own `gh-pages`
 branch, as `badges/<branch>/{unit,e2e,coverage}.svg` (plus a `.json` sibling per
@@ -711,8 +711,8 @@ its own directory, and `pr-closed.yml` drops it when the PR closes.
 
 **Rendering lives in the consumer, publishing lives here.** An SVG renderer
 needs a `package.json` and a test harness; this repo has neither by design. So
-`badges.yml` calls one named consumer script (`render-script`) through
-`scripts/checks/run-script.sh` — the same delegation `checks.yml` uses for
+`publish-badges.yml` calls one named consumer script (`render-script`) through
+`scripts/checks/run-script.sh` — the same delegation `check-code.yml` uses for
 typecheck and lint — and owns only `scripts/ci/publish-badges.sh` and the
 gh-pages mechanics behind it (`scripts/ci/gh-pages-lib.sh`: orphan creation on
 the first publish; on a rejected push, the badge write is re-applied onto the
@@ -725,9 +725,9 @@ the same paths and no merge of derived content can resolve that).
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | — |
 | `unit-result` | **required** | The caller's `needs.unit.result` |
 | `e2e-result` | **required** | The caller's `needs.e2e.result` |
-| `docs-only` | `false` | `checks.yml`'s `docs-only` output; `'true'` skips the job |
+| `docs-only` | `false` | `check-code.yml`'s `docs-only` output; `'true'` skips the job |
 | `unit-label` / `e2e-label` | `Unit` / `E2E` | Text on the left half of each status badge |
-| `coverage-artifact` | `coverage` | Artifact holding the consumer's `coverage/` directory (`unit.yml` uploads it under this name). Downloaded only when `unit-result` is `success` |
+| `coverage-artifact` | `coverage` | Artifact holding the consumer's `coverage/` directory (`check-unit.yml` uploads it under this name). Downloaded only when `unit-result` is `success` |
 | `render-script` | `badges:render` | Consumer script that renders the badges into `badge-dir` |
 | `badge-dir` | `coverage/badge` | Consumer-relative directory the render script writes and `publish-badges.sh` copies from |
 
@@ -757,7 +757,7 @@ renders no coverage badge at all, and `publish-badges.sh` copies only what was
 rendered — so a docs-only PR leaves the branch's published coverage badge
 exactly as it was instead of blanking it.
 
-**Coexistence with GitHub Pages.** `web.yml`'s `deploy` job publishes the web
+**Coexistence with GitHub Pages.** `build-web.yml`'s `deploy` job publishes the web
 export through `actions/deploy-pages`, which is an *artifact* deploy and reads
 no branch, and the badges are served from `raw.githubusercontent.com` rather
 than from the Pages site. The two therefore do not collide — **provided the
@@ -772,7 +772,7 @@ preparation — the first publish creates it as a true orphan (no parent, and
 no copy of the consumer's source tree) — unless a ruleset blocks branch
 creation outright.
 
-### `codeql.yml`
+### `check-codeql.yml`
 
 | Input | Default | Meaning |
 | --- | --- | --- |
@@ -781,12 +781,12 @@ creation outright.
 | `macos-runner`, `native-cache-version` | (unused) | — |
 | `languages` | `javascript-typescript` | Comma-separated CodeQL languages; also the `category` the SARIF is uploaded under |
 | `config-file` | `./.github/codeql/codeql-config.yml` | Consumer-relative config: query suite, packs, `paths-ignore` |
-| `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern, same as `checks.yml` |
+| `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern, same as `check-code.yml` |
 
 Outputs: `docs-only` (`'true'` when nothing but docs changed, so no analysis
 ran). Secrets: `consumer-token` (optional).
 
-Two jobs. `changes` runs the **same** classifier `checks.yml` does — the same
+Two jobs. `changes` runs the **same** classifier `check-code.yml` does — the same
 `scripts/ci/changed-class.sh`, from the same `.workflows/` self-checkout, with a
 byte-identical `BASE_SHA` expression (`test/workflow-shape.bats` compares the
 two). `analyze` is gated on `docs-only != 'true'` and runs
@@ -805,7 +805,7 @@ be a second, narrower docs rule beside the `changes` job (the same defect the
 family removed from `ci.yml`):
 
 ```yaml
-# .github/workflows/codeql.yml
+# .github/workflows/ci-codeql.yml
 name: CI / CodeQL
 on:
   push:
@@ -829,7 +829,7 @@ jobs:
       contents: read
       actions: read # workflow metadata for the SARIF upload
       security-events: write # upload the SARIF results
-    uses: blinkbitcoin/shared-workflows/.github/workflows/codeql.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-codeql.yml@v0
 ```
 
 The calling job needs no `permissions:` block of its own: a reusable workflow's
@@ -909,21 +909,21 @@ moving through the run):
 ```mermaid
 flowchart LR
   subgraph app["the app repo"]
-    releasepr["release-please.yml"]
-    internal["release-internal.yml"]
-    beta["release-beta.yml"]
-    prod["release-production.yml"]
-    hotfix["ota-hotfix.yml"]
-    listing["store-metadata.yml"]
+    releasepr["cd-release.yml"]
+    internal["cd-internal.yml"]
+    beta["cd-beta.yml"]
+    prod["cd-production.yml"]
+    hotfix["cd-ota-hotfix.yml"]
+    listing["cd-store-listing.yml"]
   end
   subgraph shared["shared-workflows @v0"]
-    prnotes["release-pr-notes.yml"]
-    prepare["expo-prepare.yml"]
-    ios["expo-build-ios.yml"]
-    android["expo-build-android.yml"]
-    lane["fastlane-lane.yml"]
-    release["github-release.yml"]
-    ota["expo-ota-publish.yml"]
+    prnotes["pr-release-notes.yml"]
+    prepare["build-prepare.yml"]
+    ios["build-ios.yml"]
+    android["build-android.yml"]
+    lane["publish-store.yml"]
+    release["publish-github-release.yml"]
+    ota["publish-ota.yml"]
   end
   artifacts[("the run's artifacts")]
   releasepr -->|"pr-number, ref the release branch"| prnotes
@@ -954,26 +954,26 @@ flowchart LR
 
 Nothing in the figure is a fixed order between the seven: each caller decides its
 own `needs:` chain, and the three tiers chain them differently. In
-`release-internal.yml` the store uploads run **before** the pre-release, and the
+`cd-internal.yml` the store uploads run **before** the pre-release, and the
 pre-release names the two build jobs directly rather than the uploads, so a
 repository with store uploads off still publishes every artifact.
-`release-beta.yml` builds nothing at all: it promotes the binaries the internal
+`cd-beta.yml` builds nothing at all: it promotes the binaries the internal
 run already produced, then moves the release onto `vX.Y.Z` with
 `mode: promote` and `from-tag` pointing at the build pre-release.
-`release-production.yml` adds the staged-rollout lanes (`phased`, `rollout`,
-`halt`), each its own `fastlane-lane.yml` call on the same tag — and, left out
-of the figure because it is not a release workflow, a final `web.yml` call
+`cd-production.yml` adds the staged-rollout lanes (`phased`, `rollout`,
+`halt`), each its own `publish-store.yml` call on the same tag — and, left out
+of the figure because it is not a release workflow, a final `build-web.yml` call
 that deploys the Pages site for the same tag. Two callers
-never prepare anything: `ota-hotfix.yml` resolves a baseline tag in a job of its
-own and calls only `expo-ota-publish.yml`, and `store-metadata.yml` calls only
-`fastlane-lane.yml`, once per platform.
+never prepare anything: `cd-ota-hotfix.yml` resolves a baseline tag in a job of its
+own and calls only `publish-ota.yml`, and `cd-store-listing.yml` calls only
+`publish-store.yml`, once per platform.
 
-`expo-prepare` is the only job that decides *what* the release is; every later
+`build-prepare` is the only job that decides *what* the release is; every later
 job is handed `version` / `build-number` and the `release-meta` artifact rather
 than recomputing them, so a re-run of a single stage can never disagree with
 the stage before it.
 
-### `expo-prepare.yml`
+### `build-prepare.yml`
 
 Resolves the version and build number, computes both native fingerprints,
 writes `build-info.json` and the store notes, and uploads them as the
@@ -988,8 +988,8 @@ writes `build-info.json` and the store notes, and uploads them as the
 | `release-body-file` | `''` | Consumer-relative file holding a release body; switches note generation to `--from-body` |
 | `release-tag` | `''` | Existing release tag whose **body** becomes the store notes, fetched with `gh release view`. It also becomes the checked-out ref and the gated/stamped commit — see [Preparing from a release tag](#preparing-from-a-release-tag) |
 | `build-env` | `{}` | Non-secret build environment — see [`build-env`](#build-env) |
-| `require-green-workflow` | `''` | Workflow file name (e.g. `release-internal.yml`) that must have concluded `success` for the **resolved target sha** (the `release-tag` commit when `release-tag` is set, else `github.sha`) before preparing. Empty disables the gate. The gate step runs **before** `Setup` (so a red upstream fails before anything is installed), which means it uses the `gh` and `yq` from the runner image — true of GitHub-hosted `ubuntu-latest`, not necessarily of a self-hosted `linux-runner` |
-| `reserve-tag` | `false` | Create the `v<version>-build.<n>` tag at the target sha **in Prepare, before the green gate**, while the commit is still the default branch tip; `github-release.yml` then creates the release on the existing tag. GitHub refuses `GITHUB_TOKEN` a *new* tag on a commit whose `.github/workflows/*` differ from the tip ("create or update workflow without `workflows` permission", surfaced by the releases API as a bare 403) - and by the time a build's release is published a later merge may have touched a workflow. Needs **`contents: write`** on the calling job. A red gate deletes the tag this run reserved |
+| `require-green-workflow` | `''` | Workflow file name (e.g. `cd-internal.yml`) that must have concluded `success` for the **resolved target sha** (the `release-tag` commit when `release-tag` is set, else `github.sha`) before preparing. Empty disables the gate. The gate step runs **before** `Setup` (so a red upstream fails before anything is installed), which means it uses the `gh` and `yq` from the runner image — true of GitHub-hosted `ubuntu-latest`, not necessarily of a self-hosted `linux-runner` |
+| `reserve-tag` | `false` | Create the `v<version>-build.<n>` tag at the target sha **in Prepare, before the green gate**, while the commit is still the default branch tip; `publish-github-release.yml` then creates the release on the existing tag. GitHub refuses `GITHUB_TOKEN` a *new* tag on a commit whose `.github/workflows/*` differ from the tip ("create or update workflow without `workflows` permission", surfaced by the releases API as a bare 403) - and by the time a build's release is published a later merge may have touched a workflow. Needs **`contents: write`** on the calling job. A red gate deletes the tag this run reserved |
 | `require-green-dispatch` | `false` | With `require-green-workflow`: when the gated workflow has **no** run for the target sha, or its newest run was **cancelled** or **failed**, dispatch it once at `release-tag` and wait for that run instead of failing. Self-healing for a release whose internal build was lost (concurrency-group eviction, a flaky runner): the beta no longer waits for a human to dispatch by hand. A dispatched run that also fails is fatal; `skipped` is never dispatched. Needs `release-tag` and **`actions: write`** on the calling job
 | `release-meta-artifact` | `release-meta` | Artifact name for `build-info.json`, `store-notes.json`, `notes-store.txt`, `notes.md` |
 
@@ -999,12 +999,12 @@ and `OPENAI_API_KEY` (all optional — the two API keys are only needed when the
 consumer's `notes.mjs` drafts store notes with an LLM; the provider, model and
 base URL are non-secret and belong in `build-env`).
 
-> **Every caller of `expo-prepare.yml` must grant `actions: read` on the calling
+> **Every caller of `build-prepare.yml` must grant `actions: read` on the calling
 > job**, on top of `contents: read`:
 >
 > ```yaml
 >   prepare:
->     uses: blinkbitcoin/shared-workflows/.github/workflows/expo-prepare.yml@v0
+>     uses: blinkbitcoin/shared-workflows/.github/workflows/build-prepare.yml@v0
 >     permissions:
 >       contents: read
 >       actions: read
@@ -1012,7 +1012,7 @@ base URL are non-secret and belong in `build-env`).
 >
 > The `prepare` job declares **no** job-level `permissions:`, and the workflow
 > has no top-level block either (a block at either level replaces the caller's
-> grant), so the job inherits the caller's. Every caller of `expo-prepare.yml` must grant `actions: read` (for
+> grant), so the job inherits the caller's. Every caller of `build-prepare.yml` must grant `actions: read` (for
 > `gh run list` in the `require-green-workflow` gate), and `actions: write`
 > when it sets `require-green-dispatch` (for `gh workflow run`). A static block
 > cannot say "read, or write when asked", and a called job may never request
@@ -1020,7 +1020,7 @@ base URL are non-secret and belong in `build-env`).
 > exactly what it uses. A caller that grants too little fails in the gate step
 > with a message naming the missing scope.
 
-### `expo-build-ios.yml`
+### `build-ios.yml`
 
 Prebuild → pods → `fastlane ios build` → `fastlane ios verify`, on
 `macos-runner`.
@@ -1031,7 +1031,7 @@ Prebuild → pods → `fastlane ios build` → `fastlane ios verify`, on
 | `native-extra-globs` | `''` | Extra globs folded into the native dependency hash (see [`docs/cache-keys.md`](cache-keys.md)) |
 | `xcode` | `''` | Sets `DEVELOPER_DIR` to `/Applications/Xcode_<v>.app/Contents/Developer` and is folded into the Pods cache key |
 | `environment` | `''` | GitHub Environment gating the build (secrets + approvals); empty means none |
-| `version` / `build-number` | **required** | `APP_VERSION` / `APP_BUILD_NUMBER`; wire them to `expo-prepare`'s outputs |
+| `version` / `build-number` | **required** | `APP_VERSION` / `APP_BUILD_NUMBER`; wire them to `build-prepare`'s outputs |
 | `stage` | `internal` | Passed through as `WORKFLOWS_STAGE` |
 | `ios-bundle-id` / `ios-scheme` / `android-package` | **required** | `IOS_BUNDLE_ID` / `IOS_SCHEME` / `ANDROID_PACKAGE`. All three are required **on the iOS build too** — see [The five Fastfile contract variables](#the-five-fastfile-contract-variables) |
 | `ios-signing` | `true` | Sign the build and export an `.ipa`. **Off** archives without signing instead:<br>it still compiles and still runs the verify gate, but needs no Apple account and produces no `.ipa`,<br>so the `ios-ipa` upload is skipped too. This is the tier a repository sits in before its certificates exist |
@@ -1044,7 +1044,7 @@ No outputs. Secrets (all optional): `consumer-token`, `MATCH_PASSWORD`,
 `MATCH_GIT_URL`, `MATCH_GIT_BASIC_AUTHORIZATION`, `ASC_KEY_ID`,
 `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`.
 
-### `expo-build-android.yml`
+### `build-android.yml`
 
 Prebuild → `fastlane android build` → `fastlane android verify`, on
 `linux-runner`.
@@ -1073,7 +1073,7 @@ No outputs. Secrets (all optional): `consumer-token`,
 `if: !cancelled()` — without the mapping, every Play crash report for that
 build is permanently unreadable, so it must survive a failed `verify`.
 
-### `fastlane-lane.yml`
+### `publish-store.yml`
 
 One lane, one job. This is what every post-build store action goes through:
 uploads, promotions, staged rollouts, halts.
@@ -1157,7 +1157,7 @@ directory and publishes only that file's path, which is why
 the base64 key content, so a path alone would make the Fastfile's `ENV.fetch`
 raise).
 
-### `github-release.yml`
+### `publish-github-release.yml`
 
 Creates or moves a GitHub release and attaches the fixed asset set.
 
@@ -1181,7 +1181,7 @@ Outputs: `url`. Secrets: `RELEASE_TAGGER_APP_ID`,
 mints a GitHub App token with `actions/create-github-app-token@v3`; otherwise
 it uses the caller's `GITHUB_TOKEN`. **That choice is not cosmetic**: a release
 created with `GITHUB_TOKEN` does not trigger other workflows, so a downstream
-`release: published` caller (e.g. `web.yml`'s Pages deploy) never fires. The
+`release: published` caller (e.g. `build-web.yml`'s Pages deploy) never fires. The
 job declares `permissions: contents: write`, which the calling job must grant.
 
 Assets attached in every mode, when present in the downloaded directory:
@@ -1190,7 +1190,7 @@ Assets attached in every mode, when present in the downloaded directory:
 computed `SHA256SUMS`. The list is fixed on purpose — a release whose asset set
 varies run to run cannot be verified by a downstream script.
 
-### `expo-ota-publish.yml`
+### `publish-ota.yml`
 
 Fingerprint gate → `expo export` → publish → manifest smoke check.
 
@@ -1227,13 +1227,13 @@ way to read a stack trace from it and they die with the runner otherwise.
 > script and this note together. A wrong token name fails as an auth error, not
 > as a flag error.
 
-### `release-pr-notes.yml`
+### `pr-release-notes.yml`
 
 Drafts the store release notes into a release-please PR body, once, for a
 human to review with the version bump. The section it writes is what the
 release lanes later ship: release-please builds the GitHub release body from
 the text between the two `---` lines of the merged PR body, and
-`expo-prepare.yml` with `release-tag` reads the `## Store notes` section of
+`build-prepare.yml` with `release-tag` reads the `## Store notes` section of
 that body back verbatim (`notes.mjs --body-section`), so beta and production
 never regenerate what was reviewed.
 
@@ -1241,7 +1241,7 @@ never regenerate what was reviewed.
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Pass the release PR's head branch as `ref`, so the prompt template and the generator are the ones under release. `macos-runner` and `native-cache-version` are unused here |
 | `pr-number` | (required) | The release PR whose body receives the section: release-please's `pr` output, parsed in the caller's shell (`jq -r '.number // empty'`), never with `fromJSON()` in a step `env:` - the runner validates that even when the step's `if` is false, and the output is empty on a push that opens no PR |
-| `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `github-release.yml` `append` replaces the block in place |
+| `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `publish-github-release.yml` `append` replaces the block in place |
 | `notes-locales` | `en-US` | Locales handed to the consumer's `scripts/release/notes.mjs`; store metadata locale names, not language codes |
 | `build-env` | `{}` | Non-secret environment for the generator: `RELEASE_NOTES_LLM_PROVIDER`, `RELEASE_NOTES_LLM_MODEL`, `OPENAI_BASE_URL`, `STORE_NOTES_INCLUDE_CHANGELOG` - see [`build-env`](#build-env) |
 
@@ -1254,7 +1254,7 @@ must grant.
 
 The block is marker-delimited (`<!-- workflows:append:Store notes -->` …
 `<!-- /workflows:append:Store notes -->`) and byte-identical to what
-`github-release.yml`'s `append` mode writes: both come from
+`publish-github-release.yml`'s `append` mode writes: both come from
 `scripts/lib/body-section.sh`. It sits before the closing `---` of the PR
 body, after the changelog, and a body without such a rule gets it appended.
 Every run strips its own previous block before generating, so a stale draft
@@ -1273,14 +1273,14 @@ Two consequences a caller signs up for:
   Edit the prompt template instead (the next push regenerates), or edit the
   GitHub release body after merging and before the beta run's Prepare reads it.
 
-The template's `release-please.yml` calls it as a second job:
+The template's `cd-release.yml` calls it as a second job:
 
 ```yaml
   store-notes:
     name: Store Notes
     needs: release-please
     if: ${{ needs.release-please.outputs.pr-number != '' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/release-pr-notes.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
     permissions:
       contents: read
       pull-requests: write
@@ -1304,8 +1304,8 @@ withholds a release, and `gh run rerun --failed` re-drafts the section.
 
 ### `build-env`
 
-`expo-prepare.yml`, `expo-build-ios.yml`, `expo-build-android.yml`,
-`fastlane-lane.yml` and `release-pr-notes.yml` take a `build-env` input: a flat JSON object of **non-secret**
+`build-prepare.yml`, `build-ios.yml`, `build-android.yml`,
+`publish-store.yml` and `pr-release-notes.yml` take a `build-env` input: a flat JSON object of **non-secret**
 environment variables, published to `$GITHUB_ENV` before prebuild, the lanes and
 the consumer scripts run. It is the only way a caller can get a value into those
 places — nothing else in the family forwards arbitrary environment.
@@ -1347,7 +1347,7 @@ Rules, enforced by `scripts/lib/build-env.sh`:
   signing credentials.
 - Only key names are logged, never values.
 
-The same rules apply to `fastlane-lane.yml`'s `env-json` input
+The same rules apply to `publish-store.yml`'s `env-json` input
 (`scripts/release/env-json.sh`), except that its keys may be lower-case: they
 reach a fastlane lane, whose own option names (`track`, `lane`) are lower-case.
 
@@ -1362,11 +1362,11 @@ applied, so `sentry_auth_token` is refused exactly as `SENTRY_AUTH_TOKEN` is.
 So `RELEASE_NOTES_LLM_PROVIDER` / `RELEASE_NOTES_LLM_MODEL` /
 `OPENAI_BASE_URL` / `STORE_NOTES_INCLUDE_CHANGELOG` go in `build-env`, while
 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are declared secrets on
-`expo-prepare.yml` and `release-pr-notes.yml`.
+`build-prepare.yml` and `pr-release-notes.yml`.
 
 ### Preparing from a release tag
 
-`expo-prepare.yml`'s `release-tag` changes three things together, and they only
+`build-prepare.yml`'s `release-tag` changes three things together, and they only
 make sense together:
 
 1. **The checkout ref** becomes the tag (`ref: ${{ inputs.release-tag || inputs.ref }}`).
@@ -1386,14 +1386,14 @@ make sense together:
 
 ### Promoting a pre-release's assets
 
-> **`github-release.yml` runs no `Setup`.** That job installs nothing — it only
+> **`publish-github-release.yml` runs no `Setup`.** That job installs nothing — it only
 > talks to the GitHub API — so its steps use the literal `.workflows/scripts/…` path
 > (`$WORKFLOWS_DIR` is published by the setup action and is empty there) and rely on the
 > runner image for `gh`, `bash` and **`node`** (the `Merge platform build-info`
 > step parses JSON with it). All three are on GitHub-hosted `ubuntu-latest`; a
 > self-hosted `linux-runner` must provide them.
 
-`github-release.yml`'s `promote` with `from-tag` downloads every asset of the
+`publish-github-release.yml`'s `promote` with `from-tag` downloads every asset of the
 pre-release and re-uploads it to the target tag (`--clobber`), regenerating
 `SHA256SUMS` over the merged set. The point is that the promoted release ships
 **the same bytes that were tested**, not a rebuild from the same source — a
@@ -1424,8 +1424,8 @@ attempt.
 
 ### `type: number` inputs and repo variables
 
-`build-number-offset` (`expo-prepare.yml`) and `rollout`
-(`expo-ota-publish.yml`) are `type: number`. A repository variable is always a
+`build-number-offset` (`build-prepare.yml`) and `rollout`
+(`publish-ota.yml`) are `type: number`. A repository variable is always a
 *string*, and an **unset** one is the empty string, which is not a number — so
 `with: rollout: ${{ vars.OTA_ROLLOUT }}` fails the workflow with a type error on
 any repo that has not set the variable. Wrap it:
@@ -1453,8 +1453,8 @@ and it rejects a value that is empty after `strip`. So the iOS build must pass
 `ANDROID_PACKAGE` and the Android build must pass `IOS_BUNDLE_ID` /
 `IOS_SCHEME`, however odd that reads: a lane that never touches the other
 platform still fails in `before_all` before its body runs. That is why all five
-are **required inputs** on `expo-build-ios.yml`, `expo-build-android.yml` and
-`fastlane-lane.yml` — an empty default would look like "the Fastfile will work
+are **required inputs** on `build-ios.yml`, `build-android.yml` and
+`publish-store.yml` — an empty default would look like "the Fastfile will work
 it out" and fail on the first real run instead.
 `test/workflow-shape.bats` asserts that every step calling `fastlane.sh`
 receives all five, from the job env or its own.
@@ -1551,12 +1551,12 @@ is a breaking change for the OTA gate and the store lanes alike. `expoSdk` and
 `reactNative` have their range operator stripped (`^54.0.0` is written as
 `54.0.0`) so the file is byte-comparable with the one the template's own
 `build-info.sh` produces. `stage` falls back to `development` when `WORKFLOWS_STAGE`
-is unset, matching the template; `expo-prepare.yml`'s `stage` input defaults to
+is unset, matching the template; `build-prepare.yml`'s `stage` input defaults to
 `internal` because a prepare run is by definition producing a build for at least
 the internal track.
 
-`artifacts` is empty as `expo-prepare` writes it and is filled in later, by the
-job that produces the binaries: `expo-build-android.yml` runs
+`artifacts` is empty as `build-prepare` writes it and is filled in later, by the
+job that produces the binaries: `build-android.yml` runs
 `scripts/release/artifact-hashes.sh` between the `build` and `verify` lanes,
 which writes an enriched **copy** into `$WORKFLOWS_OUTPUT_DIR` carrying
 `artifacts.apkSha256` / `artifacts.aabSha256`. The `verify` lane reads that copy
@@ -1567,7 +1567,7 @@ write one file.
 
 **How the digests reach the release.** The copy that travels with the binaries
 is uploaded as **`build-info.android.json`**, not `build-info.json`.
-`github-release.yml` stages several artifacts into one directory with
+`publish-github-release.yml` stages several artifacts into one directory with
 `merge-multiple: true`, and that merge has **no defined order** — two artifacts
 carrying the same filename would make the release's record a coin toss, with
 either the digests or the whole record losing, silently. With distinct names the
@@ -1588,14 +1588,14 @@ The workflows call three things the **consumer** owns:
 | `scripts/release/verify-android.sh <aab> <apk> [--cert-sha256 X]` | the `android verify` lane | The lane fails |
 
 A consumer may also ship its own `scripts/release/resolve-version.sh`.
-`expo-prepare.yml` uses **this repo's copy**, and the two must never *disagree*:
+`build-prepare.yml` uses **this repo's copy**, and the two must never *disagree*:
 a tag build and an OTA build of the same commit resolving different versions is
 the failure this guards against. They are **contract-identical, not
 byte-identical** — this repo's copy sources `scripts/lib/common.sh`, while a
 consumer's is standalone. **Neither writes `$GITHUB_ENV`**: resolving a version
 and publishing it into a job's environment are two different jobs, and a
 consumer's copy also runs on a developer machine under `make version`, where
-`$GITHUB_ENV` does not exist. `expo-prepare.yml` passes the two values to the
+`$GITHUB_ENV` does not exist. `build-prepare.yml` passes the two values to the
 steps that need them from the resolve step's outputs, explicitly.
 
 Both copies also reject a non-numeric `BUILD_NUMBER_OFFSET`. Bash reads `abc` as
@@ -1668,31 +1668,31 @@ line for line, both repos read on the same date):
 
 | Script name | Called by | Present in the template? |
 | --- | --- | --- |
-| `typecheck` | `checks.yml` (`typecheck`) | yes |
-| `lint` | `checks.yml` (`lint`) | yes |
-| `format:check` | `checks.yml` (`format`) | yes |
-| `knip` | `checks.yml` (`knip`) | **no package script; binary fallback** — falls back to the `knip` binary in `node_modules/.bin` (present: `knip` is a devDependency), so the toggle still works via the binary path. This is deliberate: a `package.json` script literally named `knip` fails `expo-doctor`'s "Check package.json for common issues" ("scripts in package.json conflict with the contents of node_modules/.bin"), and `checks.yml` runs expo-doctor too |
-| `spell` | `checks.yml` (`spell`) | yes (`typos`) |
-| `check:docs` | `checks.yml` (`docs-check` toggle, on by default) | yes (`make check-docs`) — the consumer owns what "docs are in order" means; this family only decides when to ask |
-| `i18n:check` | `checks.yml` (`i18n` toggle, off by default) — preferred over `scripts/checks/i18n.sh` | yes |
+| `typecheck` | `check-code.yml` (`typecheck`) | yes |
+| `lint` | `check-code.yml` (`lint`) | yes |
+| `format:check` | `check-code.yml` (`format`) | yes |
+| `knip` | `check-code.yml` (`knip`) | **no package script; binary fallback** — falls back to the `knip` binary in `node_modules/.bin` (present: `knip` is a devDependency), so the toggle still works via the binary path. This is deliberate: a `package.json` script literally named `knip` fails `expo-doctor`'s "Check package.json for common issues" ("scripts in package.json conflict with the contents of node_modules/.bin"), and `check-code.yml` runs expo-doctor too |
+| `spell` | `check-code.yml` (`spell`) | yes (`typos`) |
+| `check:docs` | `check-code.yml` (`docs-check` toggle, on by default) | yes (`make check-docs`) — the consumer owns what "docs are in order" means; this family only decides when to ask |
+| `i18n:check` | `check-code.yml` (`i18n` toggle, off by default) — preferred over `scripts/checks/i18n.sh` | yes |
 | `i18n:extract` | `scripts/checks/i18n.sh`, the fallback when a consumer ships no `i18n:check` | yes |
-| `codegen:check` | `checks.yml` (`graphql-codegen` toggle, off by default) — preferred over `scripts/checks/codegen.sh` | yes |
+| `codegen:check` | `check-code.yml` (`graphql-codegen` toggle, off by default) — preferred over `scripts/checks/codegen.sh` | yes |
 | `codegen` | `scripts/checks/codegen.sh`, the fallback when a consumer ships no `codegen:check` | yes |
-| `deps:check` | `checks.yml` (`expo-doctor` toggle) — preferred over `scripts/checks/expo-doctor.sh` | yes (`expo install --check && expo-doctor`) |
-| `deps:audit` | `checks.yml` (`audit` toggle) — preferred over `scripts/checks/audit.sh` | yes (`pnpm audit --prod` + lockfile provenance) |
-| `check:ci` | `checks.yml` (`actionlint`/`shellcheck`/`zizmor` toggles) — preferred over `scripts/ci/lint-ci.sh` | yes (`make check-ci`) |
-| `check:secrets` | `checks.yml` (`secret-scan` toggle) — preferred over `scripts/checks/secrets.sh` | yes (`make check-secrets`) |
+| `deps:check` | `check-code.yml` (`expo-doctor` toggle) — preferred over `scripts/checks/expo-doctor.sh` | yes (`expo install --check && expo-doctor`) |
+| `deps:audit` | `check-code.yml` (`audit` toggle) — preferred over `scripts/checks/audit.sh` | yes (`pnpm audit --prod` + lockfile provenance) |
+| `check:ci` | `check-code.yml` (`actionlint`/`shellcheck`/`zizmor` toggles) — preferred over `scripts/ci/lint-ci.sh` | yes (`make check-ci`) |
+| `check:secrets` | `check-code.yml` (`secret-scan` toggle) — preferred over `scripts/checks/secrets.sh` | yes (`make check-secrets`) |
 | commitlint binary | `scripts/checks/commitlint.sh` (`commitlint` toggle, `pr-title.yml`) | n/a — `pnpm exec commitlint` when `@commitlint/cli` is a devDependency (it is), else `npx` with a pinned fallback config |
-| `test` | `unit.yml` (`test-script`, used when `coverage: false`) | yes |
-| `test:coverage` | `unit.yml` (`coverage-script`, default path) | yes |
-| `test:scripts` | `unit.yml` (`scripts-test-script`) | yes |
-| `build:web` | `web.yml` (`export-script`) | yes |
-| `deps:licenses` | `checks.yml` (`licenses` toggle, on by default) | yes (`node scripts/check-licenses.mjs`) |
-| `check-prebuild` | `checks.yml` (`prebuild-check` toggle, **off** by default) | yes — expensive, so the template does not enable the toggle |
-| `check:bundle-secrets` | `checks.yml` (`bundle-secrets` toggle, **off** by default) | yes (`make bundle-secrets-check`) — the toggle stays off because it is minutes, not seconds |
-| `check:release` | `checks.yml` (`release-checks` toggle, off by default) | **opt-in** — only a consumer with a release setup ships it; the toggle stays `false` otherwise |
-| `badges:render` | `badges.yml` (`render-script`) | yes (`node scripts/badges/render.mjs`, driven by the `BADGE_*` environment above) |
-| `test:e2e:web` | `web.yml` (`e2e-script`) | yes (`bash scripts/e2e/web.sh`, which honors `PLAYWRIGHT_SKIP_EXPORT` — see [the Playwright / export contract](#the-playwright--export-contract)) |
+| `test` | `check-unit.yml` (`test-script`, used when `coverage: false`) | yes |
+| `test:coverage` | `check-unit.yml` (`coverage-script`, default path) | yes |
+| `test:scripts` | `check-unit.yml` (`scripts-test-script`) | yes |
+| `build:web` | `build-web.yml` (`export-script`) | yes |
+| `deps:licenses` | `check-code.yml` (`licenses` toggle, on by default) | yes (`node scripts/check-licenses.mjs`) |
+| `check-prebuild` | `check-code.yml` (`prebuild-check` toggle, **off** by default) | yes — expensive, so the template does not enable the toggle |
+| `check:bundle-secrets` | `check-code.yml` (`bundle-secrets` toggle, **off** by default) | yes (`make bundle-secrets-check`) — the toggle stays off because it is minutes, not seconds |
+| `check:release` | `check-code.yml` (`release-checks` toggle, off by default) | **opt-in** — only a consumer with a release setup ships it; the toggle stays `false` otherwise |
+| `badges:render` | `publish-badges.yml` (`render-script`) | yes (`node scripts/badges/render.mjs`, driven by the `BADGE_*` environment above) |
+| `test:e2e:web` | `build-web.yml` (`e2e-script`) | yes (`bash scripts/e2e/web.sh`, which honors `PLAYWRIGHT_SKIP_EXPORT` — see [the Playwright / export contract](#the-playwright--export-contract)) |
 
 The template also ships `lint:fix`, `format`, `i18n:check`, `codegen:check`,
 `deps:check`, `deps:audit`, `deps:licenses`, `check-bundle-secrets`,
@@ -1704,7 +1704,7 @@ consistent by hand if you rely on the local ones too).
 
 ## The Playwright / export contract
 
-`web.yml`'s `build` job exports once (`export-script`) and uploads the result
+`build-web.yml`'s `build` job exports once (`export-script`) and uploads the result
 as the `web-dist` artifact; the `playwright` job downloads that same artifact
 into `output-dir` and runs `e2e-script` with `PLAYWRIGHT_SKIP_EXPORT=1` set in
 its environment — **the point is to test the exact bytes that would be
@@ -1733,7 +1733,7 @@ exec pnpm exec playwright test "$@"
 
 Skip the export unconditionally when the variable is set — including locally,
 where `dist/` may be stale — rather than trying to be clever about freshness:
-`web.yml` guarantees the artifact it downloads is the one its own `build` job
+`build-web.yml` guarantees the artifact it downloads is the one its own `build` job
 just produced.
 
 ## The E2E hooks contract
@@ -1760,11 +1760,11 @@ paths**, not package.json script names, run via `bash` by
   template ships both (its own mock GraphQL API server, started for the E2E
   suite and stopped after) and its own `ci.yml` passes the same two paths.
   A consumer that does not ship them must leave both inputs empty, or
-  `e2e.yml` fails at the setup step (a non-empty but missing path is fatal).
+  `check-e2e.yml` fails at the setup step (a non-empty but missing path is fatal).
 
 ## iOS opt-in
 
-iOS E2E defaults to `false` in `e2e.yml` because macOS GitHub-hosted runners
+iOS E2E defaults to `false` in `check-e2e.yml` because macOS GitHub-hosted runners
 bill at 10x on a private repo, and nothing on a public one. Two independent ways to opt in per the `ci.yml` example above:
 
 - Set the repo variable `E2E_IOS=true` to run iOS on every push/PR.
@@ -1824,7 +1824,7 @@ each one lives so a future edit doesn't quietly regress it.
 | Lesson | Encoded in |
 | --- | --- |
 | A hung Maestro driver must never eat the job twice | `scripts/e2e/maestro-bound.sh` (`bounded_maestro`, exit `124`) + `ios-maestro.sh`/`android-maestro.sh` (retry only on a real failure, never on `124`) |
-| The suite's own timeout must not race the step's `timeout-minutes` | `scripts/e2e/step-timeout.sh` (step timeout = `suite-timeout-minutes + 5`), consumed via `fromJSON(steps.timeout.outputs.minutes)` in `e2e.yml` |
+| The suite's own timeout must not race the step's `timeout-minutes` | `scripts/e2e/step-timeout.sh` (step timeout = `suite-timeout-minutes + 5`), consumed via `fromJSON(steps.timeout.outputs.minutes)` in `check-e2e.yml` |
 | Killing Metro must kill its whole process group, not just the wrapper pid | `scripts/e2e/README.md` notes `kill -TERM -"$(cat "$WORKFLOWS_OUT/metro.pid")"` (leading `-`), which `metro-start.sh` also logs when it starts Metro; nothing kills Metro itself — the job teardown reaps the process group |
 | The first app launch must not race a cold Metro bundle | `scripts/e2e/metro-wait.sh` pre-warms `/.expo/.virtual-metro-entry.bundle?platform=...` before `app-launch.sh` runs |
 | The native dependency hash must be computable before `pnpm install`, or a cache lookup blocks on an install | `scripts/ci/native-hash.sh` reads `pnpm-lock.yaml` directly via `yq` instead of `pnpm list` |
@@ -1832,37 +1832,37 @@ each one lives so a future edit doesn't quietly regress it.
 | The AVD snapshot must have dialogs suppressed or the suite hangs on a first-boot dialog | `scripts/e2e/android-emulator.sh snapshot-bake` (`hide_error_dialogs 1`, `anr_show_background 0`), cache key suffix `-hidedialogs` documents the content, not a read value |
 | A crash-report scan must not pick up a stale crash from a previous job on the same runner | `scripts/e2e/collect-forensics.sh` filters iOS `DiagnosticReports` to files newer than `$WORKFLOWS_RUN_START`, stamped once by `scripts/lib/e2e-env.sh` |
 | `docs-only` classification must use merge-base semantics, not raw two-dot diff, so a target-branch advance doesn't retroactively flip a PR to non-docs-only | `scripts/ci/changed-class.sh` (falls back to two-dot only when `git merge-base` itself fails, with a warning) |
-| One docs rule, not two: a caller's `paths-ignore` is a second, narrower list that drifts from the classifier's (it misses `LICENSE` and the issue/PR templates) | `checks.yml` derives `BASE_SHA` from `github.event.before` on a push, so `scripts/ci/changed-class.sh` classifies pushes too and the caller's `ci.yml` carries no `paths-ignore` |
+| One docs rule, not two: a caller's `paths-ignore` is a second, narrower list that drifts from the classifier's (it misses `LICENSE` and the issue/PR templates) | `check-code.yml` derives `BASE_SHA` from `github.event.before` on a push, so `scripts/ci/changed-class.sh` classifies pushes too and the caller's `ci.yml` carries no `paths-ignore` |
 | An unclassifiable range must fail open, not abort the step under `set -euo pipefail` | `scripts/ci/changed-class.sh` guards an empty base, the all-zero base of a branch's first push and an unreachable base (`git cat-file -e`), each emitting `docs-only=false` and exiting 0 |
 | `sudo`-based Linux-runner scripts (free disk, KVM) must no-op safely everywhere else (macOS, a laptop, self-hosted with different env) | `scripts/ci/free-disk.sh` / `scripts/ci/enable-kvm.sh` guard on `GITHUB_ACTIONS=true && RUNNER_OS=Linux`, overridable with `WORKFLOWS_FORCE_RUNNER_SCRIPTS=1` |
 | Forensics collection must never fail the job it's diagnosing | `scripts/e2e/collect-forensics.sh` (`set -uo pipefail`, no `-e`; explicit `exit 0`) |
 | E2E must never run against a production app id/scheme | `scripts/e2e/README.md`: "`APP_VARIANT` must not be `production` for E2E" |
 | A reusable workflow must check out *itself* at the calling job's ref, not the caller's, or `$WORKFLOWS_DIR` scripts silently drift from the pinned version | Every job: `repository: ${{ job.workflow_repository }}`, `ref: ${{ job.workflow_sha }}` into `.workflows/`; enforced by `test/workflow-shape.bats` |
-| A Playwright run against a web export should test the artifact that will actually deploy, not a fresh, possibly-different export | `web.yml`'s `playwright` job downloads the `build` job's `web-dist` artifact and sets `PLAYWRIGHT_SKIP_EXPORT=1` (see [above](#the-playwright--export-contract) for the consumer-side half of this contract) |
+| A Playwright run against a web export should test the artifact that will actually deploy, not a fresh, possibly-different export | `build-web.yml`'s `playwright` job downloads the `build` job's `web-dist` artifact and sets `PLAYWRIGHT_SKIP_EXPORT=1` (see [above](#the-playwright--export-contract) for the consumer-side half of this contract) |
 | Cancelling stale runs must not cancel the run doing the cancelling | `scripts/ci/cancel-runs.sh` excludes `$GITHUB_RUN_ID` from its own query |
 | A build number must never go backwards (stores reject the build forever), so a merge of a long-lived branch must not jump it either | `scripts/release/resolve-version.sh` counts `git rev-list --count --first-parent HEAD`, plus a monotonic `BUILD_NUMBER_OFFSET`; pinned by `test/resolve-version.bats` |
 | An OTA update whose native fingerprint differs from the installed binary crashes every user on the channel on launch | `scripts/ota/fingerprint-gate.sh` compares per platform and dies on any mismatch (and on a `build-info.json` with no `fingerprint` block); `test/fingerprint-gate.bats` |
 | A promotion must not ship a binary whose own build never went green | `scripts/release/require-green-run.sh` (polls `gh run list`; failure, cancellation, skip and "no run at all" are each fatal); `test/require-green-run.bats` |
 | A decoded signing secret must never be world-readable, and a truncated one must not silently become an empty key file | `scripts/release/decode-secrets.sh` creates each file `600` inside a `700` directory *before* writing, and dies on a zero-byte decode; `test/decode-secrets.bats` |
-| A release created with `GITHUB_TOKEN` does not trigger the `release: published` workflows that depend on it | `github-release.yml` mints an `actions/create-github-app-token@v3` token when `RELEASE_TAGGER_APP_ID`/`RELEASE_TAGGER_APP_PRIVATE_KEY` are set |
-| An Android crash report is unreadable forever without that build's mapping file | `expo-build-android.yml` uploads `android-mapping` (and the apk) with `if: !cancelled()`, so a failed `verify` still yields them |
+| A release created with `GITHUB_TOKEN` does not trigger the `release: published` workflows that depend on it | `publish-github-release.yml` mints an `actions/create-github-app-token@v3` token when `RELEASE_TAGGER_APP_ID`/`RELEASE_TAGGER_APP_PRIVATE_KEY` are set |
+| An Android crash report is unreadable forever without that build's mapping file | `build-android.yml` uploads `android-mapping` (and the apk) with `if: !cancelled()`, so a failed `verify` still yields them |
 | An OTA gate wired to a same-run artifact silently stops guarding, because `download-artifact` only sees the current run | `scripts/ota/baseline.sh` fetches the baseline `build-info.json` from the `baseline-tag` release's **assets** via `gh release download`; a missing tag or asset is fatal |
 | A lane fails in `before_all` when any of the five contract variables is empty — including the other platform's ids | All five are required inputs on the three lane-running workflows; `test/workflow-shape.bats` asserts every `fastlane.sh` step receives them |
 | fastlane runs a lane with cwd = `fastlane/`, so a relative path handed to a lane resolves one directory too deep | `scripts/release/fastlane.sh` absolutises every path variable before `bundle exec` |
 | A secret decoded to a file is not the same as a secret in the lane's environment — the template's lanes read `ENV.fetch('ASC_KEY_P8_BASE64')` | Both forms are passed; `test/workflow-shape.bats` asserts every declared secret reaches a `fastlane.sh` step's `env:` |
 | Re-running a failed release job must not duplicate the section it appended to the release body | `scripts/release/release-assets.sh` `append` strips any section with the same heading first; `test/release-assets.bats` asserts two runs give a byte-identical body |
 | A bare `[[ ]]` assertion in a bats body cannot fail the test under macOS's bash 3.2, so a security control can silently stop checking | `test/test_helper.bash` (`fail`/`contains`/`not_contains`) and the `\|\| fail` form in every release test file |
-| A promoted release must ship the bytes that were tested, not a rebuild (a rebuild has a different signature and fingerprint) | `github-release.yml`'s `promote` + `from-tag` downloads the pre-release's assets and re-uploads them; `delete-source` runs only after the upload |
-| `github.sha` on a `release: published` event is the default-branch tip, not the tag's commit | `scripts/release/target-sha.sh` resolves `TAG^{commit}` and feeds it to the green-run gate and `build-info.json`; exposed as `expo-prepare`'s `sha` output |
+| A promoted release must ship the bytes that were tested, not a rebuild (a rebuild has a different signature and fingerprint) | `publish-github-release.yml`'s `promote` + `from-tag` downloads the pre-release's assets and re-uploads them; `delete-source` runs only after the upload |
+| `github.sha` on a `release: published` event is the default-branch tip, not the tag's commit | `scripts/release/target-sha.sh` resolves `TAG^{commit}` and feeds it to the green-run gate and `build-info.json`; exposed as `build-prepare`'s `sha` output |
 | A renamed App Review env name breaks the review form silently - deliver and pilot accept a smaller hash without erroring | `test/workflow-shape.bats` derives the names from a committed copy of the template's `fastlane/lanes/shared.rb` and compares both directions |
 | A non-secret value passed as a workflow input is public, so a credential smuggled through one leaks quietly | `scripts/lib/build-env.sh` refuses keys ending in `_KEY`/`_TOKEN`/`_PASSWORD`/`_SECRET`/… and logs key names only; `test/build-env.bats` |
 | An unset repo variable is `''`, which a `type: number` input rejects outright | The guide's `fromJSON(vars.X \|\| '1000')` idiom for `build-number-offset` and `rollout` |
-| No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `expo-build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-versions.sh`) |
-| A Release E2E build resolves `.env.production` at bundle time, so `EXPO_PUBLIC_*` from a dotenv file never reaches it; an exported variable beats the dotenv file, `NODE_ENV` does not (`@expo/env` assigns it from `--dev`) | `e2e.yml`'s `build-env` input, published before `Prebuild (ios)`; the template passes its mock API URL there |
+| No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-versions.sh`) |
+| A Release E2E build resolves `.env.production` at bundle time, so `EXPO_PUBLIC_*` from a dotenv file never reaches it; an exported variable beats the dotenv file, `NODE_ENV` does not (`@expo/env` assigns it from `--dev`) | `check-e2e.yml`'s `build-env` input, published before `Prebuild (ios)`; the template passes its mock API URL there |
 | A `.app` built against one `build-env` must not be restored for another, or the fix looks like it did nothing | `scripts/ci/native-keys.sh` folds a digest of `BUILD_ENV` into `ios-key` (`-env{8hex}`; empty leaves the key byte-identical); `test/native-keys.bats` |
-| A Release iOS app never asks Metro for a bundle, so starting Metro for it is pure wall clock — and a launch script must not demand `metro.log` on that path | `e2e.yml` `ios` job gates `Start Metro`/`Wait for Metro` on `ios-configuration != 'Release'`; `scripts/e2e/app-launch.sh` requires `metro.log` only when it will read it; `test/app-launch.bats` |
-| On an iOS cache hit the job must not install a dependency tree to produce a warning: the warm build was 1m57s against 13s for the same job in esign | `scripts/lib/e2e-env.sh` `workflows_ios_scheme` returns the workspace filename and cross-checks the Expo config only when it is already at hand; `e2e.yml` `build-ios` skips `Setup` and `Publish build-env` on a hit; `test/e2e-env.bats` |
-| Skipping `Setup` skips the only step that published `$WORKFLOWS_DIR`, and every later `run:` is `bash "$WORKFLOWS_DIR/…"` — exit 127 on the first warm run | `e2e.yml` `build-ios` runs `scripts/ci/workflows-env.sh` as its own unconditional first step |
+| A Release iOS app never asks Metro for a bundle, so starting Metro for it is pure wall clock — and a launch script must not demand `metro.log` on that path | `check-e2e.yml` `ios` job gates `Start Metro`/`Wait for Metro` on `ios-configuration != 'Release'`; `scripts/e2e/app-launch.sh` requires `metro.log` only when it will read it; `test/app-launch.bats` |
+| On an iOS cache hit the job must not install a dependency tree to produce a warning: the warm build was 1m57s against 13s for the same job in esign | `scripts/lib/e2e-env.sh` `workflows_ios_scheme` returns the workspace filename and cross-checks the Expo config only when it is already at hand; `check-e2e.yml` `build-ios` skips `Setup` and `Publish build-env` on a hit; `test/e2e-env.bats` |
+| Skipping `Setup` skips the only step that published `$WORKFLOWS_DIR`, and every later `run:` is `bash "$WORKFLOWS_DIR/…"` — exit 127 on the first warm run | `check-e2e.yml` `build-ios` runs `scripts/ci/workflows-env.sh` as its own unconditional first step |
 | The first `simctl openurl` of a simulator session puts up "Open in <app>?", and on a loaded runner the app acted on that first link ~40 s late — during the *next* flow; iOS remembers the choice, so every later open is alert-free and immediate | Consumer side: the template's `00-launch.yaml` opens a Home no-op link first (ADR 0010 there). Here: `ios-simulator.sh record start` streams the unified log so the alert and the `UIOpenURLAction` hand-off are in `forensics-ios` as `ios-unified.log` |
 | A suite that only passes on the retry is a failure signal GitHub paints green: the artifact carries the retry's files | `ios-maestro.sh`/`android-maestro.sh` log `rerunning the suite once`; read the job log for it before trusting a green run (see `docs/forensics.md`) |
-| The Maestro driver-startup timeout must be strictly below the suite bound, or a runner that fails to launch (`TEST EXECUTE FAILED`) burns the whole bound as exit 124 - which is never retried - and zero flows run | `scripts/lib/e2e-env.sh` `workflows_driver_startup_timeout` (validates, exports; 300000 default on both platforms), called by both maestro scripts; `e2e.yml` passes 300000; `test/driver-startup-timeout.bats` |
+| The Maestro driver-startup timeout must be strictly below the suite bound, or a runner that fails to launch (`TEST EXECUTE FAILED`) burns the whole bound as exit 124 - which is never retried - and zero flows run | `scripts/lib/e2e-env.sh` `workflows_driver_startup_timeout` (validates, exports; 300000 default on both platforms), called by both maestro scripts; `check-e2e.yml` passes 300000; `test/driver-startup-timeout.bats` |

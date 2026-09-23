@@ -47,7 +47,7 @@ on:
         type: string
         default: ''
       require-green-workflow:
-        description: Workflow file name (e.g. release-internal.yml) that must have concluded successfully for this sha before preparing; empty disables the gate
+        description: Workflow file name (e.g. cd-internal.yml) that must have concluded successfully for this sha before preparing; empty disables the gate
         type: string
         default: ''
       reserve-tag:

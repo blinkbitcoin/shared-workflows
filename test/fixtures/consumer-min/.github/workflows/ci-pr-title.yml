@@ -9,6 +9,6 @@ jobs:
     name: Title
     # `edited` also fires for a body-only edit; only re-lint when the title
     # itself changed (`opened`/`synchronize` are already covered by ci.yml's
-    # checks.yml `commitlint` toggle, which lints the same PR title).
+    # check-code.yml `commitlint` toggle, which lints the same PR title).
     if: github.event.changes.title != null
     uses: blinkbitcoin/shared-workflows/.github/workflows/pr-title.yml@v0

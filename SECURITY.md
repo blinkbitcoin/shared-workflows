@@ -60,7 +60,7 @@ backported fixes — a consumer is expected to move its pin forward.
 - If a secret is exposed, treat it as compromised: rotate first, then clean up
   history.
 
-Dependency exposure on the consumer side is watched by `checks.yml`'s audit
+Dependency exposure on the consumer side is watched by `check-code.yml`'s audit
 step; this repository's own dependencies are the pinned tools in `.mise.toml`
 and the actions pinned in `.github/workflows/`, both watched by Dependabot
 (`.github/dependabot.yml`).

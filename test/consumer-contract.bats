@@ -96,8 +96,8 @@ guide_yaml_block() {
   # `name:block` rather than a running counter: the guide has ```yaml blocks
   # that are not caller examples (the secrets-policy snippet is block 5), so the
   # index and the position in this list stopped being the same number once
-  # codeql.yml's section landed further down the page.
-  for spec in ci:1 web:2 pr-closed:3 pr-title:4 codeql:6; do
+  # check-codeql.yml's section landed further down the page.
+  for spec in ci:1 ci-web:2 ci-pr-closed:3 ci-pr-title:4 ci-codeql:6; do
     wf="${spec%:*}"
     n="${spec##*:}"
     file="$FIXTURES/consumer-min/.github/workflows/$wf.yml"
@@ -115,7 +115,7 @@ on_block() {
 }
 
 # The caller the guide tells consumers to copy must not carry a `paths-ignore`:
-# that would be a second, narrower docs rule competing with checks.yml's
+# that would be a second, narrower docs rule competing with check-code.yml's
 # classifier, the exact defect PR 3 removed. The fixture is the guide's example
 # byte for byte (above), so asserting it here asserts what consumers copy.
 @test "the fixture's ci.yml triggers carry no paths-ignore" {
@@ -124,27 +124,27 @@ on_block() {
   [ "$(grep -c . <<<"$block")" -ge 5 ] \
     || fail "read no trigger block from $file - the parser or the file shape changed"
   ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
-    || fail "$file's triggers carry a paths-ignore, a second docs rule beside checks.yml's classifier"
+    || fail "$file's triggers carry a paths-ignore, a second docs rule beside check-code.yml's classifier"
 }
 
 # The guide's `docs-globs` row restates changed-class.sh's default pattern by
 # hand, with markdown pipe escaping. Two hand-maintained copies of a regex is
 # exactly the kind of drift this suite exists to catch.
-# Same rule as ci.yml above, for the same reason: codeql.yml's `changes` job is
+# Same rule as ci.yml above, for the same reason: check-codeql.yml's `changes` job is
 # the single docs classifier, so a `paths-ignore` on the caller's triggers would
 # be a second, narrower copy of it. esign's caller still carries one; ours must
 # not grow one back. The schedule trigger is asserted too - it is what makes a
 # newly published query re-scan an idle main, and it is the one trigger a
 # reviewer is most likely to think is redundant.
-@test "the fixture's codeql.yml has no paths-ignore and keeps its weekly schedule" {
+@test "the fixture's ci-codeql.yml has no paths-ignore and keeps its weekly schedule" {
   require_consumer
-  file="$CONSUMER/.github/workflows/codeql.yml"
-  [ -f "$file" ] || fail "no codeql.yml at $file"
+  file="$CONSUMER/.github/workflows/ci-codeql.yml"
+  [ -f "$file" ] || fail "no ci-codeql.yml at $file"
   block="$(on_block "$file")"
   [ "$(grep -c . <<<"$block")" -ge 5 ] \
     || fail "read no trigger block from $file - the parser or the file shape changed"
   ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
-    || fail "$file's triggers carry a paths-ignore, a second docs rule beside codeql.yml's classifier"
+    || fail "$file's triggers carry a paths-ignore, a second docs rule beside check-codeql.yml's classifier"
   grep -q 'schedule' <<<"$block" \
     || fail "$file has no schedule trigger, so a new query never re-scans an idle main"
 }
@@ -163,9 +163,9 @@ on_block() {
 @test "every workflow_call input is documented in the guide's table for that workflow" {
   command -v yq >/dev/null || skip "yq not installed"
   missing=()
-  for wf in checks unit e2e web badges pr-title codeql \
-    expo-prepare expo-build-ios expo-build-android \
-    fastlane-lane github-release expo-ota-publish release-pr-notes; do
+  for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
+    build-prepare build-ios build-android \
+    publish-store publish-github-release publish-ota pr-release-notes; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     [ -n "$section" ] || fail "no '### \`$wf.yml\`' section in docs/consumer-guide.md"
@@ -188,9 +188,9 @@ on_block() {
   # removed or renamed - a phantom a reader would try to pass.
   command -v yq >/dev/null || skip "yq not installed"
   phantom=()
-  for wf in checks unit e2e web badges pr-title codeql \
-    expo-prepare expo-build-ios expo-build-android \
-    fastlane-lane github-release expo-ota-publish release-pr-notes; do
+  for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
+    build-prepare build-ios build-android \
+    publish-store publish-github-release publish-ota pr-release-notes; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     inputs="$(yq -r '.on.workflow_call.inputs | keys | .[]' "$file")"
@@ -224,13 +224,13 @@ on_block() {
 # checks/unit step runs, with the input that switches it. These cases hold it to
 # that, from this repository alone: no consumer checkout is involved.
 
-# `script<TAB>condition` for every checks.yml/unit.yml step that runs a consumer
+# `script<TAB>condition` for every check-code.yml/check-unit.yml step that runs a consumer
 # script: SCRIPT_NAME for run-script.sh, the positional name for
-# run-consumer-or.sh. An expression SCRIPT_NAME (unit.yml) is resolved to the
+# run-consumer-or.sh. An expression SCRIPT_NAME (check-unit.yml) is resolved to the
 # defaults of the `*-script` inputs it names.
 ci_steps() {
   local f
-  for f in checks unit; do
+  for f in check-code check-unit; do
     yq -o=json '.' "$REPO_ROOT/.github/workflows/$f.yml"
   done | node -e '
 let buf = "";
@@ -264,7 +264,7 @@ const c = require(process.argv[1]);
 const out = [];
 for (const line of process.env.STEPS.split("\n")) {
   const [script, cond] = line.split("\t");
-  // unit.yml falls back to plain `test` when coverage is off; the contract
+  // check-unit.yml falls back to plain `test` when coverage is off; the contract
   // names test:coverage for that step, gated on the same input.
   if (script === "test") continue;
   const req = c.requirements.find((r) => ["package-script", "script-or-dep"].includes(r.kind) && r.target === script);
@@ -290,16 +290,16 @@ console.log(c.requirements
   [ -z "$stale" ] || fail "contract.json requires scripts no checks/unit step runs: $stale"
 }
 
-@test "the contract's App Review names are exactly the secrets fastlane-lane.yml passes" {
+@test "the contract's App Review names are exactly the secrets publish-store.yml passes" {
   command -v yq >/dev/null || skip "yq not installed"
   declared="$(yq -r '.on.workflow_call.secrets | keys | .[] | select(test("^APP_REVIEW_"))' \
-    "$REPO_ROOT/.github/workflows/fastlane-lane.yml" | sort)"
+    "$REPO_ROOT/.github/workflows/publish-store.yml" | sort)"
   contract="$(node -e '
 const c = require(process.argv[1]);
 console.log(c.requirements.find((r) => r.id === "lane.app-review-env").target.slice().sort().join("\n"));
 ' "$REPO_ROOT/packages/dev-config/contract.json")"
-  [ "$(grep -c . <<<"$declared")" -ge 7 ] || fail "found only '$declared' in fastlane-lane.yml"
-  [ "$declared" = "$contract" ] || fail "fastlane-lane.yml passes:
+  [ "$(grep -c . <<<"$declared")" -ge 7 ] || fail "found only '$declared' in publish-store.yml"
+  [ "$declared" = "$contract" ] || fail "publish-store.yml passes:
 $declared
 contract.json lists:
 $contract"

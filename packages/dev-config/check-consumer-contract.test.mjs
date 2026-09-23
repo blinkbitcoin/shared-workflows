@@ -88,16 +88,16 @@ on: [push]
 jobs:
   checks:
     name: Checks
-    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
     with:
       docs-check: false
       release-checks: true
   unit:
     name: Unit
-    uses: blinkbitcoin/shared-workflows/.github/workflows/unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
   e2e:
     name: E2E
-    uses: blinkbitcoin/shared-workflows/.github/workflows/e2e.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
     with:
       ios: \${{ vars.E2E_IOS == 'true' }}
       e2e-setup-script: scripts/e2e/up.sh
@@ -105,23 +105,23 @@ jobs:
 
 test('the caller parser finds which reusable workflows a repository calls', () => {
   const uses = callersUse([{ name: 'ci.yml', text: CALLER }]);
-  assert.deepEqual([...uses].sort(), ['checks.yml', 'e2e.yml', 'unit.yml']);
+  assert.deepEqual([...uses].sort(), ['check-code.yml', 'check-e2e.yml', 'check-unit.yml']);
 });
 
 test('the caller parser attributes each with: key to its own workflow', () => {
   const inputs = callerInputs([{ name: 'ci.yml', text: CALLER }]);
-  assert.equal(inputs.get('checks.yml:docs-check'), 'false');
-  assert.equal(inputs.get('checks.yml:release-checks'), 'true');
-  assert.equal(inputs.get('e2e.yml:e2e-setup-script'), 'scripts/e2e/up.sh');
-  // unit.yml has no with: block, so nothing may leak into it from its neighbours
-  assert.equal(inputs.get('unit.yml:docs-check'), undefined);
+  assert.equal(inputs.get('check-code.yml:docs-check'), 'false');
+  assert.equal(inputs.get('check-code.yml:release-checks'), 'true');
+  assert.equal(inputs.get('check-e2e.yml:e2e-setup-script'), 'scripts/e2e/up.sh');
+  // check-unit.yml has no with: block, so nothing may leak into it from its neighbours
+  assert.equal(inputs.get('check-unit.yml:docs-check'), undefined);
 });
 
 test('a profile is active only when the repository calls that workflow', () => {
   const uses = callersUse([{ name: 'ci.yml', text: CALLER }]);
   const active = activeProfiles(uses);
   assert.ok(active.has('checks') && active.has('unit') && active.has('e2e'));
-  assert.ok(!active.has('web'), 'web.yml is not called, so web must not be checked');
+  assert.ok(!active.has('web'), 'build-web.yml is not called, so web must not be checked');
   assert.ok(!active.has('release'));
 });
 
@@ -130,7 +130,7 @@ test('a repository with no caller yet is checked against what every consumer nee
 });
 
 test('an explicit --profile overrides what the callers say', () => {
-  assert.deepEqual([...activeProfiles(new Set(['checks.yml']), ['release'])], ['release']);
+  assert.deepEqual([...activeProfiles(new Set(['check-code.yml']), ['release'])], ['release']);
 });
 
 // --- toggles -----------------------------------------------------------------
@@ -152,18 +152,18 @@ test('an input the caller leaves alone falls back to the workflow default', () =
 });
 
 test('a toggle wired to an expression is neither on nor off', () => {
-  const inputs = new Map([['checks.yml:typecheck', '${{ vars.TYPECHECK }}']]);
+  const inputs = new Map([['check-code.yml:typecheck', '${{ vars.TYPECHECK }}']]);
   assert.equal(toggleOn(req('script.typecheck'), inputs), 'unknown');
 });
 
 test('a requirement behind an expression is reported but never blocks', () => {
-  // This job gates every other job in checks.yml. Blocking ten of them because
+  // This job gates every other job in check-code.yml. Blocking ten of them because
   // a `${{ vars.X }}` could not be read here would be a false failure - and
   // staying silent would hide a real one. So: warn, and say why.
   const caller = [
     'jobs:',
     '  checks:',
-    '    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0',
+    '    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0',
     '    with:',
     '      typecheck: ${{ vars.TYPECHECK }}',
   ].join('\n');
@@ -269,7 +269,7 @@ test('a missing fastlane lane is named, and no fastlane at all is skipped', () =
 // --- severity ----------------------------------------------------------------
 
 test('a missing required item blocks and a missing fallback item only degrades', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
   const results = check(readContract(), c);
   const byId = new Map(results.map((r) => [r.req.id, r]));
   assert.equal(byId.get('script.typecheck').level, 'fail');
@@ -277,7 +277,7 @@ test('a missing required item blocks and a missing fallback item only degrades',
 });
 
 test('a workflow this repository does not call produces no findings at all', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
   const results = check(readContract(), c);
   for (const result of results.filter((r) => r.req.profile === 'release')) {
     assert.equal(result.level, 'skip', `${result.req.id} should be skipped`);
@@ -287,7 +287,7 @@ test('a workflow this repository does not call produces no findings at all', () 
 // --- reporting ---------------------------------------------------------------
 
 test('every finding carries its fix, and a pass carries none', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
   for (const result of check(readContract(), c)) {
     const line = formatResult(result);
     if (result.level === 'fail' || result.level === 'warn') {
@@ -300,15 +300,15 @@ test('every finding carries its fix, and a pass carries none', () => {
 
 test('the skeleton never suggests a package script named knip', () => {
   // The fix text two lines above it says not to: a script of that name fails
-  // expo-doctor, which checks.yml also runs.
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0\n' } });
+  // expo-doctor, which check-code.yml also runs.
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
   const text = skeleton(check(readContract(), c));
   assert.doesNotMatch(text, /"knip":/);
   assert.match(text, /devDependencies: .*knip/);
 });
 
 test('the job summary distinguishes a blocked row from a degraded one', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
   const table = summaryTable(check(readContract(), c));
   assert.match(table, /\*\*blocked\*\*/);
   assert.match(table, /degraded/);
@@ -330,7 +330,7 @@ test('a clean consumer gets a summary that says so rather than an empty table', 
 const GATE_CALLER = {
   'ci.yml': `jobs:
   checks:
-    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
     with:
       docs-check: false
       spell: false
@@ -341,7 +341,7 @@ const GATE_CALLER = {
       actionlint: false
       secret-scan: false
   unit:
-    uses: blinkbitcoin/shared-workflows/.github/workflows/unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
 `,
 };
 
@@ -427,7 +427,7 @@ const laneResult = (ruby) => {
   const c = consumer({
     files: { 'fastlane/Fastfile': ruby },
     dirs: ['fastlane'],
-    callers: { 'r.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/fastlane-lane.yml@v0\n' },
+    callers: { 'r.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/publish-store.yml@v0\n' },
   });
   return check(readContract(), c).find((r) => r.req.id === 'lane.app-review-env');
 };

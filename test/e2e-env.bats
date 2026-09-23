@@ -43,7 +43,7 @@ setup() {
 
 # The warm iOS build spent ~80s installing a dependency tree so that
 # workflows_ios_scheme could ask the Expo config for a name it then discarded -
-# the workspace filename is what it returns. e2e.yml now skips Setup on a cache
+# the workspace filename is what it returns. check-e2e.yml now skips Setup on a cache
 # hit, so the scheme must resolve with no pnpm, no node_modules and no expo.
 @test "the iOS scheme resolves from the workspace alone, with no expo config available" {
   root="$BATS_TEST_TMPDIR/consumer"

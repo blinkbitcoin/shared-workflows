@@ -2,7 +2,7 @@
 # Report every unmet requirement of this workflow family in the consumer, in one
 # place, before the gates that would each die on their own.
 #
-# A thin wrapper, like every other step's script: checks.yml wires the inputs and
+# A thin wrapper, like every other step's script: check-code.yml wires the inputs and
 # this resolves the consumer root and calls the checker.
 #
 # The checker lives in packages/dev-config rather than here because a consumer

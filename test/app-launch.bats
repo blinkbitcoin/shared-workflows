@@ -29,7 +29,7 @@ STUB
 
 launch() { run bash "$REPO_ROOT/scripts/e2e/app-launch.sh" "$@"; }
 
-# The bug this file was written for: e2e.yml stopped starting Metro for a
+# The bug this file was written for: check-e2e.yml stopped starting Metro for a
 # Release build (it embeds its bundle and never asks for one), and the launch
 # died on a metro.log that nothing had any reason to create.
 @test "a Release iOS launch needs no metro.log" {

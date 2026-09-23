@@ -18,7 +18,7 @@ below drift apart.
 ```
 .github/workflows/  the reusable workflows (workflow_call) + this repo's self-* CI
 .github/actions/    composite actions (setup, maestro, forensics, free-disk, native-key)
-scripts/checks/     the checks.yml steps (audit, codegen, commitlint, expo-doctor, i18n)
+scripts/checks/     the check-code.yml steps (audit, codegen, commitlint, expo-doctor, i18n)
 scripts/ci/         shared CI plumbing (changed-class, lint-ci, pnpm-install, tool-version, gh-pages badges)
 scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
 scripts/native/     prebuild, pods, iOS/Android builds and packaging
@@ -74,7 +74,15 @@ Every row is a make target; nothing here is run through a package manager.
   move together or neither does. A real consumer passes inputs of its own, so
   it is held to the fixture only where it must not diverge: its `ci.yml`
   trigger block, which is where a second docs rule (`paths-ignore`) would creep
-  back in beside `checks.yml`'s classifier.
+  back in beside `check-code.yml`'s classifier.
+- **Every PR tests everything it adds or changes, in the same PR.** That means
+  the happy path, every error path and every branch a reviewer could ask
+  about, and the PR description names the tests that cover the change. Every
+  script gets bats cases for each exit path (the rule below), every workflow
+  rule gets a `test/workflow-shape.bats` or `test/consumer-contract.bats`
+  assertion, and `packages/dev-config` is gated by `make test-package`. A
+  threshold is never lowered and no file is excluded from coverage to make a
+  PR pass; if something truly cannot be tested, the PR says what and why.
 - **Shell lives in `scripts/`, never inline in a workflow.** A `run:` block of
   more than a couple of lines is unshellcheckable, untestable and unreadable in
   a run log; give it a file under the matching `scripts/<area>/` and a bats
@@ -94,12 +102,12 @@ Every row is a make target; nothing here is run through a package manager.
 - **Permissions start at `contents: read`** at the top of a workflow; a job
   that needs more declares the extra scope *and* re-declares `contents: read`,
   because a job-level `permissions:` block replaces the top-level one rather
-  than extending it. The one exception is `expo-prepare.yml`, which has no
+  than extending it. The one exception is `build-prepare.yml`, which has no
   block at any level: a `permissions` block anywhere in a called workflow
   replaces the *caller's* grant too, and that job must take the caller's
   `contents: write` / `actions: read|write` as given (v0.6.2; the shape test
   holds both halves).
-- **A change to `expo-prepare.yml`, `expo-build-android.yml` or the scripts
+- **A change to `build-prepare.yml`, `build-android.yml` or the scripts
   they run gets `make smoke-local` before the PR.** No gate in this repo
   executes a reusable workflow - they only run inside a consumer - and v0.6.0
   broke every consumer's internal release with `make check` green. The smoke
@@ -154,8 +162,34 @@ Every row is a make target; nothing here is run through a package manager.
   expand an uncommon one on first use. A prefix made of the family's initials
   was rejected for exactly this reason; so was "ids" for identifiers in a
   status message.
-- **Docs ship with the code.** Adding or removing a `##`-documented make target
-  without updating the command table above is a hard failure.
+- **Workflow files carry their stage in the name.** GitHub reads only the top
+  level of `.github/workflows/`, so the prefix is the only grouping there is:
+  `check-` gates every change, `build-` makes artifacts, `publish-` ships to a
+  store, a release, OTA or badges, `pr-` hooks pull request events, and `self-`
+  is this repository's own CI. A new workflow takes one of these
+  (`test/workflow-shape.bats` fails otherwise). Renaming a callable workflow
+  breaks every consumer: commit it as `feat(workflows)!:` with a
+  `BREAKING CHANGE:` footer naming old and new, and open the template PR that
+  follows it at the same time. The same PR updates every reference, not just
+  the ones spelled `.yml`: `uses:` paths, test loops over workflow names, the
+  consumer guide's headings and the anchors that point at them, `contract.json`
+  toggles, fixtures, diagrams, and prose. Before pushing, `git grep` the old name
+  without its suffix; only `CHANGELOG.md` and `docs/superpowers/` may still
+  hold it.
+- **Docs and diagrams ship in the same PR as the change, never as a
+  follow-up.** Any change to a name, input, output, job, file, flow, count or
+  default updates every doc that describes it, in the same PR: prose, tables,
+  README and AGENTS.md, and every diagram (mermaid blocks, ASCII drawings in
+  code fences, SVGs under `docs/assets/`). Before pushing, `git grep` each
+  thing the diff renamed or changed, spelled every way a reader would meet it
+  (with and without `.yml`, the display name, the job name), and read each
+  diagram that shows the part you touched; a diagram that still draws the old
+  flow is drift even when no text search finds it. The PR description names
+  the docs it updated, or says why none needed to change. Mechanically
+  enforced on top: adding or removing a `##`-documented make target without
+  updating the command table above is a hard failure, and so is a
+  `<!--count:...-->` marker that disagrees with the tree
+  (`test/docs-facts.bats`).
 
 ## Testing map
 

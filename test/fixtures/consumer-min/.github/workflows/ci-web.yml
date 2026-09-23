@@ -12,7 +12,7 @@ concurrency:
 jobs:
   web:
     name: Export
-    uses: blinkbitcoin/shared-workflows/.github/workflows/web.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-web.yml@v0
     permissions:
       contents: read
       # The called workflow's `deploy` job needs these; a called job can only
