@@ -20,7 +20,7 @@ jobs:
       # consumer out for. The shared-workflows checkout below is still
       # required by the shape rule that every job with a `run:` step checks
       # out .workflows. Setup never runs here (no $WORKFLOWS_DIR), so the script is reached
-      # through the plain .workflows/ checkout path, the same way checks.yml's
+      # through the plain .workflows/ checkout path, the same way check-code.yml's
       # `changes` job reaches changed-class.sh.
       - name: Checkout shared-workflows
         uses: actions/checkout@v7
@@ -38,7 +38,7 @@ jobs:
   badges-cleanup:
     name: Clean badges
     # A fork PR's run has no token that can push to the base repository, and it
-    # never published a badge directory in the first place (badges.yml skips
+    # never published a badge directory in the first place (publish-badges.yml skips
     # fork PRs for the same reason), so there is nothing here to clean up.
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest

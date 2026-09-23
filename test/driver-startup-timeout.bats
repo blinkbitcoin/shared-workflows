@@ -60,8 +60,8 @@ timeout_for() { # DEFAULT_MS, with the caller's environment
   done
 }
 
-@test "e2e.yml passes the iOS suite a value below the default bound" {
-  v=$(grep -A4 "name: Maestro suite (iOS)" "$REPO_ROOT/.github/workflows/e2e.yml" | grep -oE "MAESTRO_DRIVER_STARTUP_TIMEOUT: '[0-9]+'" | grep -oE '[0-9]+')
+@test "check-e2e.yml passes the iOS suite a value below the default bound" {
+  v=$(grep -A4 "name: Maestro suite (iOS)" "$REPO_ROOT/.github/workflows/check-e2e.yml" | grep -oE "MAESTRO_DRIVER_STARTUP_TIMEOUT: '[0-9]+'" | grep -oE '[0-9]+')
   [ -n "$v" ] || fail "no MAESTRO_DRIVER_STARTUP_TIMEOUT on the iOS suite step"
-  [ "$v" -lt 600000 ] || fail "e2e.yml sets $v, not below the 10-minute bound"
+  [ "$v" -lt 600000 ] || fail "check-e2e.yml sets $v, not below the 10-minute bound"
 }

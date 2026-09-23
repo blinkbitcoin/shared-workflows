@@ -38,7 +38,7 @@ workflows_release_platform() {
 #
 # WORKFLOWS_FINGERPRINT_IOS / WORKFLOWS_FINGERPRINT_ANDROID short-circuit the computation. That is not only a
 # test seam: a job that already computed the fingerprint in an earlier step
-# (expo-prepare does) passes it down instead of paying for a second, slower and
+# (build-prepare does) passes it down instead of paying for a second, slower and
 # possibly *different* run - fingerprint input includes node_modules, so the
 # same commit can hash differently after an unrelated install.
 #

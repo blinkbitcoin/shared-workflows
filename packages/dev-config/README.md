@@ -49,14 +49,14 @@ satisfy the contract learns it serially — a screen of parallel reds, then the
 next missing piece one push later. This collapses that into one report, with a
 fix per finding.
 
-`checks.yml` runs it as its first job. Running it here gets the same answer
+`check-code.yml` runs it as its first job. Running it here gets the same answer
 before you push.
 
 It reports **blocked** for a gate you asked for that cannot run, and
 **degraded** for one where shared-workflows has a fallback — the gate still
 runs, just not the one this repository defined. It reads your own
 `.github/workflows/` to decide what applies: a repository that never calls
-`e2e.yml` is not told it is missing Maestro flows.
+`check-e2e.yml` is not told it is missing Maestro flows.
 
 `contract.json` is the table it reads — what wants each thing, which workflow
 input switches it off, whether a fallback exists, and the fix. The consumer

@@ -2,7 +2,7 @@
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
 # run-consumer-or.sh decides which implementation of a gate runs: the consumer's
-# own package script, or this repo's fallback. Five checks.yml steps go through
+# own package script, or this repo's fallback. Five check-code.yml steps go through
 # it, and the reason they do is that the two implementations had already drifted
 # - CI's expo-doctor.sh skipped the `expo install --check` half of the
 # template's deps:check, and CI's audit.sh skipped its lockfile check, so both
@@ -122,9 +122,9 @@ run_it() {
 # The five steps this seam was built for. Named explicitly: the whole point is
 # that these particular gates stop being implemented twice, and a step quietly
 # reverting to its fallback-only form is the regression.
-@test "checks.yml routes all five drifted gates through the seam" {
+@test "check-code.yml routes all five drifted gates through the seam" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/checks.yml"
+  f="$REPO_ROOT/.github/workflows/check-code.yml"
   for pair in "i18n:check|scripts/checks/i18n.sh" \
     "codegen:check|scripts/checks/codegen.sh" \
     "deps:check|scripts/checks/expo-doctor.sh" \
@@ -134,7 +134,7 @@ run_it() {
     fallback="${pair##*|}"
     grep -qF "run-consumer-or.sh' '$name' $fallback" "$f" ||
       grep -qF "run-consumer-or.sh\" '$name' $fallback" "$f" ||
-      fail "checks.yml does not route $name through run-consumer-or.sh with fallback $fallback"
+      fail "check-code.yml does not route $name through run-consumer-or.sh with fallback $fallback"
     [ -f "$REPO_ROOT/$fallback" ] || fail "the fallback $fallback does not exist"
   done
 }

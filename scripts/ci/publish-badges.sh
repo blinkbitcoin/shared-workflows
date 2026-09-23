@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Publishes the branch's rendered badges to gh-pages/badges/<branch>/.
 #
-# The consumer's render script (badges.yml's `render-script`, default
+# The consumer's render script (publish-badges.yml's `render-script`, default
 # `badges:render`) has already written coverage/badge/{unit,e2e,coverage}.svg
 # and their .json siblings; this only moves them onto the branch GitHub serves
 # through raw.githubusercontent.com. A badge the render script chose not to
@@ -9,7 +9,7 @@
 # one already published stays.
 #
 # Env: BRANCH (required), SHA (required), BADGE_DIR (default coverage/badge).
-# CI: the Publish step of badges.yml.
+# CI: the Publish step of publish-badges.yml.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/gh-pages-lib.sh"
@@ -47,7 +47,7 @@ apply_badges() {
     '# CI-owned branch' \
     '' \
     'badges/<branch>/{coverage,unit,e2e}.svg (+ their .json siblings) - written by' \
-    'the badges job in the CI workflow (shared-workflows badges.yml ->' \
+    'the badges job in the CI workflow (shared-workflows publish-badges.yml ->' \
     'scripts/ci/publish-badges.sh) on every run; a branch directory is removed when' \
     "its pull request closes (badges-cleanup.sh). Do not edit by hand." \
     '' \

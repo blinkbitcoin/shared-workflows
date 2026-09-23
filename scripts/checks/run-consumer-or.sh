@@ -2,7 +2,7 @@
 # Run the consumer's own NAME package script when it ships one; otherwise run
 # this repo's FALLBACK implementation of the same gate.
 #
-# Why this exists. Most checks in checks.yml already delegate to the consumer
+# Why this exists. Most checks in check-code.yml already delegate to the consumer
 # through run-script.sh: typecheck, lint, format, knip, spell, check:docs,
 # check:release. Five did not - i18n, codegen, expo-doctor, audit and the CI
 # linters were implemented here and *only* here - and those five are exactly the

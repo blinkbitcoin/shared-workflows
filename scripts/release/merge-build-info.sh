@@ -2,7 +2,7 @@
 # Fold the per-platform build-info records staged in a directory into the one
 # build-info.json that ships on the release.
 #
-#   build-info.json           the record expo-prepare produced (release-meta)
+#   build-info.json           the record build-prepare produced (release-meta)
 #   build-info.<platform>.json  the same record plus that platform's
 #                             `artifacts` digests, written by artifact-hashes.sh
 #
@@ -16,7 +16,7 @@
 #
 # Precedence: only `artifacts` is taken from the platform copies (later ones win
 # key by key). Everything else - sha, version, buildNumber, stage, fingerprint -
-# stays as expo-prepare wrote it, because a platform copy is a *snapshot* of
+# stays as build-prepare wrote it, because a platform copy is a *snapshot* of
 # that record taken mid-job and must never be able to reintroduce a stale value.
 # When there is no base record at all, the first platform copy becomes it.
 #

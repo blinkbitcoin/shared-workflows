@@ -18,7 +18,7 @@ below drift apart.
 ```
 .github/workflows/  the reusable workflows (workflow_call) + this repo's self-* CI
 .github/actions/    composite actions (setup, maestro, forensics, free-disk, native-key)
-scripts/checks/     the checks.yml steps (audit, codegen, commitlint, expo-doctor, i18n)
+scripts/checks/     the check-code.yml steps (audit, codegen, commitlint, expo-doctor, i18n)
 scripts/ci/         shared CI plumbing (changed-class, lint-ci, pnpm-install, tool-version, gh-pages badges)
 scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
 scripts/native/     prebuild, pods, iOS/Android builds and packaging
@@ -74,7 +74,7 @@ Every row is a make target; nothing here is run through a package manager.
   move together or neither does. A real consumer passes inputs of its own, so
   it is held to the fixture only where it must not diverge: its `ci.yml`
   trigger block, which is where a second docs rule (`paths-ignore`) would creep
-  back in beside `checks.yml`'s classifier.
+  back in beside `check-code.yml`'s classifier.
 - **Shell lives in `scripts/`, never inline in a workflow.** A `run:` block of
   more than a couple of lines is unshellcheckable, untestable and unreadable in
   a run log; give it a file under the matching `scripts/<area>/` and a bats
@@ -94,12 +94,12 @@ Every row is a make target; nothing here is run through a package manager.
 - **Permissions start at `contents: read`** at the top of a workflow; a job
   that needs more declares the extra scope *and* re-declares `contents: read`,
   because a job-level `permissions:` block replaces the top-level one rather
-  than extending it. The one exception is `expo-prepare.yml`, which has no
+  than extending it. The one exception is `build-prepare.yml`, which has no
   block at any level: a `permissions` block anywhere in a called workflow
   replaces the *caller's* grant too, and that job must take the caller's
   `contents: write` / `actions: read|write` as given (v0.6.2; the shape test
   holds both halves).
-- **A change to `expo-prepare.yml`, `expo-build-android.yml` or the scripts
+- **A change to `build-prepare.yml`, `build-android.yml` or the scripts
   they run gets `make smoke-local` before the PR.** No gate in this repo
   executes a reusable workflow - they only run inside a consumer - and v0.6.0
   broke every consumer's internal release with `make check` green. The smoke

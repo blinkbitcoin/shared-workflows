@@ -3,7 +3,7 @@
 ## macOS billing
 
 **On a private repo**, GitHub-hosted macOS runners bill at **10x** the Linux
-rate. `e2e.yml`'s `ios` input therefore defaults to `false`, and `android`
+rate. `check-e2e.yml`'s `ios` input therefore defaults to `false`, and `android`
 defaults to `true` — the Android suite runs on `ubuntu-latest` at 1x. Turn iOS
 on deliberately, per caller, once you have budgeted for it.
 
@@ -51,7 +51,7 @@ self-hosted:
 - `actionlint.yaml`'s `self-hosted-runner.labels` is empty in this repo (it
   never runs its own workflows on self-hosted runners), but a consumer with
   self-hosted labels needs its own `.github/actionlint.yaml` entry or
-  `actionlint`/`shellcheck` (via `checks.yml`) will flag the unknown label.
+  `actionlint`/`shellcheck` (via `check-code.yml`) will flag the unknown label.
 
 ## KVM (Android emulator, Linux)
 
@@ -70,7 +70,7 @@ fails loudly rather than silently degrading.
 `free-disk.sh` removes `/usr/share/dotnet`, `/opt/ghc`, `/usr/local/.ghcup`,
 all but the newest Android NDK version under
 `/usr/local/lib/android/sdk/ndk`, and prunes dangling Docker images — all of
-it pre-installed tooling `e2e.yml`'s Android jobs never use. It runs first,
+it pre-installed tooling `check-e2e.yml`'s Android jobs never use. It runs first,
 before Maestro install, KVM setup or the emulator, in the `android` job (the
 disk-heaviest job in the family: system image + AVD + APK + emulator + Maestro
 CLI can otherwise exhaust a standard runner's ~14GB free). It prints `df -h /`

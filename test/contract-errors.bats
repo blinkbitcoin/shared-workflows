@@ -133,7 +133,7 @@ export BOUNDARY
     const fs = require("fs");
     const root = process.env.REPO_ROOT;
     const bad = [];
-    for (const name of ["expo-build-ios", "expo-build-android", "fastlane-lane"]) {
+    for (const name of ["build-ios", "build-android", "publish-store"]) {
       const text = fs.readFileSync(`${root}/.github/workflows/${name}.yml`, "utf8");
       const check = text.indexOf("require-inputs.sh");
       if (check === -1) { bad.push(`${name}: no lane-input check`); continue; }
@@ -149,13 +149,13 @@ export BOUNDARY
   [ "$status" -eq 0 ] || fail "$output"
 }
 
-@test "codeql.yml passes a config file only when the consumer has one" {
+@test "check-codeql.yml passes a config file only when the consumer has one" {
   # codeql-action/init fails outright on a path it cannot read, and this
   # workflow is informational by design - a caller must not make it required.
   run node -e '
-    const text = require("fs").readFileSync(`${process.env.REPO_ROOT}/.github/workflows/codeql.yml`, "utf8");
+    const text = require("fs").readFileSync(`${process.env.REPO_ROOT}/.github/workflows/check-codeql.yml`, "utf8");
     if (!/config-file: \$\{\{ hashFiles\(inputs\.config-file\) != .. && inputs\.config-file \|\| .. \}\}/.test(text)) {
-      throw new Error("codeql.yml passes config-file unconditionally again");
+      throw new Error("check-codeql.yml passes config-file unconditionally again");
     }
   '
   [ "$status" -eq 0 ] || fail "$output"

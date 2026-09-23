@@ -70,7 +70,7 @@ jobs:
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
           fetch-depth: 0
-      # No setup here, exactly as in checks.yml: changed-class.sh is pure git,
+      # No setup here, exactly as in check-code.yml: changed-class.sh is pure git,
       # so this job reaches it through the plain .workflows checkout ($WORKFLOWS_DIR is
       # published by the setup action, which never runs in this job).
       - name: Checkout shared-workflows
@@ -83,7 +83,7 @@ jobs:
       - name: Classify changed files
         id: classify
         env:
-          # Byte-identical to checks.yml's expression on purpose: the classifier
+          # Byte-identical to check-code.yml's expression on purpose: the classifier
           # is the family's single source for "is this docs-only", and a second
           # spelling of the base sha is a second rule. On a `schedule` event both
           # operands are empty, the script logs "no base sha" and fails open with
@@ -132,7 +132,7 @@ jobs:
           # check), so dying on a file the consumer never had is the wrong
           # trade. Empty means CodeQL's own defaults: the analysis still runs,
           # without the consumer's exclusions or suppression pack. That
-          # difference is reported, not hidden - `checks.yml`'s contract job
+          # difference is reported, not hidden - `check-code.yml`'s contract job
           # names a missing config file as a degraded requirement.
           #
           # `A && B || C` yields B when A is truthy: `inputs.config-file` is a

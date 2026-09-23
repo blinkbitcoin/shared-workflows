@@ -38,11 +38,11 @@ on:
         type: string
         default: ''
       version:
-        description: App version to stamp into the build (wire it to expo-prepare's `version` output)
+        description: App version to stamp into the build (wire it to build-prepare's `version` output)
         type: string
         required: true
       build-number:
-        description: Build number to stamp into the build (wire it to expo-prepare's `build-number` output)
+        description: Build number to stamp into the build (wire it to build-prepare's `build-number` output)
         type: string
         required: true
       stage:
@@ -79,7 +79,7 @@ on:
         type: boolean
         default: true
       release-meta-artifact:
-        description: Artifact produced by expo-prepare that carries build-info.json and the store notes
+        description: Artifact produced by build-prepare that carries build-info.json and the store notes
         type: string
         default: 'release-meta'
       aab-artifact:
@@ -273,7 +273,7 @@ jobs:
           # platform-specific name on purpose: a release job merges several
           # artifacts into one directory with `merge-multiple: true`, whose
           # order is undefined, so two artifacts both carrying `build-info.json`
-          # would make the release's record a coin toss. github-release.yml
+          # would make the release's record a coin toss. publish-github-release.yml
           # folds this one back in explicitly, with merge-build-info.sh.
           path: |
             ${{ env.WORKFLOWS_OUTPUT_DIR }}/*.aab

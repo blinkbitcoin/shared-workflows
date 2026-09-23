@@ -41,7 +41,7 @@ permissions:
 jobs:
   checks:
     name: Checks
-    uses: ./.github/workflows/checks.yml
+    uses: ./.github/workflows/check-code.yml
     with:
       repository: ${{ inputs.repository || 'blinkbitcoin/react-native-mobile-template' }}
       ref: ${{ inputs.ref || 'main' }}
@@ -52,20 +52,20 @@ jobs:
   unit:
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.contract-only }}
     name: Unit
-    uses: ./.github/workflows/unit.yml
+    uses: ./.github/workflows/check-unit.yml
     with:
       repository: ${{ inputs.repository || 'blinkbitcoin/react-native-mobile-template' }}
       ref: ${{ inputs.ref || 'main' }}
   e2e:
     name: E2E
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.contract-only }}
-    uses: ./.github/workflows/e2e.yml
+    uses: ./.github/workflows/check-e2e.yml
     with:
       repository: ${{ inputs.repository || 'blinkbitcoin/react-native-mobile-template' }}
       ref: ${{ inputs.ref || 'main' }}
       # On the `schedule` trigger there is no `inputs` context at all, so
       # `inputs.ios`/`inputs.android` are null and *both* `null == true` and
-      # `null != false` evaluate to false - the cron run would call e2e.yml with
+      # `null != false` evaluate to false - the cron run would call check-e2e.yml with
       # both platforms off and report success without running a single flow.
       # Branch on the event instead: a scheduled run takes the dispatch defaults
       # (Android on, iOS off), a dispatch takes what the user picked.

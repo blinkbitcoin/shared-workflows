@@ -101,7 +101,7 @@ SH
 }
 
 @test "a precomputed fingerprint short-circuits the CLI entirely" {
-  # expo-prepare passes the value down rather than paying for a second run -
+  # build-prepare passes the value down rather than paying for a second run -
   # which can differ, because fingerprint input includes node_modules.
   cat > "$STUB/npx" <<'SH'
 #!/usr/bin/env bash

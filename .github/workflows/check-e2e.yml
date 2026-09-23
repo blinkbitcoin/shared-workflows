@@ -503,7 +503,7 @@ jobs:
         with:
           path: ${{ env.ANDROID_SDK_DIR || env.ANDROID_SDK_ROOT || env.ANDROID_HOME }}/system-images/android-${{ inputs.android-api-level }}
           # The version comes from the input, not a literal: the input's own
-          # description, expo-build-ios.yml's, and docs/cache-keys.md all promise
+          # description, build-ios.yml's, and docs/cache-keys.md all promise
           # that bumping native-cache-version invalidates *every* native cache.
           # With `v1` baked in, someone chasing a stale-AVD failure bumped it,
           # these two caches stayed warm, and the failure survived the fix.

@@ -10,7 +10,7 @@
 # opt-in: set BUNDLETOOL_SHA256 to the expected digest and it is enforced.
 #
 # Env: BUNDLETOOL_VERSION (required; pinned in scripts/lib/versions.sh and in
-#      expo-build-android.yml's `bundletool-version` input, kept equal by
+#      build-android.yml's `bundletool-version` input, kept equal by
 #      scripts/self/check-versions.sh), BUNDLETOOL_SHA256 (optional).
 # Usage: bundletool-install.sh
 set -euo pipefail

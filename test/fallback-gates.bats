@@ -5,7 +5,7 @@
 # plus the two libraries and the binary that nothing ran.
 #
 # The fallbacks were the softest corner of the coverage map: a test named each
-# of them, but only to assert that checks.yml still routes through the seam -
+# of them, but only to assert that check-code.yml still routes through the seam -
 # it read their source and never ran them. That reads as coverage in a listing
 # while asserting nothing about what they do, which is the distinction
 # test/script-coverage.bats now draws.

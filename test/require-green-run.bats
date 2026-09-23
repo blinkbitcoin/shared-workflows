@@ -32,7 +32,7 @@ SH
   unset GITHUB_OUTPUT
 }
 
-green() { run bash "$REPO_ROOT/scripts/release/require-green-run.sh" release-internal.yml abc123; }
+green() { run bash "$REPO_ROOT/scripts/release/require-green-run.sh" cd-internal.yml abc123; }
 
 @test "a completed successful run passes immediately" {
   printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":11}]' > "$RESPONSES"
@@ -79,7 +79,7 @@ green() { run bash "$REPO_ROOT/scripts/release/require-green-run.sh" release-int
   printf '%s\n' '[]' > "$RESPONSES"
   WORKFLOWS_GREEN_DISCOVERY_MINUTES=0 green
   [ "$status" -ne 0 ] || fail "passed with no run at all: $output"
-  contains "$output" "no release-internal.yml run found for abc123" || fail "unexpected message: $output"
+  contains "$output" "no cd-internal.yml run found for abc123" || fail "unexpected message: $output"
 }
 
 @test "an unfinished run past the overall timeout is fatal" {
@@ -104,9 +104,9 @@ green() { run bash "$REPO_ROOT/scripts/release/require-green-run.sh" release-int
 # not keep reading the replaced run as the newest one.
 
 dispatched_once_at() {
-  [ "$(grep -c '^workflow run release-internal.yml --ref ' "$CALLS")" -eq 1 ] \
+  [ "$(grep -c '^workflow run cd-internal.yml --ref ' "$CALLS")" -eq 1 ] \
     || fail "expected exactly one dispatch, calls were: $(cat "$CALLS")"
-  grep -q "^workflow run release-internal.yml --ref $1\$" "$CALLS" \
+  grep -q "^workflow run cd-internal.yml --ref $1\$" "$CALLS" \
     || fail "dispatch was not at $1: $(cat "$CALLS")"
 }
 
@@ -120,7 +120,7 @@ dispatched_once_at() {
   REQUIRE_GREEN_DISPATCH_REF=v1.2.3 green
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   dispatched_once_at v1.2.3
-  contains "$output" "dispatching release-internal.yml at v1.2.3" || fail "did not say it dispatched: $output"
+  contains "$output" "dispatching cd-internal.yml at v1.2.3" || fail "did not say it dispatched: $output"
   contains "$output" "run 21 for abc123 succeeded" || fail "did not wait for the dispatched run: $output"
 }
 

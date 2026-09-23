@@ -14,7 +14,7 @@ config-variables: null
 # on.workflow_call.outputs.<id>.value as carrying only `outputs`, while GitHub
 # documents `jobs.<job_id>.result` alongside it
 # (https://docs.github.com/en/actions/learn-github-actions/contexts#jobs-context).
-# e2e.yml exposes ios-result / android-result from those job results.
+# check-e2e.yml exposes ios-result / android-result from those job results.
 paths:
   .github/workflows/**/*.yml:
     ignore:

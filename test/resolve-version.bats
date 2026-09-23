@@ -218,7 +218,7 @@ merge_release_fixture() {
   # $GITHUB_ENV is deliberately untouched. The consumer's copy never wrote it and
   # cannot (it also runs under `make version` on a laptop), so a write from this
   # copy alone was drift the parity test could not see - it compares stdout and
-  # $GITHUB_OUTPUT. expo-prepare.yml now passes the two values to the steps that
+  # $GITHUB_OUTPUT. build-prepare.yml now passes the two values to the steps that
   # need them from this step's outputs, explicitly.
   [ ! -s "$env_file" ] || fail "resolve-version.sh wrote \$GITHUB_ENV: $(cat "$env_file")"
 }

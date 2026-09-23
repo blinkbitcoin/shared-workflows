@@ -18,7 +18,7 @@ source "$(dirname "$0")/../lib/release-env.sh"
 require_cmd gh
 
 tag="${1:-}"
-[ -n "$tag" ] || die "no baseline tag given - expo-ota-publish's baseline-tag input is required whenever ota-enabled is true"
+[ -n "$tag" ] || die "no baseline tag given - publish-ota's baseline-tag input is required whenever ota-enabled is true"
 dest="${2:-$WORKFLOWS_ASSETS_DIR/build-info.json}"
 
 mkdir -p "$(dirname "$dest")"
@@ -26,9 +26,9 @@ rm -f "$dest"
 
 group "ota baseline ($tag)"
 gh release download "$tag" --pattern build-info.json --output "$dest" --clobber ||
-  die "could not download build-info.json from release $tag - is the tag right, and was that release created by github-release.yml?"
+  die "could not download build-info.json from release $tag - is the tag right, and was that release created by publish-github-release.yml?"
 endgroup
 
-[ -s "$dest" ] || die "release $tag has no build-info.json asset, so this channel has no fingerprint baseline; publish a store build through expo-prepare + github-release first"
+[ -s "$dest" ] || die "release $tag has no build-info.json asset, so this channel has no fingerprint baseline; publish a store build through build-prepare + publish-github-release first"
 log "baseline for the gate: $dest"
 cat "$dest" >&2

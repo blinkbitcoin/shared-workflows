@@ -41,7 +41,7 @@ jobs:
       # ruleset, no status check is required, and main's push run is the one
       # that counts), but it is noise on every release. A PR opened by a
       # GitHub App triggers CI like any other. The App is the one
-      # github-release.yml already uses on the consumer side; with its two
+      # publish-github-release.yml already uses on the consumer side; with its two
       # secrets absent this step is skipped and release-please falls back to
       # GITHUB_TOKEN, exactly as before. Secrets cannot be read in `if`, so the
       # presence check goes through the job's env.

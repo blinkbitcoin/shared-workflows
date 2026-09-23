@@ -16,7 +16,7 @@ source "$(dirname "$0")/../lib/release-env.sh"
 require_cmd gh
 
 tag="${1:-}"
-[ -n "$tag" ] || die "no release tag given - expo-prepare's release-tag input is empty"
+[ -n "$tag" ] || die "no release tag given - build-prepare's release-tag input is empty"
 dest="$WORKFLOWS_OUT/release-body.md"
 
 group "release body ($tag)"

@@ -20,9 +20,9 @@ setup() {
 # deleted or renamed would otherwise just shrink WORKFLOWS and every other
 # assertion here would still pass.
 @test "every reusable workflow this family publishes is present" {
-  for w in checks unit e2e web badges pr-closed pr-title codeql \
-    expo-prepare expo-build-ios expo-build-android \
-    fastlane-lane github-release expo-ota-publish release-pr-notes; do
+  for w in check-code check-unit check-e2e build-web publish-badges pr-closed pr-title check-codeql \
+    build-prepare build-ios build-android \
+    publish-store publish-github-release publish-ota pr-release-notes; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
       return 1
@@ -58,11 +58,11 @@ setup() {
 # the classifier blind on a push, which is the defect this family fixed - and
 # the caller's `paths-ignore`, which used to mask it, has been removed on
 # purpose, so the regression would now be silent AND unmasked.
-@test "checks.yml classifies pushes too: BASE_SHA names both base.sha and event.before" {
+@test "check-code.yml classifies pushes too: BASE_SHA names both base.sha and event.before" {
   command -v yq >/dev/null || skip "yq not installed"
   expr=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
-    "$REPO_ROOT/.github/workflows/checks.yml")
-  [ -n "$expr" ] || fail "no BASE_SHA env on checks.yml's classify step"
+    "$REPO_ROOT/.github/workflows/check-code.yml")
+  [ -n "$expr" ] || fail "no BASE_SHA env on check-code.yml's classify step"
   grep -qF 'github.event.pull_request.base.sha' <<<"$expr" \
     || fail "BASE_SHA must use the PR base on a pull_request: $expr"
   grep -qF 'github.event.before' <<<"$expr" \
@@ -74,28 +74,28 @@ setup() {
     || fail "BASE_SHA must branch on github.event_name: $expr"
 }
 
-# codeql.yml asks the same question checks.yml does, and "the same" has to mean
+# check-codeql.yml asks the same question check-code.yml does, and "the same" has to mean
 # character-for-character: two spellings of the base sha are two rules, and the
 # second one drifts. Comparing the two expressions is cheaper than restating the
 # right answer twice.
-@test "codeql.yml's BASE_SHA expression is byte-identical to checks.yml's" {
+@test "check-codeql.yml's BASE_SHA expression is byte-identical to check-code.yml's" {
   command -v yq >/dev/null || skip "yq not installed"
   read_base_sha() {
     yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
       "$REPO_ROOT/.github/workflows/$1.yml"
   }
-  checks=$(read_base_sha checks)
-  codeql=$(read_base_sha codeql)
-  [ -n "$codeql" ] || fail "no BASE_SHA env on codeql.yml's classify step"
+  checks=$(read_base_sha check-code)
+  codeql=$(read_base_sha check-codeql)
+  [ -n "$codeql" ] || fail "no BASE_SHA env on check-codeql.yml's classify step"
   [ "$codeql" = "$checks" ] \
-    || fail "codeql.yml classifies with '$codeql' but checks.yml uses '$checks'"
+    || fail "check-codeql.yml classifies with '$codeql' but check-code.yml uses '$checks'"
 }
 
 # The whole point of the changes job: a docs-only change analyses nothing, and
 # a scheduled run (no base at all) analyses everything.
-@test "codeql.yml's analyze job is gated on the classifier" {
+@test "check-codeql.yml's analyze job is gated on the classifier" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/codeql.yml"
+  f="$REPO_ROOT/.github/workflows/check-codeql.yml"
   cond=$(yq -r '.jobs.analyze.if' "$f")
   [[ "$cond" == *"needs.changes.outputs.docs-only != 'true'"* ]] \
     || fail "analyze's if does not gate on the classifier: $cond"
@@ -106,9 +106,9 @@ setup() {
 # The escalation is on the analyze job alone, and naming `permissions:` resets
 # the unnamed scopes to none - so dropping contents: read would break the
 # checkout rather than the upload. All three are asserted, and nothing more.
-@test "codeql.yml escalates permissions only on the analyze job" {
+@test "check-codeql.yml escalates permissions only on the analyze job" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/codeql.yml"
+  f="$REPO_ROOT/.github/workflows/check-codeql.yml"
   [ "$(yq -r '.jobs.analyze.permissions.contents' "$f")" = "read" ] \
     || fail "analyze does not re-declare contents: read"
   [ "$(yq -r '.jobs.analyze.permissions.actions' "$f")" = "read" ] \
@@ -123,10 +123,10 @@ setup() {
 
 # The head half of the same range. changed-class.bats covers what the script
 # does when either end is absent from the consumer's checkout.
-@test "checks.yml's classify step passes both ends of the range to the script" {
+@test "check-code.yml's classify step passes both ends of the range to the script" {
   command -v yq >/dev/null || skip "yq not installed"
   run yq -r '.jobs.changes.steps[] | select(.id == "classify") | .run' \
-    "$REPO_ROOT/.github/workflows/checks.yml"
+    "$REPO_ROOT/.github/workflows/check-code.yml"
   [ "$status" -eq 0 ]
   grep -qF '"$BASE_SHA" "$HEAD_SHA"' <<<"$output" \
     || fail "classify must call changed-class.sh with BASE_SHA and HEAD_SHA: $output"
@@ -207,40 +207,40 @@ lane_step_count() {
 # Read from the fixture consumer's lanes, which is what the guide's examples are
 # built from. A real consumer's lanes are held to the same names by its own
 # Contract job (lane.app-review-env in contract.json).
-@test "fastlane-lane's App Review secrets are exactly the names the fixture's lanes read" {
+@test "publish-store's App Review secrets are exactly the names the fixture's lanes read" {
   TEMPLATE_LANES="$FIXTURES/consumer-min/fastlane/lanes/shared.rb"
   [ -f "$TEMPLATE_LANES" ] || fail "no fixture lanes at $TEMPLATE_LANES"
   wanted="$(grep -oE "ENV\['APP_REVIEW_[A-Z0-9_]*'\]" "$TEMPLATE_LANES" |
     sed "s/ENV\['//; s/'\]//" | sort -u)"
   [ "$(grep -c . <<<"$wanted")" -ge 7 ] \
     || fail "read only '$wanted' from $TEMPLATE_LANES - has the fixture changed shape?"
-  declared="$(yq -r '.on.workflow_call.secrets | keys | .[]' "$REPO_ROOT/.github/workflows/fastlane-lane.yml" |
+  declared="$(yq -r '.on.workflow_call.secrets | keys | .[]' "$REPO_ROOT/.github/workflows/publish-store.yml" |
     grep '^APP_REVIEW_' | sort -u)"
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$declared" \
-      || fail "the fixture's lanes read $name but fastlane-lane.yml does not declare it"
+      || fail "the fixture's lanes read $name but publish-store.yml does not declare it"
   done <<<"$wanted"
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$wanted" \
-      || fail "fastlane-lane.yml declares $name but no lane in the fixture reads it"
+      || fail "publish-store.yml declares $name but no lane in the fixture reads it"
   done <<<"$declared"
 }
 
 # The template's upload_huawei lane reads these straight out of the
 # environment, and a caller cannot pass a secret this reusable workflow has
 # not declared - so both halves of the AppGallery client have to be here.
-@test "fastlane-lane declares the Huawei AppGallery client pair" {
-  declared="$(yq -r '.on.workflow_call.secrets | keys | .[]' "$REPO_ROOT/.github/workflows/fastlane-lane.yml")"
+@test "publish-store declares the Huawei AppGallery client pair" {
+  declared="$(yq -r '.on.workflow_call.secrets | keys | .[]' "$REPO_ROOT/.github/workflows/publish-store.yml")"
   for name in HUAWEI_CLIENT_ID HUAWEI_CLIENT_SECRET; do
     grep -qxF "$name" <<<"$declared" \
-      || fail "fastlane-lane.yml does not declare $name"
+      || fail "publish-store.yml does not declare $name"
   done
 }
 
 @test "every workflow that runs prebuild, a lane or the notes generator accepts build-env" {
-  for w in expo-prepare expo-build-ios expo-build-android fastlane-lane release-pr-notes; do
+  for w in build-prepare build-ios build-android publish-store pr-release-notes; do
     f="$REPO_ROOT/.github/workflows/$w.yml"
     have=$(yq -r '.on.workflow_call.inputs | has("build-env")' "$f")
     [ "$have" = "true" ] || fail "$w.yml does not declare a build-env input"
@@ -258,18 +258,18 @@ lane_step_count() {
   done
 }
 
-# expo-prepare is the one exception: its prepare job must take the caller's
+# build-prepare is the one exception: its prepare job must take the caller's
 # grant as-is (contents: write for reserve-tag, actions: read or write for the
 # green gate), and any `permissions` block in a called workflow - top-level
 # included - replaces the caller's grant with its own. v0.6.0 shipped with
 # `contents: read` here and the job's token was `Contents: read, Metadata:
 # read` whatever the caller granted (react-native-mobile-template run
 # 35429556846, attempt 2). See the comment in the workflow.
-@test "every workflow has top-level permissions.contents == read, except expo-prepare which has no block at all" {
+@test "every workflow has top-level permissions.contents == read, except build-prepare which has no block at all" {
   for w in "${WORKFLOWS[@]}"; do
-    if [ "$(basename "$w")" = "expo-prepare.yml" ]; then
+    if [ "$(basename "$w")" = "build-prepare.yml" ]; then
       [ "$(yq -r '.permissions // "absent"' "$w")" = "absent" ] \
-        || fail "expo-prepare.yml has a top-level permissions block; it would replace the caller's grant: $(yq -r '.permissions' "$w")"
+        || fail "build-prepare.yml has a top-level permissions block; it would replace the caller's grant: $(yq -r '.permissions' "$w")"
       continue
     fi
     perms=$(yq -r '.permissions.contents' "$w")
@@ -280,8 +280,8 @@ lane_step_count() {
 # A store listing is keyed on the full metadata locale name (en-US, de-DE,
 # pt-BR); a bare language code matches no listing, so the default cannot be
 # `en` however natural that reads.
-@test "expo-prepare's notes-locales default is a store metadata locale" {
-  f="$REPO_ROOT/.github/workflows/expo-prepare.yml"
+@test "build-prepare's notes-locales default is a store metadata locale" {
+  f="$REPO_ROOT/.github/workflows/build-prepare.yml"
   got=$(yq -r '.on.workflow_call.inputs."notes-locales".default' "$f")
   [ "$got" = "en-US" ] || fail "notes-locales defaults to '$got', expected en-US"
   grep -q '| `notes-locales` | `en-US` |' "$REPO_ROOT/docs/consumer-guide.md" \
@@ -291,13 +291,13 @@ lane_step_count() {
 # The digest step writes an enriched build-info.json into $WORKFLOWS_OUTPUT_DIR; the
 # in-job verify has to read *that* one, or artifacts.apkSha256 is never there
 # and the lane's apk-sha check silently skips.
-@test "expo-build-android's verify reads the build-info carrying the digests" {
-  f="$REPO_ROOT/.github/workflows/expo-build-android.yml"
+@test "build-android's verify reads the build-info carrying the digests" {
+  f="$REPO_ROOT/.github/workflows/build-android.yml"
   got=$(yq -r '[.jobs[].steps[] | select(.name == "Fastlane android verify")][0].env.BUILD_INFO_FILE' "$f")
   [ "$got" = '${{ env.WORKFLOWS_OUTPUT_DIR }}/build-info.json' ] \
     || fail "the android verify step reads BUILD_INFO_FILE '$got'"
   n=$(yq -r '[.jobs[].steps[]? | select((.run? // "") | test("release/artifact-hashes.sh"))] | length' "$f")
-  [ "$n" -eq 1 ] || fail "expo-build-android does not run artifact-hashes.sh exactly once"
+  [ "$n" -eq 1 ] || fail "build-android does not run artifact-hashes.sh exactly once"
 }
 
 # $WORKFLOWS_DIR is published by the setup composite action, so it exists only
@@ -330,16 +330,16 @@ lane_step_count() {
 
 # `merge-multiple: true` has no defined order, so two artifacts carrying
 # `build-info.json` would make the release's record a coin toss. The per-platform
-# record therefore ships under its own name and github-release folds it in
+# record therefore ships under its own name and publish-github-release folds it in
 # explicitly, after both downloads and before the upload.
 @test "the release's build-info precedence is explicit, not a merge-multiple race" {
-  a="$REPO_ROOT/.github/workflows/expo-build-android.yml"
+  a="$REPO_ROOT/.github/workflows/build-android.yml"
   paths=$(yq -r '[.jobs[].steps[]? | select(.uses? // "" | test("upload-artifact")) | .with.path] | join("\n")' "$a")
   not_contains "$paths" "/build-info.json" \
-    || fail "expo-build-android uploads a bare build-info.json, which can collide: $paths"
+    || fail "build-android uploads a bare build-info.json, which can collide: $paths"
   contains "$paths" "/build-info.android.json" \
-    || fail "expo-build-android never uploads its per-platform build-info: $paths"
-  g="$REPO_ROOT/.github/workflows/github-release.yml"
+    || fail "build-android never uploads its per-platform build-info: $paths"
+  g="$REPO_ROOT/.github/workflows/publish-github-release.yml"
   names=$(yq -r '.jobs.release.steps[].name' "$g")
   # `yq` here is the Go implementation, whose jq subset has no index(); the step
   # order is read out of the numbered list instead.
@@ -348,29 +348,29 @@ lane_step_count() {
   notes_i=$(step_index "Download notes")
   assets_i=$(step_index "Download assets")
   upload_i=$(step_index "Release assets")
-  [ -n "$merge_i" ] || fail "github-release never merges the platform build-info: $names"
-  [ "$notes_i" -lt "$assets_i" ] || fail "github-release stages assets before notes: $names"
+  [ -n "$merge_i" ] || fail "publish-github-release never merges the platform build-info: $names"
+  [ "$notes_i" -lt "$assets_i" ] || fail "publish-github-release stages assets before notes: $names"
   [ "$assets_i" -lt "$merge_i" ] || fail "the merge runs before the assets are staged: $names"
   [ "$merge_i" -lt "$upload_i" ] || fail "the merge runs after the upload: $names"
 }
 
-# fastlane-lane builds nothing: the binaries its lanes upload were downloaded
+# publish-store builds nothing: the binaries its lanes upload were downloaded
 # into $WORKFLOWS_ASSETS_DIR. The lanes read $WORKFLOWS_OUTPUT_DIR, so the two have to be
 # the same directory here - and only here; the build workflows keep
 # WORKFLOWS_OUTPUT_DIR as the directory the lane *writes* to.
-@test "fastlane-lane points WORKFLOWS_OUTPUT_DIR at the downloaded artifacts" {
-  f="$REPO_ROOT/.github/workflows/fastlane-lane.yml"
+@test "publish-store points WORKFLOWS_OUTPUT_DIR at the downloaded artifacts" {
+  f="$REPO_ROOT/.github/workflows/publish-store.yml"
   got=$(yq -r '[.jobs.lane.steps[] | select(.name == "Fastlane lane")][0].env.WORKFLOWS_OUTPUT_DIR' "$f")
   [ "$got" = '${{ env.WORKFLOWS_ASSETS_DIR }}' ] \
-    || fail "fastlane-lane's lane step sets WORKFLOWS_OUTPUT_DIR to '$got'"
-  for w in expo-build-ios expo-build-android; do
+    || fail "publish-store's lane step sets WORKFLOWS_OUTPUT_DIR to '$got'"
+  for w in build-ios build-android; do
     b="$REPO_ROOT/.github/workflows/$w.yml"
     n=$(yq -r '[.jobs[].steps[]? | select((.env.WORKFLOWS_OUTPUT_DIR? // "") != "")] | length' "$b")
     [ "$n" -eq 0 ] || fail "$w.yml overrides WORKFLOWS_OUTPUT_DIR, which is where its lane writes"
   done
 }
 
-# expo-prepare's green gate needs `actions: read`, and `actions: write` when
+# build-prepare's green gate needs `actions: read`, and `actions: write` when
 # `require-green-dispatch` is on. A static job-level block cannot express
 # "read, or write when asked", and a called job may never request more than
 # the caller granted - so the job declares no permissions and inherits the
@@ -383,9 +383,9 @@ lane_step_count() {
 # After a 35-minute green gate the tip has often moved. So the reservation, and
 # the version it needs, come before the gate - and before Setup, which they do
 # not need.
-@test "expo-prepare reserves the build tag before the green gate and before Setup" {
+@test "build-prepare reserves the build tag before the green gate and before Setup" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/expo-prepare.yml"
+  f="$REPO_ROOT/.github/workflows/build-prepare.yml"
   names="$(yq -r '.jobs.prepare.steps[].name' "$f")"
   order() { printf '%s\n' "$names" | grep -n -x "$1" | cut -d: -f1; }
   v=$(order "Resolve version"); r=$(order "Reserve build tag"); g=$(order "Require a green upstream run"); s=$(order "Setup")
@@ -395,18 +395,18 @@ lane_step_count() {
   [ "$g" -lt "$s" ] || fail "the green gate runs after Setup"
 }
 
-@test "expo-prepare's prepare job inherits the caller's permissions" {
-  f="$REPO_ROOT/.github/workflows/expo-prepare.yml"
+@test "build-prepare's prepare job inherits the caller's permissions" {
+  f="$REPO_ROOT/.github/workflows/build-prepare.yml"
   [ "$(yq -r '.jobs.prepare.permissions // "inherit"' "$f")" = "inherit" ] \
-    || fail "expo-prepare's prepare job declares permissions, so it cannot take actions: write from a caller that grants it: $(yq -r '.jobs.prepare.permissions' "$f")"
+    || fail "build-prepare's prepare job declares permissions, so it cannot take actions: write from a caller that grants it: $(yq -r '.jobs.prepare.permissions' "$f")"
   # A top-level block is the same defect one level up: it applies to every job
   # without its own, and replaced the caller's grant in v0.6.0.
   [ "$(yq -r '.permissions // "absent"' "$f")" = "absent" ] \
-    || fail "expo-prepare has a top-level permissions block, which replaces the caller's grant: $(yq -r '.permissions' "$f")"
+    || fail "build-prepare has a top-level permissions block, which replaces the caller's grant: $(yq -r '.permissions' "$f")"
   grep -q 'REQUIRE_GREEN_DISPATCH_REF' "$f" \
-    || fail "expo-prepare does not wire require-green-dispatch into the gate"
+    || fail "build-prepare does not wire require-green-dispatch into the gate"
   # The consumer guide is where a caller learns what to grant.
-  grep -q 'Every caller of `expo-prepare.yml` must grant `actions: read`' "$REPO_ROOT/docs/consumer-guide.md" \
+  grep -q 'Every caller of `build-prepare.yml` must grant `actions: read`' "$REPO_ROOT/docs/consumer-guide.md" \
     || fail "the consumer guide does not tell callers to grant actions: read"
   grep -q 'actions: write' "$REPO_ROOT/docs/consumer-guide.md" \
     || fail "the consumer guide does not tell callers dispatch needs actions: write"
@@ -436,8 +436,8 @@ lane_step_count() {
 # Deliberately absent: the Maestro suite steps (theirs comes from
 # `suite-timeout-minutes` via step-timeout.sh) and download-artifact (it
 # retries internally, and a step timeout would cut a legitimate retry short).
-@test "e2e.yml's hang-prone steps each carry a step-level timeout-minutes" {
-  f="$REPO_ROOT/.github/workflows/e2e.yml"
+@test "check-e2e.yml's hang-prone steps each carry a step-level timeout-minutes" {
+  f="$REPO_ROOT/.github/workflows/check-e2e.yml"
   for spec in \
     "Pod install:20" \
     "Build iOS app:45" \
@@ -448,7 +448,7 @@ lane_step_count() {
     name="${spec%:*}"
     want="${spec##*:}"
     found=$(yq -r "[.jobs[].steps[]? | select(.name == \"$name\")] | length" "$f")
-    [ "$found" -gt 0 ] || fail "e2e.yml has no step named '$name' - was it renamed?"
+    [ "$found" -gt 0 ] || fail "check-e2e.yml has no step named '$name' - was it renamed?"
     # Every occurrence: 'Install Maestro' and 'Wait for Metro' appear in both
     # the ios and the android job.
     bad=$(yq -r "[.jobs[].steps[]? | select(.name == \"$name\") | select(.\"timeout-minutes\" != $want)] | length" "$f")
@@ -469,15 +469,15 @@ lane_step_count() {
 #     `env:` at workflow or job level is therefore the exact regression to
 #     catch: it looks like tidying and it re-arms that bug for any caller that
 #     sets a smaller value upstream.
-@test "checks.yml's audit step keeps its timeout, its soft-on-PR expression and a step-level fetch timeout" {
+@test "check-code.yml's audit step keeps its timeout, its soft-on-PR expression and a step-level fetch timeout" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/checks.yml"
+  f="$REPO_ROOT/.github/workflows/check-code.yml"
   # Across all jobs, not one named job: the gates are grouped by who acts on a
   # failure, and which group a step sits in is allowed to change.
   step='.jobs[].steps[]? | select(.name == "Audit")'
 
   found=$(yq -r "[$step] | length" "$f")
-  [ "$found" -eq 1 ] || fail "expected exactly one 'Audit' step in checks.yml, found $found"
+  [ "$found" -eq 1 ] || fail "expected exactly one 'Audit' step in check-code.yml, found $found"
 
   t=$(yq -r "$step | .\"timeout-minutes\" // \"\"" "$f")
   [ "$t" = "5" ] || fail "the Audit step must carry timeout-minutes: 5, got '$t'"
@@ -503,9 +503,9 @@ lane_step_count() {
 
     # Workflow- and job-level are where the override bug lives.
     wf=$(yq -r ".env.\"$v\" // \"\"" "$f")
-    [ -z "$wf" ] || fail "$v is set at workflow level in checks.yml ('$wf') - it must be step-level only (esign aebdd28)"
+    [ -z "$wf" ] || fail "$v is set at workflow level in check-code.yml ('$wf') - it must be step-level only (esign aebdd28)"
     jobs=$(yq -r "[.jobs | to_entries[] | select(.value.env.\"$v\") | .key] | join(\", \")" "$f")
-    [ -z "$jobs" ] || fail "$v is set at job level in checks.yml (job(s): $jobs) - it must be step-level only (esign aebdd28)"
+    [ -z "$jobs" ] || fail "$v is set at job level in check-code.yml (job(s): $jobs) - it must be step-level only (esign aebdd28)"
   done
 }
 
@@ -522,7 +522,7 @@ lane_step_count() {
     bad=$(yq -r "$select | map(select(.if != \"always()\")) | length" "$w")
     [ "$bad" -eq 0 ] || fail "$(basename "$w") has $bad forensics step(s) that are not 'if: always()'"
   done
-  # e2e.yml: collect + upload on iOS, upload on Android. web.yml: one upload.
+  # check-e2e.yml: collect + upload on iOS, upload on Android. build-web.yml: one upload.
   # Without this the selector could stop matching and the loop would pass by
   # examining nothing.
   [ "$total" -ge 4 ] || fail "the forensics selector matched only $total steps - has the action moved?"
@@ -597,7 +597,7 @@ lane_step_count() {
 }
 
 # ---------------------------------------------------------------------------
-# badges.yml — the only write path in the family.
+# publish-badges.yml — the only write path in the family.
 # ---------------------------------------------------------------------------
 
 # A badge publish pushes a branch. Nearly every job in this repo is read-only,
@@ -613,12 +613,12 @@ lane_step_count() {
       [ "$perm" = "write" ] && got="$got$(basename "$w"):$j "
     done <<<"$(yq -r '.jobs | keys | .[]' "$w")"
   done
-  [ "$got" = "badges.yml:badges github-release.yml:release pr-closed.yml:badges-cleanup " ] \
+  [ "$got" = "pr-closed.yml:badges-cleanup publish-badges.yml:badges publish-github-release.yml:release " ] \
     || fail "jobs asking for contents: write are now: $got"
 }
 
-@test "badges.yml keeps contents: read at the top and escalates only on its job" {
-  f="$REPO_ROOT/.github/workflows/badges.yml"
+@test "publish-badges.yml keeps contents: read at the top and escalates only on its job" {
+  f="$REPO_ROOT/.github/workflows/publish-badges.yml"
   [ "$(yq -r '.permissions.contents' "$f")" = "read" ]
   [ "$(yq -r '.jobs.badges.permissions | keys | join(",")' "$f")" = "contents" ] \
     || fail "the badges job asks for more than contents: $(yq -r '.jobs.badges.permissions' "$f")"
@@ -629,14 +629,14 @@ lane_step_count() {
 # never-run upstream) or impossible (a fork's token). Two are re-asserted here
 # because the caller cannot be trusted to have copied them.
 @test "the badges job skips cancelled upstreams, docs-only changes, releases and fork PRs" {
-  cond=$(yq -r '.jobs.badges.if' "$REPO_ROOT/.github/workflows/badges.yml")
+  cond=$(yq -r '.jobs.badges.if' "$REPO_ROOT/.github/workflows/publish-badges.yml")
   for needle in \
     "inputs.unit-result != 'cancelled'" \
     "inputs.e2e-result != 'cancelled'" \
     "inputs.docs-only != 'true'" \
     "github.event_name != 'release'" \
     "github.event.pull_request.head.repo.full_name == github.repository"; do
-    grep -qF "$needle" <<<"$cond" || fail "badges.yml's guard no longer contains [$needle]: $cond"
+    grep -qF "$needle" <<<"$cond" || fail "publish-badges.yml's guard no longer contains [$needle]: $cond"
   done
 }
 
@@ -644,21 +644,21 @@ lane_step_count() {
 # artifact is fetched only for a green Unit. A failed Unit renders the red
 # placeholder from no input at all, and a skipped one renders no coverage badge,
 # so the published one survives.
-@test "badges.yml downloads coverage only when the unit job succeeded" {
-  f="$REPO_ROOT/.github/workflows/badges.yml"
+@test "publish-badges.yml downloads coverage only when the unit job succeeded" {
+  f="$REPO_ROOT/.github/workflows/publish-badges.yml"
   cond=$(yq -r '[.jobs.badges.steps[] | select((.uses // "") | test("download-artifact"))][0].if' "$f")
   [ "$cond" = '${{ inputs.unit-result == '"'"'success'"'"' }}' ] \
     || fail "the coverage download is gated on '$cond'"
 }
 
 @test "the badges job delegates rendering to the consumer, and only publishing is ours" {
-  f="$REPO_ROOT/.github/workflows/badges.yml"
+  f="$REPO_ROOT/.github/workflows/publish-badges.yml"
   render=$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0]' "$f")
   contains "$render" 'run-script.sh' \
     || fail "the render step no longer goes through run-script.sh: $render"
   [ "$(yq -r '.on.workflow_call.inputs."render-script".default' "$f")" = "badges:render" ]
   n=$(yq -r '[.jobs.badges.steps[] | select((.run // "") | test("publish-badges.sh"))] | length' "$f")
-  [ "$n" -eq 1 ] || fail "badges.yml runs publish-badges.sh $n times"
+  [ "$n" -eq 1 ] || fail "publish-badges.yml runs publish-badges.sh $n times"
 }
 
 # The caller half: without always() the job never runs on a red Unit, which is
@@ -677,7 +677,7 @@ lane_step_count() {
 
 @test "every native cache key interpolates native-cache-version, none bakes in a literal" {
   command -v yq >/dev/null || skip "yq not installed"
-  # The input's own description, expo-build-ios.yml's, and docs/cache-keys.md all
+  # The input's own description, build-ios.yml's, and docs/cache-keys.md all
   # promise that bumping this invalidates *every* native cache. The Android
   # system-image and AVD keys baked in `v1`, so someone chasing a stale-AVD
   # failure bumped the input, those two caches stayed warm, and the failure
@@ -700,7 +700,7 @@ lane_step_count() {
   command -v yq >/dev/null || skip "yq not installed"
   # A consumer whose default branch is `master` never wrote the cache at all and
   # paid a cold Gradle on every run, including on its own default branch.
-  for w in e2e expo-build-android; do
+  for w in check-e2e build-android; do
     f="$REPO_ROOT/.github/workflows/$w.yml"
     [ "$(yq -r '.on.workflow_call.inputs | has("default-branch")' "$f")" = "true" ] \
       || fail "$w.yml does not declare a default-branch input"
@@ -713,12 +713,12 @@ lane_step_count() {
   done
 }
 
-@test "the iOS and Android artifact uploads in e2e.yml guard on the build the same way" {
+@test "the iOS and Android artifact uploads in check-e2e.yml guard on the build the same way" {
   command -v yq >/dev/null || skip "yq not installed"
   # The Android upload ran under always() with if-no-files-found: error, so a
   # failed build produced a second red step - a missing APK - stacked on top of
   # the real error. The iOS twin already had the right condition.
-  f="$REPO_ROOT/.github/workflows/e2e.yml"
+  f="$REPO_ROOT/.github/workflows/check-e2e.yml"
   expected="\${{ !cancelled() && steps.build.conclusion != 'failure' }}"
   for name in "Upload iOS app" "Upload APK"; do
     cond=$(yq -r ".jobs[].steps[]? | select(.name == \"$name\") | .if // \"\"" "$f")
@@ -727,20 +727,20 @@ lane_step_count() {
   done
   # The condition is meaningless without the id it names.
   ids=$(yq -r '[.jobs[].steps[]? | select(.id == "build")] | length' "$f")
-  [ "$ids" -ge 2 ] || fail "e2e.yml has $ids steps with id: build, expected one per platform"
+  [ "$ids" -ge 2 ] || fail "check-e2e.yml has $ids steps with id: build, expected one per platform"
 }
 
-# Two gates in checks.yml cost minutes rather than seconds: check-prebuild
+# Two gates in check-code.yml cost minutes rather than seconds: check-prebuild
 # prebuilds both platforms, and check:bundle-secrets runs a web export. They are
 # opt-in so a consumer decides where that wall clock is worth paying. Flipping
 # either default to true silently adds those minutes to every PR of every
 # consumer of this family, which is the kind of change nobody notices in review.
 @test "the expensive checks stay opt-in" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/checks.yml"
+  f="$REPO_ROOT/.github/workflows/check-code.yml"
   for i in prebuild-check bundle-secrets; do
     [ "$(yq -r ".on.workflow_call.inputs.\"$i\" | has(\"default\")" "$f")" = "true" ] \
-      || fail "checks.yml has no $i input"
+      || fail "check-code.yml has no $i input"
     [ "$(yq -r ".on.workflow_call.inputs.\"$i\".default" "$f")" = "false" ] \
       || fail "$i defaults to $(yq -r ".on.workflow_call.inputs.\"$i\".default" "$f"), which adds minutes to every consumer's PR"
   done
@@ -753,7 +753,7 @@ lane_step_count() {
 # A gate whose step can hang without the job cap being a useful diagnosis.
 @test "the two expensive checks carry their own step timeout" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/checks.yml"
+  f="$REPO_ROOT/.github/workflows/check-code.yml"
   for name in "Prebuild check" "Bundle secrets"; do
     t=$(yq -r ".jobs[].steps[]? | select(.name == \"$name\") | .\"timeout-minutes\" // \"\"" "$f")
     [ -n "$t" ] || fail "the '$name' step has no timeout-minutes"
@@ -769,7 +769,7 @@ lane_step_count() {
 
 @test "the platform builds can run without signing credentials" {
   command -v yq >/dev/null || skip "yq not installed"
-  for pair in "expo-build-ios|ios-signing" "expo-build-android|android-signing"; do
+  for pair in "build-ios|ios-signing" "build-android|android-signing"; do
     w="${pair%%|*}"
     input="${pair##*|}"
     f="$REPO_ROOT/.github/workflows/$w.yml"
@@ -786,7 +786,7 @@ lane_step_count() {
 
 @test "an unsigned iOS build does not try to upload an .ipa it never packaged" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/expo-build-ios.yml"
+  f="$REPO_ROOT/.github/workflows/build-ios.yml"
   cond=$(yq -r '.jobs[].steps[] | select(.name == "Upload ios-ipa") | .if // ""' "$f")
   contains "$cond" "inputs.ios-signing" \
     || fail "the ios-ipa upload is not gated on ios-signing, and its if-no-files-found is error: $cond"
@@ -816,8 +816,8 @@ lane_step_count() {
 # reader of a run graph should not need to know what a lane is.
 @test "the store job has a fixed name and no display name says lane" {
   command -v yq >/dev/null || skip "yq not installed"
-  n=$(yq -r '.jobs.lane.name' "$REPO_ROOT/.github/workflows/fastlane-lane.yml")
-  [ "$n" = "Store" ] || fail "fastlane-lane's job is named '$n', expected 'Store'"
+  n=$(yq -r '.jobs.lane.name' "$REPO_ROOT/.github/workflows/publish-store.yml")
+  [ "$n" = "Store" ] || fail "publish-store's job is named '$n', expected 'Store'"
   for w in "$REPO_ROOT"/.github/workflows/*.yml; do
     names=$(yq -r '[.name] + [.jobs[].name] | .[] | select(. != null)' "$w")
     if grep -qi 'lane' <<<"$names"; then

@@ -40,7 +40,7 @@
       <rect x="4" y="22" width="11" height="2.5" rx="1.25" fill="#ffbe0b"/>
     </g>
     <text x="96" y="149" font-size="12" font-weight="600" fill="#1d1d1d">your next app</text>
-    <text x="96" y="165" font-size="10.5" fill="#6b7280">uses: checks.yml@v0</text>
+    <text x="96" y="165" font-size="10.5" fill="#6b7280">uses: check-code.yml@v0</text>
 
     <rect x="50" y="200" width="160" height="52" rx="8" fill="#ffffff" stroke="#cfd9e2" stroke-dasharray="4 3"/>
     <g transform="translate(64 212)">

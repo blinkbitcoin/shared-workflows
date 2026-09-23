@@ -1,6 +1,6 @@
 # Forensics
 
-What `e2e.yml` and `web.yml` upload when something goes wrong, and how to read
+What `check-e2e.yml` and `build-web.yml` upload when something goes wrong, and how to read
 it. Every forensics step runs with `if: always()`, so it uploads on both pass
 and fail (a green run's artifact is usually small and worth skimming anyway).
 
@@ -129,9 +129,9 @@ log even though the artifact only carries the final attempt's files.
   the end of a long suite is often faster to diagnose by scrubbing to the last
   30 seconds of the video than by replaying every Maestro screenshot.
 
-## web.yml (Playwright)
+## build-web.yml (Playwright)
 
-`web.yml`'s `playwright` job forensics step uploads `playwright-report/` (Playwright's
+`build-web.yml`'s `playwright` job forensics step uploads `playwright-report/` (Playwright's
 own HTML report, traces and screenshots) as `playwright-report`; open
 `index.html` locally (`npx playwright show-report <dir>`) for the interactive
 trace viewer — it's more useful than the individual PNGs for a web failure.

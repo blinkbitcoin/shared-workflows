@@ -5,9 +5,9 @@ name: Release PR Notes
 # release-please builds the GitHub release body from the text between the two
 # `---` lines of the merged PR body, so a `## Store notes` block written before
 # the closing rule reaches the release verbatim, and the release lanes read
-# that section back as the store text (expo-prepare's notes step with
+# that section back as the store text (build-prepare's notes step with
 # `release-tag`). The block is marker-delimited and identical to what
-# github-release.yml's `append` mode writes, so a later append replaces it
+# publish-github-release.yml's `append` mode writes, so a later append replaces it
 # in place rather than stacking a second heading.
 #
 # release-please rewrites the whole PR body on every push to main, and skips

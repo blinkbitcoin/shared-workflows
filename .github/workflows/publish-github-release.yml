@@ -126,7 +126,7 @@ jobs:
         with:
           app-id: ${{ secrets.RELEASE_TAGGER_APP_ID }}
           private-key: ${{ secrets.RELEASE_TAGGER_APP_PRIVATE_KEY }}
-          # Releases only. The build tag already exists (expo-prepare reserves
+          # Releases only. The build tag already exists (build-prepare reserves
           # it at push time), so creating, editing and deleting releases and
           # their tags is all this token does - no `workflows` scope needed.
           permission-contents: write
@@ -148,7 +148,7 @@ jobs:
           merge-multiple: true
           path: ${{ env.WORKFLOWS_ASSETS_DIR }}
       # After both downloads, before the upload: the release's build-info.json
-      # is expo-prepare's record plus the `artifacts` digests each platform job
+      # is build-prepare's record plus the `artifacts` digests each platform job
       # recorded for the bytes it built. Only `artifacts` is taken from those
       # copies - a platform record is a mid-job snapshot and must not put a
       # stale sha or stage back on the release.

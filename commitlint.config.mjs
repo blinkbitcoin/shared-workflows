@@ -12,20 +12,20 @@ export default {
       'always',
       [
         'actions', // .github/actions/**  composite actions
-        'checks', // scripts/checks/**   + checks.yml
+        'checks', // scripts/checks/**   + check-code.yml
         'ci', // scripts/ci/**       + self-ci.yml
         'deps', // dependabot and pinned tool bumps
         'dev-config', // packages/dev-config/** the published npm package
         'docs', // docs/** and README
-        'e2e', // scripts/e2e/**      + e2e.yml
+        'e2e', // scripts/e2e/**      + check-e2e.yml
         'lib', // scripts/lib/**      shared bash helpers
         'native', // scripts/native/**   prebuild, pods, platform builds
-        'ota', // scripts/ota/**      + expo-ota-publish.yml
-        'release', // scripts/release/**  + github-release.yml, fastlane-lane.yml
+        'ota', // scripts/ota/**      + publish-ota.yml
+        'release', // scripts/release/**  + publish-github-release.yml, publish-store.yml
         'self', // scripts/self/**     + self-*.yml (this repo's own CI)
         'test', // test/**             the bats suite and its fixtures
         'tooling', // Makefile, .mise.toml, hooks, lint config
-        'web', // scripts/web/**      + web.yml
+        'web', // scripts/web/**      + build-web.yml
         'workflows', // .github/workflows/** as a shape, and the consumer contract
       ],
     ],

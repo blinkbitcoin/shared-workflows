@@ -102,29 +102,29 @@ real_jobs() {
   mise exec -- yq -r '.jobs | to_entries[] | (.value.name // .key)' "$REPO_ROOT/.github/workflows/$1"
 }
 
-@test "the guide's checks.yml job list is the job list" {
+@test "the guide's check-code.yml job list is the job list" {
   # This is the case that would have caught the missing Contract job: it was
   # absent from the guide and from README while the workflow had eleven jobs.
   local line
   line="$(grep -A1 '^Jobs: `Changes`' "$REPO_ROOT/docs/consumer-guide.md" | tr '\n' ' ')"
-  [ -n "$line" ] || fail "the guide no longer has a checks.yml Jobs: line to check"
+  [ -n "$line" ] || fail "the guide no longer has a check-code.yml Jobs: line to check"
   local missing="" job
   while read -r job; do
     [ -n "$job" ] || continue
     contains "$line" "\`$job\`" || missing="$missing $job"
-  done <<< "$(real_jobs checks.yml)"
-  [ -z "$missing" ] || fail "checks.yml jobs missing from the guide's Jobs: line:$missing"
+  done <<< "$(real_jobs check-code.yml)"
+  [ -z "$missing" ] || fail "check-code.yml jobs missing from the guide's Jobs: line:$missing"
 }
 
-@test "README's checks.yml table is the job list" {
+@test "README's check-code.yml table is the job list" {
   local table missing="" job
-  table="$(sed -n '/^### `checks.yml`/,/^### /p' "$REPO_ROOT/README.md")"
-  [ -n "$table" ] || fail "README no longer has a checks.yml section"
+  table="$(sed -n '/^### `check-code.yml`/,/^### /p' "$REPO_ROOT/README.md")"
+  [ -n "$table" ] || fail "README no longer has a check-code.yml section"
   while read -r job; do
     [ -n "$job" ] || continue
     contains "$table" "\`$job\`" || missing="$missing $job"
-  done <<< "$(real_jobs checks.yml)"
-  [ -z "$missing" ] || fail "checks.yml jobs missing from README's table:$missing"
+  done <<< "$(real_jobs check-code.yml)"
+  [ -z "$missing" ] || fail "check-code.yml jobs missing from README's table:$missing"
 }
 
 @test "README's own-workflow table names every job of self-release.yml" {

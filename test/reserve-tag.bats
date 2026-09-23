@@ -154,7 +154,7 @@ SH
   # condition is false. If the guard were dropped, a re-run that found its tag
   # already in place would delete a tag it did not create.
   run node -e '
-    const text = require("fs").readFileSync(`${process.env.REPO_ROOT}/.github/workflows/expo-prepare.yml`, "utf8");
+    const text = require("fs").readFileSync(`${process.env.REPO_ROOT}/.github/workflows/build-prepare.yml`, "utf8");
     const step = text.split("unreserve-tag.sh")[0];
     const guard = step.slice(step.lastIndexOf("- name:"));
     if (!/failure\(\)/.test(guard)) throw new Error("the unreserve step is not gated on failure()");

@@ -19,13 +19,13 @@ const ROOT = path.join(HERE, '..', '..');
 export const START = '<!-- contract-table:start -->';
 export const END = '<!-- contract-table:end -->';
 
-const PROFILE_TITLE = {
-  checks: '`checks.yml`',
-  unit: '`unit.yml`',
-  e2e: '`e2e.yml`',
-  web: '`web.yml`',
-  badges: '`badges.yml`',
-  codeql: '`codeql.yml`',
+export const PROFILE_TITLE = {
+  checks: '`check-code.yml`',
+  unit: '`check-unit.yml`',
+  e2e: '`check-e2e.yml`',
+  web: '`build-web.yml`',
+  badges: '`publish-badges.yml`',
+  codeql: '`check-codeql.yml`',
   release: 'the release workflows',
 };
 

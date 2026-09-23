@@ -66,7 +66,7 @@ $hits"
   grep -qF '.workflows' "$REPO_ROOT/docs/consumer-guide.md" \
     || fail "the consumer guide no longer names the checkout directory"
   paths="$(yq -r '.jobs[].steps[]? | select(.uses? == "actions/checkout@v7") | .with.path // ""' \
-    "$REPO_ROOT/.github/workflows/checks.yml" | grep -v '^$' | sort -u)"
+    "$REPO_ROOT/.github/workflows/check-code.yml" | grep -v '^$' | sort -u)"
   [ "$paths" = ".workflows" ] \
-    || fail "checks.yml checks out to '$paths', which is not the directory the guide documents"
+    || fail "check-code.yml checks out to '$paths', which is not the directory the guide documents"
 }
