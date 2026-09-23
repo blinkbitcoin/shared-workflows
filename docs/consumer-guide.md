@@ -110,6 +110,51 @@ Two levels, and the difference matters:
   `check:ci`, `i18n:check` and `codegen:check` are the five that degrade; see
   [Script contract](#script-contract) for why that seam exists.
 
+**It is your repository that fails, never this one.** The check runs in your
+CI, from the version of shared-workflows your caller pins, so moving to a new
+`v0` is also when a new requirement starts to apply. shared-workflows' own CI
+never checks out a consumer. It tests the checker against fixture consumers and
+holds `contract.json` to its own workflows:
+
+```mermaid
+flowchart LR
+  subgraph app["your repository"]
+    pr["a push or a PR"]
+    caller["ci.yml calls checks.yml@v0"]
+    tree["package.json, Makefile, .mise.toml,<br/>the callers' with: toggles, fastlane/"]
+  end
+  subgraph run["your Checks run"]
+    contract["Contract job"]
+    gates["every other Checks job"]
+  end
+  subgraph shared["shared-workflows at the pinned commit"]
+    data["contract.json"]
+    checker["check-consumer-contract.mjs"]
+  end
+  subgraph self["shared-workflows' own CI"]
+    fixtures["fixture consumers, aligned and misaligned"]
+    bind["contract.json against its own workflows"]
+  end
+  pr --> caller --> contract
+  contract -->|"checks out .workflows at job.workflow_sha"| checker
+  data --> checker
+  tree --> checker
+  checker -->|"a requirement you do not meet: your PR fails"| gates
+  fixtures --> checker
+  bind --> data
+```
+
+Beyond scripts and files, it holds two things together that only your
+repository can see:
+
+- **`make ci` and CI run the same gates**, in both directions. Every package
+  script the checks and unit workflows run for your caller must be reachable
+  from `make ci`. Every target `make ci` reaches with a recipe of its own must
+  be run by CI, named like a script CI runs or running only pnpm scripts CI
+  runs. No `Makefile` or no `ci` target, and both are skipped.
+- **Your lanes read only the `APP_REVIEW_*` names `fastlane-lane.yml` passes.**
+  A name it does not pass is always empty on a runner.
+
 **It only reports what applies to you.** It reads your own `.github/workflows/`
 first: a repository that never calls `e2e.yml` is not told it is missing
 `.maestro/`, and a gate you passed `false` for is not a finding.
@@ -505,6 +550,8 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `commitlint-commits` | `false` | Also lint every commit's message in the PR |
 | `actionlint` | `true` | Lint the consumer's `.github/workflows`. Reaches the built-in linter only; a consumer that ships `check:ci` owns this choice itself |
 | `shellcheck` | `true` | Lint the consumer's `scripts/` |
+| `zizmor` | `true` | Audit the consumer's `.github` with zizmor, offline, at medium severity and up: template injection, broad permissions, App tokens with blanket scope, dangerous triggers. Reaches the built-in linter only, like `actionlint`. Without a `zizmor.yml` of its own the consumer gets this family's policy, which allows tag pins |
+| `secret-scan` | `true` | Run the consumer's `check:secrets`, or scan its **full git history** with gitleaks when it ships none. The Tooling job checks out with `fetch-depth: 0` for this. A `.gitleaks.toml` at the consumer's root is read either way |
 | `licenses` | `true` | Run the consumer's `deps:licenses` (dependency licence policy) |
 | `prebuild-check` | `false` | Run the consumer's `check-prebuild`: prebuild both platforms into a temp dir and assert the config plugins produced what they should. **Minutes, not seconds** — enable it where the coverage earns the wall clock (on `main`, on a release, behind a label), not on every PR |
 | `bundle-secrets` | `false` | Run the consumer's `check:bundle-secrets`: export the bundle and assert no non-public key leaked into it. **Minutes, not seconds**, same advice as above |
@@ -1633,7 +1680,8 @@ line for line, both repos read on the same date):
 | `codegen` | `scripts/checks/codegen.sh`, the fallback when a consumer ships no `codegen:check` | yes |
 | `deps:check` | `checks.yml` (`expo-doctor` toggle) — preferred over `scripts/checks/expo-doctor.sh` | yes (`expo install --check && expo-doctor`) |
 | `deps:audit` | `checks.yml` (`audit` toggle) — preferred over `scripts/checks/audit.sh` | yes (`pnpm audit --prod` + lockfile provenance) |
-| `check:ci` | `checks.yml` (`actionlint`/`shellcheck` toggles) — preferred over `scripts/ci/lint-ci.sh` | yes (`make check-ci`) |
+| `check:ci` | `checks.yml` (`actionlint`/`shellcheck`/`zizmor` toggles) — preferred over `scripts/ci/lint-ci.sh` | yes (`make check-ci`) |
+| `check:secrets` | `checks.yml` (`secret-scan` toggle) — preferred over `scripts/checks/secrets.sh` | yes (`make check-secrets`) |
 | commitlint binary | `scripts/checks/commitlint.sh` (`commitlint` toggle, `pr-title.yml`) | n/a — `pnpm exec commitlint` when `@commitlint/cli` is a devDependency (it is), else `npx` with a pinned fallback config |
 | `test` | `unit.yml` (`test-script`, used when `coverage: false`) | yes |
 | `test:coverage` | `unit.yml` (`coverage-script`, default path) | yes |

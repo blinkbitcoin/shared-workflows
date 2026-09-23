@@ -26,6 +26,22 @@ else
   log "lint-ci: skipping actionlint"
 fi
 
+# zizmor is the security half of the workflow lint: template injection, broad
+# permissions, App tokens with blanket scope, dangerous triggers - none of which
+# actionlint looks at. --offline keeps it deterministic: the online audits ask
+# the GitHub API, and a gate must not change its answer with the network.
+# A consumer's own zizmor.yml (repo root or .github/) is its policy; without one
+# it gets this family's, which allows tag pins (see .github/zizmor.yml here).
+if [ "${WORKFLOWS_ZIZMOR:-true}" = "true" ] && [ -d .github/workflows ]; then
+  config=()
+  if [ ! -f zizmor.yml ] && [ ! -f .github/zizmor.yml ]; then
+    config=(--config "$(cd "$(dirname "$0")/../.." && pwd)/.github/zizmor.yml")
+  fi
+  mise x "zizmor@$ZIZMOR_VERSION" -- zizmor --offline --min-severity medium ${config[@]+"${config[@]}"} .github
+else
+  log "lint-ci: skipping zizmor"
+fi
+
 if [ "${WORKFLOWS_SHELLCHECK:-true}" = "true" ] && [ -d scripts ]; then
   files=()
   while IFS= read -r f; do

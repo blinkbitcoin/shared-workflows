@@ -136,35 +136,3 @@ $mine
 $SCHEMA_KEYS"
 }
 
-# Structural, not behavioural, and deliberately so: the consumer's copy shells
-# out to @expo/fingerprint and resolves its own version, so running it here would
-# need a full node_modules and a network fallback. What it does catch is the
-# drift that actually happened - a key added, renamed or dropped on one side, and
-# the declared-versus-installed choice.
-@test "the template's copy emits the same schema and reads installed versions" {
-  template_dir="${WORKFLOWS_TEMPLATE_DIR:-}"
-  [ -n "$template_dir" ] || parity_skip "parity NOT verified: set WORKFLOWS_TEMPLATE_DIR to a template checkout"
-  other="$template_dir/scripts/release/build-info.sh"
-  # A skip here means parity with the template's copy was NOT verified by this
-  # run -- not that the two copies agree.
-  [ -f "$other" ] || parity_skip "parity NOT verified: no template copy at $other (set WORKFLOWS_TEMPLATE_DIR)"
-
-  theirs="$(schema_keys_of "$other")"
-  [ "$theirs" = "$SCHEMA_KEYS" ] || fail "the template's copy drifted from the schema:
---- found    ---
-$theirs
---- expected ---
-$SCHEMA_KEYS"
-
-  grep -q 'installed("expo")' "$other" || fail "the template's copy no longer reads the installed expo version"
-  grep -q 'installed("react-native")' "$other" || fail "the template's copy no longer reads the installed react-native version"
-  grep -q 'installed("expo")' "$REPO_ROOT/scripts/release/build-info.sh" || fail "this copy no longer reads the installed expo version"
-  grep -q 'installed("react-native")' "$REPO_ROOT/scripts/release/build-info.sh" || fail "this copy no longer reads the installed react-native version"
-
-  # Both nest the fingerprints under the same two names. One writes them on a
-  # single line and the other over three, so they are checked by name.
-  for f in "$other" "$REPO_ROOT/scripts/release/build-info.sh"; do
-    grep -q 'ios:' "$f" || fail "$f has no fingerprint.ios"
-    grep -q 'android:' "$f" || fail "$f has no fingerprint.android"
-  done
-}

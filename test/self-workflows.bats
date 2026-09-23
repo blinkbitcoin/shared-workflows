@@ -23,14 +23,17 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
     || fail "self-ci.yml lost its pull_request trigger"
 }
 
-# The dispatch needs `actions: write`; the release-please job has no
-# job-level block by design (a job-level block would replace the top-level
-# one), so the scope has to be granted at the top of the file.
-@test "self-release.yml grants actions: write at the top, for the dispatch" {
-  [ "$(yq -r '.permissions.actions' "$RELEASE")" = "write" ] \
-    || fail "self-release.yml top-level permissions.actions is '$(yq -r '.permissions.actions' "$RELEASE")', not write"
-  [ "$(yq -r '.jobs."release-please" | has("permissions")' "$RELEASE")" = "false" ] \
-    || fail "the release-please job declares its own permissions block, which replaces the top-level grant"
+# The dispatch needs `actions: write`, and release-please needs contents and
+# pull-requests. All three are granted on the release-please job, not at the
+# top: a job-level block replaces the top-level one, so a write grant at the top
+# would reach every job added later (zizmor's excessive-permissions).
+@test "self-release.yml grants the release-please job its writes, and nothing at the top" {
+  for scope in contents pull-requests actions; do
+    got="$(yq -r ".jobs.\"release-please\".permissions.\"$scope\"" "$RELEASE")"
+    [ "$got" = "write" ] || fail "release-please job permissions.$scope is '$got', not write"
+  done
+  top="$(yq -r '[.permissions // {} | to_entries[] | select(.value == "write") | .key] | join(",")' "$RELEASE")"
+  [ -z "$top" ] || fail "self-release.yml grants '$top' at the top level; grant writes per job"
 }
 
 @test "self-release.yml starts self-ci on the release PR only when a PR was created" {

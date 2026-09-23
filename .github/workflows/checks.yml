@@ -90,6 +90,14 @@ on:
         description: Lint the consumer's scripts/ with shellcheck
         type: boolean
         default: true
+      zizmor:
+        description: Audit the consumer's .github with zizmor (workflow security - injection, permissions, App tokens, triggers)
+        type: boolean
+        default: true
+      secret-scan:
+        description: Run the consumer's `check:secrets` script, or scan its full git history with gitleaks
+        type: boolean
+        default: true
       licenses:
         description: Run the consumer's `deps:licenses` script (dependency licence policy)
         type: boolean
@@ -521,7 +529,7 @@ jobs:
         env:
           SCRIPT_NAME: 'check:release'
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
-      # WORKFLOWS_ACTIONLINT / WORKFLOWS_SHELLCHECK reach the fallback only. A consumer that
+      # WORKFLOWS_ACTIONLINT / WORKFLOWS_SHELLCHECK / WORKFLOWS_ZIZMOR reach the fallback only. A consumer that
       # ships check:ci owns that decision itself, which is the point of the seam.
   tooling:
     name: Tooling
@@ -536,6 +544,9 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
+          # The secret scan reads every commit, not the tip: a key deleted in a
+          # later commit is still in the repository.
+          fetch-depth: 0
       - name: Checkout shared-workflows
         uses: actions/checkout@v7
         with:
@@ -547,12 +558,16 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-      - name: Lint CI (actionlint / shellcheck)
-        if: ${{ inputs.actionlint || inputs.shellcheck }}
+      - name: Lint CI (actionlint / shellcheck / zizmor)
+        if: ${{ inputs.actionlint || inputs.shellcheck || inputs.zizmor }}
         env:
           WORKFLOWS_ACTIONLINT: ${{ inputs.actionlint }}
           WORKFLOWS_SHELLCHECK: ${{ inputs.shellcheck }}
+          WORKFLOWS_ZIZMOR: ${{ inputs.zizmor }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:ci' scripts/ci/lint-ci.sh
+      - name: Secret scan
+        if: ${{ inputs.secret-scan }}
+        run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:secrets' scripts/checks/secrets.sh
   commits:
     name: Commits
     needs: contract

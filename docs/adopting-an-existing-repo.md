@@ -96,6 +96,7 @@ is a warning in the report, not a failure. See
 | `deps:check` | optional — a fallback runs | checks.yml (expo-doctor) |
 | `deps:audit` | optional — a fallback runs | checks.yml (audit) |
 | `check:ci` | optional — a fallback runs | checks.yml (actionlint, shellcheck) |
+| `check:secrets` | optional — a fallback runs | checks.yml (secret-scan) |
 | `i18n:check` | optional — a fallback runs | checks.yml (i18n) |
 | `codegen:check` | optional — a fallback runs | checks.yml (graphql-codegen) |
 | `check-prebuild` | only if you set `prebuild-check: true` | checks.yml (prebuild-check) |
@@ -103,6 +104,8 @@ is a warning in the report, not a failure. See
 | `check:release` | only if you set `release-checks: true` | checks.yml (release-checks) |
 | `@commitlint/cli` | optional — a fallback runs | checks.yml (commitlint), pr-title.yml |
 | `Gemfile` | only if you set `release-checks: true` | checks.yml (release-checks) via bundler-cache, and scripts/release/fastlane.sh |
+| every gate CI runs, reachable from `make ci` | required | checks.yml and unit.yml, against your Makefile |
+| every gate `make ci` runs, run by CI | required | your Makefile, against checks.yml and unit.yml |
 | `biome.json` | optional — a fallback runs | your own lint gate, which walks the whole tree |
 | `eslint.config.mjs` | optional — a fallback runs | your own lint gate, which walks the whole tree |
 | `tsconfig.json` | optional — a fallback runs | your own typecheck gate |
@@ -152,6 +155,7 @@ is a warning in the report, not a failure. See
 | --- | --- | --- |
 | `fastlane/Fastfile` | required | expo-build-ios.yml, expo-build-android.yml, fastlane-lane.yml |
 | the `ios:build`, `ios:verify`, `android:build` and `android:verify` lanes | required | expo-build-ios.yml, expo-build-android.yml |
+| lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_NOTES` and `APP_REVIEW_PHONE` | required | fastlane-lane.yml, which passes exactly these as secrets |
 | `scripts/release/verify-ios.sh` | required | the ios verify lane |
 | `scripts/release/verify-android.sh` | required | the android verify lane |
 | `scripts/release/notes.mjs` | optional — a fallback runs | expo-prepare.yml, through scripts/release/notes.sh |

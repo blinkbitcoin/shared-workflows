@@ -126,6 +126,10 @@ jobs:
         with:
           app-id: ${{ secrets.RELEASE_TAGGER_APP_ID }}
           private-key: ${{ secrets.RELEASE_TAGGER_APP_PRIVATE_KEY }}
+          # Releases only. The build tag already exists (expo-prepare reserves
+          # it at push time), so creating, editing and deleting releases and
+          # their tags is all this token does - no `workflows` scope needed.
+          permission-contents: write
       # Notes first, assets second - but the staging order is not what decides
       # the release's build-info.json: `merge-multiple` has no defined order, so
       # the per-platform record ships as `build-info.<platform>.json` (it cannot

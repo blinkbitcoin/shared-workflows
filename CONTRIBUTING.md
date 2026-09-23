@@ -6,7 +6,7 @@ table and the rules CI enforces. This file covers the workflow around a change.
 ## Setup
 
 ```sh
-mise trust && mise install   # node, pnpm, shellcheck, actionlint, bats, yq, typos, lefthook, act
+mise trust && mise install   # node, pnpm, shellcheck, actionlint, zizmor, gitleaks, bats, yq, typos, lefthook, act
 make hooks                   # install the git hooks (once per clone, see below)
 make check                   # verify the toolchain by running every gate
 ```
@@ -65,12 +65,12 @@ their pin. Mark breaking changes with `!` (`feat(workflows)!: ...`) or a
 ## Before you push
 
 ```sh
-make check   # shellcheck, actionlint, bats, test-package, check-versions, tool-versions, typos
+make check   # shellcheck, actionlint, zizmor, bats, test-package, check-versions, tool-versions, typos, gitleaks
 ```
 
 The `pre-push` hook runs exactly that, and `pre-commit` runs a faster subset on
-staged files (shellcheck, actionlint when anything under `.github/` is staged,
-typos). They are a safety net, not a substitute: `self-ci.yml` runs the same
+staged files (shellcheck, actionlint and zizmor when anything under `.github/`
+is staged, typos, gitleaks over the staged diff). They are a safety net, not a substitute: `self-ci.yml` runs the same
 gate on every PR. Escape hatches exist for genuinely broken tooling
 (`git commit --no-verify`, `LEFTHOOK=0 git push`), and personal additions go in
 a gitignored `lefthook-local.yml` rather than in `lefthook.yml`.
@@ -117,32 +117,31 @@ The same file holds job lists to `yq '.jobs[].name'` and any
 were wrong when it was written: the `Contract` job was in no table, and the
 guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
 
-### The parity cases, and the seven skips you will see
+### How consumers are held to the contract
 
-Seven cases need a real consumer checkout. Five compare something here against
-the consumer's own copy of it — `resolve-version.sh`, `build-info.sh`, the App
-Review names the fastlane lanes read, and the two that hold the consumer's
-`make ci` / `make check` to the gates CI runs. The other two check that the
-consumer satisfies the contract at all. This repo serves any consumer, so it
-has no business guessing where one sits on your machine: without a checkout to
-point at, those cases **skip**, and say `parity NOT verified` rather than
-implying the two copies agree.
+This repository never checks out a consumer, in CI or in a test. The direction
+is the other way round: each consumer's `checks.yml` run starts with a
+`Contract` job, which reads [`packages/dev-config/contract.json`](packages/dev-config/contract.json)
+from the exact version of this repository that consumer calls and checks the
+consumer against it. A consumer that has drifted fails **its own** PR, and a
+change here is never red because of the state of some consumer's `main`.
+"The contract check" in [`docs/consumer-guide.md`](docs/consumer-guide.md#the-contract-check)
+has the diagram.
 
-Point them at a checkout to run them:
+That puts a rule that spans repositories in one of two places:
 
-```sh
-WORKFLOWS_TEMPLATE_DIR=../react-native-mobile-template \
-WORKFLOWS_CONSUMER_ROOT=../react-native-mobile-template \
-  mise exec -- bats test/
-```
+- **A requirement in `contract.json`**, checked by
+  `packages/dev-config/bin/check-consumer-contract.mjs`. That covers package scripts,
+  files, lanes, the rule that `make ci` and CI run the same gates in both
+  directions, and the rule that the lanes read only the `APP_REVIEW_*` names
+  `fastlane-lane.yml` passes. Its tests use in-memory fixture consumers,
+  aligned and misaligned.
+- **The consumer's own tests**, when the consumer ships a copy of a script
+  from here (`resolve-version.sh`, `build-info.sh`). Its CI has this repository
+  checked out at `$WORKFLOWS_DIR`, so it compares its copy with ours.
 
-`WORKFLOWS_TEMPLATE_DIR` is what the parity cases read; `WORKFLOWS_CONSUMER_ROOT` is what
-`consumer-contract.bats` reads. Setting both is the configuration CI uses.
-
-Add `WORKFLOWS_PARITY_REQUIRED=1` to turn a would-be skip into a failure. `self-ci.yml`'s
-`parity` job sets it, because a parity case that silently runs against nothing
-and reports green is the exact failure the whole mechanism exists to prevent.
-Do not add it to a plain local run unless you have supplied a checkout.
+`test/consumer-contract.bats` binds `contract.json` to the workflows here: every
+script a checks or unit step runs has a requirement, gated on that step's input.
 
 ### Running the release pipeline locally
 
@@ -181,19 +180,19 @@ job" log on GitHub before merging.
   the matching row in [`docs/consumer-guide.md`](docs/consumer-guide.md), and
   the fixtures under `test/fixtures/consumer-min/` updated in the same commit.
   `test/consumer-contract.bats` keeps the guide's examples and the fixtures
-  byte-identical, and separately checks the live consumer's `on:` block when
-  `WORKFLOWS_CONSUMER_ROOT` points at one.
-- **A new gate** - a step in `checks.yml` or `unit.yml` - needs the matching
-  target in the consumer's `Makefile`, reachable from `make ci`. The two cases
-  at the end of `test/consumer-contract.bats` read the workflow YAML and the
-  consumer's Makefile and fail in both directions, so "CI and `make` run the
-  same gates" is a mechanism rather than a comment. It used to be a comment,
-  and four gates ran locally and in no CI job at all.
+  byte-identical.
+- **A new gate** - a step in `checks.yml` or `unit.yml` that runs a consumer
+  script - needs its requirement in `contract.json`, gated on the step's input;
+  `test/consumer-contract.bats` fails until it has one. From the next release,
+  every consumer's `Contract` job then requires `make ci` to reach it, and fails
+  a consumer whose `make ci` runs a gate no CI step does. It used to be a
+  comment, and four gates ran locally and in no CI job at all.
 - **A change to a script the consumer also ships** — today
   `scripts/release/resolve-version.sh` and `scripts/release/build-info.sh` —
-  has to move both copies. They are contract-identical, not byte-identical, and
-  the parity cases above are what holds them together; run them with
-  `WORKFLOWS_TEMPLATE_DIR` set before you push, because a laptop run skips them.
+  has to move both copies. They are contract-identical, not byte-identical. The
+  consumer's own tests compare its copy with this one through `$WORKFLOWS_DIR`,
+  so a change here that the consumer's copy does not follow turns the
+  consumer's CI red on its next run.
 - **A tool version bump** moves `scripts/lib/versions.sh` *and* the mirrors in
   `.mise.toml` and the workflow defaults; `make check-versions` is what fails
   otherwise.

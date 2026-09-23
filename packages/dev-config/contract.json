@@ -181,6 +181,18 @@
       "guide": "script-contract"
     },
     {
+      "id": "script.check-secrets",
+      "kind": "package-script",
+      "target": "check:secrets",
+      "profile": "checks",
+      "neededBy": "checks.yml (secret-scan)",
+      "toggle": "checks.yml:secret-scan",
+      "defaultOn": true,
+      "severity": "degrades",
+      "fix": "Without a \"check:secrets\" script, shared-workflows runs its own scripts/checks/secrets.sh: gitleaks over your whole git history with its default rules and any .gitleaks.toml at your root. Ship the script when you want the same scan as a make target, or pass secret-scan: false.",
+      "guide": "script-contract"
+    },
+    {
       "id": "script.i18n-check",
       "kind": "package-script",
       "target": "i18n:check",
@@ -288,6 +300,32 @@
       "severity": "required",
       "fix": "Add a \"test:scripts\" script that tests your own scripts/ directory, or pass scripts-test-script: '' in your caller - an empty value skips the step entirely.",
       "guide": "unityml"
+    },
+    {
+      "id": "gate.make-ci-reaches-ci",
+      "label": "make ci reaches every CI gate",
+      "kind": "make-ci-reaches-ci",
+      "target": "ci",
+      "profile": "checks",
+      "neededBy": "checks.yml and unit.yml, against your Makefile",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Every package script the checks and unit workflows run for your caller must be reachable from `make ci`, by name or through a target of the dashed name (check:docs is make check-docs). Add the gate to a target `make ci` reaches, or switch it off in your caller. No Makefile, or no ci target, and this is skipped.",
+      "guide": "the-contract-check"
+    },
+    {
+      "id": "gate.ci-runs-make-ci",
+      "label": "CI runs every make ci gate",
+      "kind": "ci-runs-make-ci",
+      "target": "ci",
+      "profile": "checks",
+      "neededBy": "your Makefile, against checks.yml and unit.yml",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Every target `make ci` reaches that has a recipe of its own must be run by CI: named like a script CI runs (check-docs for check:docs), or running only pnpm scripts CI runs. Fold a local-only gate into a script CI already runs, or turn its CI toggle on. Otherwise a green `make ci` claims checks CI never makes.",
+      "guide": "the-contract-check"
     },
 
     {
@@ -413,6 +451,20 @@
       "severity": "required",
       "fix": "Define the four build lanes. A Fastfile that exists but lacks a lane fails inside fastlane with 'Could not find lane', after prebuild and pod install have already been paid for.",
       "guide": "expo-build-iosyml"
+    },
+    {
+      "id": "lane.app-review-env",
+      "label": "APP_REVIEW_* names the lanes read",
+      "kind": "fastlane-env-subset",
+      "target": ["APP_REVIEW_DEMO_PASSWORD", "APP_REVIEW_DEMO_USER", "APP_REVIEW_EMAIL", "APP_REVIEW_FIRST_NAME", "APP_REVIEW_LAST_NAME", "APP_REVIEW_NOTES", "APP_REVIEW_PHONE"],
+      "prefix": "APP_REVIEW_",
+      "profile": "release",
+      "neededBy": "fastlane-lane.yml, which passes exactly these as secrets",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Your lanes read an APP_REVIEW_* environment variable that fastlane-lane.yml does not pass, so it is always empty on a runner and fastlane submits the empty value. Rename it to one of the listed names, or propose the new secret in shared-workflows first.",
+      "guide": "the-contract-check"
     },
     {
       "id": "script.verify-ios",

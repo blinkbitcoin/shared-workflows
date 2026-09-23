@@ -16,6 +16,8 @@ const REAL_OUTPUT = {
   typos: 'typos-cli 1.50.1\n',
   yq: 'yq (https://github.com/mikefarah/yq/) version v4.53.6\n',
   lefthook: '2.1.14\n',
+  zizmor: 'zizmor 1.30.1\n',
+  gitleaks: '8.30.1\n',
   bats: 'Bats 1.14.0\n',
   node: 'v24.20.0\n',
   pnpm: '12.3.4\n',

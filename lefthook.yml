@@ -31,6 +31,14 @@ pre-commit:
       # deliberately not passed.
       glob: '.github/**/*'
       run: mise exec -- actionlint -color
+    zizmor:
+      # Same shape as actionlint: it audits the whole .github tree, so the glob
+      # only decides whether to run. Same flags as `make zizmor`.
+      glob: '.github/**/*'
+      run: mise exec -- zizmor --offline --min-severity medium .github
+    gitleaks:
+      # Staged changes only; `make secrets` (pre-push, CI) reads the history.
+      run: mise exec -- gitleaks git --pre-commit --staged --redact --no-banner .
     typos:
       # --force-exclude: typos.toml's extend-exclude otherwise governs only
       # directory traversal, and naming a file explicitly on the command line

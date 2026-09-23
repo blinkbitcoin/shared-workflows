@@ -1,29 +1,26 @@
 #!/usr/bin/env bats
-# The published contract, checked three ways:
+# The published contract, held together inside this repository:
 #   1. every script docs/consumer-guide.md's script-contract table marks "yes"
-#      exists in a consumer's package.json — the table is *parsed*, so adding a
-#      row to the guide immediately becomes an assertion;
+#      exists in the fixture consumer's package.json - the table is *parsed*, so
+#      adding a row to the guide immediately becomes an assertion;
 #   2. every input a reusable workflow declares is documented in that workflow's
 #      own section of the guide;
-#   3. the guide's four caller examples are the files a consumer actually ships;
-#   4. the real consumer's `ci.yml` keeps the fixture's trigger block, so a
-#      `paths-ignore` cannot come back as a second docs rule beside the
-#      classifier. (3) compares the guide to the fixture only — it would not
-#      catch that on its own.
-# Runs against test/fixtures/consumer-min by default, so all of this is asserted
-# on every push including self-ci. Set WORKFLOWS_CONSUMER_ROOT to a real consumer
-# checkout (e.g. a react-native-mobile-template clone) to assert against that
-# instead; the consumer tests skip with a message if that path has no
-# package.json.
+#   3. the guide's caller examples are the fixture's files, byte for byte;
+#   4. contract.json names every script CI runs, which is what each consumer's
+#      Contract job reads to hold that consumer's `make ci` to CI.
+# Everything here reads this repository and test/fixtures/consumer-min only. A
+# real consumer is never checked out: it is held to the contract by its own
+# Contract job (packages/dev-config/bin/check-consumer-contract.mjs), against the
+# version of this repository it calls, and fails its own PR when it drifts.
 load test_helper
 
 GUIDE="$REPO_ROOT/docs/consumer-guide.md"
 # Exported: the contract-table cases at the bottom read it from node's process.env.
 export GUIDE
-CONSUMER="${WORKFLOWS_CONSUMER_ROOT:-$FIXTURES/consumer-min}"
+CONSUMER="$FIXTURES/consumer-min"
 
 require_consumer() {
-  [ -f "$CONSUMER/package.json" ] || skip "no consumer package.json at $CONSUMER (WORKFLOWS_CONSUMER_ROOT)"
+  [ -f "$CONSUMER/package.json" ] || fail "no package.json in the fixture consumer at $CONSUMER"
 }
 
 # Prints the consumer's package.json script names, one per line.
@@ -117,22 +114,17 @@ on_block() {
        inside { print }' "$1"
 }
 
-# The byte-identity case above compares the guide to the FIXTURE, and says
-# nothing about the real consumer - whose ci.yml legitimately diverges further
-# down (`release-checks: true`), so a whole-file diff is not available. The
-# `on:` block is the part that must not diverge: a `paths-ignore` there is a
-# second, narrower docs rule competing with checks.yml's classifier, which is
-# the exact defect PR 3 removed and the one thing nothing else here would
-# notice coming back.
-@test "the consumer's ci.yml trigger block matches the fixture's (no paths-ignore)" {
-  require_consumer
-  file="$CONSUMER/.github/workflows/ci.yml"
-  [ -f "$file" ] || fail "no ci.yml at $file"
-  fixture="$FIXTURES/consumer-min/.github/workflows/ci.yml"
-  [ "$(grep -c . <<<"$(on_block "$fixture")")" -ge 5 ] \
-    || fail "read no trigger block from $fixture - the parser or the file shape changed"
-  diff -u <(on_block "$fixture") <(on_block "$file") \
-    || fail "$file's trigger block has drifted from the fixture's; a paths-ignore here would be a second docs rule competing with checks.yml's classifier"
+# The caller the guide tells consumers to copy must not carry a `paths-ignore`:
+# that would be a second, narrower docs rule competing with checks.yml's
+# classifier, the exact defect PR 3 removed. The fixture is the guide's example
+# byte for byte (above), so asserting it here asserts what consumers copy.
+@test "the fixture's ci.yml triggers carry no paths-ignore" {
+  file="$FIXTURES/consumer-min/.github/workflows/ci.yml"
+  block="$(on_block "$file")"
+  [ "$(grep -c . <<<"$block")" -ge 5 ] \
+    || fail "read no trigger block from $file - the parser or the file shape changed"
+  ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
+    || fail "$file's triggers carry a paths-ignore, a second docs rule beside checks.yml's classifier"
 }
 
 # The guide's `docs-globs` row restates changed-class.sh's default pattern by
@@ -144,14 +136,14 @@ on_block() {
 # not grow one back. The schedule trigger is asserted too - it is what makes a
 # newly published query re-scan an idle main, and it is the one trigger a
 # reviewer is most likely to think is redundant.
-@test "the consumer's codeql.yml has no paths-ignore and keeps its weekly schedule" {
+@test "the fixture's codeql.yml has no paths-ignore and keeps its weekly schedule" {
   require_consumer
   file="$CONSUMER/.github/workflows/codeql.yml"
   [ -f "$file" ] || fail "no codeql.yml at $file"
   block="$(on_block "$file")"
   [ "$(grep -c . <<<"$block")" -ge 5 ] \
     || fail "read no trigger block from $file - the parser or the file shape changed"
-  ! grep -q 'paths-ignore' <<<"$block" \
+  ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
     || fail "$file's triggers carry a paths-ignore, a second docs rule beside codeql.yml's classifier"
   grep -q 'schedule' <<<"$block" \
     || fail "$file has no schedule trigger, so a new query never re-scans an idle main"
@@ -223,164 +215,94 @@ on_block() {
   [ "$output" = "null" ]
 }
 
-# --- the CI gate set and the consumer's `make` gate set are the same set ------
+# --- contract.json knows every script CI runs --------------------------------
 #
-# The template's Makefile used to head its gate section "each is what CI runs",
-# and AGENTS.md repeated it. It was not true: i18n drift, codegen drift,
-# lockfile provenance and the licence check all ran through `make check` and
-# through no CI job at all, so a green local gate implied coverage CI was not
-# providing. Nothing detected the gap, because the claim lived in a comment.
-#
-# These cases move the claim into a mechanism. They read the CI side out of the
-# workflow YAML and the local side out of the consumer's Makefile, so neither
-# is a hand-maintained list that can go stale on its own.
+# A consumer's Contract job holds its `make ci` to the gates CI runs
+# (gate.make-ci-reaches-ci, gate.ci-runs-make-ci in contract.json). It learns
+# which scripts those are from contract.json, never from a YAML parser - it runs
+# before setup, on plain node. So contract.json has to name every script a
+# checks/unit step runs, with the input that switches it. These cases hold it to
+# that, from this repository alone: no consumer checkout is involved.
 
-# Every SCRIPT_NAME the reusable workflows hand to run-script.sh or
-# run-consumer-or.sh, one per line.
-# Steps gated on an input that defaults to false are excluded: those gates are
-# opt-in in CI by design (a prebuild of both platforms and a web export are
-# minutes each), so `make ci` not running them is the intended arrangement, not
-# drift. `make check-slow` is where they live locally.
-ci_script_names() {
-  local optional f line name cond
-  # Inputs that default to false. Their steps are opt-in in CI by design - a
-  # prebuild of both platforms and a web export are minutes each - so `make ci`
-  # not running them is the intended arrangement, not drift. `make check-slow`
-  # is where they live locally.
-  optional="$(yq -r '.on.workflow_call.inputs | to_entries[] | select(.value.default == false) | .key' \
-    "$REPO_ROOT/.github/workflows/checks.yml")"
-  {
-    # One file per call: yq separates multiple documents with `---`.
-    for f in checks unit; do
-      yq -r '.jobs[].steps[]?
-        | select((.run? // "") | test("run-script.sh|run-consumer-or.sh"))
-        | ((.env.SCRIPT_NAME // "") + "\t" + (.if // ""))' \
-        "$REPO_ROOT/.github/workflows/$f.yml"
-    done | while IFS=$'\t' read -r name cond; do
-      [ -n "$name" ] || continue
-      skip_this=false
-      while read -r opt; do
-        [ -n "$opt" ] || continue
-        case "$cond" in *"inputs.$opt"*) skip_this=true ;; esac
-      done <<<"$optional"
-      [ "$skip_this" = true ] || printf '%s\n' "$name"
-    done
-    # run-consumer-or.sh takes the name as a positional argument, not env. Its
-    # five steps are all gated on inputs that default to true.
-    grep -oE "run-consumer-or\.sh\" '[^']+'" "$REPO_ROOT/.github/workflows/checks.yml" |
-      sed "s/.*'\\(.*\\)'/\\1/"
-  } | grep -v '^$' | grep -v '\${{' | sort -u
+# `script<TAB>condition` for every checks.yml/unit.yml step that runs a consumer
+# script: SCRIPT_NAME for run-script.sh, the positional name for
+# run-consumer-or.sh. An expression SCRIPT_NAME (unit.yml) is resolved to the
+# defaults of the `*-script` inputs it names.
+ci_steps() {
+  local f
+  for f in checks unit; do
+    yq -o=json '.' "$REPO_ROOT/.github/workflows/$f.yml"
+  done | node -e '
+let buf = "";
+process.stdin.on("data", (d) => (buf += d)).on("end", () => {
+  // yq -o=json prints one document per file, back to back.
+  const docs = buf.replace(/}\s*{/g, "}\u0000{").split("\u0000").map((t) => JSON.parse(t));
+  for (const wf of docs) {
+    const inputs = wf.on.workflow_call.inputs;
+    for (const job of Object.values(wf.jobs)) {
+      for (const step of job.steps ?? []) {
+        const run = step.run ?? "";
+        const cond = `${step.if ?? ""} ${step.env?.SCRIPT_NAME ?? ""}`;
+        const positional = /run-consumer-or\.sh" \x27([^\x27]+)\x27/.exec(run);
+        if (positional) { console.log(`${positional[1]}\t${cond}`); continue; }
+        if (!/run-script\.sh/.test(run)) continue;
+        const name = String(step.env?.SCRIPT_NAME ?? "");
+        if (!name.includes("${{")) { console.log(`${name}\t${cond}`); continue; }
+        for (const m of name.matchAll(/inputs\.([a-z-]+-script)/g)) console.log(`${inputs[m[1]].default}\t${cond}`);
+      }
+    }
+  }
+});'
 }
 
-# Every target reachable from `make TARGET` in the consumer, following
-# prerequisites transitively. Parsed rather than executed: running `make` here
-# would run the gates themselves.
-make_reachable() {
-  MAKE_START="$1" node -e '
-const fs = require("node:fs");
-const src = fs.readFileSync(process.argv[1], "utf8");
-const deps = new Map();
-for (const line of src.split("\n")) {
-  // `target: dep dep ## description` - recipe lines are indented, so a
-  // leading-space line is never a rule.
-  const m = /^([A-Za-z0-9_-]+):([^=]*)$/.exec(line);
-  if (!m) continue;
-  const rhs = m[2].split("##")[0].trim();
-  deps.set(m[1], rhs ? rhs.split(/\s+/) : []);
-}
-const seen = new Set();
-const walk = (t) => {
-  if (seen.has(t)) return;
-  seen.add(t);
-  for (const d of deps.get(t) || []) walk(d);
-};
-walk(process.env.MAKE_START);
-console.log([...seen].join("\n"));
-' "$CONSUMER/Makefile"
-}
-
-# The recipe text of every target reachable from `make TARGET`, so a script
-# name can be looked for in what those recipes actually run.
-make_recipes() {
-  MAKE_TARGETS="$(make_reachable "$1" | tr '\n' ' ')" node -e '
-const fs = require("node:fs");
-const want = new Set(process.env.MAKE_TARGETS.trim().split(/\s+/));
+@test "every script a checks or unit step runs has a contract requirement gated on that step's input" {
+  command -v yq >/dev/null || skip "yq not installed"
+  steps="$(ci_steps)"
+  [ "$(grep -c . <<<"$steps")" -ge 15 ] || fail "parsed only '$steps' - has the step shape changed?"
+  problems="$(STEPS="$steps" node -e '
+const c = require(process.argv[1]);
 const out = [];
-let current = null;
-for (const line of fs.readFileSync(process.argv[1], "utf8").split("\n")) {
-  const m = /^([A-Za-z0-9_-]+):([^=]*)$/.exec(line);
-  if (m) { current = m[1]; continue; }
-  if (current && /^\s/.test(line) && want.has(current)) out.push(line);
+for (const line of process.env.STEPS.split("\n")) {
+  const [script, cond] = line.split("\t");
+  // unit.yml falls back to plain `test` when coverage is off; the contract
+  // names test:coverage for that step, gated on the same input.
+  if (script === "test") continue;
+  const req = c.requirements.find((r) => ["package-script", "script-or-dep"].includes(r.kind) && r.target === script);
+  if (!req) { out.push(`${script}: no requirement in contract.json`); continue; }
+  if (req.toggle && !cond.includes(`inputs.${req.toggle.split(":")[1]}`)) out.push(`${script}: contract toggle ${req.toggle} is not what switches the step (${cond.trim()})`);
 }
 console.log(out.join("\n"));
-' "$CONSUMER/Makefile"
+' "$REPO_ROOT/packages/dev-config/contract.json")"
+  [ -z "$problems" ] || fail "contract.json disagrees with the workflows:
+$problems"
 }
 
-@test "every script CI runs is reachable from the consumer's make ci" {
-  require_consumer
+@test "every checks or unit script requirement in the contract is run by some step" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ -f "$CONSUMER/Makefile" ] || parity_skip "no Makefile at $CONSUMER - cannot compare the two gate sets"
-
-  names="$(ci_script_names)"
-  [ "$(grep -c . <<<"$names")" -ge 10 ] \
-    || fail "parsed only '$names' from the workflow YAML - has the step shape changed?"
-
-  recipes="$(make_recipes ci)"
-  [ -n "$recipes" ] || fail "parsed no recipe lines from $CONSUMER/Makefile's ci target"
-
-  targets="$(make_reachable ci)"
-  missing=()
-  while read -r name; do
-    [ -n "$name" ] || continue
-    # Three ways a CI script can be reachable locally:
-    #   1. a recipe runs it by name          (`pnpm typecheck`)
-    #   2. a recipe runs its dashed spelling  (rare, but cheap to allow)
-    #   3. it maps onto a make target of the dashed name, which is how the
-    #      make-wrapping scripts work: `check:release` is `make check-release`,
-    #      whose recipe mentions neither spelling.
-    alt="${name//:/-}"
-    grep -qF -- "$name" <<<"$recipes" && continue
-    grep -qF -- "$alt" <<<"$recipes" && continue
-    grep -qxF -- "$alt" <<<"$targets" && continue
-    missing+=("$name")
-  done <<<"$names"
-
-  [ "${#missing[@]}" -eq 0 ] || fail "CI runs these, and \`make ci\` in $CONSUMER does not reach them: ${missing[*]}
-This is the drift the gate inventory exists to stop: a gate CI makes that a
-developer cannot run locally with one command."
+  names="$(ci_steps | cut -f1 | sort -u)"
+  stale="$(NAMES="$names" node -e '
+const c = require(process.argv[1]);
+const names = new Set(process.env.NAMES.split("\n"));
+console.log(c.requirements
+  .filter((r) => ["package-script", "script-or-dep"].includes(r.kind) && ["checks", "unit"].includes(r.profile))
+  .filter((r) => !names.has(r.target)).map((r) => r.id).join(" "));
+' "$REPO_ROOT/packages/dev-config/contract.json")"
+  [ -z "$stale" ] || fail "contract.json requires scripts no checks/unit step runs: $stale"
 }
 
-@test "every gate the consumer's make check runs has a CI step" {
-  require_consumer
+@test "the contract's App Review names are exactly the secrets fastlane-lane.yml passes" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ -f "$CONSUMER/Makefile" ] || parity_skip "no Makefile at $CONSUMER - cannot compare the two gate sets"
-
-  # The direction that would have caught all four orphans. Each entry is a
-  # marker that appears in a `make check` recipe, paired with the CI script name
-  # that must exist for it. A gate added to `make check` with no CI step is the
-  # failure being prevented, so a new row here is part of adding a gate.
-  recipes="$(make_recipes check)"
-  names="$(ci_script_names)"
-  for pair in \
-    'pnpm typecheck|typecheck' \
-    'pnpm lint|lint' \
-    'pnpm format:check|format:check' \
-    'pnpm spell|spell' \
-    'pnpm i18n:check|i18n:check' \
-    'pnpm codegen:check|codegen:check' \
-    'pnpm deps:check|deps:check' \
-    'pnpm deps:audit|deps:audit' \
-    'pnpm deps:licenses|deps:licenses' \
-    'check-docs|check:docs' \
-    'check-ci|check:ci' \
-    'check-release|check:release'; do
-    marker="${pair%%|*}"
-    script="${pair##*|}"
-    if grep -qF -- "$marker" <<<"$recipes"; then
-      grep -qxF "$script" <<<"$names" \
-        || fail "\`make check\` runs '$marker' but no CI step calls '$script' - that gate would run on developer machines and nowhere else"
-    fi
-  done
+  declared="$(yq -r '.on.workflow_call.secrets | keys | .[] | select(test("^APP_REVIEW_"))' \
+    "$REPO_ROOT/.github/workflows/fastlane-lane.yml" | sort)"
+  contract="$(node -e '
+const c = require(process.argv[1]);
+console.log(c.requirements.find((r) => r.id === "lane.app-review-env").target.slice().sort().join("\n"));
+' "$REPO_ROOT/packages/dev-config/contract.json")"
+  [ "$(grep -c . <<<"$declared")" -ge 7 ] || fail "found only '$declared' in fastlane-lane.yml"
+  [ "$declared" = "$contract" ] || fail "fastlane-lane.yml passes:
+$declared
+contract.json lists:
+$contract"
 }
 
 # --- a caller must grant what the workflow it calls asks for -----------------

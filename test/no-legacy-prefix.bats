@@ -22,10 +22,10 @@ load test_helper
 # match today's names would make them lie about their own past.
 legacy_hits() {
   cd "$REPO_ROOT" || return 1
-  # `git ls-files`, not a directory walk: self-ci.yml's parity job checks the
-  # consumer repository out into .template/ *inside* this workspace, and a walk
-  # then reads another repository's files - including its dated plan archives,
-  # which name the old prefix on purpose. Tracked files are exactly this repo.
+  # `git ls-files`, not a directory walk: a walk also reads whatever else sits in
+  # the workspace (a consumer checked out beside this one by a smoke run, with
+  # its dated plan archives that name the old prefix on purpose). Tracked files
+  # are exactly this repo.
   #
   # CHANGELOG.md is excluded for the same reason as the archives: release-please
   # generates it from commit subjects, and those subjects are what they were

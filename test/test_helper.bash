@@ -31,25 +31,6 @@ fail() {
 contains() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
 not_contains() { case "$1" in *"$2"*) return 1 ;; *) return 0 ;; esac; }
 
-# parity_skip MESSAGE - skip a cross-repo parity case, unless CI insists.
-#
-# Several cases here compare a script in this repo against the consumer's own
-# copy of it, which means they need a checkout of the template repo. This repo
-# serves any consumer, so it has no business guessing where one sits on a
-# particular machine: without $WORKFLOWS_TEMPLATE_DIR the case skips, and the message
-# says the parity was NOT verified rather than implying the copies agree.
-#
-# On a laptop a skip is the right answer. In CI it is the exact failure this
-# whole mechanism exists to prevent - a check that silently runs against nothing
-# and reports green - so self-ci.yml sets WORKFLOWS_PARITY_REQUIRED=1 and a would-be
-# skip becomes a failure instead.
-parity_skip() {
-  if [ "${WORKFLOWS_PARITY_REQUIRED:-0}" = "1" ]; then
-    fail "WORKFLOWS_PARITY_REQUIRED=1 but this case cannot run: $*"
-  fi
-  skip "$*"
-}
-
 # The three variables that decide *where* a script writes, cleared for every
 # test in every file.
 #

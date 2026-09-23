@@ -10,9 +10,7 @@
 load test_helper
 
 setup() {
-  # consumer_root() is GITHUB_WORKSPACE + WORKING_DIRECTORY, not
-  # WORKFLOWS_CONSUMER_ROOT (that one points the *tests* at a checkout, not the
-  # scripts at a consumer).
+  # consumer_root() is GITHUB_WORKSPACE + WORKING_DIRECTORY.
   ROOT="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$ROOT"
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR" WORKING_DIRECTORY=consumer

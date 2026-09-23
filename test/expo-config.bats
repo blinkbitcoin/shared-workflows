@@ -65,7 +65,6 @@ cache_setup() {
   export RUNNER_TEMP
   ROOT="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$ROOT"
-  export WORKFLOWS_CONSUMER_ROOT="$ROOT"
   export GITHUB_SHA=cafebabe
   STUB="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$STUB"

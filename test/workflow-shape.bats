@@ -204,29 +204,12 @@ lane_step_count() {
 # They are secrets rather than build-env/env-json values because a reviewer demo
 # login is a real credential and both of those inputs are printed to the log.
 #
-# Which copy of shared.rb to read is the whole question. The committed fixture is
-# a snapshot, and a snapshot cannot go stale loudly: it had drifted to 368 lines
-# against a real file of 457, and the `-ge 7` floor below catches an *emptied*
-# fixture, never an outdated one. So a real checkout wins whenever there is one,
-# and the fixture is the fallback that says so.
-template_lanes() {
-  if [ -n "${WORKFLOWS_TEMPLATE_DIR:-}" ] && [ -f "$WORKFLOWS_TEMPLATE_DIR/fastlane/lanes/shared.rb" ]; then
-    printf '%s' "$WORKFLOWS_TEMPLATE_DIR/fastlane/lanes/shared.rb"
-  else
-    printf '%s' "$FIXTURES/consumer-min/fastlane/lanes/shared.rb"
-  fi
-}
-
-@test "fastlane-lane's App Review secrets are exactly the names the template's lanes read" {
-  TEMPLATE_LANES="$(template_lanes)"
-  [ -f "$TEMPLATE_LANES" ] || fail "no template lanes at $TEMPLATE_LANES"
-  case "$TEMPLATE_LANES" in
-    "$FIXTURES"/*)
-      # Not a failure - the check still runs - but the thing it runs against is a
-      # snapshot that nothing keeps current.
-      echo "# checked against the committed fixture, NOT a template checkout: set WORKFLOWS_TEMPLATE_DIR" >&3
-      ;;
-  esac
+# Read from the fixture consumer's lanes, which is what the guide's examples are
+# built from. A real consumer's lanes are held to the same names by its own
+# Contract job (lane.app-review-env in contract.json).
+@test "fastlane-lane's App Review secrets are exactly the names the fixture's lanes read" {
+  TEMPLATE_LANES="$FIXTURES/consumer-min/fastlane/lanes/shared.rb"
+  [ -f "$TEMPLATE_LANES" ] || fail "no fixture lanes at $TEMPLATE_LANES"
   wanted="$(grep -oE "ENV\['APP_REVIEW_[A-Z0-9_]*'\]" "$TEMPLATE_LANES" |
     sed "s/ENV\['//; s/'\]//" | sort -u)"
   [ "$(grep -c . <<<"$wanted")" -ge 7 ] \
@@ -236,12 +219,12 @@ template_lanes() {
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$declared" \
-      || fail "the template's lanes read $name but fastlane-lane.yml does not declare it"
+      || fail "the fixture's lanes read $name but fastlane-lane.yml does not declare it"
   done <<<"$wanted"
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$wanted" \
-      || fail "fastlane-lane.yml declares $name but no lane in the template reads it"
+      || fail "fastlane-lane.yml declares $name but no lane in the fixture reads it"
   done <<<"$declared"
 }
 
@@ -254,24 +237,6 @@ template_lanes() {
     grep -qxF "$name" <<<"$declared" \
       || fail "fastlane-lane.yml does not declare $name"
   done
-}
-
-# The fixture above is a snapshot of a file that lives in another repo, and a
-# snapshot has no way to notice that it has fallen behind: it had drifted to 368
-# lines against a real file of 457 before anything looked. This is what makes the
-# staleness loud, in the one dimension the fixture is actually used for.
-@test "the committed lanes fixture still carries the same App Review names as the template" {
-  template_dir="${WORKFLOWS_TEMPLATE_DIR:-}"
-  [ -n "$template_dir" ] || parity_skip "fixture freshness NOT verified: set WORKFLOWS_TEMPLATE_DIR to a template checkout"
-  real="$template_dir/fastlane/lanes/shared.rb"
-  [ -f "$real" ] || parity_skip "fixture freshness NOT verified: no lanes at $real (set WORKFLOWS_TEMPLATE_DIR)"
-  fixture="$FIXTURES/consumer-min/fastlane/lanes/shared.rb"
-  names() { grep -oE "ENV\['APP_REVIEW_[A-Z0-9_]*'\]" "$1" | sed "s/ENV\['//; s/'\]//" | sort -u; }
-  [ "$(names "$fixture")" = "$(names "$real")" ] || fail "the lanes fixture is stale - refresh it from the template:
---- fixture ($fixture) ---
-$(names "$fixture")
---- template ($real) ---
-$(names "$real")"
 }
 
 @test "every workflow that runs prebuild, a lane or the notes generator accepts build-env" {

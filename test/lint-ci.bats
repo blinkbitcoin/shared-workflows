@@ -82,3 +82,37 @@ scripts() {
   [[ "$output" == *"nothing to lint"* ]] || fail "assertion failed; output: $output"
   [ ! -s "$MISE_LOG" ]
 }
+
+@test "runs zizmor offline at medium severity when the consumer has workflows" {
+  workflows
+  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ]
+  line="$(grep zizmor "$MISE_LOG")" || fail "zizmor did not run: $(cat "$MISE_LOG")"
+  [[ "$line" == *"--offline"* && "$line" == *"--min-severity medium"* ]] \
+    || fail "zizmor ran without the deterministic flags: $line"
+}
+
+@test "WORKFLOWS_ZIZMOR=false disables only the zizmor half" {
+  workflows
+  WORKFLOWS_ZIZMOR=false run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ]
+  grep -q actionlint "$MISE_LOG"
+  ! grep -q zizmor "$MISE_LOG" || fail "zizmor ran with WORKFLOWS_ZIZMOR off: $(cat "$MISE_LOG")"
+}
+
+@test "a consumer without a zizmor config gets this family's policy" {
+  workflows
+  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ]
+  grep zizmor "$MISE_LOG" | grep -qF -- "--config $REPO_ROOT/.github/zizmor.yml" \
+    || fail "fallback policy not passed: $(grep zizmor "$MISE_LOG")"
+}
+
+@test "a consumer's own zizmor config wins over the family's" {
+  workflows
+  printf 'rules: {}\n' > "$GITHUB_WORKSPACE/.github/zizmor.yml"
+  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ]
+  ! grep zizmor "$MISE_LOG" | grep -qF -- "--config" \
+    || fail "overrode the consumer's own zizmor.yml: $(grep zizmor "$MISE_LOG")"
+}
