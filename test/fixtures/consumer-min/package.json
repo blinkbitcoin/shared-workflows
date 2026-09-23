@@ -51,6 +51,7 @@
     "check-prebuild": "node -e 0",
     "check-bundle-secrets": "node -e 0",
     "check:bundle-secrets": "node -e 0",
-    "check:ci": "node -e 0"
+    "check:ci": "node -e 0",
+    "check:secrets": "node -e 0"
   }
 }

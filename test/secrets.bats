@@ -22,6 +22,9 @@ STUB
 
 repo_with_two_commits() {
   git init -q "$1"
+  # A runner has no global identity; set one per repo, like the other suites.
+  git -C "$1" config user.email test@example.com
+  git -C "$1" config user.name test
   git -C "$1" commit -q --allow-empty -m one
   git -C "$1" commit -q --allow-empty -m two
 }
