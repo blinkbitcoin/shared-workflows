@@ -311,7 +311,7 @@
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Every package script the checks and unit workflows run for your caller must be reachable from `make ci`, by name or through a target of the dashed name (check:docs is make check-docs). Add the gate to a target `make ci` reaches, or switch it off in your caller. No Makefile, or no ci target, and this is skipped.",
+      "fix": "Every package script the check-code and check-unit workflows run for your caller must be reachable from `make ci`, by name or through a target of the dashed name (check:docs is make check-docs). Add the gate to a target `make ci` reaches, or switch it off in your caller. No Makefile, or no ci target, and this is skipped.",
       "guide": "the-contract-check"
     },
     {

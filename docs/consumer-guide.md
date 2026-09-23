@@ -148,7 +148,7 @@ Beyond scripts and files, it holds two things together that only your
 repository can see:
 
 - **`make ci` and CI run the same gates**, in both directions. Every package
-  script the checks and unit workflows run for your caller must be reachable
+  script the check-code and check-unit workflows run for your caller must be reachable
   from `make ci`. Every target `make ci` reaches with a recipe of its own must
   be run by CI, named like a script CI runs or running only pnpm scripts CI
   runs. No `Makefile` or no `ci` target, and both are skipped.

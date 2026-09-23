@@ -433,7 +433,7 @@ export function readMakefile(root, io = defaultIo) {
 
 /**
  * The package scripts CI runs for this caller, from the contract itself: every
- * script requirement of the checks and unit workflows whose workflow is called
+ * script requirement of the check-code and check-unit workflows whose workflow is called
  * and whose toggle is on. `on` holds the toggles known to be on; `maybe` adds
  * the ones wired to an expression, so neither direction of the gate-set check
  * fails on a value it cannot read.

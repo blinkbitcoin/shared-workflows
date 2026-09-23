@@ -27,7 +27,7 @@ on:
     # Actions cron stampede.
     - cron: '17 6 * * 1'
 # `secrets: inherit` is deliberately absent: the default consumer is public,
-# so the checks/unit/e2e workflows fall back to `github.token` for their
+# so the check-code/check-unit/check-e2e workflows fall back to `github.token` for their
 # consumer checkouts. If the smoke target ever becomes a private repository,
 # add a repo secret `SMOKE_TOKEN` (a PAT with read access to that repository)
 # and pass it below as `secrets: { consumer-token: ${{ secrets.SMOKE_TOKEN }} }`
