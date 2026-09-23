@@ -168,8 +168,20 @@ Every row is a make target; nothing here is run through a package manager.
   toggles, fixtures, diagrams, and prose. Before pushing, `git grep` the old name
   without its suffix; only `CHANGELOG.md` and `docs/superpowers/` may still
   hold it.
-- **Docs ship with the code.** Adding or removing a `##`-documented make target
-  without updating the command table above is a hard failure.
+- **Docs and diagrams ship in the same PR as the change, never as a
+  follow-up.** Any change to a name, input, output, job, file, flow, count or
+  default updates every doc that describes it, in the same PR: prose, tables,
+  README and AGENTS.md, and every diagram (mermaid blocks, ASCII drawings in
+  code fences, SVGs under `docs/assets/`). Before pushing, `git grep` each
+  thing the diff renamed or changed, spelled every way a reader would meet it
+  (with and without `.yml`, the display name, the job name), and read each
+  diagram that shows the part you touched; a diagram that still draws the old
+  flow is drift even when no text search finds it. The PR description names
+  the docs it updated, or says why none needed to change. Mechanically
+  enforced on top: adding or removing a `##`-documented make target without
+  updating the command table above is a hard failure, and so is a
+  `<!--count:...-->` marker that disagrees with the tree
+  (`test/docs-facts.bats`).
 
 ## Testing map
 
