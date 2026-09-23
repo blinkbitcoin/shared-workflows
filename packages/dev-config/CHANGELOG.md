@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.3.0...dev-config-v0.3.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **checks:** add zizmor and a gitleaks history scan, and check every make ci gate runs in CI ([#62](https://github.com/blinkbitcoin/shared-workflows/issues/62)) ([20ee209](https://github.com/blinkbitcoin/shared-workflows/commit/20ee20946eba1aeab89150cbf1c403dab8736a30))
+
 ## [0.3.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.2.0...dev-config-v0.3.0) (2026-09-22)
 
 
