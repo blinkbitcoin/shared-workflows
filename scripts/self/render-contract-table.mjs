@@ -55,6 +55,9 @@ export function targetOf(req) {
       : `${quoted.slice(0, -1).join(', ')} ${conjunction} ${quoted.at(-1)}`;
   if (req.kind === 'mise-tool') return `${joined} in your mise config`;
   if (req.kind === 'fastlane-lane') return `the ${joined} lanes`;
+  if (req.kind === 'make-ci-reaches-ci') return 'every gate CI runs, reachable from `make ci`';
+  if (req.kind === 'ci-runs-make-ci') return 'every gate `make ci` runs, run by CI';
+  if (req.kind === 'fastlane-env-subset') return `lanes that read only these \`${req.prefix}*\` names: ${joined}`;
   return joined;
 }
 

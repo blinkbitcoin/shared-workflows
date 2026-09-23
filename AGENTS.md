@@ -164,27 +164,21 @@ Every row is a make target; nothing here is run through a package manager.
 | Pure bash scripts | `test/*.bats` | `make test` |
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
-| The consumer contract (guide ↔ fixtures ↔ real caller) | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
+| The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
+| The contract checker's rules, including a consumer's make-ci gate set against CI and the lane secret names | `packages/dev-config/check-consumer-contract.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
 | That every script is executed by some test, or allow-listed with a reason | `test/script-coverage.bats` | `make test` |
-| Parity with the consumer's own copy of a shared script | `test/resolve-version.bats`, `test/build-info.bats`, `test/workflow-shape.bats` | `make test` **with `WORKFLOWS_TEMPLATE_DIR` set** |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
 
-Two variables point the suite at a real consumer, and both are worth setting
-together — that is the configuration `self-ci.yml`'s `parity` job uses:
-
-```sh
-WORKFLOWS_TEMPLATE_DIR=~/Dev/blink/react-native-mobile-template \
-WORKFLOWS_CONSUMER_ROOT=~/Dev/blink/react-native-mobile-template \
-  mise exec -- bats test/
-```
-
-`WORKFLOWS_CONSUMER_ROOT` is what `consumer-contract.bats` reads; `WORKFLOWS_TEMPLATE_DIR`
-is what the parity cases read. **Without them eight cases skip**, saying `parity
-NOT verified` rather than implying the copies agree. `WORKFLOWS_PARITY_REQUIRED=1`
-turns such a skip into a failure, which is what makes the CI job honest.
+**Nothing here checks out a consumer.** The suite reads this repository and
+`test/fixtures/consumer-min` only. A consumer is held to the contract by its own
+`Contract` job, against the version of this repository it calls, and it is the
+consumer's PR that fails when it drifts - see "The contract check" in
+`docs/consumer-guide.md`. A rule that spans this repository and its consumers is
+a `contract.json` requirement, never a test here that reads another
+repository's checkout.
 
 ## Where to look next
 

@@ -110,6 +110,51 @@ Two levels, and the difference matters:
   `check:ci`, `i18n:check` and `codegen:check` are the five that degrade; see
   [Script contract](#script-contract) for why that seam exists.
 
+**It is your repository that fails, never this one.** The check runs in your
+CI, from the version of shared-workflows your caller pins, so moving to a new
+`v0` is also when a new requirement starts to apply. shared-workflows' own CI
+never checks out a consumer. It tests the checker against fixture consumers and
+holds `contract.json` to its own workflows:
+
+```mermaid
+flowchart LR
+  subgraph app["your repository"]
+    pr["a push or a PR"]
+    caller["ci.yml calls checks.yml@v0"]
+    tree["package.json, Makefile, .mise.toml,<br/>the callers' with: toggles, fastlane/"]
+  end
+  subgraph run["your Checks run"]
+    contract["Contract job"]
+    gates["every other Checks job"]
+  end
+  subgraph shared["shared-workflows at the pinned commit"]
+    data["contract.json"]
+    checker["check-consumer-contract.mjs"]
+  end
+  subgraph self["shared-workflows' own CI"]
+    fixtures["fixture consumers, aligned and misaligned"]
+    bind["contract.json against its own workflows"]
+  end
+  pr --> caller --> contract
+  contract -->|"checks out .workflows at job.workflow_sha"| checker
+  data --> checker
+  tree --> checker
+  checker -->|"a requirement you do not meet: your PR fails"| gates
+  fixtures --> checker
+  bind --> data
+```
+
+Beyond scripts and files, it holds two things together that only your
+repository can see:
+
+- **`make ci` and CI run the same gates**, in both directions. Every package
+  script the checks and unit workflows run for your caller must be reachable
+  from `make ci`. Every target `make ci` reaches with a recipe of its own must
+  be run by CI, named like a script CI runs or running only pnpm scripts CI
+  runs. No `Makefile` or no `ci` target, and both are skipped.
+- **Your lanes read only the `APP_REVIEW_*` names `fastlane-lane.yml` passes.**
+  A name it does not pass is always empty on a runner.
+
 **It only reports what applies to you.** It reads your own `.github/workflows/`
 first: a repository that never calls `e2e.yml` is not told it is missing
 `.maestro/`, and a gate you passed `false` for is not a finding.

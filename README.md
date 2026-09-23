@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->15<!--/count--> reusable workflows · <!--count:scripts-->90<!--/count--> scripts · <!--count:tests-->625<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->15<!--/count--> reusable workflows · <!--count:scripts-->90<!--/count--> scripts · <!--count:tests-->618<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -171,7 +171,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Workflow           | Jobs                              | What it does                                                                                   |
 | ------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `self-ci.yml`      | `Check`<br>`Parity`<br>`PR title` | actionlint, shellcheck, bats, version agreement, spell; then this repo against a real consumer |
+| `self-ci.yml`      | `Check`<br>`PR title` | actionlint, zizmor, shellcheck, bats, version agreement, spell, gitleaks - this repository only |
 | `self-smoke.yml`   | `Checks`<br>`Unit`<br>`E2E`       | Runs the family against a real consumer repo. Weekly, and on dispatch                          |
 | `self-act-smoke.yml` | `Prepare`<br>`Build Android` | The Linux release jobs against the template, run on a laptop with act (`make smoke-local`). Dispatch-only, never run on GitHub |
 | `self-release.yml` | `Release PR`<br>`Major tag`<br>`Publish dev-config` | release-please maintains the version PR; on release, `v0` and `v0.<minor>` move and the npm package publishes |
@@ -191,7 +191,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table |
-| `test/`                | <!--count:bats-files-->71<!--/count--> bats files, <!--count:tests-->625<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->71<!--/count--> bats files, <!--count:tests-->618<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 

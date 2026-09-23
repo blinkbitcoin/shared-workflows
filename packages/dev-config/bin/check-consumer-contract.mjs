@@ -330,9 +330,126 @@ export function checkRequirement(req, consumer) {
       return absent.length === 0 ? ok() : missing(`fastlane defines no lane named ${absent.map((l) => l.split(':')[1]).join(', ')}`);
     }
 
+    case 'make-ci-reaches-ci': {
+      // CI runs a gate `make ci` cannot reach: a developer has no one command
+      // that makes the same checks CI does.
+      const make = readMakefile(root, io);
+      if (make === null) return skip('no Makefile');
+      if (!make.rules.has(req.target)) return skip(`the Makefile has no ${req.target} target`);
+      const targets = make.reachable(req.target);
+      const recipes = [...targets].map((t) => make.rules.get(t)?.recipe ?? '').join('\n');
+      const unreached = [...consumer.ciScripts.on].filter((name) => {
+        const dashed = name.replaceAll(':', '-');
+        return !(recipes.includes(name) || recipes.includes(dashed) || targets.has(dashed));
+      });
+      return unreached.length === 0
+        ? ok()
+        : missing(`CI runs ${unreached.map((n) => `"${n}"`).join(', ')}, and \`make ${req.target}\` does not reach ${unreached.length === 1 ? 'it' : 'them'}`);
+    }
+
+    case 'ci-runs-make-ci': {
+      // The other direction: `make ci` runs a gate no CI step runs, so a green
+      // laptop claims coverage CI does not have. Every target it reaches with a
+      // recipe of its own must be a CI script by its dashed name, or run only
+      // pnpm scripts CI runs. An aggregate has no recipe; its prerequisites are
+      // visited on their own.
+      const make = readMakefile(root, io);
+      if (make === null) return skip('no Makefile');
+      if (!make.rules.has(req.target)) return skip(`the Makefile has no ${req.target} target`);
+      const inCi = consumer.ciScripts.maybe;
+      const dashed = new Set([...inCi].map((n) => n.replaceAll(':', '-')));
+      const orphans = [];
+      for (const target of make.reachable(req.target)) {
+        const recipe = make.rules.get(target)?.recipe ?? '';
+        if (recipe === '' || dashed.has(target)) continue;
+        const scripts = [...recipe.matchAll(/pnpm (?:run )?([A-Za-z0-9:_-]+)/g)].map((m) => m[1]);
+        if (scripts.length === 0) orphans.push(target);
+        for (const s of scripts) if (!inCi.has(s)) orphans.push(`${target} (pnpm ${s})`);
+      }
+      return orphans.length === 0
+        ? ok()
+        : missing(`\`make ${req.target}\` runs ${orphans.join(', ')}, and no CI step does`);
+    }
+
+    case 'fastlane-env-subset': {
+      // A lane reading an environment variable the lane workflow never passes
+      // gets an empty string, and fastlane uploads the empty value.
+      const text = collectRuby(path.join(root, 'fastlane'), io);
+      if (text === null) return skip('no fastlane/');
+      const prefix = req.prefix;
+      const read = new Set(
+        [...text.matchAll(/ENV(?:\.fetch\(|\[)\s*['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]).filter((n) => n.startsWith(prefix)),
+      );
+      const unknown = [...read].filter((n) => !req.target.includes(n)).sort();
+      return unknown.length === 0
+        ? ok(`${read.size} ${prefix}* names`)
+        : missing(`the lanes read ${unknown.join(', ')}, which fastlane-lane.yml does not pass`);
+    }
+
     default:
       return skip(`unknown kind: ${req.kind}`);
   }
+}
+
+/**
+ * The consumer's Makefile as `{ rules, reachable(target) }`: each rule's
+ * prerequisites and recipe text, and every target a `make TARGET` reaches by
+ * following prerequisites. Parsed, not run - running `make` here would run the
+ * gates themselves. `null` when there is no Makefile.
+ */
+export function readMakefile(root, io = defaultIo) {
+  const text = io.read(path.join(root, 'Makefile'));
+  if (text === null) return null;
+  const rules = new Map();
+  let current = null;
+  for (const line of text.split('\n')) {
+    // `target: dep dep ## description`. A recipe line is indented, so a line
+    // with leading whitespace is never a rule, and `:=` is an assignment.
+    const rule = /^([A-Za-z0-9_-]+):([^=]*)$/.exec(line);
+    if (rule) {
+      const rhs = rule[2].split('##')[0].trim();
+      current = { deps: rhs ? rhs.split(/\s+/) : [], recipe: '' };
+      rules.set(rule[1], current);
+      continue;
+    }
+    if (current && /^\s/.test(line) && line.trim() !== '') {
+      current.recipe += `${line}\n`;
+    } else if (!/^\s/.test(line) && line.trim() !== '' && !line.startsWith('#')) {
+      current = null;
+    }
+  }
+  const reachable = (start) => {
+    const seen = new Set();
+    const walk = (t) => {
+      if (seen.has(t)) return;
+      seen.add(t);
+      for (const d of rules.get(t)?.deps ?? []) walk(d);
+    };
+    walk(start);
+    return seen;
+  };
+  return { rules, reachable };
+}
+
+/**
+ * The package scripts CI runs for this caller, from the contract itself: every
+ * script requirement of the checks and unit workflows whose workflow is called
+ * and whose toggle is on. `on` holds the toggles known to be on; `maybe` adds
+ * the ones wired to an expression, so neither direction of the gate-set check
+ * fails on a value it cannot read.
+ */
+export function ciScripts(contract, uses, inputs, profiles) {
+  const active = activeProfiles(uses, profiles);
+  const on = new Set();
+  const maybe = new Set();
+  for (const req of contract.requirements) {
+    if (!['package-script', 'script-or-dep'].includes(req.kind)) continue;
+    if (!['checks', 'unit'].includes(req.profile) || !active.has(req.profile)) continue;
+    const state = toggleOn(req, inputs);
+    if (state === true) on.add(req.target);
+    if (state !== false) maybe.add(req.target);
+  }
+  return { on, maybe };
 }
 
 function collectRuby(dir, io, depth = 0) {
@@ -354,6 +471,7 @@ const skip = (reason) => ({ status: 'skip', reason });
 /** Every requirement, resolved against one consumer. */
 export function check(contract, consumer, { profiles } = {}) {
   const active = activeProfiles(consumer.uses, profiles);
+  consumer.ciScripts = ciScripts(contract, consumer.uses, consumer.inputs, profiles);
   return contract.requirements.map((req) => {
     if (!active.has(req.profile)) {
       return { req, level: 'skip', reason: `${req.profile} workflows are not called from this repository` };
@@ -382,11 +500,21 @@ export function check(contract, consumer, { profiles } = {}) {
 
 export function formatResult(result) {
   const { req, level, reason, detail } = result;
-  const name = Array.isArray(req.target) ? req.target[0] : req.target;
+  const name = nameOf(req);
   if (level === 'ok') return `ok    ${name}${detail ? ` (${detail})` : ''}`;
   if (level === 'skip') return `skip  ${name}: ${reason}`;
   const label = level === 'fail' ? 'FAIL' : 'warn';
   return `${label}  ${name}: ${reason}. Fix: ${req.fix}`;
+}
+
+/**
+ * How a finding is named. A rule whose target is not the thing it is about -
+ * `make ci` for the gate-set rules, a list of names for the lane rule - carries
+ * a `label` of its own.
+ */
+function nameOf(req) {
+  if (req.label) return req.label;
+  return Array.isArray(req.target) ? req.target[0] : req.target;
 }
 
 const GUIDE = 'https://github.com/blinkbitcoin/shared-workflows/blob/v0/docs/consumer-guide.md';
@@ -400,7 +528,7 @@ export function summaryTable(results) {
   }
   lines.push('| | Requirement | Needed by | What to do |', '| --- | --- | --- | --- |');
   for (const { req, level, reason } of notable) {
-    const name = Array.isArray(req.target) ? req.target.join(' / ') : req.target;
+    const name = req.label ?? (Array.isArray(req.target) ? req.target.join(' / ') : req.target);
     const icon = level === 'fail' ? '**blocked**' : 'degraded';
     lines.push(`| ${icon} | \`${name}\`<br>${reason} | ${req.neededBy} | ${req.fix} [Contract](${GUIDE}#${req.guide}) |`);
   }

@@ -9,6 +9,7 @@ import {
   formatResult,
   parseMiseTools,
   readContract,
+  readMakefile,
   skeleton,
   summaryTable,
   toggleOn,
@@ -59,6 +60,9 @@ test('every requirement declares the fields the report depends on', () => {
     'ignores-workflows-or-narrow',
     'caller-path',
     'fastlane-lane',
+    'make-ci-reaches-ci',
+    'ci-runs-make-ci',
+    'fastlane-env-subset',
   ]);
   const profiles = new Set(readContract().profiles);
   for (const r of readContract().requirements) {
@@ -315,4 +319,126 @@ test('a clean consumer gets a summary that says so rather than an empty table', 
   const table = summaryTable([{ req: req('script.lint'), level: 'ok' }]);
   assert.doesNotMatch(table, /\| --- \|/);
   assert.match(table, /satisfied/);
+});
+
+// --- make ci and CI run the same gates ---------------------------------------
+//
+// These are the rules that used to live in this repository's own bats suite and
+// ran against a checkout of one consumer's main. They run in each consumer's
+// Contract job instead, so a consumer that drifts fails its own PR.
+
+const GATE_CALLER = {
+  'ci.yml': `jobs:
+  checks:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/checks.yml@v0
+    with:
+      docs-check: false
+      spell: false
+      knip: false
+      licenses: false
+      expo-doctor: false
+      audit: false
+      actionlint: false
+      secret-scan: false
+  unit:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/unit.yml@v0
+`,
+};
+
+// With the caller above, CI runs typecheck, lint, format:check, test:coverage
+// and test:scripts - and nothing else.
+const ALIGNED_MAKEFILE = `check: typecheck lint format-check ## gates
+typecheck: ## types
+\tpnpm typecheck
+lint:
+\tpnpm lint
+format-check:
+\tpnpm format:check
+coverage:
+\tpnpm test:coverage
+test-scripts:
+\tpnpm test:scripts
+ci: check coverage test-scripts ## everything
+`;
+
+const gateResults = (makefile, callers = GATE_CALLER) => {
+  const c = consumer({ files: makefile === null ? {} : { Makefile: makefile }, callers });
+  const byId = new Map(check(readContract(), c).map((r) => [r.req.id, r]));
+  return { reaches: byId.get('gate.make-ci-reaches-ci'), runs: byId.get('gate.ci-runs-make-ci') };
+};
+
+test('an aligned Makefile passes both gate-set rules', () => {
+  const { reaches, runs } = gateResults(ALIGNED_MAKEFILE);
+  assert.equal(reaches.level, 'ok', reaches.reason);
+  assert.equal(runs.level, 'ok', runs.reason);
+});
+
+test('a make ci target no CI step runs fails, naming the target', () => {
+  const { runs } = gateResults(`${ALIGNED_MAKEFILE}check-skills:\n\tbash scripts/check-skills.sh\nci: check coverage test-scripts check-skills\n`);
+  assert.equal(runs.level, 'fail');
+  assert.match(runs.reason, /check-skills/);
+});
+
+test('a pnpm script make ci runs and CI does not fails, naming the script', () => {
+  const { runs } = gateResults(ALIGNED_MAKEFILE.replace('\tpnpm test:coverage\n', '\tpnpm test:coverage\n\tpnpm check:coverage-empty\n'));
+  assert.equal(runs.level, 'fail');
+  assert.match(runs.reason, /coverage \(pnpm check:coverage-empty\)/);
+});
+
+test('a script CI runs that make ci cannot reach fails, naming the script', () => {
+  const { reaches } = gateResults(ALIGNED_MAKEFILE.replace('ci: check coverage test-scripts', 'ci: check coverage'));
+  assert.equal(reaches.level, 'fail');
+  assert.match(reaches.reason, /"test:scripts"/);
+});
+
+test('a gate the caller switched off is neither required locally nor an orphan when present', () => {
+  // spell is off in GATE_CALLER: `make ci` need not reach it...
+  assert.equal(gateResults(ALIGNED_MAKEFILE).reaches.level, 'ok');
+  // ...but a make ci target running it is a local-only gate, which is the drift.
+  const { runs } = gateResults(`${ALIGNED_MAKEFILE}spell:\n\tpnpm spell\nci: check coverage test-scripts spell\n`);
+  assert.equal(runs.level, 'fail');
+  assert.match(runs.reason, /spell/);
+});
+
+test('a toggle wired to an expression never fails the gate-set rules', () => {
+  const callers = { 'ci.yml': GATE_CALLER['ci.yml'].replace('spell: false', 'spell: ${{ vars.SPELL }}') };
+  const withSpell = `${ALIGNED_MAKEFILE}spell:\n\tpnpm spell\nci: check coverage test-scripts spell\n`;
+  assert.equal(gateResults(withSpell, callers).runs.level, 'ok');
+  assert.equal(gateResults(ALIGNED_MAKEFILE, callers).reaches.level, 'ok');
+});
+
+test('no Makefile skips both gate-set rules rather than failing', () => {
+  const { reaches, runs } = gateResults(null);
+  assert.equal(reaches.level, 'skip');
+  assert.equal(runs.level, 'skip');
+});
+
+test('the Makefile reader follows prerequisites and keeps recipes per target', () => {
+  const c = consumer({ files: { Makefile: ALIGNED_MAKEFILE } });
+  const make = readMakefile('', c.io);
+  assert.deepEqual([...make.reachable('ci')].sort(), ['check', 'ci', 'coverage', 'format-check', 'lint', 'test-scripts', 'typecheck']);
+  assert.equal(make.rules.get('check').recipe, '');
+  assert.match(make.rules.get('coverage').recipe, /pnpm test:coverage/);
+});
+
+// --- the lanes read only the App Review names the lane workflow passes -------
+
+const laneResult = (ruby) => {
+  const c = consumer({
+    files: { 'fastlane/Fastfile': ruby },
+    dirs: ['fastlane'],
+    callers: { 'r.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/fastlane-lane.yml@v0\n' },
+  });
+  return check(readContract(), c).find((r) => r.req.id === 'lane.app-review-env');
+};
+
+test('lanes reading only passed App Review names pass', () => {
+  const result = laneResult("x = ENV['APP_REVIEW_EMAIL']\ny = ENV.fetch('APP_REVIEW_NOTES', '')\n");
+  assert.equal(result.level, 'ok', result.reason);
+});
+
+test('a lane reading an App Review name the workflow does not pass fails, naming it', () => {
+  const result = laneResult("x = ENV['APP_REVIEW_EMAIL']\ny = ENV['APP_REVIEW_COMPANY']\n");
+  assert.equal(result.level, 'fail');
+  assert.match(result.reason, /APP_REVIEW_COMPANY/);
 });

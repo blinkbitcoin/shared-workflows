@@ -168,15 +168,6 @@ JSON
   [ "$status" -eq 0 ] || fail "$output"
 }
 
-@test "the template satisfies the contract" {
-  # The parity case: this repo's idea of the contract, against the repo it was
-  # built for. A requirement added here that the template does not meet is
-  # either a real gap there or a wrong entry here, and both are worth a failure.
-  [ -n "${WORKFLOWS_CONSUMER_ROOT:-}" ] || parity_skip "no WORKFLOWS_CONSUMER_ROOT: the contract was NOT verified against a real consumer"
-  run node "$DOCTOR" --root "$WORKFLOWS_CONSUMER_ROOT"
-  [ "$status" -eq 0 ] || fail "the template does not satisfy the contract: $output"
-}
-
 @test "a broken package.json is an annotation, not a node stack trace" {
   # The failure this whole file exists to replace. A checker that answers a
   # malformed package.json with a SyntaxError and eight frames of node internals
