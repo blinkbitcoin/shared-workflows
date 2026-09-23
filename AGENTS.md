@@ -154,6 +154,20 @@ Every row is a make target; nothing here is run through a package manager.
   expand an uncommon one on first use. A prefix made of the family's initials
   was rejected for exactly this reason; so was "ids" for identifiers in a
   status message.
+- **Workflow files carry their stage in the name.** GitHub reads only the top
+  level of `.github/workflows/`, so the prefix is the only grouping there is:
+  `check-` gates every change, `build-` makes artifacts, `publish-` ships to a
+  store, a release, OTA or badges, `pr-` hooks pull request events, and `self-`
+  is this repository's own CI. A new workflow takes one of these
+  (`test/workflow-shape.bats` fails otherwise). Renaming a callable workflow
+  breaks every consumer: commit it as `feat(workflows)!:` with a
+  `BREAKING CHANGE:` footer naming old and new, and open the template PR that
+  follows it at the same time. The same PR updates every reference, not just
+  the ones spelled `.yml`: `uses:` paths, test loops over workflow names, the
+  consumer guide's headings and the anchors that point at them, `contract.json`
+  toggles, fixtures, diagrams, and prose. Before pushing, `git grep` the old name
+  without its suffix; only `CHANGELOG.md` and `docs/superpowers/` may still
+  hold it.
 - **Docs ship with the code.** Adding or removing a `##`-documented make target
   without updating the command table above is a hard failure.
 

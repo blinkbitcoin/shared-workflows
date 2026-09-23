@@ -30,6 +30,23 @@ setup() {
   done
 }
 
+# GitHub reads only the top level of .github/workflows, so the filename prefix
+# is the only grouping there is: check- (gates on every change), build-
+# (artifacts), publish- (stores, releases, OTA, badges), pr- (pull request
+# hooks) and self- (this repository's own CI). A new workflow outside them is
+# a naming decision nobody made on purpose.
+@test "every workflow file carries a stage prefix" {
+  bad=()
+  for f in "$REPO_ROOT"/.github/workflows/*; do
+    base="$(basename "$f")"
+    case "$base" in
+      check-*.yml | build-*.yml | publish-*.yml | pr-*.yml | self-*.yml) ;;
+      *) bad+=("$base") ;;
+    esac
+  done
+  [ "${#bad[@]}" -eq 0 ] || fail "workflow files without a stage prefix: ${bad[*]}"
+}
+
 @test "every declared secret is optional (required: false)" {
   for w in "${WORKFLOWS[@]}"; do
     # A required secret in a reusable workflow makes every caller declare it,
