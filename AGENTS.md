@@ -80,9 +80,10 @@ Every row is a make target; nothing here is run through a package manager.
   about, and the PR description names the tests that cover the change. Every
   script gets bats cases for each exit path (the rule below), every workflow
   rule gets a `test/workflow-shape.bats` or `test/consumer-contract.bats`
-  assertion, and `packages/dev-config` is gated by `make test-package`. A
-  threshold is never lowered and no file is excluded from coverage to make a
-  PR pass; if something truly cannot be tested, the PR says what and why.
+  assertion, and `packages/dev-config` is gated by `make test-package` at
+  100% lines, branches and functions. A threshold is never lowered and no file
+  is excluded from coverage to make a PR pass; if something truly cannot be
+  tested, the PR says what and why.
 - **Shell lives in `scripts/`, never inline in a workflow.** A `run:` block of
   more than a couple of lines is unshellcheckable, untestable and unreadable in
   a run log; give it a file under the matching `scripts/<area>/` and a bats
@@ -199,7 +200,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
-| The contract checker's rules, including a consumer's make-ci gate set against CI and the lane secret names | `packages/dev-config/check-consumer-contract.test.mjs` | `make test-package` |
+| Both dev-config programs at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, and each program's flags, messages and exit codes | `packages/dev-config/*.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |

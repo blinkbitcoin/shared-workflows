@@ -64,38 +64,59 @@ export function formatResult(result) {
   return `  MISMATCH ${name} is ${found ?? 'unreadable'}, baseline pins ${want}`;
 }
 
-// `realpathSync`, not `path.resolve` alone: node resolves symlinks when it loads
-// a module, so `import.meta.url` is the real path while `process.argv[1]` is
-// what the caller typed. A package manager installs a `bin` entry into
-// node_modules/.bin as a link, so the advertised `pnpm exec check-tool-versions`
-// made the two differ - and this guard then said "imported": no output, exit 0,
-// a version gate that silently passed. Only `node packages/.../bin/x.mjs`, the
-// path `make tool-versions` happens to use, ever ran.
-function runAsProgram() {
-  if (!process.argv[1]) return false;
+/**
+ * Runs one tool the way `checkTools` wants it run: `{ status: null }` when the
+ * command never started, the spawnSync result otherwise.
+ */
+export function runTool(name, args) {
+  const result = spawnSync(name, args, { encoding: 'utf8' });
+  // A command that never started has no exit code of its own.
+  return result.error ? { status: null } : result;
+}
+
+/**
+ * The whole program, returning its exit code. The table, the tool runner and
+ * both output streams arrive through the second argument, so the tests run
+ * every path of it in-process; the defaults are the real ones.
+ */
+export function main(
+  argv,
+  { table = readTable(), run = runTool, stdout = process.stdout, stderr = process.stderr } = {},
+) {
+  const wanted = argv.length > 0 ? argv : Object.keys(table.tools);
+  const results = checkTools(table, wanted, run);
+  for (const result of results) stdout.write(`${formatResult(result)}\n`);
+  const bad = results.filter((r) => r.status !== 'ok');
+  if (bad.length > 0) {
+    const names = bad.map((r) => r.name).join(', ');
+    stderr.write(`::error::tool versions disagree with the baseline: ${names}\n`);
+    return 1;
+  }
+  stdout.write(`tool versions ok (${results.length} checked)\n`);
+  return 0;
+}
+
+/**
+ * Whether the module at `moduleUrl` was run as a program, given the script path
+ * node was started with (`process.argv[1]`), rather than imported.
+ *
+ * `realpathSync`, not `path.resolve` alone: node resolves symlinks when it loads
+ * a module, so `import.meta.url` is the real path while `process.argv[1]` is
+ * what the caller typed. A package manager installs a `bin` entry into
+ * node_modules/.bin as a link, so the advertised `pnpm exec check-tool-versions`
+ * made the two differ - and this guard then said "imported": no output, exit 0,
+ * a version gate that silently passed. Only `node packages/.../bin/x.mjs`, the
+ * path `make tool-versions` happens to use, ever ran.
+ */
+export function isProgram(moduleUrl, scriptPath) {
+  if (!scriptPath) return false;
   try {
-    return fileURLToPath(import.meta.url) === realpathSync(path.resolve(process.argv[1]));
+    return fileURLToPath(moduleUrl) === realpathSync(path.resolve(scriptPath));
   } catch {
     return false;
   }
 }
 
-if (runAsProgram()) {
-  const table = readTable();
-  const names = process.argv.slice(2);
-  const wanted = names.length > 0 ? names : Object.keys(table.tools);
-  const run = (name, args) => {
-    const result = spawnSync(name, args, { encoding: 'utf8' });
-    // A command that never started has no exit code of its own.
-    return result.error ? { status: null } : result;
-  };
-  const results = checkTools(table, wanted, run);
-  for (const result of results) console.log(formatResult(result));
-  const bad = results.filter((r) => r.status !== 'ok');
-  if (bad.length > 0) {
-    const names = bad.map((r) => r.name).join(', ');
-    console.error(`::error::tool versions disagree with the baseline: ${names}`);
-    process.exit(1);
-  }
-  console.log(`tool versions ok (${results.length} checked)`);
-}
+// `exitCode`, not `process.exit()`: the process ends on its own once stdout has
+// drained, so the report piped to a slow reader is never cut short.
+if (isProgram(import.meta.url, process.argv[1])) process.exitCode = main(process.argv.slice(2));

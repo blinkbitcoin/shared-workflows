@@ -1,15 +1,27 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { after, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   activeProfiles,
   callerInputs,
   callersUse,
   check,
   checkRequirement,
+  defaultIo,
   formatResult,
+  isProgram,
+  main,
+  parseArgs,
   parseMiseTools,
+  readCallers,
+  readConsumer,
   readContract,
   readMakefile,
+  readMiseTools,
   skeleton,
   summaryTable,
   toggleOn,
@@ -115,6 +127,29 @@ test('the caller parser attributes each with: key to its own workflow', () => {
   assert.equal(inputs.get('check-e2e.yml:e2e-setup-script'), 'scripts/e2e/up.sh');
   // check-unit.yml has no with: block, so nothing may leak into it from its neighbours
   assert.equal(inputs.get('check-unit.yml:docs-check'), undefined);
+});
+
+test('a top-level key after a caller job ends that job, with or without a with: block', () => {
+  const inputs = callerInputs([
+    {
+      name: 'ci.yml',
+      text: `jobs:
+  plain:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
+env:
+  coverage: false
+---
+jobs:
+  checks:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
+    with:
+      lint: false
+concurrency:
+  spell: false
+`,
+    },
+  ]);
+  assert.deepEqual([...inputs], [['check-code.yml:lint', 'false']]);
 });
 
 test('a profile is active only when the repository calls that workflow', () => {
@@ -441,4 +476,392 @@ test('a lane reading an App Review name the workflow does not pass fails, naming
   const result = laneResult("x = ENV['APP_REVIEW_EMAIL']\ny = ENV['APP_REVIEW_COMPANY']\n");
   assert.equal(result.level, 'fail');
   assert.match(result.reason, /APP_REVIEW_COMPANY/);
+});
+
+// --- the real filesystem -----------------------------------------------------
+//
+// Everything above reaches the disk through an object literal. The cases below
+// hold the real `defaultIo`, and the program around it, to the same contract
+// against a temporary directory.
+
+const BIN = fileURLToPath(new URL('./bin/check-consumer-contract.mjs', import.meta.url));
+const GUIDE = 'https://github.com/blinkbitcoin/shared-workflows/blob/v0/docs/consumer-guide.md';
+const temporaryDirectories = [];
+after(() => {
+  for (const dir of temporaryDirectories) rmSync(dir, { recursive: true, force: true });
+});
+
+/** A real directory holding `files` (path to text), for the code that reads a disk. */
+function tree(files = {}) {
+  const root = mkdtempSync(path.join(tmpdir(), 'dev-config-contract-'));
+  temporaryDirectories.push(root);
+  for (const [name, text] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+    writeFileSync(path.join(root, name), text);
+  }
+  return root;
+}
+
+/** A writable stream that keeps what it was given, as `.text`. */
+function sink() {
+  return {
+    text: '',
+    write(chunk) {
+      this.text += chunk;
+      return true;
+    },
+  };
+}
+
+/** Runs `main` against a real directory; the environment is empty unless given. */
+function runMain(argv, { env = {}, io, cwd = '/' } = {}) {
+  const stdout = sink();
+  const stderr = sink();
+  const code = main(argv, { stdout, stderr, env, cwd, ...(io ? { io } : {}) });
+  return { code, stdout: stdout.text, stderr: stderr.text };
+}
+
+const CHECKS_CALLER = 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n';
+
+test('the default io reads a file, and answers null for one that is not there', () => {
+  const root = tree({ 'a.txt': 'hello' });
+  assert.equal(defaultIo.read(path.join(root, 'a.txt')), 'hello');
+  assert.equal(defaultIo.read(path.join(root, 'absent.txt')), null);
+});
+
+test('the default io says whether a path exists', () => {
+  const root = tree({ 'a.txt': '' });
+  assert.equal(defaultIo.exists(path.join(root, 'a.txt')), true);
+  assert.equal(defaultIo.exists(path.join(root, 'absent.txt')), false);
+});
+
+test('the default io counts only a directory with entries as a non-empty directory', () => {
+  const root = tree({ 'full/a.txt': '', 'file.txt': '' });
+  mkdirSync(path.join(root, 'empty'));
+  assert.equal(defaultIo.isNonEmptyDir(path.join(root, 'full')), true);
+  assert.equal(defaultIo.isNonEmptyDir(path.join(root, 'empty')), false);
+  assert.equal(defaultIo.isNonEmptyDir(path.join(root, 'file.txt')), false);
+  assert.equal(defaultIo.isNonEmptyDir(path.join(root, 'absent')), false);
+});
+
+test('the default io lists a directory, and a missing one as empty', () => {
+  const root = tree({ 'dir/a.txt': '', 'dir/b.txt': '' });
+  assert.deepEqual(defaultIo.list(path.join(root, 'dir')).sort(), ['a.txt', 'b.txt']);
+  assert.deepEqual(defaultIo.list(path.join(root, 'absent')), []);
+});
+
+test('the default io appends to a file rather than replacing it', () => {
+  const root = tree({ 'summary.md': 'first\n' });
+  defaultIo.append(path.join(root, 'summary.md'), 'second\n');
+  assert.equal(readFileSync(path.join(root, 'summary.md'), 'utf8'), 'first\nsecond\n');
+});
+
+// --- reading a consumer from disk ---------------------------------------------
+
+test('a consumer is read from disk: scripts, both dependency tables, mise and callers', () => {
+  const root = tree({
+    'package.json': JSON.stringify({
+      scripts: { lint: 'biome check' },
+      dependencies: { react: '19.0.0' },
+      devDependencies: { knip: '5.0.0' },
+    }),
+    '.mise.toml': '[tools]\nnode = "24"\n',
+    '.github/workflows/ci.yml': `jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n    with:\n      lint: false\n`,
+  });
+  const read = readConsumer(root);
+  assert.equal(read.root, root);
+  assert.equal(read.io, defaultIo);
+  assert.deepEqual(read.scripts, { lint: 'biome check' });
+  assert.deepEqual(read.deps, { react: '19.0.0', knip: '5.0.0' });
+  assert.equal(read.miseTools.file, '.mise.toml');
+  assert.deepEqual([...read.miseTools.tools], ['node']);
+  assert.deepEqual(read.callers.map((c) => c.name), ['ci.yml']);
+  assert.deepEqual([...read.uses], ['check-code.yml']);
+  assert.equal(read.inputs.get('check-code.yml:lint'), 'false');
+});
+
+test('a consumer with no package.json has no scripts and no dependencies', () => {
+  const read = readConsumer(tree());
+  assert.equal(read.pkg, null);
+  assert.deepEqual(read.scripts, {});
+  assert.deepEqual(read.deps, {});
+});
+
+test('a package.json with neither scripts nor dependencies reads as empty tables', () => {
+  const read = readConsumer(tree({ 'package.json': '{"name":"hello-world"}' }));
+  assert.deepEqual(read.pkg, { name: 'hello-world' });
+  assert.deepEqual(read.scripts, {});
+  assert.deepEqual(read.deps, {});
+});
+
+test('a package.json that does not parse is an error naming the file, not a report', () => {
+  const root = tree({ 'package.json': '{ not json' });
+  assert.throws(() => readConsumer(root), (error) => {
+    assert.match(error.message, /^::error::.*package\.json is not valid JSON: /);
+    assert.ok(error.message.includes(path.join(root, 'package.json')));
+    return true;
+  });
+});
+
+test('the mise reader tries each config name in order, and reports none as no file', () => {
+  assert.deepEqual(readMiseTools(tree()), { file: null, tools: new Set() });
+  assert.equal(readMiseTools(tree({ 'mise.toml': '[tools]\nnode = "24"\n' })).file, 'mise.toml');
+  assert.equal(readMiseTools(tree({ '.config/mise/config.toml': '[tools]\nnode = "24"\n' })).file, '.config/mise/config.toml');
+  const both = readMiseTools(tree({ '.mise.toml': '[tools]\npnpm = "10"\n', 'mise.toml': '[tools]\nnode = "24"\n' }));
+  assert.equal(both.file, '.mise.toml');
+  assert.deepEqual([...both.tools], ['pnpm']);
+});
+
+test('the caller reader takes .yml and .yaml files only', () => {
+  const root = tree({
+    '.github/workflows/a.yml': 'one',
+    '.github/workflows/b.yaml': 'two',
+    '.github/workflows/README.md': 'three',
+  });
+  assert.deepEqual(
+    readCallers(root).sort((x, y) => x.name.localeCompare(y.name)),
+    [
+      { name: 'a.yml', text: 'one' },
+      { name: 'b.yaml', text: 'two' },
+    ],
+  );
+});
+
+test('a repository with no workflows directory has no callers', () => {
+  assert.deepEqual(readCallers(tree()), []);
+});
+
+test('a caller file that cannot be read counts as an empty caller', () => {
+  const io = { list: () => ['ci.yml'], read: () => null };
+  assert.deepEqual(readCallers('', io), [{ name: 'ci.yml', text: '' }]);
+});
+
+// --- the checks the cases above do not reach ----------------------------------
+
+test('a directory requirement wants the directory to hold something', () => {
+  const withFlows = consumer({ dirs: ['.maestro'] });
+  assert.deepEqual(checkRequirement(req('dir.maestro'), withFlows), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(req('dir.maestro'), consumer()), { status: 'missing', reason: '.maestro/ is missing or empty' });
+});
+
+test('a requirement of a kind this version does not know is skipped, naming the kind', () => {
+  assert.deepEqual(checkRequirement({ kind: 'from-the-future', target: 'x' }, consumer()), {
+    status: 'skip',
+    reason: 'unknown kind: from-the-future',
+  });
+});
+
+test('an unindented line that is not a rule ends the recipe before it', () => {
+  const makefile = 'lint:\n\tpnpm lint\n# a comment keeps the rule open\n\tpnpm lint:more\nPNPM := pnpm\n\tpnpm orphan\n\ncheck: lint\n';
+  const make = readMakefile('', consumer({ files: { Makefile: makefile } }).io);
+  assert.equal(make.rules.get('lint').recipe, '\tpnpm lint\n\tpnpm lint:more\n');
+  assert.equal(make.rules.has('PNPM'), false);
+  assert.deepEqual(make.rules.get('check'), { deps: ['lint'], recipe: '' });
+  assert.deepEqual([...make.reachable('absent')], ['absent']);
+});
+
+test('fastlane lanes are read from subdirectories, two levels deep and no deeper', () => {
+  const lanes = (files) =>
+    checkRequirement(
+      req('lane.ios-build'),
+      consumer({ files, dirs: Object.keys(files).flatMap((f) => f.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))) }),
+    );
+  const all = 'lane :build do\nend\nlane :verify do\nend\n';
+  assert.equal(lanes({ 'fastlane/lanes/ios.rb': all, 'fastlane/notes.txt': 'lane :nothing' }).status, 'ok');
+  assert.equal(lanes({ 'fastlane/a/b/ios.rb': all }).status, 'ok');
+  assert.equal(lanes({ 'fastlane/a/b/c/ios.rb': all }).status, 'missing');
+});
+
+test('a lane file that cannot be read counts as empty', () => {
+  const io = { list: (dir) => (dir === 'fastlane' ? ['Fastfile'] : []), read: () => null, isNonEmptyDir: () => false };
+  const c = { ...consumer(), io };
+  assert.equal(checkRequirement(req('lane.ios-build'), c).status, 'missing');
+});
+
+test('each reusable workflow a repository calls switches on its own profile', () => {
+  const profileOf = (workflow) => [...activeProfiles(new Set([workflow]))];
+  assert.deepEqual(profileOf('build-web.yml'), ['web']);
+  assert.deepEqual(profileOf('publish-badges.yml'), ['badges']);
+  assert.deepEqual(profileOf('check-codeql.yml'), ['codeql']);
+  for (const workflow of ['build-prepare.yml', 'build-ios.yml', 'build-android.yml', 'publish-store.yml', 'publish-ota.yml']) {
+    assert.deepEqual(profileOf(workflow), ['release'], workflow);
+  }
+});
+
+test('a make ci prerequisite that is a file, not a rule, reaches nothing and breaks nothing', () => {
+  const { reaches, runs } = gateResults(ALIGNED_MAKEFILE.replace('ci: check coverage test-scripts', 'ci: check coverage test-scripts node_modules'));
+  assert.equal(reaches.level, 'ok', reaches.reason);
+  assert.equal(runs.level, 'ok', runs.reason);
+});
+
+test('the Makefile reader visits a prerequisite shared by two targets once, and survives a cycle', () => {
+  const make = readMakefile('', consumer({ files: { Makefile: 'ci: a b\na: shared\nb: shared\nshared: ci\n' } }).io);
+  assert.deepEqual([...make.reachable('ci')], ['ci', 'a', 'shared', 'b']);
+});
+
+// --- the command line ----------------------------------------------------------
+
+test('arguments default to the working directory, every profile and the text report', () => {
+  assert.deepEqual(parseArgs([], '/work'), { root: '/work', profiles: null, json: false, skeleton: false });
+  assert.equal(parseArgs([]).root, process.cwd());
+});
+
+test('every flag is read', () => {
+  assert.deepEqual(parseArgs(['--root', '/app', '--profile', 'checks, unit,,', '--json', '--skeleton'], '/work'), {
+    root: '/app',
+    profiles: ['checks', 'unit'],
+    json: true,
+    skeleton: true,
+  });
+});
+
+test('an unknown argument is refused by name', () => {
+  assert.throws(() => parseArgs(['--verbose']), { message: '::error::unknown argument: --verbose' });
+});
+
+test('the program refuses an unknown argument with one error line and exit 1', () => {
+  assert.deepEqual(runMain(['--nope']), { code: 1, stdout: '', stderr: '::error::unknown argument: --nope\n' });
+});
+
+test('the program refuses an unknown profile, listing the known ones', () => {
+  const { profiles } = readContract();
+  assert.deepEqual(runMain(['--root', tree(), '--profile', 'checks,nonesuch']), {
+    code: 1,
+    stdout: '',
+    stderr: `::error::unknown profile(s): nonesuch (known: ${profiles.join(', ')})\n`,
+  });
+});
+
+test('the program reports an unreadable package.json as one error line, not a stack trace', () => {
+  const root = tree({ 'package.json': '{' });
+  const { code, stdout, stderr } = runMain(['--root', root]);
+  assert.equal(code, 1);
+  assert.equal(stdout, '');
+  assert.match(stderr, /^::error::.*package\.json is not valid JSON: [^\n]*\n$/);
+});
+
+test('a flag missing its value exits 1 with a message and no stack trace', () => {
+  const { code, stdout, stderr } = runMain(['--root']);
+  assert.equal(code, 1);
+  assert.equal(stdout, '');
+  assert.equal(stderr.split('\n').length, 2, stderr);
+});
+
+test('a consumer meeting every requirement exits 0 and says so', () => {
+  const root = tree({ 'package.json': JSON.stringify({ scripts: { 'badges:render': 'node badges.mjs' } }) });
+  assert.deepEqual(runMain(['--root', root, '--profile', 'badges']), {
+    code: 0,
+    stdout: 'ok    badges:render\n\nEvery requirement of the workflows this repository calls is satisfied.\n',
+    stderr: '',
+  });
+});
+
+test('the root defaults to the working directory the program was given', () => {
+  const root = tree({ 'package.json': JSON.stringify({ scripts: { 'badges:render': 'x' } }) });
+  const { code, stdout } = runMain(['--profile', 'badges'], { cwd: root });
+  assert.equal(code, 0);
+  assert.match(stdout, /^ok    badges:render\n/);
+});
+
+test('a degraded-only consumer exits 0 and counts what degraded', () => {
+  const { code, stdout, stderr } = runMain(['--root', tree(), '--profile', 'codeql']);
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  const codeql = check(readContract(), readConsumer(tree()), { profiles: ['codeql'] }).find((r) => r.req.id === 'file.codeql-config');
+  assert.equal(codeql.level, 'warn');
+  assert.equal(stdout, `${formatResult(codeql)}\n\n1 degraded. See ${GUIDE}\n`);
+});
+
+test('a consumer missing required items exits 1, lists each finding and counts both kinds', () => {
+  const root = tree({ '.github/workflows/ci.yml': CHECKS_CALLER });
+  const { code, stdout, stderr } = runMain(['--root', root]);
+  const results = check(readContract(), readConsumer(root));
+  const failures = results.filter((r) => r.level === 'fail').length;
+  const warnings = results.filter((r) => r.level === 'warn').length;
+  assert.equal(code, 1);
+  const expected = results.filter((r) => r.level !== 'skip').map((r) => `${formatResult(r)}\n`).join('');
+  assert.equal(stdout, `${expected}\n${failures} blocked, ${warnings} degraded. See ${GUIDE}\n`);
+  assert.equal(stderr, `::error::consumer contract: ${failures} requirement(s) of the workflows this repository calls are not met\n`);
+});
+
+test('--skeleton adds what would clear the failures', () => {
+  const root = tree({ '.github/workflows/ci.yml': CHECKS_CALLER });
+  const { stdout } = runMain(['--root', root, '--skeleton']);
+  assert.ok(stdout.includes(`\n${skeleton(check(readContract(), readConsumer(root)))}`));
+  assert.match(stdout, /Either add these to package\.json:/);
+});
+
+test('--skeleton prints nothing extra when nothing fails', () => {
+  const plain = runMain(['--root', tree(), '--profile', 'codeql']);
+  const withSkeleton = runMain(['--root', tree(), '--profile', 'codeql', '--skeleton']);
+  assert.equal(withSkeleton.stdout, plain.stdout);
+});
+
+test('skipped requirements are printed only when WORKFLOWS_CONTRACT_VERBOSE is set', () => {
+  const root = tree({ '.github/workflows/ci.yml': CHECKS_CALLER });
+  assert.doesNotMatch(runMain(['--root', root]).stdout, /^skip  /m);
+  assert.match(runMain(['--root', root], { env: { WORKFLOWS_CONTRACT_VERBOSE: '1' } }).stdout, /^skip  /m);
+});
+
+test('--json prints every result by id and no text summary, keeping the exit code', () => {
+  const root = tree({ '.github/workflows/ci.yml': CHECKS_CALLER });
+  const { code, stdout, stderr } = runMain(['--root', root, '--json', '--skeleton']);
+  const expected = check(readContract(), readConsumer(root)).map(({ req: r, level, reason, detail }) => ({ id: r.id, level, reason, detail }));
+  assert.equal(stdout, `${JSON.stringify(expected, null, 2)}\n`);
+  assert.equal(code, 1);
+  assert.match(stderr, /^::error::consumer contract: /);
+});
+
+test('--json exits 0 when nothing fails', () => {
+  const { code, stderr } = runMain(['--root', tree(), '--profile', 'codeql', '--json']);
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+});
+
+test('the job summary is appended to GITHUB_STEP_SUMMARY when it is set', () => {
+  const root = tree({ '.github/workflows/ci.yml': CHECKS_CALLER, 'summary.md': 'before\n' });
+  const summary = path.join(root, 'summary.md');
+  runMain(['--root', root], { env: { GITHUB_STEP_SUMMARY: summary } });
+  assert.equal(readFileSync(summary, 'utf8'), `before\n${summaryTable(check(readContract(), readConsumer(root)))}\n`);
+});
+
+test('no job summary is written without GITHUB_STEP_SUMMARY', () => {
+  const appended = [];
+  const io = { ...defaultIo, append: (file, text) => appended.push([file, text]) };
+  runMain(['--root', tree(), '--profile', 'codeql'], { io });
+  assert.deepEqual(appended, []);
+});
+
+test('an io that cannot append skips the job summary rather than failing the run', () => {
+  const { append, ...readOnly } = defaultIo;
+  assert.equal(typeof append, 'function');
+  const { code } = runMain(['--root', tree(), '--profile', 'codeql'], { io: readOnly, env: { GITHUB_STEP_SUMMARY: '/nonexistent/summary.md' } });
+  assert.equal(code, 0);
+});
+
+// --- run as a program, not imported ---------------------------------------------
+
+// The inherited environment, so node's coverage reaches the child, minus the
+// two variables that would change what the program prints.
+const { GITHUB_STEP_SUMMARY: _summary, WORKFLOWS_CONTRACT_VERBOSE: _verbose, ...CHILD_ENV } = process.env;
+
+test('the file counts as a program only when node was started on it, through any symlink', () => {
+  const url = new URL('./bin/check-consumer-contract.mjs', import.meta.url).href;
+  const link = path.join(tree(), 'check-consumer-contract');
+  symlinkSync(BIN, link);
+  assert.equal(isProgram(url, BIN), true);
+  assert.equal(isProgram(url, link), true);
+  assert.equal(isProgram(url, fileURLToPath(import.meta.url)), false);
+  assert.equal(isProgram(url, undefined), false);
+  assert.equal(isProgram(url, path.join(tree(), 'absent.mjs')), false);
+});
+
+test('run as a program, it prints the report and exits with the report\'s code', () => {
+  const failing = spawnSync(process.execPath, [BIN, '--root', tree({ '.github/workflows/ci.yml': CHECKS_CALLER })], { encoding: 'utf8', env: CHILD_ENV });
+  assert.equal(failing.status, 1);
+  assert.match(failing.stdout, /^FAIL  /m);
+  assert.match(failing.stderr, /^::error::consumer contract: /);
+  const passing = spawnSync(process.execPath, [BIN, '--root', tree(), '--profile', 'codeql'], { encoding: 'utf8', env: CHILD_ENV });
+  assert.equal(passing.status, 0);
+  assert.match(passing.stdout, /1 degraded/);
 });
