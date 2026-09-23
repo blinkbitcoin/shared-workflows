@@ -75,6 +75,14 @@ Every row is a make target; nothing here is run through a package manager.
   it is held to the fixture only where it must not diverge: its `ci.yml`
   trigger block, which is where a second docs rule (`paths-ignore`) would creep
   back in beside `check-code.yml`'s classifier.
+- **Every PR tests everything it adds or changes, in the same PR.** That means
+  the happy path, every error path and every branch a reviewer could ask
+  about, and the PR description names the tests that cover the change. Every
+  script gets bats cases for each exit path (the rule below), every workflow
+  rule gets a `test/workflow-shape.bats` or `test/consumer-contract.bats`
+  assertion, and `packages/dev-config` is gated by `make test-package`. A
+  threshold is never lowered and no file is excluded from coverage to make a
+  PR pass; if something truly cannot be tested, the PR says what and why.
 - **Shell lives in `scripts/`, never inline in a workflow.** A `run:` block of
   more than a couple of lines is unshellcheckable, untestable and unreadable in
   a run log; give it a file under the matching `scripts/<area>/` and a bats
