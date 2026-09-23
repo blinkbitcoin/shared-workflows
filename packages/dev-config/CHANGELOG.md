@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.3.1...dev-config-v0.4.0) (2026-09-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **workflows:** callers must update their uses: paths. checks.yml -> check-code.yml, unit.yml -> check-unit.yml, codeql.yml -> check-codeql.yml, e2e.yml -> check-e2e.yml, expo-prepare.yml -> build-prepare.yml, expo-build-ios.yml -> build-ios.yml, expo-build-android.yml -> build-android.yml, web.yml -> build-web.yml, badges.yml -> publish-badges.yml, expo-ota-publish.yml -> publish-ota.yml, fastlane-lane.yml -> publish-store.yml, github-release.yml -> publish-github-release.yml, release-pr-notes.yml -> pr-release-notes.yml. pr-title.yml and pr-closed.yml keep their names.
+
+### Features
+
+* **workflows:** prefix reusable workflow filenames by pipeline stage ([#64](https://github.com/blinkbitcoin/shared-workflows/issues/64)) ([aac1f48](https://github.com/blinkbitcoin/shared-workflows/commit/aac1f48afa437fa67d45bde742e2a05eced810bd))
+
 ## [0.3.1](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.3.0...dev-config-v0.3.1) (2026-09-23)
 
 
