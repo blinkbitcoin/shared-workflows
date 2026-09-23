@@ -93,9 +93,14 @@ script that no longer exists fails, and so does an entry for a script that has
 since gained a test. An allowlist that outlives what it excuses is where
 coverage goes to be forgotten.
 
-`make test-package` carries coverage thresholds for the Node package, set at the
-measured baseline so they ratchet. Raise them when a change covers more; never
-lower them to make a change fit.
+`make test-package` holds the Node package at 100% lines, branches and
+functions. Each program's command-line entry is a `main(argv, { ... })` that
+takes its streams, environment and filesystem as arguments and returns the exit
+code, so every flag, message and exit path is a `node:test` case in-process; one
+case per program also runs the file as a real child process, which node's
+coverage follows. Never lower a threshold, exclude a file or add a coverage
+ignore comment to make a change fit; if a line truly cannot be tested, the PR
+says which and why.
 
 ### Numbers in the docs
 

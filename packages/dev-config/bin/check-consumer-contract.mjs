@@ -66,7 +66,11 @@ export function readConsumer(root, io = defaultIo) {
   };
 }
 
-const defaultIo = {
+/**
+ * The real filesystem, as the checks reach it. Exported so the tests can hold
+ * each method to its contract against a temporary directory.
+ */
+export const defaultIo = {
   read(file) {
     try {
       return readFileSync(file, 'utf8');
@@ -459,7 +463,9 @@ function collectRuby(dir, io, depth = 0) {
   for (const entry of entries) {
     const full = path.join(dir, entry);
     if (entry.endsWith('.rb') || entry === 'Fastfile') text += `${io.read(full) ?? ''}\n`;
-    else if (depth < 2 && io.isNonEmptyDir(full)) text += collectRuby(full, io, depth + 1) ?? '';
+    // Below the top level this always returns text: only an empty fastlane/
+    // itself is `null`, meaning "no fastlane at all".
+    else if (depth < 2 && io.isNonEmptyDir(full)) text += collectRuby(full, io, depth + 1);
   }
   return text;
 }
@@ -577,8 +583,8 @@ export function skeleton(results) {
 // CLI
 // ---------------------------------------------------------------------------
 
-export function parseArgs(argv) {
-  const options = { root: process.cwd(), profiles: null, json: false, skeleton: false };
+export function parseArgs(argv, cwd = process.cwd()) {
+  const options = { root: cwd, profiles: null, json: false, skeleton: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--root') options.root = argv[++i];
@@ -590,8 +596,30 @@ export function parseArgs(argv) {
   return options;
 }
 
-export function main(argv, io = defaultIo, out = process.stdout) {
-  const options = parseArgs(argv);
+/**
+ * The whole program, returning its exit code. Everything it touches outside
+ * itself arrives through the second argument, so the tests run every path of
+ * it in-process; the defaults are the real process. `cwd` is the root checked
+ * when there is no `--root`.
+ */
+export function main(
+  argv,
+  { io = defaultIo, stdout = process.stdout, stderr = process.stderr, env = process.env, cwd = process.cwd() } = {},
+) {
+  // Every throw below is already a finished ::error:: line - an unreadable
+  // package.json, an unknown argument. Printing the message and nothing else is
+  // the whole point of this file: a node stack trace here would be the same
+  // failure it exists to replace.
+  try {
+    return run(argv, { io, stdout, stderr, env, cwd });
+  } catch (error) {
+    stderr.write(`${error.message}\n`);
+    return 1;
+  }
+}
+
+function run(argv, { io, stdout, stderr, env, cwd }) {
+  const options = parseArgs(argv, cwd);
   const contract = readContract();
   // A profile name with a typo matches no requirement, so every check would be
   // skipped and the run would end "every requirement is satisfied" - a green
@@ -604,38 +632,39 @@ export function main(argv, io = defaultIo, out = process.stdout) {
   const results = check(contract, consumer, { profiles: options.profiles });
 
   if (options.json) {
-    out.write(`${JSON.stringify(results.map(({ req, level, reason, detail }) => ({ id: req.id, level, reason, detail })), null, 2)}\n`);
+    stdout.write(`${JSON.stringify(results.map(({ req, level, reason, detail }) => ({ id: req.id, level, reason, detail })), null, 2)}\n`);
   } else {
     for (const result of results) {
-      if (result.level === 'skip' && !process.env.WORKFLOWS_CONTRACT_VERBOSE) continue;
-      out.write(`${formatResult(result)}\n`);
+      if (result.level === 'skip' && !env.WORKFLOWS_CONTRACT_VERBOSE) continue;
+      stdout.write(`${formatResult(result)}\n`);
     }
   }
 
   const failures = results.filter((r) => r.level === 'fail');
   const warnings = results.filter((r) => r.level === 'warn');
 
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    io.append?.(process.env.GITHUB_STEP_SUMMARY, `${summaryTable(results)}\n`);
+  if (env.GITHUB_STEP_SUMMARY) {
+    io.append?.(env.GITHUB_STEP_SUMMARY, `${summaryTable(results)}\n`);
   }
 
   if (!options.json) {
-    if (failures.length > 0 && options.skeleton) out.write(`\n${skeleton(results)}`);
+    if (failures.length > 0 && options.skeleton) stdout.write(`\n${skeleton(results)}`);
     const parts = [];
     if (failures.length > 0) parts.push(`${failures.length} blocked`);
     if (warnings.length > 0) parts.push(`${warnings.length} degraded`);
-    out.write(parts.length > 0 ? `\n${parts.join(', ')}. See ${GUIDE}\n` : '\nEvery requirement of the workflows this repository calls is satisfied.\n');
+    stdout.write(parts.length > 0 ? `\n${parts.join(', ')}. See ${GUIDE}\n` : '\nEvery requirement of the workflows this repository calls is satisfied.\n');
   }
 
   if (failures.length > 0) {
-    process.stderr.write(`::error::consumer contract: ${failures.length} requirement(s) of the workflows this repository calls are not met\n`);
+    stderr.write(`::error::consumer contract: ${failures.length} requirement(s) of the workflows this repository calls are not met\n`);
     return 1;
   }
   return 0;
 }
 
 /**
- * Whether this file was run as a program rather than imported.
+ * Whether the module at `moduleUrl` was run as a program, given the script path
+ * node was started with (`process.argv[1]`), rather than imported.
  *
  * `realpathSync`, not `path.resolve` alone: node resolves symlinks when it
  * loads a module, so `import.meta.url` is the real path while `process.argv[1]`
@@ -645,24 +674,15 @@ export function main(argv, io = defaultIo, out = process.stdout) {
  * one that fails, and this one runs behind a `bash .workflows/...` path that a
  * consumer is free to make a link.
  */
-function runAsProgram() {
-  if (!process.argv[1]) return false;
+export function isProgram(moduleUrl, scriptPath) {
+  if (!scriptPath) return false;
   try {
-    return fileURLToPath(import.meta.url) === realpathSync(path.resolve(process.argv[1]));
+    return fileURLToPath(moduleUrl) === realpathSync(path.resolve(scriptPath));
   } catch {
     return false;
   }
 }
 
-if (runAsProgram()) {
-  // Every throw below is already a finished ::error:: line - an unreadable
-  // package.json, an unknown argument. Printing the message and nothing else is
-  // the whole point of this file: a node stack trace here would be the same
-  // failure it exists to replace.
-  try {
-    process.exit(main(process.argv.slice(2)));
-  } catch (error) {
-    process.stderr.write(`${error.message}\n`);
-    process.exit(1);
-  }
-}
+// `exitCode`, not `process.exit()`: the process ends on its own once stdout has
+// drained, so a long report piped to a slow reader is never cut short.
+if (isProgram(import.meta.url, process.argv[1])) process.exitCode = main(process.argv.slice(2));

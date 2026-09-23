@@ -30,7 +30,7 @@ tool-versions: ## Fail when an installed tool is not the version the baseline pi
 # never lower them to make a change fit.
 test-package: ## node:test for packages/dev-config, with coverage thresholds
 	$(MISE) node --test --experimental-test-coverage \
-		--test-coverage-lines=77 --test-coverage-branches=86 --test-coverage-functions=73 \
+		--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \
 		"packages/dev-config/**/*.test.mjs"
 spell: ## typos over the whole repo
 	$(MISE) typos
