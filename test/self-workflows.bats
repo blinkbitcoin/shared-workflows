@@ -57,6 +57,17 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
   [ -f "$CI" ] || fail "self-ci.yml is gone; the dispatch script still names it"
 }
 
+# One release PR per package, and both bump adjacent lines of the shared
+# manifest: merging one leaves the other conflicting. release-please rebuilds
+# an open PR only when its notes change - unless always-update is set, which
+# rebuilds every open one on each push to main. Without it the other PR sits
+# conflicting until someone rebases it by hand (#55, #76).
+@test "release-please rebuilds every open release PR, so two PRs cannot leave each other conflicting" {
+  config="$REPO_ROOT/release-please-config.json"
+  [ "$(jq -r '."always-update"' "$config")" = "true" ] \
+    || fail "release-please-config.json has separate-pull-requests without always-update; a release of one package leaves the other's PR conflicting on .release-please-manifest.json"
+}
+
 # --------------------------------------------------------------------------
 # The gate list and the job list, held together.
 #

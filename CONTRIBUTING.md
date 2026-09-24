@@ -213,4 +213,9 @@ here and every consumer's CI.
 
 Releases are automated: release-please keeps a release PR open on `main`, and
 squash-merging it cuts the version and re-points the moving `v0`/`v0.<minor>` tags.
-Never move a tag or edit a version by hand.
+Never move a tag or edit a version by hand. There is one release PR per
+package (the workflows and `@blinkbitcoin/dev-config`), and every push to
+`main` rebuilds each open one on that `main` (`always-update` in
+`release-please-config.json`), so merging one never leaves the other
+conflicting. Each rebuild dismisses an approval: approve a release PR right
+before merging it.
