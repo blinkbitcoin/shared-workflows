@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->94<!--/count--> scripts · <!--count:tests-->649<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->94<!--/count--> scripts · <!--count:tests-->659<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -149,7 +149,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | `build-web.yml`       | `Build`<br>`E2E`<br>`Deploy`                       | Expo web export, the browser suite against it, GitHub Pages              |
 | `publish-badges.yml`    | `Publish`                                          | Unit, E2E and coverage badges pushed to `gh-pages/badges/<branch>/`      |
 | `check-codeql.yml`    | `Changes`<br>`Analyze`                             | CodeQL on the consumer's query suite. Informational, never required      |
-| `check-security.yml`  | `Config`<br>`Dependencies`<br>`Code`<br>`Policy`<br>`Verdict` | The consumer's security scanners, one job each, then one verdict that merges the SARIF and applies the threshold |
+| `check-security.yml`  | `Config`<br>`Dependencies`<br>`Code`<br>`Policy`<br>`Bill of Materials`<br>`Bundle`<br>`Mobile`<br>`Binaries`<br>`Review`<br>`OpenAnt`<br>`Verdict` | The consumer's security scanners, one job each, then one verdict that merges the SARIF and applies the threshold. Pull requests run the source scanners, the release pull request adds the bundle and OpenAnt, and the production dispatch checks the built binaries |
 | `pr-title.yml`  | `Title`                                            | Conventional Commits lint on the PR title                                |
 | `pr-closed.yml` | `Cancel runs`<br>`Clean badges`                    | Cancels the closed PR's in-flight runs, deletes its badges               |
 
@@ -194,7 +194,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table |
-| `test/`                | <!--count:bats-files-->73<!--/count--> bats files, <!--count:tests-->649<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->73<!--/count--> bats files, <!--count:tests-->659<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 

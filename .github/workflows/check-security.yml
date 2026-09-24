@@ -8,6 +8,12 @@ name: Security
 # exists in CI: the job graph, the permissions, the artifact passing, the upload
 # to code scanning and the step summary. It carries no fallback runner - a job
 # that is switched on but whose runner is missing fails loudly, by name.
+#
+# A scanner runs where what it reads exists, so a caller turns on the tier it
+# is: a pull request allows deps, code, policy and review; the release pull
+# request adds bundle, openant and review-full-range; the production dispatch
+# allows binaries, mobile, bundle and sbom with release-tag set. The consumer's
+# security-policy.json still decides which of those actually run.
 on:
   workflow_call:
     inputs:
@@ -50,6 +56,68 @@ on:
         description: Allow the install-policy scanner (the consumer's `check-security-policy`); the effective setting is this and security-policy.json together
         type: boolean
         default: true
+      sbom:
+        description: >-
+          Allow the bill of materials (the consumer's `check-security-sbom`, a
+          CycloneDX SBOM from the lockfile, kept as the security-sbom artifact).
+          Off by default: it belongs to the production tier.
+        type: boolean
+        default: false
+      bundle:
+        description: >-
+          Allow the bundle scanner (the consumer's `check-security-bundle`: exports
+          the JavaScript bundle and reads what it gives away). Minutes, so off by
+          default; the release pull request and the production dispatch turn it on.
+        type: boolean
+        default: false
+      mobile:
+        description: >-
+          Allow the native project scanner (the consumer's `check-security-mobile`:
+          mobsfscan over a fresh prebuild). Off by default: production tier.
+        type: boolean
+        default: false
+      binaries:
+        description: >-
+          Allow the MASTG checks over the release's built binaries (the consumer's
+          `check-security-binaries`). Needs release-tag. Off by default: binaries
+          only exist once a release is built.
+        type: boolean
+        default: false
+      review:
+        description: >-
+          Allow the LLM security review of the change (the consumer's
+          `check-security-review`). The consumer's policy keeps it off until a
+          provider and a key are configured; with no key it reports skipped.
+        type: boolean
+        default: false
+      openant:
+        description: >-
+          Allow the OpenAnt LLM scan of the codebase (the consumer's
+          `check-security-openant`). Minutes and tokens, so the release pull
+          request is the tier that turns it on.
+        type: boolean
+        default: false
+      review-full-range:
+        description: >-
+          Review everything since the last release tag rather than the pull
+          request's own diff - what the release pull request asks for. A switch,
+          like the job inputs: the tag itself is found by the consumer's script.
+        type: boolean
+        default: false
+      release-tag:
+        description: >-
+          The release whose .apk, .aab and .ipa assets the binaries job checks
+          (e.g. v1.2.3). Required when binaries is on; ignored otherwise.
+        type: string
+        default: ''
+      build-env:
+        description: >-
+          Non-secret environment for every job, as a flat JSON object:
+          SECURITY_LLM_PROVIDER, SECURITY_LLM_MODEL, SECURITY_LLM_EFFORT,
+          SECURITY_LLM_EXTRA_PARAMS, OPENAI_BASE_URL, and any SECURITY_* twin of a
+          security-policy.json setting. Keys only are logged.
+        type: string
+        default: '{}'
       sarif-upload:
         description: >-
           Upload the merged SARIF to code scanning. Off makes the run say so in
@@ -60,6 +128,12 @@ on:
     secrets:
       consumer-token:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
+        required: false
+      OPENAI_API_KEY:
+        description: Key for an OpenAI or OpenAI-compatible provider (OPENAI_BASE_URL). Reaches the review and openant scan steps only
+        required: false
+      ANTHROPIC_API_KEY:
+        description: Key for Anthropic. Reaches the review and openant scan steps only
         required: false
 permissions:
   contents: read
@@ -77,6 +151,12 @@ jobs:
       deps: ${{ steps.resolve.outputs.deps }}
       code: ${{ steps.resolve.outputs.code }}
       policy: ${{ steps.resolve.outputs.policy }}
+      sbom: ${{ steps.resolve.outputs.sbom }}
+      bundle: ${{ steps.resolve.outputs.bundle }}
+      mobile: ${{ steps.resolve.outputs.mobile }}
+      binaries: ${{ steps.resolve.outputs.binaries }}
+      review: ${{ steps.resolve.outputs.review }}
+      openant: ${{ steps.resolve.outputs.openant }}
       severity: ${{ steps.resolve.outputs.severity }}
       fail-on: ${{ steps.resolve.outputs.fail-on }}
     steps:
@@ -93,6 +173,13 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
+      # Before Setup and before any consumer script, in every job: a SECURITY_*
+      # twin in build-env changes what config.mjs resolves, what a runner does
+      # and what the verdict applies, so all of them have to see the same values.
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
       # Setup here, unlike check-code.yml's contract job, which deliberately runs
       # on the runner image's own node. config.mjs guards its command-line entry
       # with `import.meta.main`, which is undefined before Node 24: an older node
@@ -135,6 +222,13 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
+      # Before Setup and before any consumer script, in every job: a SECURITY_*
+      # twin in build-env changes what config.mjs resolves, what a runner does
+      # and what the verdict applies, so all of them have to see the same values.
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
@@ -177,6 +271,13 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
+      # Before Setup and before any consumer script, in every job: a SECURITY_*
+      # twin in build-env changes what config.mjs resolves, what a runner does
+      # and what the verdict applies, so all of them have to see the same values.
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
@@ -220,6 +321,13 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
+      # Before Setup and before any consumer script, in every job: a SECURITY_*
+      # twin in build-env changes what config.mjs resolves, what a runner does
+      # and what the verdict applies, so all of them have to see the same values.
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
@@ -238,9 +346,313 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/policy.sarif
           if-no-files-found: error
           retention-days: 7
+  # A record rather than a scan: what the release pins, kept long enough to
+  # answer "did we ship the vulnerable version?" when an advisory lands later.
+  sbom:
+    name: Bill of Materials
+    needs: config
+    if: ${{ inputs.sbom && needs.config.outputs.enabled == 'true' && needs.config.outputs.sbom == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Write the bill of materials
+        id: scan
+        timeout-minutes: 10
+        env:
+          SECURITY_JOB: sbom
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-sbom
+          path: ${{ inputs.working-directory }}/.security/sbom.sarif
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload the bill of materials
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sbom
+          path: ${{ inputs.working-directory }}/.security/sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 90
+  # The two jobs here that install: expo export and expo prebuild both need
+  # node_modules. Every other job reads files and skips the install.
+  bundle:
+    name: Bundle
+    needs: config
+    if: ${{ inputs.bundle && needs.config.outputs.enabled == 'true' && needs.config.outputs.bundle == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'true'
+      - name: Scan the exported bundle
+        id: scan
+        timeout-minutes: 25
+        env:
+          SECURITY_JOB: bundle
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-bundle
+          path: ${{ inputs.working-directory }}/.security/bundle.sarif
+          if-no-files-found: error
+          retention-days: 7
+  mobile:
+    name: Mobile
+    needs: config
+    if: ${{ inputs.mobile && needs.config.outputs.enabled == 'true' && needs.config.outputs.mobile == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 40
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'true'
+      - name: Scan a fresh prebuild
+        id: scan
+        timeout-minutes: 35
+        env:
+          SECURITY_JOB: mobile
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-mobile
+          path: ${{ inputs.working-directory }}/.security/mobile.sarif
+          if-no-files-found: error
+          retention-days: 7
+  # The release's own assets, not a rebuild: what the stores receive is what is
+  # checked. binaries-fetch.sh puts them in a directory and hands its path to
+  # the consumer's runner through SECURITY_BINARIES_DIR.
+  binaries:
+    name: Binaries
+    needs: config
+    if: ${{ inputs.binaries && needs.config.outputs.enabled == 'true' && needs.config.outputs.binaries == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Download the release binaries
+        env:
+          GH_TOKEN: ${{ secrets.consumer-token || github.token }}
+          GH_REPO: ${{ inputs.repository || github.repository }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          BINARIES_DIR: ${{ runner.temp }}/security-binaries
+        run: bash "$WORKFLOWS_DIR/scripts/security/binaries-fetch.sh" "$RELEASE_TAG" "$BINARIES_DIR"
+      - name: Check the release binaries
+        id: scan
+        timeout-minutes: 15
+        env:
+          SECURITY_JOB: binaries
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-binaries
+          path: ${{ inputs.working-directory }}/.security/binaries.sarif
+          if-no-files-found: error
+          retention-days: 7
+  # History and tags, not a shallow clone: the review diffs against the pull
+  # request's base, or against the last release tag on the release pull request.
+  review:
+    name: Review
+    needs: config
+    if: ${{ inputs.review && needs.config.outputs.enabled == 'true' && needs.config.outputs.review == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 25
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+          fetch-depth: 0
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Review the change
+        id: scan
+        timeout-minutes: 20
+        env:
+          SECURITY_JOB: review
+          # Empty outside a pull request; the consumer's script then falls back to
+          # the last release tag (review-full-range) or the merge base with main.
+          SECURITY_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+          SECURITY_REVIEW_FULL_RANGE: ${{ inputs.review-full-range }}
+          # The keys reach this one step and nothing else in the job: a
+          # consumer script is the only reader, and a fork's run has neither.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-review
+          path: ${{ inputs.working-directory }}/.security/review.sarif
+          if-no-files-found: error
+          retention-days: 7
+  # OpenAnt is built from the commit the consumer's openant.sh pins, into a
+  # cache keyed on that file, so moving the pin is what rebuilds it.
+  openant:
+    name: OpenAnt
+    needs: config
+    if: ${{ inputs.openant && needs.config.outputs.enabled == 'true' && needs.config.outputs.openant == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Cache the OpenAnt build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/openant
+            ~/.openant/venv
+          key: openant-${{ runner.os }}-${{ hashFiles(format('{0}/scripts/security/openant.sh', inputs.working-directory)) }}
+      - name: Scan with OpenAnt
+        id: scan
+        timeout-minutes: 50
+        env:
+          SECURITY_JOB: openant
+          # The keys reach this one step and nothing else in the job: a
+          # consumer script is the only reader, and a fork's run has neither.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-openant
+          path: ${{ inputs.working-directory }}/.security/openant.sarif
+          if-no-files-found: error
+          retention-days: 7
   verdict:
     name: Verdict
-    needs: [config, deps, code, policy]
+    needs: [config, deps, code, policy, sbom, bundle, mobile, binaries, review, openant]
     # !cancelled(), not success(): a scanner that was switched off is skipped and
     # a scanner that crashed is failed, and both still have to reach the verdict -
     # "one scanner died" and "nothing was found" must never read the same. A
@@ -269,13 +681,20 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
+      # Before Setup and before any consumer script, in every job: a SECURITY_*
+      # twin in build-env changes what config.mjs resolves, what a runner does
+      # and what the verdict applies, so all of them have to see the same values.
+      - name: Publish build-env
+        env:
+          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+        run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
           install: 'false'
       # merge-multiple is safe here only because each artifact carries a file
-      # named after its own job - deps.sarif, code.sarif, policy.sarif. Two
+      # named after its own job - deps.sarif, code.sarif, and so on. Two
       # artifacts carrying one filename would make the merge a coin toss, which
       # is what the release's per-platform build-info.json exists to avoid.
       #
@@ -283,9 +702,16 @@ jobs:
       # when its pattern matches nothing, and "every scanner was switched off" is
       # a case verdict.sh reports properly on its own.
       - name: Download scanner SARIF
-        if: ${{ needs.deps.result == 'success' || needs.code.result == 'success' || needs.policy.result == 'success' }}
+        if: >-
+          ${{ needs.deps.result == 'success' || needs.code.result == 'success'
+          || needs.policy.result == 'success' || needs.sbom.result == 'success'
+          || needs.bundle.result == 'success' || needs.mobile.result == 'success'
+          || needs.binaries.result == 'success' || needs.review.result == 'success'
+          || needs.openant.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
+          # security-sarif-*, not security-*: the bill of materials is an
+          # artifact for people, and the verdict reads SARIF only.
           pattern: security-sarif-*
           merge-multiple: true
           path: ${{ inputs.working-directory }}/.security

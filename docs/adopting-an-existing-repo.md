@@ -157,6 +157,12 @@ is a warning in the report, not a failure. See
 | `scripts/security/deps.sh` | required, or pass `deps: false` | check-security.yml (deps), through scripts/security/run-job.sh |
 | `scripts/security/code.sh` | required, or pass `code: false` | check-security.yml (code), through scripts/security/run-job.sh |
 | `scripts/security/policy.sh` | required, or pass `policy: false` | check-security.yml (policy), through scripts/security/run-job.sh |
+| `scripts/security/sbom.sh` | only if you set `sbom: true` | check-security.yml (sbom), through scripts/security/run-job.sh |
+| `scripts/security/bundle.sh` | only if you set `bundle: true` | check-security.yml (bundle), through scripts/security/run-job.sh |
+| `scripts/security/mobile.sh` | only if you set `mobile: true` | check-security.yml (mobile), through scripts/security/run-job.sh |
+| `scripts/security/binaries.sh` | only if you set `binaries: true` | check-security.yml (binaries), through scripts/security/run-job.sh |
+| `scripts/security/review.sh` | only if you set `review: true` | check-security.yml (review), through scripts/security/run-job.sh |
+| `scripts/security/openant.sh` | only if you set `openant: true` | check-security.yml (openant), through scripts/security/run-job.sh |
 | `scripts/security/verdict.mjs` | required | check-security.yml (the Verdict job), through scripts/security/verdict.sh |
 | `security-policy.json` | optional — a fallback runs | scripts/security/config.mjs, the settings resolver the Config job runs |
 

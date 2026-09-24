@@ -989,7 +989,8 @@ same rule somewhere else still shows up.
 
 ### `check-security.yml`
 
-Jobs: `Config`, `Dependencies`, `Code`, `Policy`, `Verdict`.
+Jobs: `Config`, `Dependencies`, `Code`, `Policy`, `Bill of Materials`, `Bundle`,
+`Mobile`, `Binaries`, `Review`, `OpenAnt`, `Verdict`.
 
 The consumer's own security scanners, run in CI. Every scanner, the settings
 resolver and the merge live in **your** repository under `scripts/security/`,
@@ -1020,11 +1021,38 @@ that scans nothing while reporting green is worse than one that is red.
 | `deps` | Allow the dependency scanner (your `check-security-deps`, osv-scanner over the lockfile). Default `true` |
 | `code` | Allow the source scanner (your `check-security-code`, Semgrep over app source). Default `true` |
 | `policy` | Allow the install-policy scanner (your `check-security-policy`). Default `true` |
+| `sbom` | Allow the bill of materials (your `check-security-sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
+| `bundle` | Allow the bundle scanner (your `check-security-bundle`: exports the bundle and reads it). Installs dependencies. Default `false` |
+| `mobile` | Allow the native project scanner (your `check-security-mobile`: mobsfscan over a fresh prebuild). Installs dependencies. Default `false` |
+| `binaries` | Allow the MASTG checks over the release's built binaries (your `check-security-binaries`). Needs `release-tag`. Default `false` |
+| `review` | Allow the LLM review of the change (your `check-security-review`). Gets full history and, on a pull request, its base. Default `false` |
+| `openant` | Allow the OpenAnt LLM scan (your `check-security-openant`). The build is cached, keyed on your `scripts/security/openant.sh`. Default `false` |
+| `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
+| `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |
+| `build-env` | Non-secret environment for every job, as a flat JSON object: `SECURITY_LLM_PROVIDER`, `SECURITY_LLM_MODEL`, `SECURITY_LLM_EFFORT`, `SECURITY_LLM_EXTRA_PARAMS`,<br>`OPENAI_BASE_URL`, and any `SECURITY_*` twin of a `security-policy.json` setting. Default `{}` |
 | `sarif-upload` | Upload the merged SARIF to code scanning. Default `true`. Off makes the run say so in the summary rather than go quiet, and the verdict still applies the threshold |
 
-Secrets: `consumer-token` only, and only for a private consumer repository.
-There are no outputs: the caller already has `docs-only` from `check-code.yml`,
-and a second docs classifier would be a second rule that drifts.
+Secrets: `consumer-token`, only for a private consumer repository, and
+`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for the two LLM jobs. The keys reach the
+`Review` and `OpenAnt` scan steps and no other step; without them those jobs
+report skipped, never clean. There are no outputs: the caller already has
+`docs-only` from `check-code.yml`, and a second docs classifier would be a
+second rule that drifts.
+
+**The three tiers.** A scanner runs where what it reads exists. The template
+calls this workflow three ways; the inputs say which scanners a tier allows,
+and your `security-policy.json` still decides which of those actually run:
+
+| Tier | Caller | Inputs on |
+| --- | --- | --- |
+| Every pull request, every push to `main` | `ci.yml` | `deps`, `code`, `policy`; `review` on pull requests |
+| The release pull request (release-please's branch) | `ci.yml` | the above plus `bundle`, `openant`, `review-full-range` |
+| The production dispatch, before any store job | `cd-production.yml` | `binaries`, `mobile`, `bundle`, `sbom`, with `release-tag` and `ref` set to the tag |
+
+The release pull request's CI run is a `workflow_dispatch` on its branch, not a
+`pull_request` event, so a caller recognises it by `github.ref_name` starting
+with `release-please--`; `github.head_ref` is empty there. The production tier
+carries no LLM environment: the family keeps model calls out of CD lanes.
 
 **Permissions your caller must grant.** The `Verdict` job is the only one that
 escalates, and it asks for `security-events: write` plus `actions: read`. A
