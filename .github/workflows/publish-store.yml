@@ -42,6 +42,21 @@ on:
         description: Space-separated fastlane key:value arguments appended to the lane invocation (e.g. 'percentage:0.1')
         type: string
         default: ''
+      dry-run:
+        description: >-
+          Rehearse the lane instead of running it for real. Threads DRY_RUN=1
+          into the environment the lane runs in, which is the consumer's own
+          mechanism (fastlane/lanes/shared.rb's store_action gate, wrapping
+          every deliver/pilot/supply/AppGallery call) rather than a bespoke
+          branch here - the rehearsal walks the exact same code path a real
+          run does, resolving credentials, building the lane's arguments and
+          validating metadata paths, and stops short of only the store call
+          itself. Same name and meaning as the template's cd-store-listing.yml
+          `dry_run` dispatch input, which already forwards its own flag here
+          through `env-json`'s DRY_RUN key; this input is OR'd with that one
+          (see the Fastlane lane step) so neither can disarm the other.
+        type: boolean
+        default: false
       runner:
         description: Runner label for the lane job (an iOS lane that touches Xcode needs a macOS runner; a store-API-only lane does not)
         type: string
@@ -235,6 +250,14 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
           LANE: ${{ inputs.lane }}
           LANE_ARGS: ${{ inputs.lane-args }}
+          # OR'd with whatever env-json already put in $GITHUB_ENV, never
+          # replacing it: a step's own `env:` wins over an inherited
+          # $GITHUB_ENV value of the same name, so writing this input's value
+          # alone would silently override - and could disarm - a caller like
+          # the template's cd-store-listing.yml, which forwards its own
+          # dry_run dispatch input (default true) through env-json's DRY_RUN
+          # key rather than through this input.
+          DRY_RUN: ${{ (inputs.dry-run || env.DRY_RUN == '1') && '1' || '0' }}
           # The lanes read their binaries out of WORKFLOWS_OUTPUT_DIR, but this
           # workflow does not build anything: the .ipa/.aab it operates on were
           # downloaded into WORKFLOWS_ASSETS_DIR by the step above. Pointing
