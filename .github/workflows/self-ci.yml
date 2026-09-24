@@ -8,29 +8,29 @@ on:
   # self-release.yml for why that run has no jobs, and for the fix.
   pull_request:
   # Started by name from self-release.yml on the release PR's branch: the one
-  # event GitHub still fires for a PR opened with GITHUB_TOKEN. The pr-title
+  # event GitHub still fires for a PR opened with GITHUB_TOKEN. The Commits
   # job is gated on the pull_request event and is skipped here.
   workflow_dispatch:
 permissions: { contents: read }
 concurrency:
   group: self-ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+# Two callers rather than one job running `make check`, so a run graph names
+# the gate that failed: `Checks / Code`, `Checks / Security`, ... and
+# `Unit / Tests`, `Unit / Package`. That is the shape a consumer's own CI has,
+# and the reason to match it is the same one - a reader should see which gate
+# went red without opening a log.
+#
+# Local paths, not @v0: this repository's CI has to run the ref under review.
+# A tag here would test the last release on every pull request.
 jobs:
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
-      - run: make check
-  pr-title:
-    name: PR title
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
-      - env: { PR_TITLE: "${{ github.event.pull_request.title }}" }
-        run: bash scripts/checks/commitlint.sh
+  checks:
+    name: Checks
+    uses: ./.github/workflows/self-checks.yml
+  # No `needs: checks`. A consumer gates its unit job that way to keep a red
+  # run out of a twenty-minute E2E, and has a docs-only classifier to consult
+  # first. Here every job finishes in about two minutes and there is no
+  # classifier, so serializing would buy latency and nothing else.
+  unit:
+    name: Unit
+    uses: ./.github/workflows/self-unit.yml
