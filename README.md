@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->94<!--/count--> scripts · <!--count:tests-->648<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->94<!--/count--> scripts · <!--count:tests-->649<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -194,7 +194,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table |
-| `test/`                | <!--count:bats-files-->73<!--/count--> bats files, <!--count:tests-->648<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->73<!--/count--> bats files, <!--count:tests-->649<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
@@ -245,8 +245,8 @@ only ever enter the release workflows a repo chooses to call, from that repo's
 own secrets.
 
 Two repo variables are worth setting. `E2E_IOS=true` runs the iOS suite on
-every push — macOS bills at ten times the Linux rate on a private repo, free on a public one, so it is opt-in
-per repo, and a single PR can have it with an `e2e:ios` label instead.
+every push to `main` — macOS bills at ten times the Linux rate on a private repo, free on a public one, so it is opt-in
+per repo, and a PR runs it only with an `e2e:ios` label.
 `WORKFLOWS_MACOS_RUNNER` moves iOS off `macos-26` onto another label or a
 self-hosted box.
 

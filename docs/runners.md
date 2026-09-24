@@ -16,8 +16,9 @@ the coverage for nothing.
 
 What remains true either way is wall-clock: iOS takes roughly three times as
 long as Android, and public repos have their own concurrency caps on macOS
-jobs. That is a scheduling argument, not a cost one, and it is the only reason
-to think twice.
+jobs. That is a scheduling argument, not a cost one, and it is why the
+consumer guide's `ci.yml` runs iOS on pushes to `main` and keeps it off PRs
+unless one carries the `e2e:ios` label.
 
 `macos-runner` (default `macos-26`) is a workflow input on every family member
 that takes inputs at all — the exception is `pr-closed.yml`, which takes none —
