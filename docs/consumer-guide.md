@@ -285,10 +285,11 @@ jobs:
     with:
       # iOS is opt-in because macOS bills at 10x on a private repo. On a
       # public repo standard runners are free, macOS included, so set the repo
-      # variable E2E_IOS=true and take the coverage. Either way a single PR can
-      # opt in with the `e2e:ios` label (the `labeled` trigger above is what
-      # makes the label alone start a run). See docs/runners.md.
-      ios: ${{ vars.E2E_IOS == 'true' || contains(github.event.pull_request.labels.*.name, 'e2e:ios') }}
+      # variable E2E_IOS=true and take the coverage on every push to main. A
+      # PR runs iOS only with the `e2e:ios` label (the `labeled` trigger above
+      # is what makes the label alone start a run), so it waits for Android
+      # alone, a third of the wall-clock. See docs/runners.md.
+      ios: ${{ (github.event_name != 'pull_request' && vars.E2E_IOS == 'true') || contains(github.event.pull_request.labels.*.name, 'e2e:ios') }}
       macos-runner: ${{ vars.WORKFLOWS_MACOS_RUNNER || 'macos-26' }}
       dev-client: true
       e2e-setup-script: scripts/e2e/ci-mock-api-up.sh
@@ -1974,10 +1975,16 @@ paths**, not package.json script names, run via `bash` by
 iOS E2E defaults to `false` in `check-e2e.yml` because macOS GitHub-hosted runners
 bill at 10x on a private repo, and nothing on a public one. Two independent ways to opt in per the `ci.yml` example above:
 
-- Set the repo variable `E2E_IOS=true` to run iOS on every push/PR.
-- Add the `e2e:ios` label to a PR to run it just for that PR (needs
-  `pull_request: types: [..., labeled]` in the caller so the label itself
-  triggers a run).
+- Set the repo variable `E2E_IOS=true` to run iOS on every push to `main` (and
+  every manual run). The example keeps it off PRs even then: iOS takes about
+  three times as long as Android, and a PR would otherwise wait for it.
+- Add the `e2e:ios` label to a PR to run it on that PR, with or without the
+  variable (needs `pull_request: types: [..., labeled]` in the caller so the
+  label itself triggers a run). A new repo has no such label; create it once
+  with `gh label create e2e:ios --description "Run the iOS E2E suite on this PR"`.
+
+To run iOS on every PR as well, drop the `github.event_name != 'pull_request'`
+term from the example's `ios:` expression.
 
 `macos-runner` reads the repo variable `WORKFLOWS_MACOS_RUNNER` when set
 (`vars.WORKFLOWS_MACOS_RUNNER || 'macos-26'`), falling back to `macos-26` —

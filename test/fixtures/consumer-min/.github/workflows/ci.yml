@@ -32,10 +32,11 @@ jobs:
     with:
       # iOS is opt-in because macOS bills at 10x on a private repo. On a
       # public repo standard runners are free, macOS included, so set the repo
-      # variable E2E_IOS=true and take the coverage. Either way a single PR can
-      # opt in with the `e2e:ios` label (the `labeled` trigger above is what
-      # makes the label alone start a run). See docs/runners.md.
-      ios: ${{ vars.E2E_IOS == 'true' || contains(github.event.pull_request.labels.*.name, 'e2e:ios') }}
+      # variable E2E_IOS=true and take the coverage on every push to main. A
+      # PR runs iOS only with the `e2e:ios` label (the `labeled` trigger above
+      # is what makes the label alone start a run), so it waits for Android
+      # alone, a third of the wall-clock. See docs/runners.md.
+      ios: ${{ (github.event_name != 'pull_request' && vars.E2E_IOS == 'true') || contains(github.event.pull_request.labels.*.name, 'e2e:ios') }}
       macos-runner: ${{ vars.WORKFLOWS_MACOS_RUNNER || 'macos-26' }}
       dev-client: true
       e2e-setup-script: scripts/e2e/ci-mock-api-up.sh

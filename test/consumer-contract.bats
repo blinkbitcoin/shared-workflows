@@ -127,6 +127,21 @@ on_block() {
     || fail "$file's triggers carry a paths-ignore, a second docs rule beside check-code.yml's classifier"
 }
 
+# The example runs iOS on pushes to main and keeps it off PRs unless one carries
+# the e2e:ios label: iOS takes three times Android's wall-clock, and E2E_IOS=true
+# alone would put that wait on every PR. Asserted on the fixture for the same
+# reason as above - it is what consumers copy.
+@test "the fixture's ci.yml runs iOS on a PR only with the e2e:ios label" {
+  file="$FIXTURES/consumer-min/.github/workflows/ci.yml"
+  ios=$(yq -r '.jobs.e2e.with.ios' "$file")
+  [[ "$ios" == *"(github.event_name != 'pull_request' && vars.E2E_IOS == 'true')"* ]] \
+    || fail "E2E_IOS reaches PRs, not only pushes to main: $ios"
+  [[ "$ios" == *"|| contains(github.event.pull_request.labels.*.name, 'e2e:ios')"* ]] \
+    || fail "the e2e:ios label no longer opts a PR in: $ios"
+  grep -qE '^[[:space:]]+types: \[.*\blabeled\b.*\]' "$file" \
+    || fail "$file has no labeled trigger, so adding the label starts no run"
+}
+
 # The guide's `docs-globs` row restates changed-class.sh's default pattern by
 # hand, with markdown pipe escaping. Two hand-maintained copies of a regex is
 # exactly the kind of drift this suite exists to catch.
