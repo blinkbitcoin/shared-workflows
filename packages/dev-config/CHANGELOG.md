@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.4.0...dev-config-v0.5.0) (2026-09-24)
+
+
+### Features
+
+* **ci:** add check-security.yml, the reusable security scanning workflow ([#74](https://github.com/blinkbitcoin/shared-workflows/issues/74)) ([1c5bc73](https://github.com/blinkbitcoin/shared-workflows/commit/1c5bc7329bdfc9d889d898591b96f5fd3f5b9d1f))
+
 ## [0.4.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.3.1...dev-config-v0.4.0) (2026-09-23)
 
 
