@@ -1049,6 +1049,12 @@ and your `security-policy.json` still decides which of those actually run:
 | The release pull request (release-please's branch) | `ci.yml` | the above plus `bundle`, `openant`, `review-full-range` |
 | The production dispatch, before any store job | `cd-production.yml` | `binaries`, `mobile`, `bundle`, `sbom`, with `release-tag` and `ref` set to the tag |
 
+**Call it once per workflow run.** Each scanner's SARIF travels as a run-scoped
+artifact named after the scanner (`security-sarif-<job>`), so a second call in
+the same run - two tiers side by side in one workflow - has its verdict read the
+first call's SARIF as well as its own. The template calls it once from `ci.yml`
+and once from `cd-production.yml`, which are separate runs.
+
 The release pull request's CI run is a `workflow_dispatch` on its branch, not a
 `pull_request` event, so a caller recognises it by `github.ref_name` starting
 with `release-please--`; `github.head_ref` is empty there. The production tier
