@@ -1,0 +1,329 @@
+name: Security
+# The consumer's security scanners, one job each so a red run names the scanner,
+# and one verdict that merges their SARIF and applies the threshold.
+#
+# Every scanner, the settings resolver and the merge live in the CONSUMER, under
+# scripts/security/. `make check-security` runs the same files, so a green
+# laptop and a green pipeline are the same claim. This workflow owns only what
+# exists in CI: the job graph, the permissions, the artifact passing, the upload
+# to code scanning and the step summary. It carries no fallback runner - a job
+# that is switched on but whose runner is missing fails loudly, by name.
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Consumer repository to check out (defaults to the caller's repository)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref to check out (empty lets actions/checkout resolve the correct ref, including PR merge refs)
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for every job in this workflow
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'v1'
+      deps:
+        description: >-
+          Allow the dependency scanner (the consumer's `check-security-deps`).
+          A switch, not a setting: whether it actually runs is this AND the
+          consumer's security-policy.json, so a caller may narrow and never widen.
+        type: boolean
+        default: true
+      code:
+        description: Allow the source scanner (the consumer's `check-security-code`); the effective setting is this and security-policy.json together
+        type: boolean
+        default: true
+      policy:
+        description: Allow the install-policy scanner (the consumer's `check-security-policy`); the effective setting is this and security-policy.json together
+        type: boolean
+        default: true
+      sarif-upload:
+        description: >-
+          Upload the merged SARIF to code scanning. Off makes the run say so in
+          the summary rather than go quiet; the verdict still applies the
+          threshold either way.
+        type: boolean
+        default: true
+    secrets:
+      consumer-token:
+        description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
+        required: false
+permissions:
+  contents: read
+jobs:
+  # A job-level `if:` cannot read a file, and security-policy.json is a file in
+  # the consumer. So the policy is resolved once, here, by the consumer's own
+  # config.mjs - not by a second implementation of the same resolution order -
+  # and published as outputs the other jobs' `if:` expressions can read.
+  config:
+    name: Config
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 10
+    outputs:
+      enabled: ${{ steps.resolve.outputs.enabled }}
+      deps: ${{ steps.resolve.outputs.deps }}
+      code: ${{ steps.resolve.outputs.code }}
+      policy: ${{ steps.resolve.outputs.policy }}
+      severity: ${{ steps.resolve.outputs.severity }}
+      fail-on: ${{ steps.resolve.outputs.fail-on }}
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      # Setup here, unlike check-code.yml's contract job, which deliberately runs
+      # on the runner image's own node. config.mjs guards its command-line entry
+      # with `import.meta.main`, which is undefined before Node 24: an older node
+      # would run the file, print nothing and exit 0, and empty output read as
+      # "nothing enabled" would switch the whole gate off in silence. The
+      # consumer's .mise.toml pin is what makes that impossible.
+      #
+      # install: 'false' - no job in this workflow reads node_modules. The
+      # scanners read source, pnpm-lock.yaml and pnpm-workspace.yaml, and the
+      # consumer's scripts/security/*.mjs are zero-dependency node. Quoted,
+      # because the composite action's inputs are strings.
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Resolve the security policy
+        id: resolve
+        run: bash "$WORKFLOWS_DIR/scripts/security/settings.sh"
+  deps:
+    name: Dependencies
+    needs: config
+    # The AND of the caller's tier and the consumer's policy. A skipped job is
+    # green, so a repository that has turned the gate off never holds up a
+    # required check.
+    if: ${{ inputs.deps && needs.config.outputs.enabled == 'true' && needs.config.outputs.deps == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Scan dependencies
+        id: scan
+        env:
+          SECURITY_JOB: deps
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      # Same guard as check-e2e.yml's platform uploads: a failed scan has no
+      # SARIF, and if-no-files-found: error would stack a second red step on top
+      # of the real one. if-no-files-found stays `error` because a *successful*
+      # scan with no SARIF is the silence run-job.sh already refuses.
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-deps
+          path: ${{ inputs.working-directory }}/.security/deps.sarif
+          if-no-files-found: error
+          retention-days: 7
+  code:
+    name: Code
+    needs: config
+    if: ${{ inputs.code && needs.config.outputs.enabled == 'true' && needs.config.outputs.code == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 25
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      # The longest of the three: the consumer's code.sh fetches its registry
+      # packs on every invocation, so this step can hang on the Semgrep registry
+      # rather than on anything in the repository. A bound of its own, so the
+      # log names the step instead of the job.
+      - name: Scan source
+        id: scan
+        timeout-minutes: 20
+        env:
+          SECURITY_JOB: code
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-code
+          path: ${{ inputs.working-directory }}/.security/code.sarif
+          if-no-files-found: error
+          retention-days: 7
+  policy:
+    name: Policy
+    needs: config
+    if: ${{ inputs.policy && needs.config.outputs.enabled == 'true' && needs.config.outputs.policy == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      - name: Scan the install policy
+        id: scan
+        env:
+          SECURITY_JOB: policy
+        run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
+      - name: Upload SARIF
+        if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-sarif-policy
+          path: ${{ inputs.working-directory }}/.security/policy.sarif
+          if-no-files-found: error
+          retention-days: 7
+  verdict:
+    name: Verdict
+    needs: [config, deps, code, policy]
+    # !cancelled(), not success(): a scanner that was switched off is skipped and
+    # a scanner that crashed is failed, and both still have to reach the verdict -
+    # "one scanner died" and "nothing was found" must never read the same. A
+    # crashed scanner keeps the run red on its own job; this one adds the summary.
+    if: ${{ !cancelled() && needs.config.result == 'success' && needs.config.outputs.enabled == 'true' }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 15
+    # The only escalation in this workflow, and the reason a caller has to grant
+    # anything at all. Naming `permissions:` resets the unnamed scopes to none,
+    # so contents: read is re-declared or the checkouts below lose it.
+    permissions:
+      contents: read
+      actions: read # workflow metadata for the SARIF upload
+      security-events: write # upload the merged SARIF to code scanning
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          install: 'false'
+      # merge-multiple is safe here only because each artifact carries a file
+      # named after its own job - deps.sarif, code.sarif, policy.sarif. Two
+      # artifacts carrying one filename would make the merge a coin toss, which
+      # is what the release's per-platform build-info.json exists to avoid.
+      #
+      # Guarded on at least one scanner having succeeded: download-artifact fails
+      # when its pattern matches nothing, and "every scanner was switched off" is
+      # a case verdict.sh reports properly on its own.
+      - name: Download scanner SARIF
+        if: ${{ needs.deps.result == 'success' || needs.code.result == 'success' || needs.policy.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: security-sarif-*
+          merge-multiple: true
+          path: ${{ inputs.working-directory }}/.security
+      - name: Verdict
+        id: verdict
+        run: bash "$WORKFLOWS_DIR/scripts/security/verdict.sh"
+      # !cancelled(), so a verdict that failed on findings still gets those
+      # findings into the Security tab - that run is exactly the one where they
+      # matter. hashFiles guards the case where nothing was produced at all;
+      # upload-sarif dies on an empty directory.
+      #
+      # The event branch is load-bearing: on a push both operands of the
+      # full_name comparison are empty, so a bare equality would treat every push
+      # as a fork and never upload anything.
+      - name: Upload to code scanning
+        if: >-
+          ${{ !cancelled() && inputs.sarif-upload
+          && (github.event_name != 'pull_request'
+              || github.event.pull_request.head.repo.full_name == github.repository)
+          && hashFiles(format('{0}/.security/*.sarif', inputs.working-directory)) != '' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ inputs.working-directory }}/.security
+          category: security
+      # A fork's GITHUB_TOKEN is read-only whatever the block above requests, so
+      # the upload cannot happen. The verdict still ran and still applied the
+      # threshold; only the destination is missing, and an empty Security tab
+      # must never be allowed to read as "scanned, nothing found".
+      - name: Report the fork upload gap
+        if: >-
+          ${{ !cancelled() && inputs.sarif-upload
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name != github.repository }}
+        env:
+          REASON: this run is a pull request from a fork, whose token is read-only whatever this workflow requests
+        run: bash "$WORKFLOWS_DIR/scripts/security/sarif-upload-skipped.sh" "$REASON"
+      - name: Report the disabled upload
+        if: ${{ !cancelled() && !inputs.sarif-upload }}
+        env:
+          REASON: the caller passed sarif-upload false
+        run: bash "$WORKFLOWS_DIR/scripts/security/sarif-upload-skipped.sh" "$REASON"

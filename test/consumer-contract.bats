@@ -97,7 +97,7 @@ guide_yaml_block() {
   # that are not caller examples (the secrets-policy snippet is block 5), so the
   # index and the position in this list stopped being the same number once
   # check-codeql.yml's section landed further down the page.
-  for spec in ci:1 ci-web:2 ci-pr-closed:3 ci-pr-title:4 ci-codeql:6; do
+  for spec in ci:1 ci-web:2 ci-pr-closed:3 ci-pr-title:4 ci-codeql:6 ci-security:8; do
     wf="${spec%:*}"
     n="${spec##*:}"
     file="$FIXTURES/consumer-min/.github/workflows/$wf.yml"
@@ -164,7 +164,7 @@ on_block() {
   command -v yq >/dev/null || skip "yq not installed"
   missing=()
   for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
-    build-prepare build-ios build-android \
+    check-security build-prepare build-ios build-android \
     publish-store publish-github-release publish-ota pr-release-notes; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
@@ -189,7 +189,7 @@ on_block() {
   command -v yq >/dev/null || skip "yq not installed"
   phantom=()
   for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
-    build-prepare build-ios build-android \
+    check-security build-prepare build-ios build-android \
     publish-store publish-github-release publish-ota pr-release-notes; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"

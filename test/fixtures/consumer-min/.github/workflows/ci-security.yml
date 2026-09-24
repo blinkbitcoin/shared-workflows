@@ -1,0 +1,32 @@
+name: Security
+on:
+  push:
+    branches: [main]
+    # No paths-ignore: check-code.yml's `changes` job is this family's single
+    # docs classifier, and a second, narrower copy of it here would drift from it.
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+concurrency:
+  group: ci-security-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  security:
+    name: Security
+    # The repository variable is the master switch, the same shape as
+    # OTA_ENABLED and STORE_UPLOADS_ENABLED - except this one is opt-out, because
+    # a generated app gets the deterministic scanners on. A skipped job is green,
+    # so a repository that sets it to false never holds up a required check.
+    if: ${{ vars.SECURITY_ENABLED != 'false' }}
+    # A called workflow can only ever narrow the caller's token, never widen it.
+    # check-security.yml's verdict job asks for security-events: write, so a
+    # caller that grants less does not get a failed step - the whole run dies as
+    # a startup_failure with no jobs at all, which is close to undebuggable from
+    # the UI. That is not hypothetical: every CodeQL run on the first consumer
+    # failed this way from the day the repository was pushed.
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-security.yml@v0

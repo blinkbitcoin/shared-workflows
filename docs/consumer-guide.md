@@ -892,6 +892,94 @@ marker travels with the code, is reviewed with the diff that adds it, and
 silences exactly one site rather than the whole query — a real finding of the
 same rule somewhere else still shows up.
 
+### `check-security.yml`
+
+Jobs: `Config`, `Dependencies`, `Code`, `Policy`, `Verdict`.
+
+The consumer's own security scanners, run in CI. Every scanner, the settings
+resolver and the merge live in **your** repository under `scripts/security/`,
+and `make check-security` runs the same files — so a green laptop and a green
+pipeline are the same claim. This workflow owns the job graph, the permissions,
+the artifact passing, the upload to code scanning and the run summary, and
+nothing else. It ships no fallback scanner: a job that is switched on but whose
+`scripts/security/<job>.sh` is missing fails, by name, rather than skipping
+quietly.
+
+**What decides whether a scanner runs.** Two things, together. The input below is
+what this *tier* allows, and `security-policy.json` in your repository is what
+your repository wants; a caller may narrow and may never widen. A job-level
+`if:` cannot read a file, so the `Config` job runs your `scripts/security/config.mjs`
+once and publishes the answer as job outputs the other jobs read. Values —
+`severity`, `failOn` — are never inputs here: they live in
+`security-policy.json`, with environment twins that win over it.
+
+`"enabled": false` in `security-policy.json` (or `SECURITY_ENABLED=false`)
+switches everything off, and every job then skips. A skipped job is green, so
+`require-green-workflow` never waits on it. If the gate is on but every scanner
+is off, the `Verdict` job fails rather than reporting a clean run: a pipeline
+that scans nothing while reporting green is worse than one that is red.
+
+| Input | Meaning |
+| --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | The family's common six. `macos-runner` and `native-cache-version` are unused here and carried for consistency |
+| `deps` | Allow the dependency scanner (your `check-security-deps`, osv-scanner over the lockfile). Default `true` |
+| `code` | Allow the source scanner (your `check-security-code`, Semgrep over app source). Default `true` |
+| `policy` | Allow the install-policy scanner (your `check-security-policy`). Default `true` |
+| `sarif-upload` | Upload the merged SARIF to code scanning. Default `true`. Off makes the run say so in the summary rather than go quiet, and the verdict still applies the threshold |
+
+Secrets: `consumer-token` only, and only for a private consumer repository.
+There are no outputs: the caller already has `docs-only` from `check-code.yml`,
+and a second docs classifier would be a second rule that drifts.
+
+**Permissions your caller must grant.** The `Verdict` job is the only one that
+escalates, and it asks for `security-events: write` plus `actions: read`. A
+called workflow can only narrow the caller's token, so a caller that grants less
+does not get a failed step — the whole run dies as a `startup_failure` with no
+jobs at all.
+
+**Forks.** A pull request from a fork gets a read-only `GITHUB_TOKEN` whatever
+this workflow requests, so the SARIF cannot reach code scanning. The gate is not
+weaker there: the verdict still merges, still applies the threshold and still
+fails the run on a blocking finding. Only the destination is missing, and the run
+says so — a `::warning::` and a line in the summary — so an empty Security tab
+can never read as "scanned, nothing found".
+
+```yaml
+# .github/workflows/ci-security.yml
+name: Security
+on:
+  push:
+    branches: [main]
+    # No paths-ignore: check-code.yml's `changes` job is this family's single
+    # docs classifier, and a second, narrower copy of it here would drift from it.
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+concurrency:
+  group: ci-security-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  security:
+    name: Security
+    # The repository variable is the master switch, the same shape as
+    # OTA_ENABLED and STORE_UPLOADS_ENABLED - except this one is opt-out, because
+    # a generated app gets the deterministic scanners on. A skipped job is green,
+    # so a repository that sets it to false never holds up a required check.
+    if: ${{ vars.SECURITY_ENABLED != 'false' }}
+    # A called workflow can only ever narrow the caller's token, never widen it.
+    # check-security.yml's verdict job asks for security-events: write, so a
+    # caller that grants less does not get a failed step - the whole run dies as
+    # a startup_failure with no jobs at all, which is close to undebuggable from
+    # the UI. That is not hypothetical: every CodeQL run on the first consumer
+    # failed this way from the day the repository was pushed.
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check-security.yml@v0
+```
+
 ## Release workflows
 
 Seven more reusable workflows cover the release path: the store notes drafted

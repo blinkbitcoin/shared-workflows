@@ -21,7 +21,7 @@ setup() {
 # assertion here would still pass.
 @test "every reusable workflow this family publishes is present" {
   for w in check-code check-unit check-e2e build-web publish-badges pr-closed pr-title check-codeql \
-    build-prepare build-ios build-android \
+    check-security build-prepare build-ios build-android \
     publish-store publish-github-release publish-ota pr-release-notes; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
@@ -862,4 +862,123 @@ lane_step_count() {
       fail "$(basename "$w") puts fastlane vocabulary in a display name: $(grep -i lane <<<"$names" | tr '\n' ' ')"
     fi
   done
+}
+
+# ---------------------------------------------------------------------------
+# check-security.yml - the second workflow in the family that writes to code
+# scanning, and the first whose job graph is decided by a file in the consumer.
+# ---------------------------------------------------------------------------
+
+# security-events: write is the whole reason a caller has to grant anything at
+# all here, and a called workflow can only ever narrow the caller's token - so
+# an escalation that spreads to a scanner job would make every caller grant more
+# than the one job that needs it. Naming `permissions:` also resets the unnamed
+# scopes to none, which is why contents: read is re-declared rather than assumed.
+@test "check-security.yml escalates permissions only on its verdict job" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  [ "$(yq -r '.jobs.verdict.permissions.contents' "$f")" = "read" ] \
+    || fail "verdict does not re-declare contents: read, so its own checkouts would lose it"
+  [ "$(yq -r '.jobs.verdict.permissions.actions' "$f")" = "read" ] \
+    || fail "verdict does not declare actions: read, which the SARIF upload needs"
+  [ "$(yq -r '.jobs.verdict.permissions."security-events"' "$f")" = "write" ] \
+    || fail "verdict does not declare security-events: write"
+  [ "$(yq -r '.jobs.verdict.permissions | keys | length' "$f")" -eq 3 ] \
+    || fail "verdict asks for more than three scopes: $(yq -r '.jobs.verdict.permissions' "$f")"
+  escalating="$(yq -r '[.jobs | to_entries[] | select(.value.permissions) | .key] | join(",")' "$f")"
+  [ "$escalating" = "verdict" ] \
+    || fail "jobs declaring their own permissions in check-security.yml: $escalating - only verdict may"
+}
+
+# A job-level `if:` cannot read a file, so the consumer's security-policy.json
+# reaches the graph only through the config job's outputs. The effective setting
+# is the AND of the caller's input and the consumer's policy: a caller may
+# narrow (a pull request has no binaries to scan) and may never widen.
+@test "check-security.yml's scanner jobs are the AND of the caller's input and the consumer's policy" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  for job in deps code policy; do
+    cond="$(yq -r ".jobs.\"$job\".if" "$f")"
+    contains "$cond" "inputs.$job" || fail "the $job job ignores its own input: $cond"
+    contains "$cond" "needs.config.outputs.$job == 'true'" \
+      || fail "the $job job ignores the consumer's policy: $cond"
+    contains "$cond" "needs.config.outputs.enabled == 'true'" \
+      || fail "the $job job ignores the master switch: $cond"
+    needs="$(yq -r ".jobs.\"$job\".needs" "$f")"
+    [ "$needs" = "config" ] || fail "the $job job needs '$needs', expected config"
+  done
+  # !cancelled(), not success(): a scanner that was switched off, or one that
+  # crashed, must still reach the verdict. A crash keeps the run red on its own
+  # job; the verdict's business is to say what was and was not scanned.
+  vcond="$(yq -r '.jobs.verdict.if' "$f")"
+  contains "$vcond" '!cancelled()' || fail "the verdict never runs after a skipped or failed scanner: $vcond"
+  contains "$vcond" "needs.config.outputs.enabled == 'true'" \
+    || fail "the verdict ignores the master switch: $vcond"
+  vneeds="$(yq -r '.jobs.verdict.needs | join(",")' "$f")"
+  [ "$vneeds" = "config,deps,code,policy" ] || fail "verdict needs '$vneeds'"
+}
+
+# The consumer owns every scanner, the merge and the verdict. Shared owns the
+# job graph and nothing else. A fallback runner here would serve only a consumer
+# not generated from the template, and no such consumer exists - "a baseline
+# with one consumer is not a baseline".
+@test "check-security.yml runs the consumer's scripts and shares no runner of its own" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  for job in deps code policy; do
+    line="$(yq -r ".jobs.\"$job\".steps[] | select(.id == \"scan\") | .run" "$f")"
+    contains "$line" 'scripts/security/run-job.sh' \
+      || fail "the $job job does not go through run-job.sh, which is what fails loudly on a missing runner: $line"
+  done
+  ! ls "$REPO_ROOT"/scripts/security/*.mjs >/dev/null 2>&1 \
+    || fail "shared-workflows has grown its own security modules; the resolver, the scanners and the merge live in the consumer"
+  vline="$(yq -r '.jobs.verdict.steps[] | select(.id == "verdict") | .run' "$f")"
+  contains "$vline" 'scripts/security/verdict.sh' || fail "the verdict step does not go through verdict.sh: $vline"
+}
+
+# A fork's GITHUB_TOKEN is read-only whatever a permissions block asks for, so
+# upload-sarif cannot work there. The gate is not weaker on a fork - the verdict
+# still applies the threshold - but the reporting destination is missing, and
+# that has to be said rather than left as an empty Security tab.
+@test "check-security.yml uploads SARIF only when it can, and says so when it cannot" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  upload="$(yq -r '.jobs.verdict.steps[] | select((.uses // "") | test("upload-sarif")) | .if' "$f")"
+  [ -n "$upload" ] || fail "check-security.yml has no upload-sarif step"
+  contains "$upload" "github.event.pull_request.head.repo.full_name == github.repository" \
+    || fail "the upload is not guarded against a fork pull request: $upload"
+  contains "$upload" "github.event_name != 'pull_request'" \
+    || fail "the fork guard would also block a push and a dispatch, where both operands are empty: $upload"
+  contains "$upload" 'hashFiles' \
+    || fail "the upload is not guarded on a SARIF actually existing, and upload-sarif dies on an empty directory: $upload"
+  notes="$(yq -r '[.jobs.verdict.steps[] | select((.run // "") | test("sarif-upload-skipped.sh"))] | length' "$f")"
+  [ "$notes" -eq 2 ] \
+    || fail "expected two steps explaining a missing upload (a fork, and sarif-upload: false), found $notes"
+}
+
+# One artifact per scanner, each carrying a file named after its own job. The
+# release's build-info taught this family what merge-multiple does to two
+# artifacts carrying the same filename: the winner is a coin toss. Here the
+# filenames differ by construction, which is the only reason merge-multiple is
+# safe - so both halves are pinned.
+@test "each scanner's SARIF travels under its own artifact name and its own filename" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  names="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.name] | join("\n")' "$f")"
+  [ "$(grep -c . <<<"$names")" -eq 3 ] || fail "expected three SARIF uploads, got: $names"
+  [ "$(sort -u <<<"$names" | grep -c .)" -eq 3 ] || fail "two scanner jobs upload under one artifact name: $names"
+  paths="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.path] | join("\n")' "$f")"
+  for job in deps code policy; do
+    contains "$paths" "/.security/$job.sarif" || fail "no upload of $job.sarif: $paths"
+  done
+  merge="$(yq -r '[.jobs.verdict.steps[] | select((.uses // "") | test("download-artifact"))][0].with."merge-multiple"' "$f")"
+  [ "$merge" = "true" ] || fail "the verdict does not merge the scanner artifacts into one directory: $merge"
+  # These jobs read source, a lockfile and a workspace file. None of them reads
+  # node_modules, and a pnpm install in each is minutes added to every consumer's
+  # pull request for nothing. Quoted 'false' on purpose: unquoted, yq returns a
+  # boolean and this assertion fails on correct YAML.
+  setups="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("workflows/.github/actions/setup"))] | length' "$f")"
+  [ "$setups" -eq 5 ] || fail "expected one Setup step per job, found $setups"
+  installing="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("workflows/.github/actions/setup")) | select(.with.install != "false")] | length' "$f")"
+  [ "$installing" -eq 0 ] || fail "$installing Setup step(s) run pnpm install, which no job here needs"
 }
