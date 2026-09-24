@@ -515,6 +515,100 @@ runner own (`WORKFLOWS_`, `GITHUB_`, `RUNNER_`, `ACTIONS_`, `LD_`, `DYLD_`,
 `PATH`, `HOME`, `NODE_OPTIONS`). A refusal fails the step with the offending
 key named, rather than publishing it.
 
+## Configuring a feature
+
+Configuration in this family has landed on one shape, worked out first for
+security scanning and now the pattern every feature with more than an on/off
+switch follows: the template's `scripts/security/config.mjs` and
+`security-policy.json` (see the template's `docs/security.md`, "Turning
+things off") are the reference implementation, not a one-off.
+
+### The four rules
+
+1. **One policy file per feature, in the consumer repository.** For security
+   scanning that is `security-policy.json` at the consumer root. It holds
+   every tunable the feature has — what is on, thresholds, allowlists,
+   excludes — and it is committed. Lowering a bar is then a diff, in the
+   repository that lowered it, that a reviewer can see and a `git blame` can
+   find later. A setting that instead lived only in a repository variable
+   would change with no PR, no diff and no reviewer.
+2. **Environment variables override it, key for key.** `SECURITY_CODE=false`
+   beats `jobs.code.enabled` in `security-policy.json`. The same name works
+   two ways with no translation: exported on a laptop before `make
+   check-security`, or set as a repository variable read into the job's
+   environment in CI. Nobody maintains a second mapping from "the CI knob"
+   to "the file key" — they are the same word.
+3. **An invalid value fails the run.** Never "reads as off." A value that is
+   not one of the settings a scanner actually understands has to stop the
+   run and name the offending value, because the alternative — silently
+   dropping the check the value was supposed to configure — is worse than
+   any finding the check would have reported. `SECURITY_FAIL_ON=deterministc`
+   (one dropped letter) must fail loudly, naming `deterministc` as not a
+   known engine class, rather than resolving to an empty `failOn` that blocks
+   nothing while the run reports success. This rule earned its place during
+   the security work rather than being designed in advance: an unrecognised
+   severity, an unknown job name and an invalid `failOn` each independently
+   turned out to silently disable blocking the first time they were tried,
+   and each needed its own fix before the resolver actually failed closed.
+   An **empty** `failOn` is not the same failure — `SECURITY_FAIL_ON=` or
+   `"failOn": []` is a deliberate choice (advisory-only), so it is accepted,
+   but the summary says so explicitly rather than letting the run read as an
+   ordinary pass.
+4. **Workflow inputs stay booleans.** An input may switch a whole layer on
+   or off for a caller; it may never carry a threshold, a list or a
+   free-form value. Numbers, allowlists and excludes live in the consumer's
+   policy file, where they are versioned next to the code they cover, not in
+   a `with:` block in a caller's workflow file.
+
+### When a feature needs a policy file
+
+A single on/off switch does not need one — a plain `type: boolean` workflow
+input (rule 4) covers it, the same as `docs-check` or `commitlint` in
+`check-code.yml` above. The line is what the feature has to tune beyond "on
+or off": the moment a feature grows a threshold (`severity`), an allowlist or
+excludes, or independent per-part switches (`jobs.deps`, `jobs.code`, ...),
+those settings need a home that is diffable and reviewable in the consumer,
+which a workflow input — read once per run, with no history of its own — is
+not. Security scanning needed all three from the start, which is why it has
+`security-policy.json`; a feature that only ever needs "is this on" does not
+need one, and adding a policy file for it would be a file nobody reads that
+duplicates a boolean already sitting in a caller.
+
+### Naming
+
+A feature is `<feature>`; its policy file is `<feature>-policy.json` at the
+consumer's root; its environment twins are `FEATURE_*`, one name per key in
+the file (`SECURITY_ENABLED` for `enabled`, `SECURITY_SEVERITY` for
+`severity`, `SECURITY_FAIL_ON` for `failOn`, `SECURITY_<JOB>` for each
+`jobs.<name>.enabled`). Where the family also exposes an on/off switch as a
+workflow input for that feature, it carries the same name once more, in
+kebab-case (`security-enabled`, not a different word for the same on/off
+decision). One concept, one name, spelled three ways by three different
+syntaxes — `enabled` / `SECURITY_ENABLED` / `security-enabled` — never three
+concepts that happen to look related.
+
+### The resolver is duplicated, and that is deliberate for now
+
+`config.mjs`'s reader — take a schema of defaults, resolve file then
+environment then default, validate every value — is generic; nothing in it
+is specific to security scanning. It is not, today, extracted into a shared
+package that every feature and every consumer imports. `security-policy.json`
+resolves through the copy that lives in the template alongside it, and a
+second feature that wants the same behaviour (`test-policy.json`, agreed but
+not yet built) is expected to copy the pattern rather than import it.
+
+That is a deliberate choice, not an oversight: the template carries no
+`@blinkbitcoin` dependency today, and GitHub Packages requires authentication
+even for a public package, so adopting one means a scoped registry entry and
+a token on every developer machine and in CI — for a resolver whose only
+caller so far is the template itself. A baseline with one consumer is not a
+baseline: extracting now would fix an interface before a second real
+consumer exists to say which knobs it actually needs, and would couple the
+template's `pnpm install` to this repository's release cadence for no
+present benefit. The model above — the four rules — is the part worth fixing
+now; which repository owns the code that enforces them is revisited once a
+second consumer exists.
+
 ## Inputs, outputs and secrets per workflow
 
 Every table below is read from the workflow's own `on.workflow_call` block —
