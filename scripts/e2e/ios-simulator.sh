@@ -17,6 +17,48 @@ require_cmd xcrun jq
 rec_pid_file="$WORKFLOWS_OUT/ios-record.pid"
 log_pid_file="$WORKFLOWS_OUT/ios-unified-log.pid"
 
+# Pre-answer iOS's "Open in <app>?" alert for every URL scheme the installed
+# app declares. `simctl openurl` raises that alert on a simulator that has never
+# been asked - every fresh runner - and everything downstream was built around
+# tapping through it: app-launch.sh's one-shot Open tap, and in each consumer's
+# flows an Open tap after every openLink plus a warm-up open in the first flow.
+# The alert was the fault, not the taps: on a loaded runner the first hand-off
+# took ~40s, the XCTest driver timed out screenshotting it (run 36049645029,
+# react-native-mobile-template), every flow after that failed in milliseconds,
+# and the alerts the dead driver could not answer queued up for the retry.
+#
+# The answer is a LaunchServices preference, the same one a developer's
+# simulator writes when someone taps Open once: key
+# `com.apple.CoreSimulator.CoreSimulatorBridge--><scheme>` (CoreSimulatorBridge
+# is the process `simctl openurl` opens from), value the bundle id. Written
+# through `simctl spawn defaults`, so cfprefsd sees it live - no reboot. With it
+# set, SpringBoard logs "Received trusted open application request" and hands
+# the URL over at once, alert-free.
+#
+# Read from the built app's Info.plist rather than the Expo config: iOS prompts
+# per scheme the binary registers, and a config plugin can add schemes the
+# config never names (Expo adds `exp+<slug>` and the bundle id itself).
+approve_url_schemes() { # <App.app>
+  local plist="$1/Info.plist" udid bundle_id schemes scheme
+  require_cmd plutil
+  udid="$(workflows_sim_udid)"
+  bundle_id="$(plutil -extract CFBundleIdentifier raw -o - "$plist")" ||
+    die "no CFBundleIdentifier in $plist"
+  # No CFBundleURLTypes is a valid app (nothing to deep link into); the jq
+  # filter tolerates a URL type without schemes, which Xcode also allows.
+  schemes="$(plutil -extract CFBundleURLTypes json -o - "$plist" 2>/dev/null |
+    jq -r '.[].CFBundleURLSchemes[]?')" || schemes=""
+  if [ -z "$schemes" ]; then
+    log "$bundle_id declares no URL schemes - nothing to pre-approve"
+    return 0
+  fi
+  while IFS= read -r scheme; do
+    xcrun simctl spawn "$udid" defaults write com.apple.launchservices.schemeapproval \
+      "com.apple.CoreSimulator.CoreSimulatorBridge-->$scheme" -string "$bundle_id"
+  done <<< "$schemes"
+  log "pre-approved URL schemes for $bundle_id: $(printf '%s' "$schemes" | tr '\n' ' ')"
+}
+
 case "${1:-}" in
   pick)
     devices="$(xcrun simctl list -j devices available)"
@@ -59,6 +101,7 @@ case "${1:-}" in
     fi
     xcrun simctl install "$(workflows_sim_udid)" "$app"
     log "installed $app"
+    approve_url_schemes "$app"
     ;;
   record)
     case "${2:-}" in
