@@ -2,7 +2,13 @@
 extend-exclude = ["test/fixtures/**", "CHANGELOG.md", ".git/**"]
 
 [default]
-extend-ignore-re = []
+extend-ignore-re = [
+  # The configuration-model contract in docs/consumer-guide.md illustrates an
+  # invalid setting by dropping a letter from it, so the misspelling is the
+  # point of the example. Scoped to the backticked example itself: a bare
+  # `deterministc` written by accident anywhere else still fails the gate.
+  "`(?:SECURITY_FAIL_ON=)?deterministc`",
+]
 
 [default.extend-words]
 # Real project/technology names and Apple API field names that trip the dictionary.
