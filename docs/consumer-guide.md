@@ -51,7 +51,7 @@ flowchart TD
   consumer["a consumer pinned @v0"]
   run["the consumer's next run"]
   merged -->|"push to main"| release
-  release -->|"opens or updates"| pr
+  release -->|"opens, or rebuilds on each push"| pr
   pr -->|"squash merge, push to main"| release
   release -->|"release_created is true"| tag
   tag -->|"tag_name"| major

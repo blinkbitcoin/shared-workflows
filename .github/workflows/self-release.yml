@@ -57,6 +57,9 @@ jobs:
           # every permission the App's installation has.
           permission-contents: write
           permission-pull-requests: write
+      # always-update in the config: every run rebuilds each open release PR
+      # on this main, so a release of one package cannot leave the other
+      # package's PR conflicting on the shared manifest.
       - name: Release please
         id: release
         uses: googleapis/release-please-action@v5
@@ -81,7 +84,7 @@ jobs:
       # the way to make that run real). workflow_dispatch is the one event
       # that token still fires: start self-ci.yml on the PR's branch by name,
       # once per release PR the push created or updated (separate-pull-requests:
-      # one per package). The branch is read in the script, not with
+      # one per package; always-update: every open one, on every push). The branch is read in the script, not with
       # fromJSON() in `env:` - the runner validates a step's env even when
       # its `if` is false, and fromJSON('') is an error.
       - name: Run CI on the release PR

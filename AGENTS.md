@@ -131,6 +131,12 @@ Every row is a make target; nothing here is run through a package manager.
   one goes away only when the PR is opened by the RELEASE_TAGGER App (the
   guarded step in `self-release.yml`; needs the App's two secrets on this
   repo).
+  There are two release PRs, one per package (`separate-pull-requests`),
+  and both bump `.release-please-manifest.json`. `always-update` in
+  `release-please-config.json` rebuilds every open one on each push to
+  `main`, so merging one never leaves the other conflicting. Each rebuild is a
+  force push, which dismisses an approval: approve a release PR right
+  before merging it.
 
   The chain, end to end:
 
@@ -144,8 +150,8 @@ Every row is a make target; nothing here is run through a package manager.
     participant tags as tags and packages
     main->>rel: push to main
     rel->>rel: mint an App token when both RELEASE_TAGGER secrets exist, else use GITHUB_TOKEN
-    rel->>pr: release-please opens or updates the release PR
-    rel->>ci: dispatch-release-pr-ci.sh starts self-ci.yml on the PR branch
+    rel->>pr: release-please opens each release PR, or rebuilds it on this main (always-update)
+    rel->>ci: dispatch-release-pr-ci.sh starts self-ci.yml on each PR branch
     ci-->>pr: the green dispatched run is the signal
     Note over pr: the pull_request run GitHub creates for a GITHUB_TOKEN-opened PR gets no job and is noise
     pr->>main: squash merge
@@ -153,6 +159,7 @@ Every row is a make target; nothing here is run through a package manager.
     rel->>tags: release_created, tag vX.Y.Z and its release
     rel->>tags: major-tag job moves v0 and the minor tag to that commit
     rel->>tags: publish-dev-config job publishes the npm package, when it released too
+    rel->>pr: the other package's open release PR is rebuilt on the new main, manifest included
   ```
 
 - **No vague abbreviations, anywhere a human reads.** Write the word:

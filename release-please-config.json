@@ -1,8 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "simple",
-  "$comment": "separate-pull-requests, so each release PR names its own version. With both packages in one PR release-please cannot fit two versions in one title and falls back to `chore: release main` - the repo went from `chore(main): release 0.2.1` to a title saying nothing. They also release on genuinely independent cadences: the moving v0 tag that every consumer pins, and an npm package. One PR each keeps those decisions separate.",
+  "$comment": "separate-pull-requests, so each release PR names its own version. With both packages in one PR release-please cannot fit two versions in one title and falls back to `chore: release main` - the repo went from `chore(main): release 0.2.1` to a title saying nothing. They also release on genuinely independent cadences: the moving v0 tag that every consumer pins, and an npm package. One PR each keeps those decisions separate. always-update, because two PRs share one manifest: both bump adjacent lines of .release-please-manifest.json, so merging one leaves the other conflicting. Without it release-please rebuilds an open PR only when its release notes change, and a release of the other package does not change them - #55 on 2026-09-23 and #76 on 2026-09-24 sat conflicting until rebased by hand. With it every push to main rebuilds each open release PR on that main. The cost: a force push to every release PR per push to main, which re-runs its CI and dismisses an approval given before that push.",
   "separate-pull-requests": true,
+  "always-update": true,
   "packages": {
     ".": {
       "release-type": "simple",
