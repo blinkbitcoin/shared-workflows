@@ -1,0 +1,32 @@
+name: Self unit
+# The two test suites, split so a run says which one failed: the bats cases
+# over the shell scripts and the workflow shapes, and node:test over
+# packages/dev-config. Called from self-ci.yml, which turns these into
+# `Unit / Tests` and `Unit / Package`.
+#
+# Kept apart from self-checks.yml because they answer different questions - "is
+# the code right" rather than "is the repository tidy" - and because this is
+# where a coverage artifact will come from when this repository starts
+# publishing its own badges.
+on:
+  workflow_call:
+permissions: { contents: read }
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      - run: make test
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      # Carries the 100% line, branch and function thresholds; see the comment
+      # on the target in the Makefile for why they ratchet and never drop.
+      - run: make test-package

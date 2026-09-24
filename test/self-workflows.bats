@@ -56,3 +56,69 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
     || fail "dispatch-release-pr-ci.sh no longer dispatches self-ci.yml by that name"
   [ -f "$CI" ] || fail "self-ci.yml is gone; the dispatch script still names it"
 }
+
+# --------------------------------------------------------------------------
+# The gate list and the job list, held together.
+#
+# self-ci.yml used to run `make check` as one job, which made "CI runs every
+# gate" true by construction. Splitting it into a job per gate - so a run graph
+# names the one that failed - gives up that guarantee: a target added to
+# `check:` would be enforced by the pre-push hook and by no CI job at all. That
+# is the same drift consumer-contract.bats exists to catch on the consumer
+# side, and it is caught here the same way, by reading both lists rather than
+# keeping a third by hand.
+# --------------------------------------------------------------------------
+SELF_CHECKS="$REPO_ROOT/.github/workflows/self-checks.yml"
+SELF_UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
+
+# The targets `make check` depends on, read out of the Makefile at run time.
+check_prerequisites() {
+  local line deps
+  line="$(grep -E '^check:' "$REPO_ROOT/Makefile" | head -1)"
+  deps="${line#check:}"
+  deps="${deps%%##*}"
+  tr ' ' '\n' <<<"$deps" | sed '/^$/d' | sort -u
+}
+
+# Every make target some job in the two called workflows actually runs. A step
+# may name several (`make shellcheck actionlint`), so the line is split too.
+ci_make_targets() {
+  local f
+  for f in "$SELF_CHECKS" "$SELF_UNIT"; do
+    yq -r '[.jobs[].steps[] | .run // ""] | .[]' "$f"
+  done | sed -nE 's/^[[:space:]]*make[[:space:]]+([a-z0-9 _-]+)$/\1/p' \
+    | tr ' ' '\n' | sed '/^$/d' | sort -u
+}
+
+@test "every gate make check depends on is run by a self-CI job" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local missing=()
+  while IFS= read -r target; do
+    ci_make_targets | grep -qx "$target" || missing+=("$target")
+  done < <(check_prerequisites)
+  [ "${#missing[@]}" -eq 0 ] \
+    || fail "make check runs these gates and no self-CI job does: ${missing[*]}"
+}
+
+# The other direction. A job running a target that `make check` does not reach
+# is a gate CI enforces and `make check` does not, so a green local run would
+# be a claim about coverage it does not have.
+@test "every make target a self-CI job runs is reachable from make check" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local extra=()
+  while IFS= read -r target; do
+    check_prerequisites | grep -qx "$target" || extra+=("$target")
+  done < <(ci_make_targets)
+  [ "${#extra[@]}" -eq 0 ] \
+    || fail "these self-CI jobs run a target make check does not: ${extra[*]}"
+}
+
+# The extractors are the load-bearing part: one that silently found nothing
+# would make both cases above pass by vacuum.
+@test "the self-CI extractors find the gates and the jobs" {
+  command -v yq >/dev/null || skip "yq not installed"
+  [ "$(check_prerequisites | wc -l)" -ge 5 ] \
+    || fail "check_prerequisites found almost nothing: $(check_prerequisites | tr '\n' ' ')"
+  [ "$(ci_make_targets | wc -l)" -ge 5 ] \
+    || fail "ci_make_targets found almost nothing: $(ci_make_targets | tr '\n' ' ')"
+}

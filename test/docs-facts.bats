@@ -40,7 +40,14 @@ for f in sorted(glob.glob(os.path.join(root, '*.md')) + glob.glob(os.path.join(r
 # untracked scratch file must not move a documented number.
 real_count() {
   case "$1" in
-    reusable-workflows) grep -l 'workflow_call' "$REPO_ROOT"/.github/workflows/*.yml | wc -l ;;
+    # self-* excluded: the claim this number backs is about the family a
+    # consumer calls, and this repository's own CI is not part of it. They are
+    # `workflow_call` workflows all the same - self-ci.yml calls self-checks.yml
+    # and self-unit.yml - so counting every file that says workflow_call would
+    # inflate the README's hero line every time this repo splits one of its own
+    # jobs into another called workflow.
+    reusable-workflows) grep -l 'workflow_call' "$REPO_ROOT"/.github/workflows/*.yml \
+                          | grep -vc '/self-' ;;
     workflows)          git -C "$REPO_ROOT" ls-files '.github/workflows/*.yml' | wc -l ;;
     actions)            git -C "$REPO_ROOT" ls-files '.github/actions/*/action.yml' | wc -l ;;
     shell-scripts)      git -C "$REPO_ROOT" ls-files 'scripts/**/*.sh' | wc -l ;;
