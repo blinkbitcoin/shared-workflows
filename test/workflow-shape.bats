@@ -257,7 +257,7 @@ lane_step_count() {
 }
 
 @test "every workflow that runs prebuild, a lane or the notes generator accepts build-env" {
-  for w in build-prepare build-ios build-android publish-store pr-release-notes; do
+  for w in build-prepare build-ios build-android publish-store pr-release-notes check-security; do
     f="$REPO_ROOT/.github/workflows/$w.yml"
     have=$(yq -r '.on.workflow_call.inputs | has("build-env")' "$f")
     [ "$have" = "true" ] || fail "$w.yml does not declare a build-env input"
@@ -894,10 +894,15 @@ lane_step_count() {
 # reaches the graph only through the config job's outputs. The effective setting
 # is the AND of the caller's input and the consumer's policy: a caller may
 # narrow (a pull request has no binaries to scan) and may never widen.
+SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
+
 @test "check-security.yml's scanner jobs are the AND of the caller's input and the consumer's policy" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
-  for job in deps code policy; do
+  for job in $SECURITY_JOBS; do
+    out="$(yq -r ".jobs.config.outputs.\"$job\"" "$f")"
+    [ "$out" = "\${{ steps.resolve.outputs.$job }}" ] \
+      || fail "the config job does not publish the consumer's setting for $job: $out"
     cond="$(yq -r ".jobs.\"$job\".if" "$f")"
     contains "$cond" "inputs.$job" || fail "the $job job ignores its own input: $cond"
     contains "$cond" "needs.config.outputs.$job == 'true'" \
@@ -915,7 +920,14 @@ lane_step_count() {
   contains "$vcond" "needs.config.outputs.enabled == 'true'" \
     || fail "the verdict ignores the master switch: $vcond"
   vneeds="$(yq -r '.jobs.verdict.needs | join(",")' "$f")"
-  [ "$vneeds" = "config,deps,code,policy" ] || fail "verdict needs '$vneeds'"
+  [ "$vneeds" = "config,$(tr ' ' ',' <<<"$SECURITY_JOBS")" ] || fail "verdict needs '$vneeds'"
+  # The download is guarded on any scanner having succeeded: download-artifact
+  # fails when its pattern matches nothing. A job missing from the guard would
+  # leave a run where only that job reported with nothing downloaded.
+  guard="$(yq -r '.jobs.verdict.steps[] | select(.name == "Download scanner SARIF") | .if' "$f")"
+  for job in $SECURITY_JOBS; do
+    contains "$guard" "needs.$job.result == 'success'" || fail "the download guard forgets $job: $guard"
+  done
 }
 
 # The consumer owns every scanner, the merge and the verdict. Shared owns the
@@ -925,7 +937,7 @@ lane_step_count() {
 @test "check-security.yml runs the consumer's scripts and shares no runner of its own" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
-  for job in deps code policy; do
+  for job in $SECURITY_JOBS; do
     line="$(yq -r ".jobs.\"$job\".steps[] | select(.id == \"scan\") | .run" "$f")"
     contains "$line" 'scripts/security/run-job.sh' \
       || fail "the $job job does not go through run-job.sh, which is what fails loudly on a missing runner: $line"
@@ -964,13 +976,22 @@ lane_step_count() {
 @test "each scanner's SARIF travels under its own artifact name and its own filename" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
-  names="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.name] | join("\n")' "$f")"
-  [ "$(grep -c . <<<"$names")" -eq 3 ] || fail "expected three SARIF uploads, got: $names"
-  [ "$(sort -u <<<"$names" | grep -c .)" -eq 3 ] || fail "two scanner jobs upload under one artifact name: $names"
+  names="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.name | select(test("^security-sarif-"))] | join("\n")' "$f")"
+  [ "$(grep -c . <<<"$names")" -eq 9 ] || fail "expected nine SARIF uploads, got: $names"
+  [ "$(sort -u <<<"$names" | grep -c .)" -eq 9 ] || fail "two scanner jobs upload under one artifact name: $names"
   paths="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.path] | join("\n")' "$f")"
-  for job in deps code policy; do
+  for job in $SECURITY_JOBS; do
     contains "$paths" "/.security/$job.sarif" || fail "no upload of $job.sarif: $paths"
   done
+  # The bill of materials is for people, not for the verdict: its own artifact,
+  # kept long enough to answer a later advisory, and outside the security-sarif-*
+  # pattern the verdict downloads.
+  [ "$(yq -r '.jobs.sbom.steps[] | select(.with.name == "security-sbom") | .with.path' "$f")" \
+    = '${{ inputs.working-directory }}/.security/sbom.cdx.json' ] || fail "the sbom job does not keep sbom.cdx.json"
+  [ "$(yq -r '.jobs.sbom.steps[] | select(.with.name == "security-sbom") | .with."retention-days"' "$f")" -ge 90 ] \
+    || fail "the bill of materials is not kept for at least 90 days"
+  pattern="$(yq -r '.jobs.verdict.steps[] | select(.name == "Download scanner SARIF") | .with.pattern' "$f")"
+  [ "$pattern" = 'security-sarif-*' ] || fail "the verdict downloads '$pattern', which would pull in the bill of materials" 
   merge="$(yq -r '[.jobs.verdict.steps[] | select((.uses // "") | test("download-artifact"))][0].with."merge-multiple"' "$f")"
   [ "$merge" = "true" ] || fail "the verdict does not merge the scanner artifacts into one directory: $merge"
   # These jobs read source, a lockfile and a workspace file. None of them reads
@@ -978,7 +999,89 @@ lane_step_count() {
   # pull request for nothing. Quoted 'false' on purpose: unquoted, yq returns a
   # boolean and this assertion fails on correct YAML.
   setups="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("workflows/.github/actions/setup"))] | length' "$f")"
-  [ "$setups" -eq 5 ] || fail "expected one Setup step per job, found $setups"
-  installing="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("workflows/.github/actions/setup")) | select(.with.install != "false")] | length' "$f")"
-  [ "$installing" -eq 0 ] || fail "$installing Setup step(s) run pnpm install, which no job here needs"
+  [ "$setups" -eq 11 ] || fail "expected one Setup step per job, found $setups"
+  # Only an expo export (bundle) and an expo prebuild (mobile) need the install.
+  installing=""
+  for job in $(yq -r '.jobs | keys | .[]' "$f"); do
+    n="$(yq -r "[.jobs.\"$job\".steps[]? | select((.uses // \"\") | test(\"workflows/.github/actions/setup\")) | select(.with.install != \"false\")] | length" "$f")"
+    [ "$n" -eq 0 ] || installing="$installing${installing:+,}$job"
+  done
+  [ "$installing" = "bundle,mobile" ] || fail "jobs running pnpm install: '$installing', expected bundle,mobile"
+}
+
+# The provider keys are the only secrets here besides the consumer token, and
+# they reach exactly the two steps that call a model. A key on a job's env, or on
+# any other step, is a key every script in that job - the setup action, the
+# artifact upload - can read.
+@test "check-security.yml hands the LLM keys to the review and OpenAnt scan steps and nowhere else" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  for key in OPENAI_API_KEY ANTHROPIC_API_KEY; do
+    [ "$(yq -r ".on.workflow_call.secrets.$key.required" "$f")" = "false" ] || fail "$key is not an optional secret"
+    where="$(yq -r "[.jobs | to_entries[] | .key as \$job | .value.steps[]? | select(.env.$key) | \$job + \":\" + (.id // .name)] | join(\",\")" "$f")"
+    [ "$where" = "review:scan,openant:scan" ] || fail "$key reaches '$where', expected review:scan,openant:scan"
+    jobwide="$(yq -r "[.jobs[] | select(.env.$key)] | length" "$f")"
+    [ "$jobwide" -eq 0 ] || fail "$key is set on a whole job's env"
+  done
+}
+
+# The binaries are the release's own assets, fetched before the consumer's
+# runner looks for them. Order matters: a scan before the download would find
+# no binaries and report skipped on every production dispatch.
+@test "check-security.yml fetches the release binaries, by tag, before the binaries scan" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  names="$(yq -r '.jobs.binaries.steps[].name' "$f")"
+  fetch_at="$(grep -n 'Download the release binaries' <<<"$names" | cut -d: -f1)"
+  scan_at="$(grep -n 'Check the release binaries' <<<"$names" | cut -d: -f1)"
+  [ -n "$fetch_at" ] && [ -n "$scan_at" ] || fail "binaries job steps: $names"
+  [ "$fetch_at" -lt "$scan_at" ] || fail "the scan runs before the download"
+  run_line="$(yq -r '.jobs.binaries.steps[] | select(.name == "Download the release binaries") | .run' "$f")"
+  contains "$run_line" 'scripts/security/binaries-fetch.sh' || fail "the download does not go through binaries-fetch.sh: $run_line"
+  tag="$(yq -r '.jobs.binaries.steps[] | select(.name == "Download the release binaries") | .env.RELEASE_TAG' "$f")"
+  [ "$tag" = '${{ inputs.release-tag }}' ] || fail "the download is not keyed on the release-tag input: $tag"
+  [ "$(yq -r '.on.workflow_call.inputs."release-tag".default' "$f")" = "" ] || fail "release-tag has a default"
+}
+
+# The review diffs against a base commit or the last release tag, and neither
+# exists in a shallow clone.
+@test "check-security.yml's review checks out full history and knows its range" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  depth="$(yq -r '.jobs.review.steps[] | select(.name == "Checkout consumer") | .with."fetch-depth"' "$f")"
+  [ "$depth" = "0" ] || fail "the review's checkout is shallow (fetch-depth: $depth)"
+  base="$(yq -r '.jobs.review.steps[] | select(.id == "scan") | .env.SECURITY_REVIEW_BASE' "$f")"
+  [ "$base" = '${{ github.event.pull_request.base.sha }}' ] || fail "SECURITY_REVIEW_BASE is '$base'"
+  full="$(yq -r '.jobs.review.steps[] | select(.id == "scan") | .env.SECURITY_REVIEW_FULL_RANGE' "$f")"
+  [ "$full" = '${{ inputs.review-full-range }}' ] || fail "SECURITY_REVIEW_FULL_RANGE is '$full'"
+}
+
+# A SECURITY_* twin passed through build-env changes what config.mjs resolves,
+# what a runner does and what the verdict applies - so every job publishes it,
+# and before the setup action and any consumer script run.
+@test "every check-security.yml job publishes build-env before its Setup step" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  for job in config $SECURITY_JOBS verdict; do
+    names="$(yq -r ".jobs.\"$job\".steps[].name" "$f")"
+    publish_at="$(grep -n '^Publish build-env$' <<<"$names" | cut -d: -f1)"
+    setup_at="$(grep -n '^Setup$' <<<"$names" | cut -d: -f1)"
+    [ -n "$publish_at" ] || fail "the $job job never publishes build-env"
+    [ "$publish_at" -lt "$setup_at" ] || fail "the $job job publishes build-env after Setup"
+  done
+}
+
+# Each scanner input is off unless a tier turns it on - except the three that
+# existed before the release tier did, whose default stays what callers have
+# relied on since.
+@test "check-security.yml's release-tier inputs default to off" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  for input in deps code policy; do
+    [ "$(yq -r ".on.workflow_call.inputs.$input.default" "$f")" = "true" ] || fail "$input no longer defaults to true"
+  done
+  for input in sbom bundle mobile binaries review openant review-full-range; do
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\".default" "$f")" = "false" ] || fail "$input does not default to false"
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\".type" "$f")" = "boolean" ] || fail "$input is not a boolean switch"
+  done
 }

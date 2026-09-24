@@ -477,6 +477,78 @@
       "guide": "check-securityyml"
     },
     {
+      "id": "script.security-sbom",
+      "kind": "file",
+      "target": ["scripts/security/sbom.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (sbom), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:sbom",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "Add scripts/security/sbom.sh (the bill of materials: pnpm sbom over the lockfile, written beside the SARIF as sbom.cdx.json), or leave sbom off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-bundle",
+      "kind": "file",
+      "target": ["scripts/security/bundle.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (bundle), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:bundle",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "Add scripts/security/bundle.sh (the bundle scanner: exports the JavaScript bundle and reads what it gives away), or leave bundle off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-mobile",
+      "kind": "file",
+      "target": ["scripts/security/mobile.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (mobile), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:mobile",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "Add scripts/security/mobile.sh (the native project scanner: mobsfscan over a fresh prebuild), or leave mobile off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-binaries",
+      "kind": "file",
+      "target": ["scripts/security/binaries.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (binaries), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:binaries",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "Add scripts/security/binaries.sh (the MASTG checks over the release binaries binaries-fetch.sh downloads into SECURITY_BINARIES_DIR), or leave binaries off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-review",
+      "kind": "file",
+      "target": ["scripts/security/review.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (review), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:review",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "Add scripts/security/review.sh (the LLM review of the change; it must write a skipped SARIF, never fail, when no provider or key is configured), or leave review off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-openant",
+      "kind": "file",
+      "target": ["scripts/security/openant.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (openant), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:openant",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "Add scripts/security/openant.sh (the OpenAnt scan; it must write a skipped SARIF, never fail, when no provider or key is configured), or leave openant off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
       "id": "script.security-verdict",
       "kind": "file",
       "target": ["scripts/security/verdict.mjs"],

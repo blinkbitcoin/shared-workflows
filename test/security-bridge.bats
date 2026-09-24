@@ -193,3 +193,88 @@ EOF
   run bash "$REPO_ROOT/scripts/security/sarif-upload-skipped.sh"
   [ "$status" -ne 0 ] || fail "a reasonless notice is exactly the silence this step exists to prevent: $output"
 }
+
+# ---------------------------------------------------------------------------
+# binaries-fetch.sh - the one bridge that talks to GitHub rather than to the
+# consumer. A fake gh stands in: `release view` succeeds for any tag but
+# v-missing; `release download` writes whatever $FAKE_ASSETS names into --dir,
+# or fails the way the real gh does for no match ($FAKE_NO_ASSETS) or for a
+# broken download ($FAKE_BROKEN). Every call is recorded.
+# ---------------------------------------------------------------------------
+
+fake_gh() {
+  local bin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$bin"
+  cat > "$bin/gh" <<'GH'
+#!/usr/bin/env bash
+echo "gh $*" >> "$BATS_TEST_TMPDIR/gh-calls"
+if [ "$1 $2" = "release view" ]; then
+  [ "$3" != v-missing ] || { echo "release not found" >&2; exit 1; }
+  exit 0
+fi
+if [ "$1 $2" = "release download" ]; then
+  [ -z "${FAKE_BROKEN:-}" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
+  [ -z "${FAKE_NO_ASSETS:-}" ] || { echo "$FAKE_NO_ASSETS" >&2; exit 1; }
+  dir=""
+  while [ $# -gt 0 ]; do [ "$1" = --dir ] && dir="$2"; shift; done
+  for asset in ${FAKE_ASSETS:-}; do : > "$dir/$asset"; done
+  exit 0
+fi
+echo "unexpected gh invocation: $*" >&2
+exit 2
+GH
+  chmod +x "$bin/gh"
+  export PATH="$bin:$PATH"
+  export GITHUB_ENV="$BATS_TEST_TMPDIR/github-env"
+  : > "$GITHUB_ENV"
+}
+
+@test "binaries-fetch.sh downloads the three binary types and hands their directory on" {
+  fake_gh
+  export FAKE_ASSETS="app-release.aab app-universal.apk"
+  run bash "$REPO_ROOT/scripts/security/binaries-fetch.sh" v1.2.3 "$BATS_TEST_TMPDIR/bin-out"
+  [ "$status" -eq 0 ] || fail "binaries-fetch.sh failed: $output"
+  calls="$(cat "$BATS_TEST_TMPDIR/gh-calls")"
+  contains "$calls" "--pattern *.apk --pattern *.aab --pattern *.ipa" \
+    || fail "the download did not ask for all three binary types: $calls"
+  contains "$output" "2 file(s) from v1.2.3" || fail "the log does not count what arrived: $output"
+  grep -qxF "SECURITY_BINARIES_DIR=$(cd "$BATS_TEST_TMPDIR/bin-out" && pwd -P)" "$GITHUB_ENV" \
+    || fail "SECURITY_BINARIES_DIR was not published: $(cat "$GITHUB_ENV")"
+}
+
+@test "binaries-fetch.sh without a tag fails, naming both ways out" {
+  fake_gh
+  run bash "$REPO_ROOT/scripts/security/binaries-fetch.sh" "" "$BATS_TEST_TMPDIR/bin-out"
+  [ "$status" -eq 1 ] || fail "expected a hard failure, got $status: $output"
+  contains "$output" "release-tag" || fail "the error does not name the input to pass: $output"
+  contains "$output" "binaries: false" || fail "the error does not name the switch: $output"
+  [ ! -e "$BATS_TEST_TMPDIR/gh-calls" ] || fail "gh was called with no tag: $(cat "$BATS_TEST_TMPDIR/gh-calls")"
+}
+
+@test "binaries-fetch.sh fails when the release does not exist" {
+  fake_gh
+  run bash "$REPO_ROOT/scripts/security/binaries-fetch.sh" v-missing "$BATS_TEST_TMPDIR/bin-out"
+  [ "$status" -eq 1 ] || fail "a missing release did not fail: $output"
+  contains "$output" "release v-missing was not found" || fail "the error does not name the release: $output"
+}
+
+@test "binaries-fetch.sh treats a release with no binaries as a notice, in either of gh's wordings" {
+  fake_gh
+  for wording in "no assets to download" "no assets match the file pattern"; do
+    export FAKE_NO_ASSETS="$wording"
+    run bash "$REPO_ROOT/scripts/security/binaries-fetch.sh" v1.2.3 "$BATS_TEST_TMPDIR/empty-$RANDOM"
+    [ "$status" -eq 0 ] || fail "'$wording' failed the step: $output"
+    contains "$output" "::notice::release v1.2.3 carries no .apk, .aab or .ipa" \
+      || fail "'$wording' was not reported as a notice: $output"
+  done
+  grep -q '^SECURITY_BINARIES_DIR=' "$GITHUB_ENV" \
+    || fail "an empty release still has to hand the runner its (empty) directory: $(cat "$GITHUB_ENV")"
+}
+
+@test "binaries-fetch.sh fails when the download itself breaks, rather than reading it as empty" {
+  fake_gh
+  export FAKE_BROKEN=1
+  run bash "$REPO_ROOT/scripts/security/binaries-fetch.sh" v1.2.3 "$BATS_TEST_TMPDIR/bin-out"
+  [ "$status" -eq 1 ] || fail "a broken download passed: $output"
+  contains "$output" "HTTP 502" || fail "the error does not carry gh's own message: $output"
+}
