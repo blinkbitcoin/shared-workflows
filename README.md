@@ -182,7 +182,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Path                   | Responsibility                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/`   | The <!--count:workflows-->19<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
+| `.github/workflows/`   | The <!--count:workflows-->21<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
 | `.github/actions/`     | <!--count:actions-->5<!--/count--> composite actions — `setup`, `maestro`, `native-key`, `free-disk`, `forensics` — the steps repeated across workflows |
 | `scripts/checks/`      | A gate each: audit, codegen, commitlint, expo-doctor, i18n; plus the scripts that pick the consumer's over this repo's    |
 | `scripts/ci/`          | Runner plumbing: Android SDK, KVM, disk pressure, pnpm store, badges, cancel-runs, tool versions                          |
