@@ -149,6 +149,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | `build-web.yml`       | `Build`<br>`E2E`<br>`Deploy`                       | Expo web export, the browser suite against it, GitHub Pages              |
 | `publish-badges.yml`    | `Publish`                                          | Unit, E2E and coverage badges pushed to `gh-pages/badges/<branch>/`      |
 | `check-codeql.yml`    | `Changes`<br>`Analyze`                             | CodeQL on the consumer's query suite. Informational, never required      |
+| `check-security.yml`  | `Config`<br>`Dependencies`<br>`Code`<br>`Policy`<br>`Verdict` | The consumer's security scanners, one job each, then one verdict that merges the SARIF and applies the threshold |
 | `pr-title.yml`  | `Title`                                            | Conventional Commits lint on the PR title                                |
 | `pr-closed.yml` | `Cancel runs`<br>`Clean badges`                    | Cancels the closed PR's in-flight runs, deletes its badges               |
 
