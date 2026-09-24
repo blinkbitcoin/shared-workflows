@@ -26,6 +26,7 @@ export const PROFILE_TITLE = {
   web: '`build-web.yml`',
   badges: '`publish-badges.yml`',
   codeql: '`check-codeql.yml`',
+  security: '`check-security.yml`',
   release: 'the release workflows',
 };
 

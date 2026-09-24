@@ -149,6 +149,17 @@ is a warning in the report, not a failure. See
 | --- | --- | --- |
 | `.github/codeql/codeql-config.yml` | optional — a fallback runs | check-codeql.yml (config-file) |
 
+### If you call `check-security.yml`
+
+| What | You need | Why |
+| --- | --- | --- |
+| `scripts/security/config.mjs` | required | check-security.yml (the Config job), through scripts/security/settings.sh |
+| `scripts/security/deps.sh` | required, or pass `deps: false` | check-security.yml (deps), through scripts/security/run-job.sh |
+| `scripts/security/code.sh` | required, or pass `code: false` | check-security.yml (code), through scripts/security/run-job.sh |
+| `scripts/security/policy.sh` | required, or pass `policy: false` | check-security.yml (policy), through scripts/security/run-job.sh |
+| `scripts/security/verdict.mjs` | required | check-security.yml (the Verdict job), through scripts/security/verdict.sh |
+| `security-policy.json` | optional — a fallback runs | scripts/security/config.mjs, the settings resolver the Config job runs |
+
 ### If you call the release workflows
 
 | What | You need | Why |

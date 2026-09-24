@@ -8,7 +8,7 @@
     "guide": "Anchor in docs/consumer-guide.md."
   },
 
-  "profiles": ["checks", "unit", "e2e", "web", "badges", "codeql", "release"],
+  "profiles": ["checks", "unit", "e2e", "web", "badges", "codeql", "security", "release"],
 
   "requirements": [
     {
@@ -426,6 +426,79 @@
       "severity": "degrades",
       "fix": "Add .github/codeql/codeql-config.yml, or pass config-file: '' in your caller. Without it the analysis still runs, on CodeQL's own defaults - so your path exclusions and the alert-suppression pack that makes an inline // codeql[rule-id] marker count are not applied.",
       "guide": "check-codeqlyml"
+    },
+
+    {
+      "id": "script.security-config",
+      "kind": "file",
+      "target": ["scripts/security/config.mjs"],
+      "profile": "security",
+      "neededBy": "check-security.yml (the Config job), through scripts/security/settings.sh",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Add scripts/security/config.mjs, or stop calling check-security.yml. It resolves security-policy.json (and its environment twins) into the settings the Config job publishes as outputs for every other job.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-deps",
+      "kind": "file",
+      "target": ["scripts/security/deps.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (deps), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:deps",
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Add scripts/security/deps.sh, or pass deps: false in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-code",
+      "kind": "file",
+      "target": ["scripts/security/code.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (code), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:code",
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Add scripts/security/code.sh, or pass code: false in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-policy-scanner",
+      "kind": "file",
+      "target": ["scripts/security/policy.sh"],
+      "profile": "security",
+      "neededBy": "check-security.yml (policy), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:policy",
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Add scripts/security/policy.sh, or pass policy: false in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "script.security-verdict",
+      "kind": "file",
+      "target": ["scripts/security/verdict.mjs"],
+      "profile": "security",
+      "neededBy": "check-security.yml (the Verdict job), through scripts/security/verdict.sh",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Add scripts/security/verdict.mjs, or stop calling check-security.yml. It merges every scanner's SARIF and decides the outcome against the resolved severity and failOn.",
+      "guide": "check-securityyml"
+    },
+    {
+      "id": "file.security-policy",
+      "kind": "file",
+      "target": ["security-policy.json"],
+      "profile": "security",
+      "neededBy": "scripts/security/config.mjs, the settings resolver the Config job runs",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "degrades",
+      "fix": "Add security-policy.json to set severity, failOn and per-job enabled flags. Without it the built-in defaults apply.",
+      "guide": "check-securityyml"
     },
 
     {
