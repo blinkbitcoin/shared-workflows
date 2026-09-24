@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.5.0...dev-config-v0.6.0) (2026-09-24)
+
+
+### Features
+
+* **workflows:** run the release-time security scanners in check-security.yml ([#82](https://github.com/blinkbitcoin/shared-workflows/issues/82)) ([521834e](https://github.com/blinkbitcoin/shared-workflows/commit/521834ee99e6ec5518873f9ee7fa7ff9be12cfe8))
+
 ## [0.5.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.4.0...dev-config-v0.5.0) (2026-09-24)
 
 
