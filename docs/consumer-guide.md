@@ -1084,6 +1084,7 @@ uploads, promotions, staged rollouts, halts.
 | `platform` | (required) | `ios` or `android` |
 | `lane` | (required) | The fastlane lane to run - fastlane's word for a named task in the consumer's `Fastfile`; it never appears in a run graph, where this job shows as `<caller job> / Store`.<br>`ios build\|verify\|upload_internal\|promote_beta\|release_production\|phased\|upload_symbols`, `android build\|verify\|upload_internal\|promote_beta\|release_production\|rollout\|halt\|upload_huawei` |
 | `lane-args` | `''` | Space-separated fastlane `key:value` arguments (e.g. `percentage:0.1`) |
+| `dry-run` | `false` | Rehearse the lane instead of running it for real - see [Dry-running a lane](#dry-running-a-lane) |
 | `runner` | `ubuntu-latest` | An iOS lane that touches Xcode needs a macOS runner; a store-API-only lane does not |
 | `environment` | `''` | GitHub Environment gating the lane (this is where a production approval belongs) |
 | `env-json` | `{}` | Flat JSON object published into the lane's environment. **Configuration only** — the values are printed to the log; credentials belong in `secrets:` |
@@ -1156,6 +1157,30 @@ directory and publishes only that file's path, which is why
 `ASC_KEY_P8_BASE64` is *also* handed to the lane step directly (the lanes read
 the base64 key content, so a path alone would make the Fastfile's `ENV.fetch`
 raise).
+
+#### Dry-running a lane
+
+`dry-run: true` sets `DRY_RUN=1` for the "Fastlane lane" step. That variable is
+not this workflow's own invention: `fastlane/lanes/shared.rb`'s `store_action`
+helper already wraps every `deliver`/`pilot`/`supply`/AppGallery call a lane
+makes, and under `DRY_RUN=1` it logs the call and returns canned data instead
+of making it - `phased` and the `pull_metadata` lanes check the same variable
+directly, for the one or two calls (Spaceship, `deliver`/`supply` commands)
+that sit outside `store_action`. So a dry run walks the *same* lane a real
+release does - credentials resolved, arguments built, metadata validated,
+release notes computed - and stops only at the network call to App Store
+Connect or Play.
+
+This is also the variable the template's `cd-store-listing.yml` already
+forwards through `env-json`'s `DRY_RUN` key (that workflow's own `dry_run`
+dispatch input defaults to `true`, so a listing sync is a rehearsal unless
+someone opts out). The two are OR'd in the Fastlane lane step's env
+(`(inputs.dry-run || env.DRY_RUN == '1') && '1' || '0'`), not one replacing the
+other: this input's default of `false` leaves an env-json-supplied `DRY_RUN`
+alone, so `cd-store-listing.yml` keeps rehearsing by default exactly as it did
+before this input existed, and a caller may now set either the input or
+`env-json`'s key - whichever reads better at the call site - and get the same
+result.
 
 ### `publish-github-release.yml`
 

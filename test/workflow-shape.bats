@@ -387,6 +387,27 @@ lane_step_count() {
   done
 }
 
+# Issue #70: a rehearsal path for the store lane. `default: false` is what
+# keeps every existing caller unaffected; the Fastlane lane step's DRY_RUN must
+# still read `env.DRY_RUN`, not just the new input, or this ships silently
+# disarming the template's cd-store-listing.yml - it forwards its own
+# `dry_run` dispatch input (default true) through env-json's DRY_RUN key
+# rather than through this input, and a step's own `env:` block wins over a
+# same-named value inherited from an earlier step's $GITHUB_ENV write.
+@test "publish-store declares dry-run (boolean, default false) and ORs it into the Fastlane lane step's DRY_RUN" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/publish-store.yml"
+  [ "$(yq -r '.on.workflow_call.inputs."dry-run".type' "$f")" = "boolean" ] \
+    || fail "dry-run is not declared as a boolean input"
+  [ "$(yq -r '.on.workflow_call.inputs."dry-run".default' "$f")" = "false" ] \
+    || fail "dry-run does not default to false, which would change behaviour for every existing caller"
+  expr=$(yq -r '[.jobs.lane.steps[] | select(.name == "Fastlane lane")][0].env.DRY_RUN' "$f")
+  grep -qF 'inputs.dry-run' <<<"$expr" \
+    || fail "the Fastlane lane step's DRY_RUN does not read the dry-run input: $expr"
+  grep -qF 'env.DRY_RUN' <<<"$expr" \
+    || fail "the Fastlane lane step's DRY_RUN ignores an env-json-supplied value, which would disarm cd-store-listing.yml's dry_run forwarding: $expr"
+}
+
 # build-prepare's green gate needs `actions: read`, and `actions: write` when
 # `require-green-dispatch` is on. A static job-level block cannot express
 # "read, or write when asked", and a called job may never request more than
