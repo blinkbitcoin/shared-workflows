@@ -79,6 +79,41 @@ after"
   [ "$status" -ne 0 ] || fail "accepted a value containing the delimiter"
   contains "$output" "heredoc delimiter" || fail "unexpected message: $output"
 }
+@test "gh_output_multiline appends the heredoc form to GITHUB_OUTPUT, and exports nothing" {
+  GITHUB_OUTPUT="$BATS_TEST_TMPDIR/out"; export GITHUB_OUTPUT
+  : > "$GITHUB_OUTPUT"
+  gh_output_multiline section "$(printf 'one\nsecond=line')"
+  head -1 "$GITHUB_OUTPUT" | grep -q '^section<<__workflows_eof_[0-9]*$' || fail "not the heredoc form: $(cat "$GITHUB_OUTPUT")"
+  delim="$(head -1 "$GITHUB_OUTPUT" | sed 's/^section<<//')"
+  [ "$(sed -n 2,3p "$GITHUB_OUTPUT")" = "$(printf 'one\nsecond=line')" ] || fail "the value is not intact: $(cat "$GITHUB_OUTPUT")"
+  [ "$(tail -1 "$GITHUB_OUTPUT")" = "$delim" ] || fail "the block is not closed with its delimiter: $(cat "$GITHUB_OUTPUT")"
+  [ "$(wc -l < "$GITHUB_OUTPUT" | tr -d ' ')" -eq 4 ] || fail "extra lines: $(cat "$GITHUB_OUTPUT")"
+  [ -z "${section:-}" ] || fail "an output leaked into the environment"
+}
+@test "gh_output_multiline prints the heredoc form to stdout when GITHUB_OUTPUT is unset" {
+  unset GITHUB_OUTPUT
+  run gh_output_multiline section "$(printf 'one\ntwo')"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "${lines[1]}" = "one" ] || fail "the value is not on stdout: $output"
+  [ "${lines[2]}" = "two" ] || fail "the value is not on stdout: $output"
+  [ "${lines[0]}" = "section<<${lines[3]}" ] || fail "not a closed heredoc record: $output"
+}
+@test "gh_output_multiline refuses a value carrying its own delimiter" {
+  GITHUB_OUTPUT="$BATS_TEST_TMPDIR/out"; export GITHUB_OUTPUT
+  : > "$GITHUB_OUTPUT"
+  # Same seeding as the gh_env_multiline case above, for the same reason.
+  run bash -c '
+    source "$1/scripts/lib/common.sh"
+    RANDOM=42; delim="__workflows_eof_${RANDOM}${RANDOM}"
+    RANDOM=42; gh_output_multiline section "before
+$delim
+after"
+  ' _ "$REPO_ROOT"
+  [ "$status" -ne 0 ] || fail "accepted a value containing the delimiter"
+  contains "$output" "heredoc delimiter" || fail "unexpected message: $output"
+  contains "$output" '$GITHUB_OUTPUT' || fail "the message names the wrong channel: $output"
+  [ ! -s "$GITHUB_OUTPUT" ] || fail "something was written anyway: $(cat "$GITHUB_OUTPUT")"
+}
 @test "consumer_root honours WORKING_DIRECTORY" {
   GITHUB_WORKSPACE="$BATS_TEST_TMPDIR"; WORKING_DIRECTORY=app; export GITHUB_WORKSPACE WORKING_DIRECTORY
   mkdir -p "$BATS_TEST_TMPDIR/app"

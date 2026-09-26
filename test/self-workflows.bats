@@ -69,6 +69,76 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 }
 
 # --------------------------------------------------------------------------
+# The consumer rehearsal: pr-release-notes.yml, executed for real.
+#
+# Every other reusable workflow runs only inside a consumer, so a mistake in
+# one ships with every gate here green. self-rehearsal.yml runs this one
+# against the template in a dry run, on every change and before `v0` moves.
+# --------------------------------------------------------------------------
+REHEARSAL="$REPO_ROOT/.github/workflows/self-rehearsal.yml"
+
+@test "self-rehearsal.yml runs the local pr-release-notes.yml against the template in a dry run" {
+  command -v yq >/dev/null || skip "yq not installed"
+  [ "$(yq -r '.on | has("workflow_call")' "$REHEARSAL")" = "true" ] || fail "self-rehearsal.yml is not callable"
+  # Local, not @v0: the rehearsal has to run the ref under review.
+  [ "$(yq -r '.jobs.notes.uses' "$REHEARSAL")" = "./.github/workflows/pr-release-notes.yml" ] \
+    || fail "the rehearsal does not call the local pr-release-notes.yml: $(yq -r '.jobs.notes.uses' "$REHEARSAL")"
+  [ "$(yq -r '.jobs.notes.with.repository' "$REHEARSAL")" = "blinkbitcoin/react-native-mobile-template" ] \
+    || fail "the rehearsal no longer targets the template"
+  [ "$(yq -r '.jobs.notes.with.ref' "$REHEARSAL")" = "main" ] || fail "the rehearsal no longer reads the template's main"
+  [ "$(yq -r '.jobs.notes.with."dry-run"' "$REHEARSAL")" = "true" ] || fail "the rehearsal is not a dry run - it would edit a PR"
+  [ "$(yq -r '.jobs.notes.with."body-file"' "$REHEARSAL")" = "scripts/release/fixtures/release-body.md" ] \
+    || fail "the rehearsal reads no body file, so it would need a release PR"
+  [ "$(yq -r '.jobs.notes.with."pr-number" // ""' "$REHEARSAL")" = "" ] || fail "the rehearsal names a PR"
+  [ "$(yq -r '.jobs.notes.secrets // "none"' "$REHEARSAL")" = "none" ] || fail "the rehearsal passes secrets"
+  [ "$(yq -r '.jobs.notes.permissions."pull-requests"' "$REHEARSAL")" = "write" ] \
+    || fail "the rehearsal does not grant what pr-release-notes.yml's job declares"
+}
+
+@test "self-rehearsal.yml checks the section output with its own script" {
+  command -v yq >/dev/null || skip "yq not installed"
+  [ "$(yq -r '.jobs.section.needs' "$REHEARSAL")" = "notes" ] || fail "the section check does not wait on the rehearsal"
+  [ "$(yq -r '.jobs.section."timeout-minutes"' "$REHEARSAL")" != "null" ] || fail "the section check has no timeout"
+  step="$(yq -r '.jobs.section.steps[] | select(.run != null)' "$REHEARSAL")"
+  [ "$(yq -r '.run' <<<"$step")" = "bash scripts/self/check-rehearsal-section.sh" ] \
+    || fail "the section check does not run scripts/self/check-rehearsal-section.sh: $step"
+  [ "$(yq -r '.env.SECTION' <<<"$step")" = '${{ needs.notes.outputs.section }}' ] \
+    || fail "the section check does not read the rehearsal's section output: $step"
+  [ -f "$REPO_ROOT/scripts/self/check-rehearsal-section.sh" ] || fail "the check script is gone"
+}
+
+@test "self-ci.yml runs the rehearsal on every change, with the grant the called job declares" {
+  command -v yq >/dev/null || skip "yq not installed"
+  [ "$(yq -r '.jobs.rehearsal.uses' "$CI")" = "./.github/workflows/self-rehearsal.yml" ] \
+    || fail "self-ci.yml does not call self-rehearsal.yml"
+  [ "$(yq -r '.jobs.rehearsal.name' "$CI")" = "Consumer rehearsal" ] || fail "the rehearsal job was renamed"
+  [ "$(yq -r '.jobs.rehearsal.if // "always"' "$CI")" = "always" ] || fail "the rehearsal is gated: $(yq -r '.jobs.rehearsal.if' "$CI")"
+  [ "$(yq -r '.jobs.rehearsal.permissions.contents' "$CI")" = "read" ] || fail "the rehearsal job does not grant contents: read"
+  [ "$(yq -r '.jobs.rehearsal.permissions."pull-requests"' "$CI")" = "write" ] \
+    || fail "the rehearsal job does not grant pull-requests: write, so the called job cannot start"
+}
+
+# tag-major.sh force-moves `v0`, which every consumer resolves on its next run.
+# A release whose rehearsal failed must leave the tags where they were.
+@test "self-release.yml moves the major tag only after the release commit's rehearsal passed" {
+  command -v yq >/dev/null || skip "yq not installed"
+  [ "$(yq -r '.jobs.rehearsal.uses' "$RELEASE")" = "./.github/workflows/self-rehearsal.yml" ] \
+    || fail "self-release.yml does not run the rehearsal"
+  cond="$(yq -r '.jobs.rehearsal.if' "$RELEASE")"
+  [[ "$cond" == *"needs.release-please.outputs.release_created == 'true'"* ]] \
+    || fail "the rehearsal is not gated on a release: $cond"
+  [ "$(yq -r '.jobs.rehearsal.permissions."pull-requests"' "$RELEASE")" = "write" ] \
+    || fail "the release rehearsal does not grant pull-requests: write"
+  needs="$(yq -r '.jobs."major-tag".needs | (select(type == "!!seq") | join(",")) // .' "$RELEASE")"
+  [[ ",$needs," == *",rehearsal,"* ]] || fail "major-tag does not need the rehearsal: $needs"
+  [[ ",$needs," == *",release-please,"* ]] || fail "major-tag lost its release-please need: $needs"
+  [ "$(yq -r '.jobs."major-tag".if' "$RELEASE")" != "null" ] || fail "major-tag lost its if"
+  # `always()` or `!cancelled()` would run it past a failed rehearsal.
+  not_contains "$(yq -r '.jobs."major-tag".if' "$RELEASE")" "always()" || fail "major-tag runs past a failed rehearsal"
+  not_contains "$(yq -r '.jobs."major-tag".if' "$RELEASE")" "cancelled()" || fail "major-tag runs past a failed rehearsal"
+}
+
+# --------------------------------------------------------------------------
 # The gate list and the job list, held together.
 #
 # self-ci.yml used to run `make check` as one job, which made "CI runs every

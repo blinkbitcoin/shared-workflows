@@ -38,7 +38,7 @@ available and is the recommended pin going forward. `@v0` and `@v1` behave
 identically in kind — both are moving tags re-pointed on release — the only
 difference is which major line you're tracking.
 
-A release here is four steps and one force-pushed tag:
+A release here is five steps and one force-pushed tag:
 
 ```mermaid
 flowchart TD
@@ -46,6 +46,7 @@ flowchart TD
   release["self-release.yml, release-please job"]
   pr["release PR: chore(main) release X.Y.Z"]
   tag["tag vX.Y.Z and its GitHub release"]
+  rehearsal["rehearsal job: pr-release-notes.yml against the template, dry run"]
   major["major-tag job, scripts/self/tag-major.sh"]
   moving["v0 and v0.&lt;minor&gt;"]
   consumer["a consumer pinned @v0"]
@@ -54,6 +55,8 @@ flowchart TD
   release -->|"opens, or rebuilds on each push"| pr
   pr -->|"squash merge, push to main"| release
   release -->|"release_created is true"| tag
+  tag -->|"the release commit"| rehearsal
+  rehearsal -->|"passed; a failure leaves the tags where they were"| major
   tag -->|"tag_name"| major
   major -->|"git push -f to that commit"| moving
   moving -->|"the tag is resolved when a run starts"| consumer
@@ -66,10 +69,12 @@ first consumer run after a release here executes the new code — a push that
 touches one line of copy can fail in a build step that changed in this
 repository an hour earlier. Two consequences worth acting on: after a release
 here, the family watches the template's `CD / Internal` run, which is the first
-real execution of the reusable release workflows (no gate in this repository can
-execute them — see `AGENTS.md`); and a repository that wants to decide when it
-moves pins `@v0.<minor>` or a full commit sha instead of `@v0`, and moves the
-pin as a reviewed commit.
+real execution of the reusable release workflows (the one gate in this
+repository that executes a reusable workflow is the consumer rehearsal of
+`pr-release-notes.yml`, which `v0` waits on; the build and publish workflows
+run only inside a consumer — see `AGENTS.md`); and a repository that wants to
+decide when it moves pins `@v0.<minor>` or a full commit sha instead of `@v0`,
+and moves the pin as a reviewed commit.
 
 ### Moving to a version that added `docs-check`
 
@@ -1482,17 +1487,24 @@ never regenerate what was reviewed.
 | Input | Default | Meaning |
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Pass the release PR's head branch as `ref`, so the prompt template and the generator are the ones under release. `macos-runner` and `native-cache-version` are unused here |
-| `pr-number` | (required) | The release PR whose body receives the section: release-please's `pr` output, parsed in the caller's shell (`jq -r '.number // empty'`), never with `fromJSON()` in a step `env:` - the runner validates that even when the step's `if` is false, and the output is empty on a push that opens no PR |
+| `pr-number` | `''` | The release PR whose body receives the section: release-please's `pr` output, parsed in the caller's shell (`jq -r '.number // empty'`), never with `fromJSON()` in a step `env:` - the runner validates that even when the step's `if` is false, and the output is empty on a push that opens no PR. Required, except in a dry run with `body-file` |
+| `dry-run` | `false` | Generate the section and edit no PR: the body a real run would write, and whether it would edit at all, go to the job summary. See [Rehearsing the release PR notes](#rehearsing-the-release-pr-notes) |
+| `body-file` | `''` | Path, relative to `working-directory`, of a release-please-shaped PR body to generate from instead of fetching the PR's. With `dry-run` the job needs no PR and calls no `gh`; without it, and with a `pr-number`, the edit writes this file's body plus the section to that PR |
 | `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `publish-github-release.yml` `append` replaces the block in place |
 | `notes-locales` | `en-US` | Locales handed to the consumer's `scripts/release/notes.mjs`; store metadata locale names, not language codes |
 | `build-env` | `{}` | Non-secret environment for the generator: `RELEASE_NOTES_LLM_PROVIDER`, `RELEASE_NOTES_LLM_MODEL`, `OPENAI_BASE_URL`, `STORE_NOTES_INCLUDE_CHANGELOG` - see [`build-env`](#build-env) |
 
-No outputs. Secrets: `consumer-token`, `ANTHROPIC_API_KEY` and
+Output: `section`, the rendered section as a multi-line string - the begin
+marker, `## <section-title>`, a blank line, the notes, the end marker. It is
+set in both modes, and also when the body was already current and nothing was
+edited. Secrets: `consumer-token`, `ANTHROPIC_API_KEY` and
 `OPENAI_API_KEY` (all optional; the two keys only matter when the consumer's
 generator drafts with an LLM, and without a generator the section is the
 commit-subject fallback, with a warning). The job declares
 `permissions: contents: read, pull-requests: write`, which the calling job
-must grant.
+must grant - in a dry run too, which writes nothing with it: a rehearsal asks
+for exactly what the real call asks for, so it fails where an under-granting
+caller would.
 
 The block is marker-delimited (`<!-- workflows:append:Store notes -->` …
 `<!-- /workflows:append:Store notes -->`) and byte-identical to what
@@ -1501,9 +1513,11 @@ The block is marker-delimited (`<!-- workflows:append:Store notes -->` …
 body, after the changelog, and a body without such a rule gets it appended.
 Every run strips its own previous block before generating, so a stale draft
 never feeds the next one, and a run whose result equals the current body edits
-nothing. The generated text is refused - the job fails - if it carries a line
-of dashes or an HTML tag, since either would change how release-please splits
-the body.
+nothing. "Equals" ignores runs of blank lines and trailing ones: `gh pr view`
+reads a stored body back with an extra newline, and compared raw that alone
+made every run edit the PR. The generated text is refused - the job fails - if
+it carries a line of dashes or an HTML tag, since either would change how
+release-please splits the body.
 
 Two consequences a caller signs up for:
 
@@ -1543,6 +1557,49 @@ where the first job exposes `pr-number` and `pr-branch` from release-please's
 `pr` output, parsed in the shell. Nothing downstream waits on this job: the
 beta and web dispatches live in the first job, so a red `Store Notes` never
 withholds a release, and `gh run rerun --failed` re-drafts the section.
+
+#### Rehearsing the release PR notes
+
+A release PR exists only between a release-please push and its merge, so
+without a dry run this workflow is first executed by the push that needs it.
+`dry-run: true` with `body-file` runs the whole job - checkout at `ref`, the
+setup action, `build-env`, the consumer's `scripts/release/notes.mjs` and the
+checks on what it produced - against a body the consumer keeps in its tree,
+then stops before the edit:
+
+- no PR is needed and `gh` is never called, so no token beyond the checkout's
+  is used and a pull request from a fork runs it too;
+- the body a real run would write, and whether a real run would edit at all,
+  go to the job summary and the log;
+- the `section` output carries the rendered block, for a later job to check;
+- a generator that fails, or notes carrying a line of dashes or an HTML tag,
+  fail the job exactly as they would on the release PR.
+
+A consumer rehearses on its own pull requests with one more job in its CI
+caller. The body file is release-please-shaped - a changelog entry, optionally
+between the two `---` lines of a PR body; one without the rules gets the
+section appended:
+
+```yaml
+  notes-rehearsal:
+    name: Release PR notes rehearsal
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      dry-run: true
+      body-file: scripts/release/fixtures/release-body.md
+```
+
+A job that `needs: notes-rehearsal` can then hold
+`needs.notes-rehearsal.outputs.section` to what a release PR must carry: not
+empty, the begin marker as its first line and the end marker as its last.
+Pass no secrets there unless the rehearsal should spend LLM tokens on every
+pull request; without a key the generator drafts without the LLM pass. This
+repository runs the same rehearsal against the template's `main`, with that
+fixture, on every one of its own pull requests and before `v0` moves
+(`self-rehearsal.yml`).
 
 ### `build-env`
 

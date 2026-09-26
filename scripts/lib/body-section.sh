@@ -42,10 +42,23 @@ strip_section_block() {
         !skipping { print }
       ' "$body_file"
     fi
-  } | awk 'BEGIN { blank = 0 }
+  } | squeeze_blank_lines -
+}
+
+# squeeze_blank_lines FILE - FILE (`-` for stdin) with every run of blank lines
+# collapsed to one and trailing blank lines dropped, on stdout.
+#
+# This is the shape strip_section_block leaves a body in, so it is also how a
+# body is compared with one built from its stripped copy: `gh pr view --jq`
+# prints the body plus a newline, and a body GitHub stored with a final
+# newline then reads back ending in a blank line that no rebuilt body has.
+# Compared raw, the two never matched, and a release PR whose block was
+# already current was edited on every run.
+squeeze_blank_lines() {
+  awk 'BEGIN { blank = 0 }
     /^[[:space:]]*$/ { blank++; next }
     { if (blank > 0) print ""; blank = 0; print }
-  '
+  ' "$1"
 }
 
 # render_section_block TITLE NOTES_FILE - the block for TITLE, on stdout: one

@@ -124,8 +124,10 @@ guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
 
 ### How consumers are held to the contract
 
-This repository never checks out a consumer, in CI or in a test. The direction
-is the other way round: each consumer's `check-code.yml` run starts with a
+This repository never checks out a consumer to check it against a rule, in
+CI or in a test. (The consumer rehearsal in `self-rehearsal.yml` checks the
+template out to execute this repository's `pr-release-notes.yml`, not to judge
+the template.) The direction is the other way round: each consumer's `check-code.yml` run starts with a
 `Contract` job, which reads [`packages/dev-config/contract.json`](packages/dev-config/contract.json)
 from the exact version of this repository that consumer calls and checks the
 consumer against it. A consumer that has drifted fails **its own** PR, and a
@@ -150,8 +152,10 @@ script a checks or unit step runs has a requirement, gated on that step's input.
 
 ### Running the release pipeline locally
 
-`make check` cannot execute a reusable workflow, and neither can the PR's CI:
-the workflows only ever run inside a consumer. v0.6.0 shipped a Prepare job
+`make check` cannot execute a reusable workflow, and the PR's CI executes only
+one: `pr-release-notes.yml`, in a dry run against the template
+(`self-rehearsal.yml`, the `Consumer rehearsal` jobs). The build and publish
+workflows only ever run inside a consumer. v0.6.0 shipped a Prepare job
 that exited 127 on every consumer's next push with every gate green. Before a
 change to `build-prepare.yml` or `build-android.yml` goes out, run the
 Linux half of a consumer's internal release here with [nektos/act]:

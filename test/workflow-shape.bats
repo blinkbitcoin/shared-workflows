@@ -387,6 +387,44 @@ lane_step_count() {
   done
 }
 
+# pr-release-notes.yml's rehearsal path. `dry-run` defaults off and
+# `pr-number` keeps meaning what it did, so every existing caller is
+# unaffected; the step has to read both new inputs, and the `section` output
+# has to be wired from the step through the job to the workflow, or a
+# rehearsal reads an empty string and a consumer's check of it is vacuous.
+@test "pr-release-notes declares dry-run, body-file and an optional pr-number, and passes them to the script" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/pr-release-notes.yml"
+  [ "$(yq -r '.on.workflow_call.inputs."dry-run".type' "$f")" = "boolean" ] || fail "dry-run is not a boolean input"
+  [ "$(yq -r '.on.workflow_call.inputs."dry-run".default' "$f")" = "false" ] || fail "dry-run does not default to false"
+  [ "$(yq -r '.on.workflow_call.inputs."body-file".type' "$f")" = "string" ] || fail "body-file is not a string input"
+  [ "$(yq -r '.on.workflow_call.inputs."body-file".default' "$f")" = "" ] || fail "body-file has a default"
+  [ "$(yq -r '.on.workflow_call.inputs."pr-number".required // false' "$f")" = "false" ] || fail "pr-number is still required"
+  [ "$(yq -r '.on.workflow_call.inputs."pr-number".default' "$f")" = "" ] || fail "pr-number has a non-empty default"
+  step='.jobs.notes.steps[] | select(.name == "Store notes into the release PR")'
+  [ "$(yq -r "$step | .env.DRY_RUN" "$f")" = '${{ inputs.dry-run }}' ] || fail "the step does not pass dry-run as DRY_RUN"
+  [ "$(yq -r "$step | .env.PR_BODY_FILE" "$f")" = '${{ inputs.body-file }}' ] || fail "the step does not pass body-file as PR_BODY_FILE"
+  [ "$(yq -r "$step | .env.PR_NUMBER" "$f")" = '${{ inputs.pr-number }}' ] || fail "the step does not pass pr-number as PR_NUMBER"
+  grep -qF 'scripts/release/pr-notes.sh' <<<"$(yq -r "$step | .run" "$f")" || fail "the step no longer runs pr-notes.sh"
+}
+
+@test "pr-release-notes wires the section output from the step to the workflow, and keeps its write grant" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/pr-release-notes.yml"
+  [ "$(yq -r '.on.workflow_call.outputs.section.value' "$f")" = '${{ jobs.notes.outputs.section }}' ] \
+    || fail "the workflow's section output does not read the notes job"
+  [ "$(yq -r '.jobs.notes.outputs.section' "$f")" = '${{ steps.notes.outputs.section }}' ] \
+    || fail "the notes job's section output does not read the step"
+  [ "$(yq -r '.jobs.notes.steps[] | select(.name == "Store notes into the release PR") | .id' "$f")" = "notes" ] \
+    || fail "the step the output reads is not the one that runs pr-notes.sh"
+  # A dry run writes nothing, but a rehearsal must ask for what the real call
+  # asks for, or it cannot catch a caller that grants too little.
+  [ "$(yq -r '.jobs.notes.permissions."pull-requests"' "$f")" = "write" ] \
+    || fail "the notes job no longer asks for pull-requests: write"
+  [ "$(yq -r '.jobs.notes.permissions.contents' "$f")" = "read" ] \
+    || fail "the notes job does not re-declare contents: read"
+}
+
 # Issue #70: a rehearsal path for the store lane. `default: false` is what
 # keeps every existing caller unaffected; the Fastlane lane step's DRY_RUN must
 # still read `env.DRY_RUN`, not just the new input, or this ships silently
