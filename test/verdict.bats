@@ -3,7 +3,8 @@
 # scripts/security/verdict.mjs, over the scanners' SARIF, and writes the report
 # to the step log and the run summary. Covers every way out of it: a failing
 # and a passing merge (its exit code handed back either way, its error stream
-# kept in the report, the summary on stdout when there is no run summary), the
+# kept in the report, the summary on stdout when there is no run summary, its
+# annotations kept in the log and out of the summary), the
 # directory SECURITY_DIR names, and each failure - no node, no merge, no SARIF
 # directory, and a directory that holds no SARIF. The merge lives in the
 # consumer; each test hands in a stand-in.
@@ -123,4 +124,38 @@ EOF
   run bash "$REPO_ROOT/scripts/security/verdict.sh"
   [ "$status" -eq 0 ] || fail "verdict.sh failed: $output"
   contains "$output" 'merged reports/security' || fail "the merge was not handed SECURITY_DIR: $output"
+}
+
+@test "verdict.sh leaves the merge's annotations in the log and keeps them out of the summary" {
+  local consumer
+  consumer="$(consumer_with annotates scripts/security/verdict.mjs <<'EOF'
+console.log('::error file=src/a.ts,line=3,title=Security high%3A js/eval::eval of user input');
+console.log('security: fail, highest high, 1 finding(s), 0 suppressed, 0 job(s) skipped');
+process.exit(1);
+EOF
+)"
+  mkdir -p "$consumer/.security"
+  printf '{"version":"2.1.0","runs":[]}' > "$consumer/.security/code.sarif"
+  export GITHUB_WORKSPACE="$consumer"
+  export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"
+  run bash "$REPO_ROOT/scripts/security/verdict.sh"
+  [ "$status" -eq 1 ] || fail "the verdict's exit code was not handed back: $status / $output"
+  contains "$output" '::error file=src/a.ts,line=3' || fail "the annotation never reached the log, so the runner cannot show it: $output"
+  ! grep -q '^::' "$BATS_TEST_TMPDIR/summary.md" || fail "a workflow command leaked into the run summary: $(cat "$BATS_TEST_TMPDIR/summary.md")"
+  grep -q 'security: fail' "$BATS_TEST_TMPDIR/summary.md" || fail "the report itself was dropped from the summary"
+}
+
+@test "verdict.sh still writes the summary block when the merge prints only annotations" {
+  local consumer
+  consumer="$(consumer_with only-annotations scripts/security/verdict.mjs <<'EOF'
+console.log('::warning file=a,line=1::x');
+EOF
+)"
+  mkdir -p "$consumer/.security"
+  printf '{"version":"2.1.0","runs":[]}' > "$consumer/.security/code.sarif"
+  export GITHUB_WORKSPACE="$consumer"
+  export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"
+  run bash "$REPO_ROOT/scripts/security/verdict.sh"
+  [ "$status" -eq 0 ] || fail "grep keeping no line failed the step under pipefail: $status / $output"
+  grep -q '^## Security' "$BATS_TEST_TMPDIR/summary.md" || fail "the summary block is missing"
 }

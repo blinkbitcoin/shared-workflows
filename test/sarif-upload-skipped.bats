@@ -2,7 +2,8 @@
 # scripts/security/sarif-upload-skipped.sh - the warning check-security.yml
 # prints when the findings cannot be uploaded to code scanning. Covers every
 # way out of it: the warning with a run summary, the same notice on stdout
-# without one, and the refusal to run with no reason or an empty one.
+# without one, --summary-only's summary line with no warning, and the refusal to
+# run with no reason or an empty one, with or without the flag.
 #
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 load test_helper
@@ -27,7 +28,7 @@ load test_helper
 @test "sarif-upload-skipped.sh refuses an empty reason, with its usage" {
   run bash "$REPO_ROOT/scripts/security/sarif-upload-skipped.sh" ""
   [ "$status" -ne 0 ] || fail "an empty reason passed: $output"
-  contains "$output" 'usage: sarif-upload-skipped.sh REASON' || fail "the error does not show the usage: $output"
+  contains "$output" 'usage: sarif-upload-skipped.sh [--summary-only] REASON' || fail "the error does not show the usage: $output"
   not_contains "$output" '::warning::' || fail "a warning with no reason was printed: $output"
 }
 
@@ -39,4 +40,19 @@ load test_helper
   contains "$output" '> Findings were **not** uploaded to code scanning: the upload step was switched off.' \
     || fail "without a run summary the notice did not go to stdout: $output"
   contains "$output" 'still applied the threshold' || fail "the notice does not say the gate still ran: $output"
+}
+
+@test "sarif-upload-skipped.sh --summary-only writes the summary line and no warning" {
+  export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"
+  run bash "$REPO_ROOT/scripts/security/sarif-upload-skipped.sh" --summary-only "code scanning takes findings from the default branch only"
+  [ "$status" -eq 0 ] || fail "$output"
+  not_contains "$output" '::warning::' || fail "a by-design skip put a warning on the run: $output"
+  grep -q 'not.*uploaded to code scanning: code scanning takes findings from the default branch only' "$BATS_TEST_TMPDIR/summary.md" \
+    || fail "the run summary does not say where the findings went"
+}
+
+@test "sarif-upload-skipped.sh --summary-only still refuses a missing reason" {
+  run bash "$REPO_ROOT/scripts/security/sarif-upload-skipped.sh" --summary-only
+  [ "$status" -ne 0 ] || fail "the flag alone passed as a reason: $output"
+  contains "$output" 'usage: sarif-upload-skipped.sh [--summary-only] REASON' || fail "the error does not show the usage: $output"
 }

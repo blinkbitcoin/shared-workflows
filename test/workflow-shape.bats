@@ -1069,24 +1069,53 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
   contains "$vline" 'scripts/security/verdict.sh' || fail "the verdict step does not go through verdict.sh: $vline"
 }
 
-# A fork's GITHUB_TOKEN is read-only whatever a permissions block asks for, so
-# upload-sarif cannot work there. The gate is not weaker on a fork - the verdict
-# still applies the threshold - but the reporting destination is missing, and
-# that has to be said rather than left as an empty Security tab.
-@test "check-security.yml uploads SARIF only when it can, and says so when it cannot" {
+# Every SARIF upload makes code scanning add checks under GitHub's fixed "Code
+# scanning results" heading, one per tool. On a pull request they only repeated
+# the Security / * jobs, so the upload happens from the default branch alone -
+# which also covers a fork, whose token could not upload anyway. The labelling
+# step runs under the same guard, since it exists only for the upload.
+@test "check-security.yml uploads SARIF from the default branch only, labelled, and says so elsewhere" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   upload="$(yq -r '.jobs.verdict.steps[] | select((.uses // "") | test("upload-sarif")) | .if' "$f")"
   [ -n "$upload" ] || fail "check-security.yml has no upload-sarif step"
-  contains "$upload" "github.event.pull_request.head.repo.full_name == github.repository" \
-    || fail "the upload is not guarded against a fork pull request: $upload"
   contains "$upload" "github.event_name != 'pull_request'" \
-    || fail "the fork guard would also block a push and a dispatch, where both operands are empty: $upload"
+    || fail "the upload runs on pull requests, where its checks repeat the Security jobs: $upload"
+  contains "$upload" "github.ref_name == (github.event.repository.default_branch || 'main')" \
+    || fail "the upload is not held to the default branch: $upload"
   contains "$upload" 'hashFiles' \
     || fail "the upload is not guarded on a SARIF actually existing, and upload-sarif dies on an empty directory: $upload"
+  label="$(yq -r '.jobs.verdict.steps[] | select((.run // "") | test("label-sarif.sh")) | .if' "$f")"
+  [ "$label" = "$upload" ] || fail "the labelling step does not run exactly when the upload does: $label"
+  order="$(yq -r '[.jobs.verdict.steps[] | .name] | join(",")' "$f")"
+  contains "$order" 'Verdict,Label the SARIF by job,Upload to code scanning' \
+    || fail "labelling must come after the verdict has read the files and before the upload: $order"
   notes="$(yq -r '[.jobs.verdict.steps[] | select((.run // "") | test("sarif-upload-skipped.sh"))] | length' "$f")"
   [ "$notes" -eq 2 ] \
-    || fail "expected two steps explaining a missing upload (a fork, and sarif-upload: false), found $notes"
+    || fail "expected two steps explaining a missing upload (another branch, and sarif-upload: false), found $notes"
+  branch="$(yq -r '.jobs.verdict.steps[] | select(.name == "Note the branch upload") | .run' "$f")"
+  contains "$branch" '--summary-only' \
+    || fail "a by-design skip on every pull request would put a warning on every change: $branch"
+}
+
+# label-sarif.sh carries the job names as a map, because a step cannot read its
+# own job's display name. The map and the workflow must name each job the same.
+@test "label-sarif.sh names each scanner exactly as check-security.yml names its job" {
+  command -v yq >/dev/null || skip "yq not installed"
+  command -v jq >/dev/null || skip "jq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR/consumer"
+  mkdir -p "$GITHUB_WORKSPACE/.security"
+  for job in $SECURITY_JOBS; do
+    printf '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"x"}}}]}' > "$GITHUB_WORKSPACE/.security/$job.sarif"
+  done
+  run bash "$REPO_ROOT/scripts/security/label-sarif.sh"
+  [ "$status" -eq 0 ] || fail "$output"
+  for job in $SECURITY_JOBS; do
+    want="$(yq -r ".jobs.\"$job\".name" "$f")"
+    got="$(jq -r '.runs[0].tool.driver.name' "$GITHUB_WORKSPACE/.security/$job.sarif")"
+    [ "$got" = "$want" ] || fail "the $job job is '$want' in the workflow but uploads as '$got'"
+  done
 }
 
 # One artifact per scanner, each carrying a file named after its own job. The

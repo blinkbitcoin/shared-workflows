@@ -120,9 +120,10 @@ on:
         default: '{}'
       sarif-upload:
         description: >-
-          Upload the merged SARIF to code scanning. Off makes the run say so in
-          the summary rather than go quiet; the verdict still applies the
-          threshold either way.
+          Upload the SARIF to code scanning, from the default branch only (a
+          pull request is judged by the Verdict job and its annotations). Off
+          makes the run say so in the summary rather than go quiet; the verdict
+          still applies the threshold either way.
         type: boolean
         default: true
     secrets:
@@ -718,36 +719,47 @@ jobs:
       - name: Verdict
         id: verdict
         run: bash "$WORKFLOWS_DIR/scripts/security/verdict.sh"
+      # From the default branch only. Every SARIF upload makes code scanning add
+      # a check of its own under GitHub's fixed "Code scanning results" heading,
+      # one per tool, and that heading cannot be renamed. On a pull request those
+      # checks only repeated the Security / * jobs above them, so a change is
+      # judged by the Verdict job and its annotations, and the Security tab is
+      # fed from the default branch, where the alerts are tracked anyway. A fork
+      # pull request, whose token is read-only, falls under the same rule.
+      #
       # !cancelled(), so a verdict that failed on findings still gets those
       # findings into the Security tab - that run is exactly the one where they
       # matter. hashFiles guards the case where nothing was produced at all;
-      # upload-sarif dies on an empty directory.
-      #
-      # The event branch is load-bearing: on a push both operands of the
-      # full_name comparison are empty, so a bare equality would treat every push
-      # as a fork and never upload anything.
+      # upload-sarif dies on an empty directory. A schedule event carries no
+      # repository in its payload, hence the fallback to main.
+      - name: Label the SARIF by job
+        if: >-
+          ${{ !cancelled() && inputs.sarif-upload
+          && github.event_name != 'pull_request'
+          && github.ref_name == (github.event.repository.default_branch || 'main')
+          && hashFiles(format('{0}/.security/*.sarif', inputs.working-directory)) != '' }}
+        run: bash "$WORKFLOWS_DIR/scripts/security/label-sarif.sh"
       - name: Upload to code scanning
         if: >-
           ${{ !cancelled() && inputs.sarif-upload
-          && (github.event_name != 'pull_request'
-              || github.event.pull_request.head.repo.full_name == github.repository)
+          && github.event_name != 'pull_request'
+          && github.ref_name == (github.event.repository.default_branch || 'main')
           && hashFiles(format('{0}/.security/*.sarif', inputs.working-directory)) != '' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ inputs.working-directory }}/.security
           category: security
-      # A fork's GITHUB_TOKEN is read-only whatever the block above requests, so
-      # the upload cannot happen. The verdict still ran and still applied the
-      # threshold; only the destination is missing, and an empty Security tab
-      # must never be allowed to read as "scanned, nothing found".
-      - name: Report the fork upload gap
+      # Not a warning: leaving the upload to the default branch is the design,
+      # and an annotation on every pull request would be noise of its own. The
+      # summary says where the findings went instead.
+      - name: Note the branch upload
         if: >-
           ${{ !cancelled() && inputs.sarif-upload
-          && github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name != github.repository }}
+          && (github.event_name == 'pull_request'
+              || github.ref_name != (github.event.repository.default_branch || 'main')) }}
         env:
-          REASON: this run is a pull request from a fork, whose token is read-only whatever this workflow requests
-        run: bash "$WORKFLOWS_DIR/scripts/security/sarif-upload-skipped.sh" "$REASON"
+          REASON: code scanning takes findings from the default branch only
+        run: bash "$WORKFLOWS_DIR/scripts/security/sarif-upload-skipped.sh" --summary-only "$REASON"
       - name: Report the disabled upload
         if: ${{ !cancelled() && !inputs.sarif-upload }}
         env:

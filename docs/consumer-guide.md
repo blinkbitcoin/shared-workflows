@@ -1098,7 +1098,7 @@ that scans nothing while reporting green is worse than one that is red.
 | `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |
 | `build-env` | Non-secret environment for every job, as a flat JSON object: `SECURITY_LLM_PROVIDER`, `SECURITY_LLM_MODEL`, `SECURITY_LLM_EFFORT`, `SECURITY_LLM_EXTRA_PARAMS`,<br>`OPENAI_BASE_URL`, and any `SECURITY_*` twin of a `security-policy.json` setting. Default `{}` |
-| `sarif-upload` | Upload the merged SARIF to code scanning. Default `true`. Off makes the run say so in the summary rather than go quiet, and the verdict still applies the threshold |
+| `sarif-upload` | Upload the SARIF to code scanning, from the default branch only (see below). Default `true`. Off makes the run say so<br>with a warning and a summary line rather than go quiet, and the verdict still applies the threshold |
 
 Secrets: `consumer-token`, only for a private consumer repository, and
 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for the two LLM jobs. The keys reach the
@@ -1134,12 +1134,20 @@ called workflow can only narrow the caller's token, so a caller that grants less
 does not get a failed step — the whole run dies as a `startup_failure` with no
 jobs at all.
 
-**Forks.** A pull request from a fork gets a read-only `GITHUB_TOKEN` whatever
-this workflow requests, so the SARIF cannot reach code scanning. The gate is not
-weaker there: the verdict still merges, still applies the threshold and still
-fails the run on a blocking finding. Only the destination is missing, and the run
-says so — a `::warning::` and a line in the summary — so an empty Security tab
-can never read as "scanned, nothing found".
+**Code scanning, from the default branch only.** Every SARIF upload makes code
+scanning add a check of its own to the commit, one per tool, under GitHub's
+fixed "Code scanning results" heading, which no repository can rename. On a pull
+request those checks only repeated the `Security / *` jobs above them, so the
+upload happens on the default branch alone: a push to `main`, or a dispatch from
+it. A pull request is judged by the `Verdict` job, whose findings are
+annotations on the change, and its summary says the findings were not uploaded,
+without a warning, since that is the design. A pull request from a fork, whose
+token is read-only whatever this workflow requests, falls under the same rule.
+
+Before the upload, every run is named after its job (`Dependencies`, `Code`,
+`Policy`, ...), so the Security tab's tool filter and the checks on `main` read
+as the jobs do rather than as `osv-scanner` or `Semgrep OSS`. The verdict has
+read the files by then, so nothing it reports changes.
 
 ```yaml
 # .github/workflows/ci-security.yml
