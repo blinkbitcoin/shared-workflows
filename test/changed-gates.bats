@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # scripts/self/changed-gates.sh: which of this repository's narrow CI gates a
-# diff can affect, and scripts/lib/changed-files.sh, the diff logic it shares
-# with the consumer classifier (whose cases are in changed-class.bats).
+# diff can affect. The diff logic it shares with the consumer classifier is
+# scripts/lib/changed-files.sh, whose own cases are in changed-files.bats.
 load test_helper
 
 setup() {
@@ -138,70 +138,6 @@ expect() {
   cd "$repo" && run bash "$REPO_ROOT/scripts/self/changed-gates.sh" abc
   [ "$status" -ne 0 ] || fail "ran without a head: $output"
   contains "$output" "usage: changed-gates.sh" || fail "no usage line: $output"
-}
-
-# --- scripts/lib/changed-files.sh, called directly ----------------------------
-
-@test "any_path_matches answers true, false, and 2 for a pattern that does not compile" {
-  source "$REPO_ROOT/scripts/lib/common.sh"
-  source "$REPO_ROOT/scripts/lib/changed-files.sh"
-  [ "$(any_path_matches '^src/' $'docs/a.md\nsrc/b.ts')" = true ] || fail "a match was not true"
-  [ "$(any_path_matches '^lib/' $'docs/a.md\nsrc/b.ts')" = false ] || fail "no match was not false"
-  run any_path_matches '[' 'src/b.ts'
-  [ "$status" -eq 2 ] || fail "a bad pattern returned $status, not 2: $output"
-  has_line true && fail "a bad pattern printed an answer: $output"
-  has_line false && fail "a bad pattern printed an answer: $output"
-  true
-}
-
-@test "any_path_matches is not fooled by an early grep exit on a long list" {
-  # `printf | grep -q` under pipefail turns an early match into status 141.
-  source "$REPO_ROOT/scripts/lib/common.sh"
-  source "$REPO_ROOT/scripts/lib/changed-files.sh"
-  set -o pipefail
-  list="src/first.ts"
-  for i in $(seq 1 20000); do list+=$'\n'"docs/file$i.md"; done
-  [ "$(any_path_matches '^src/' "$list")" = true ] || fail "an early match on a long list was not true"
-}
-
-@test "every_path_matches answers true, false, and 2 for a pattern that does not compile" {
-  source "$REPO_ROOT/scripts/lib/common.sh"
-  source "$REPO_ROOT/scripts/lib/changed-files.sh"
-  [ "$(every_path_matches '^docs/' $'docs/a.md\ndocs/b.md')" = true ] || fail "all matching was not true"
-  [ "$(every_path_matches '^docs/' $'docs/a.md\nsrc/b.ts')" = false ] || fail "one non-match was not false"
-  run every_path_matches '[' 'docs/a.md'
-  [ "$status" -eq 2 ] || fail "a bad pattern returned $status, not 2: $output"
-}
-
-@test "changed_files prints the three-dot diff and returns 1 on an empty range" {
-  source "$REPO_ROOT/scripts/lib/common.sh"
-  source "$REPO_ROOT/scripts/lib/changed-files.sh"
-  commit_file "a.txt"
-  base=$(git -C "$repo" rev-parse HEAD)
-  commit_file "src/b.ts"
-  head=$(git -C "$repo" rev-parse HEAD)
-  cd "$repo"
-  [ "$(changed_files "$base" "$head")" = "src/b.ts" ] || fail "wrong file list"
-  run changed_files "$head" "$head"
-  [ "$status" -eq 1 ] || fail "an empty range returned $status, not 1: $output"
-}
-
-@test "changed_files falls back to a two-dot diff, with a warning, when the ends share no history" {
-  source "$REPO_ROOT/scripts/lib/common.sh"
-  source "$REPO_ROOT/scripts/lib/changed-files.sh"
-  commit_file "a.txt"
-  base=$(git -C "$repo" rev-parse HEAD)
-  git -C "$repo" checkout -q --orphan unrelated
-  git -C "$repo" rm -rq --cached .
-  rm -f "$repo/a.txt"
-  commit_file "packages/dev-config/x.json"
-  head=$(git -C "$repo" rev-parse HEAD)
-  cd "$repo"
-  run changed_files "$base" "$head"
-  [ "$status" -eq 0 ] || fail "the fallback failed: $output"
-  contains "$output" "falling back to two-dot diff" || fail "no warning: $output"
-  has_line "a.txt" || fail "the two-dot diff lost the deleted file: $output"
-  has_line "packages/dev-config/x.json" || fail "the two-dot diff lost the added file: $output"
 }
 
 @test "an unrelated-history range still classifies the self gates" {

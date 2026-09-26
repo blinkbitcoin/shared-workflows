@@ -16,7 +16,14 @@ name: Release PR Notes
 # release PR. The caller runs this job on every run that reports a PR, and
 # the script strips its own previous block before generating.
 #
-# Not part of self-act-smoke.yml: it needs a real PR to edit.
+# `dry-run` with `body-file` runs the whole job - checkout, setup, the
+# consumer's generator - against a release-please-shaped body the consumer
+# keeps in its tree, edits no PR and calls no `gh`, and hands the section back
+# as the `section` output. That is what lets a pull request execute this
+# workflow: this repository's own CI does it against the template on every
+# pull request and before `v0` moves (self-rehearsal.yml), and a consumer can
+# do the same on its own pull requests. Not part of self-act-smoke.yml, which
+# runs only the jobs act can: this one runs on GitHub, for real.
 on:
   workflow_call:
     inputs:
@@ -45,9 +52,17 @@ on:
         type: string
         default: 'v1'
       pr-number:
-        description: Number of the release PR whose body receives the section (release-please's `pr` output, parsed in the caller's shell)
+        description: Number of the release PR whose body receives the section (release-please's `pr` output, parsed in the caller's shell); required unless dry-run is on and body-file is given
         type: string
-        required: true
+        default: ''
+      dry-run:
+        description: Generate the section but never edit a PR; the body a real run would write goes to the job summary
+        type: boolean
+        default: false
+      body-file:
+        description: Path, relative to working-directory, of a release-please-shaped PR body to use instead of fetching the PR's (with dry-run, no PR and no gh call is needed)
+        type: string
+        default: ''
       section-title:
         description: Heading of the section written into the PR body; must match the `append-title` the release workflows use for the same section
         type: string
@@ -60,6 +75,10 @@ on:
         description: Flat JSON object of non-secret environment variables published before the notes generator runs (the LLM provider and model, STORE_NOTES_INCLUDE_CHANGELOG)
         type: string
         default: '{}'
+    outputs:
+      section:
+        description: The rendered section, markers first and last (multi-line); written in both modes
+        value: ${{ jobs.notes.outputs.section }}
     secrets:
       consumer-token:
         description: Token for a private consumer checkout, and for editing the PR when the caller's GITHUB_TOKEN may not (defaults to github.token)
@@ -78,9 +97,14 @@ jobs:
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     # `gh pr edit` writes the PR body; the calling job must grant the same.
+    # Kept in a dry run too, which never writes: a rehearsal has to ask for
+    # exactly what the real call asks for, or it cannot catch a caller that
+    # grants too little.
     permissions:
       contents: read
       pull-requests: write
+    outputs:
+      section: ${{ steps.notes.outputs.section }}
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
     steps:
@@ -115,10 +139,13 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           install: 'false'
       - name: Store notes into the release PR
+        id: notes
         env:
           GH_TOKEN: ${{ secrets.consumer-token || github.token }}
           GH_REPO: ${{ inputs.repository || github.repository }}
           PR_NUMBER: ${{ inputs.pr-number }}
+          PR_BODY_FILE: ${{ inputs.body-file }}
+          DRY_RUN: ${{ inputs.dry-run }}
           SECTION_TITLE: ${{ inputs.section-title }}
           NOTES_LOCALES: ${{ inputs.notes-locales }}
           # The consumer's notes.mjs may draft store notes with an LLM; the

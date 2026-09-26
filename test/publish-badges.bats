@@ -1,21 +1,22 @@
 #!/usr/bin/env bats
-# gh-pages-lib.sh, publish-badges.sh and badges-cleanup.sh against a throwaway
-# bare remote. This is the one place in the repo where a bug rewrites a branch
-# instead of failing a check, so both risky paths are exercised for real: the
-# orphan created when gh-pages does not exist yet, and the push-retry when
-# another job's publish lands between our fetch and our push.
+# scripts/ci/publish-badges.sh against a throwaway bare remote: its own test.
+#
+# Every exit path of the script: a missing git, a missing BRANCH or SHA, a
+# branch name that cannot be a path, a consumer directory that is not there, no
+# rendered badges, a gh-pages worktree that cannot be created, a commit the
+# consumer's hooks refuse, a push that never lands - and the success paths: the
+# first publish (an orphan), a later one, an unchanged one, and one that loses a
+# race to another job's publish and re-applies onto the new tip.
 #
 # The races are deterministic, not timing-dependent: `arm_race` installs a
 # pre-receive hook on the bare remote that moves gh-pages to a prepared
 # competing commit and then rejects our first push, which is exactly the state
-# a real concurrent publish leaves us in. Anything less than a genuinely
-# conflicting path (two publishes for the SAME branch, or a cleanup against a
-# late publish for that branch) tests the easy half only - the case that cannot
-# conflict - and that is what this file used to do.
+# a real concurrent publish leaves us in. The library under it has its own
+# file, test/gh-pages-lib.bats; the removal on pull request close is
+# test/badges-cleanup.bats.
 load test_helper
 
 PUBLISH="$REPO_ROOT/scripts/ci/publish-badges.sh"
-CLEANUP="$REPO_ROOT/scripts/ci/badges-cleanup.sh"
 
 setup() {
   TMP="$(mktemp -d)"
@@ -66,8 +67,8 @@ remote_has_gh_pages() {
 
 # rival_commit BRANCH SUBJECT [EXTRA] - build, but do NOT push, a commit on
 # gh-pages that another job would have made: it rewrites badges/BRANCH/unit.svg
-# (the path our own publish and cleanup both touch, so a replayed commit is
-# guaranteed to conflict) and optionally adds EXTRA beside it. Prints its sha.
+# (the path our own publish touches, so a replayed commit is guaranteed to
+# conflict) and optionally adds EXTRA beside it. Prints its sha.
 rival_commit() {
   local branch="$1" subject="$2" extra="${3:-}" dir="$TMP/rival-$RANDOM"
   git clone -q -b gh-pages "$REMOTE" "$dir"
@@ -191,62 +192,6 @@ EOF
   contains "$(git -C "$out" log --oneline)" "rival" || fail "the rival commit was dropped from history"
 }
 
-# The second conflicting race, and the easier one to hit in practice: closing a
-# pull request while its CI is still publishing. Modify/delete, which no merge
-# strategy resolves - `-X theirs` included. The closed branch's directory is
-# meant to be gone afterwards, so the cleanup is the last writer.
-@test "a PR-close cleanup racing a late publish for that branch converges" {
-  BRANCH=feat/x bash "$PUBLISH"
-  BRANCH=main bash "$PUBLISH"
-  rival="$(rival_commit feat/x "chore(ci): late badges for feat/x")"
-  arm_race "$rival"
-  BRANCH=feat/x run bash "$CLEANUP"
-  [ "$status" -eq 0 ] || fail "the cleanup race never converged: $output"
-  out="$(gh_pages_checkout)"
-  [ ! -d "$out/badges/feat/x" ] || fail "the closed branch's badges came back"
-  [ -f "$out/badges/main/unit.svg" ] || fail "the cleanup took another branch's badges"
-}
-
-# The other end of the same restructure: when the fresh tip already has the work
-# done, re-applying finds nothing to do and the run ends green rather than
-# pushing an empty commit or burning the whole retry budget.
-@test "a cleanup whose work another job already did ends green without pushing" {
-  BRANCH=feat/x bash "$PUBLISH"
-  BRANCH=main bash "$PUBLISH"
-  # The competing commit is the same cleanup, done first.
-  dir="$TMP/rival-cleanup"
-  git clone -q -b gh-pages "$REMOTE" "$dir"
-  git -C "$dir" config user.email t@example.com
-  git -C "$dir" config user.name test
-  git -C "$dir" rm -rq "badges/feat/x"
-  git -C "$dir" commit -qm "chore(ci): drop badges for closed branch feat/x"
-  git -C "$dir" push -q origin "HEAD:refs/rivals/cleanup"
-  arm_race "$(git -C "$dir" rev-parse HEAD)"
-  BRANCH=feat/x run bash "$CLEANUP"
-  [ "$status" -eq 0 ] || fail "cleanup failed after losing the race: $output"
-  contains "$output" "nothing left to do" || fail "expected the no-op notice: $output"
-  out="$(gh_pages_checkout)"
-  [ ! -d "$out/badges/feat/x" ]
-  [ "$(git -C "$out" log -1 --pretty=%s)" = "chore(ci): drop badges for closed branch feat/x" ] \
-    || fail "an empty commit was pushed on top: $(git -C "$out" log -1 --pretty=%s)"
-}
-
-@test "a push that never succeeds fails loudly instead of reporting success" {
-  BRANCH=main bash "$PUBLISH"
-  cd "$CONSUMER"
-  source "$REPO_ROOT/scripts/lib/common.sh"
-  source "$REPO_ROOT/scripts/ci/gh-pages-lib.sh"
-  gh_pages_worktree "$RUNNER_TEMP/gh-pages"
-  echo x > "$RUNNER_TEMP/gh-pages/x.txt"
-  git -C "$RUNNER_TEMP/gh-pages" add -A
-  git -C "$RUNNER_TEMP/gh-pages" commit -qm "chore(ci): badges"
-  rm -rf "$REMOTE"
-  redo() { return 0; } # there is always more to do: the remote is gone
-  GH_PAGES_PUSH_ATTEMPTS=2 run gh_pages_push "$RUNNER_TEMP/gh-pages" redo
-  [ "$status" -ne 0 ] || fail "a push to a vanished remote reported success"
-  contains "$output" "could not push gh-pages in 2 attempts" || fail "unexpected error: $output"
-}
-
 # The orphan path creates a local gh-pages branch. Nothing on the remote
 # changes when the push then fails, so the next run takes the orphan path again
 # - and used to die with "a branch named 'gh-pages' already exists", every time,
@@ -349,42 +294,6 @@ HOOK
   contains "$(cat "$out/badges/main/unit.svg")" "unit2" || fail "the new unit badge did not land"
 }
 
-@test "cleanup with no gh-pages branch is a no-op, and creates none" {
-  BRANCH=feat/gone run bash "$CLEANUP"
-  [ "$status" -eq 0 ] || fail "cleanup failed: $output"
-  contains "$output" "nothing to clean" || fail "unexpected output: $output"
-  ! remote_has_gh_pages || fail "cleanup created a gh-pages branch"
-}
-
-@test "cleanup with no directory for this branch is a no-op" {
-  BRANCH=main bash "$PUBLISH"
-  before="$(git -C "$REMOTE" rev-parse gh-pages)"
-  BRANCH=feat/never-published run bash "$CLEANUP"
-  [ "$status" -eq 0 ] || fail "cleanup failed: $output"
-  contains "$output" "nothing to clean" || fail "unexpected output: $output"
-  [ "$(git -C "$REMOTE" rev-parse gh-pages)" = "$before" ]
-}
-
-@test "cleanup removes only the closed branch's directory" {
-  BRANCH=main bash "$PUBLISH"
-  BRANCH=feat/two bash "$PUBLISH"
-  BRANCH=feat/two run bash "$CLEANUP"
-  [ "$status" -eq 0 ] || fail "cleanup failed: $output"
-  out="$(gh_pages_checkout)"
-  [ ! -d "$out/badges/feat/two" ] || fail "the closed branch's badges are still there"
-  [ -f "$out/badges/main/unit.svg" ] || fail "cleanup took another branch's badges"
-  contains "$(git -C "$out" log -1 --pretty=%s)" "drop badges for closed branch feat/two" \
-    || fail "unexpected commit subject: $(git -C "$out" log -1 --pretty=%s)"
-}
-
-@test "cleanup refuses an unsafe branch name" {
-  BRANCH=main bash "$PUBLISH"
-  before="$(git -C "$REMOTE" rev-parse gh-pages)"
-  BRANCH="../main" run bash "$CLEANUP"
-  [ "$status" -ne 0 ] || fail "cleanup accepted '../main'"
-  [ "$(git -C "$REMOTE" rev-parse gh-pages)" = "$before" ]
-}
-
 @test "publishing twice in one job works (the worktree is reused, not stacked)" {
   BRANCH=main bash "$PUBLISH"
   render_badges "$CONSUMER" 88%
@@ -426,4 +335,137 @@ HOOK
   [ "$status" -eq 0 ] || fail "publish failed: $output"
   contains "$output" "skipped suite" || fail "no log line saying why nothing was published: $output"
   [ "$(git --git-dir="$REMOTE" rev-parse gh-pages)" = "$before" ] || fail "gh-pages moved"
+}
+
+@test "a publish logs how many files it published and writes the CI-owned README" {
+  BRANCH=main run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  contains "$output" "published 5 file(s) to badges/main" || fail "no count in the log: $output"
+  out="$(gh_pages_checkout)" || fail "no gh-pages branch on the remote after publishing"
+  contains "$(cat "$out/README.md")" "# CI-owned branch" || fail "the README does not say who owns the branch"
+  contains "$(cat "$out/README.md")" "NOT the GitHub Pages source" \
+    || fail "the README does not warn against making the branch the Pages source"
+}
+
+@test "publish copies only the .svg and .json files at the top of the badge directory" {
+  echo "notes" > "$CONSUMER/coverage/badge/notes.txt"
+  mkdir -p "$CONSUMER/coverage/badge/nested"
+  echo "<svg>nested</svg>" > "$CONSUMER/coverage/badge/nested/deep.svg"
+  BRANCH=main run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  out="$(gh_pages_checkout)" || fail "no gh-pages branch on the remote after publishing"
+  [ ! -e "$out/badges/main/notes.txt" ] || fail "a file that is not a badge was published"
+  [ ! -e "$out/badges/main/nested" ] || fail "a nested directory was published"
+  [ ! -e "$out/badges/main/deep.svg" ] || fail "a nested badge was published"
+  [ -f "$out/badges/main/unit.json" ] || fail "the .json badge data was not published"
+}
+
+@test "publish reads the badges from BADGE_DIR when it is set" {
+  mkdir -p "$CONSUMER/build"
+  mv "$CONSUMER/coverage/badge" "$CONSUMER/build/badges"
+  BRANCH=main BADGE_DIR=build/badges run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish from BADGE_DIR failed: $output"
+  out="$(gh_pages_checkout)" || fail "no gh-pages branch on the remote after publishing"
+  contains "$(cat "$out/badges/main/coverage.svg")" "100%" || fail "the badges in BADGE_DIR were not published"
+}
+
+@test "publish names the missing BADGE_DIR in its error" {
+  BRANCH=main BADGE_DIR=build/nowhere run bash "$PUBLISH"
+  [ "$status" -eq 1 ] || fail "publish did not fail on a missing BADGE_DIR: $output"
+  contains "$output" "::error::no badge directory at" || fail "no error annotation: $output"
+  contains "$output" "build/nowhere" || fail "the error does not name the directory: $output"
+  ! remote_has_gh_pages || fail "a publish with no badges still created gh-pages"
+}
+
+@test "publish names the badge directory when it holds no badges" {
+  rm -f "$CONSUMER"/coverage/badge/*
+  echo "notes" > "$CONSUMER/coverage/badge/notes.txt"
+  BRANCH=main run bash "$PUBLISH"
+  [ "$status" -eq 1 ] || fail "publish did not fail on a directory without badges: $output"
+  contains "$output" "no .svg/.json badges in" || fail "unexpected error: $output"
+}
+
+@test "publish works from a WORKING_DIRECTORY inside the workspace" {
+  mkdir -p "$CONSUMER/app"
+  mv "$CONSUMER/coverage" "$CONSUMER/app/coverage"
+  BRANCH=main WORKING_DIRECTORY=app run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish from a working directory failed: $output"
+  out="$(gh_pages_checkout)" || fail "no gh-pages branch on the remote after publishing"
+  [ -f "$out/badges/main/unit.svg" ] || fail "the working directory's badges were not published"
+  [ ! -e "$out/app" ] || fail "the working directory leaked into the gh-pages layout"
+}
+
+@test "publish fails when git is not installed" {
+  nogit="$TMP/no-git"
+  mkdir -p "$nogit"
+  ln -s "$(command -v dirname)" "$nogit/dirname"
+  run env PATH="$nogit" BRANCH=main "$BASH" "$PUBLISH"
+  [ "$status" -eq 1 ] || fail "publish ran without git: $output"
+  contains "$output" "missing command: git" || fail "unexpected error: $output"
+}
+
+@test "publish requires BRANCH" {
+  run env -u BRANCH bash "$PUBLISH"
+  [ "$status" -ne 0 ] || fail "publish ran without BRANCH: $output"
+  contains "$output" "BRANCH is required" || fail "unexpected error: $output"
+  ! remote_has_gh_pages || fail "a publish without BRANCH still created gh-pages"
+}
+
+@test "publish requires SHA" {
+  run env -u SHA BRANCH=main bash "$PUBLISH"
+  [ "$status" -ne 0 ] || fail "publish ran without SHA: $output"
+  contains "$output" "SHA is required" || fail "unexpected error: $output"
+  ! remote_has_gh_pages || fail "a publish without SHA still created gh-pages"
+}
+
+@test "publish gives each refused branch name its own diagnosis" {
+  BRANCH="../x" run bash "$PUBLISH"
+  [ "$status" -eq 1 ] || fail "publish accepted '../x': $output"
+  contains "$output" "refusing to use branch name '../x' as a gh-pages path" || fail "unexpected error: $output"
+  BRANCH="a b" run bash "$PUBLISH"
+  [ "$status" -eq 1 ] || fail "publish accepted 'a b': $output"
+  contains "$output" "has characters that cannot be a gh-pages path" || fail "unexpected error: $output"
+  BRANCH="" run bash "$PUBLISH"
+  [ "$status" -ne 0 ] || fail "publish accepted an empty branch name: $output"
+  contains "$output" "BRANCH is required" || fail "unexpected error: $output"
+}
+
+@test "publish fails when the consumer directory does not exist" {
+  BRANCH=main GITHUB_WORKSPACE="$TMP/missing" run bash "$PUBLISH"
+  [ "$status" -ne 0 ] || fail "publish ran against a missing workspace: $output"
+  contains "$output" "$TMP/missing" || fail "the error does not name the missing directory: $output"
+  ! remote_has_gh_pages || fail "a publish from a missing workspace still created gh-pages"
+}
+
+# RUNNER_TEMP pointing at a regular file makes the worktree path impossible to
+# create, the simplest stand-in for a runner whose temporary directory is
+# unusable. The script must stop there rather than publish from somewhere else.
+@test "publish fails when the gh-pages worktree cannot be created" {
+  : > "$TMP/not-a-directory"
+  BRANCH=main RUNNER_TEMP="$TMP/not-a-directory" run bash "$PUBLISH"
+  [ "$status" -ne 0 ] || fail "publish succeeded without a worktree: $output"
+  ! remote_has_gh_pages || fail "a publish without a worktree still created gh-pages"
+  [ "$(git -C "$CONSUMER" rev-parse --abbrev-ref HEAD)" = "main" ] \
+    || fail "the consumer checkout was moved off its branch"
+}
+
+# The copy's own steps each carry `|| return 2`; a branch path that is a file on
+# gh-pages makes the first of them, the mkdir, fail for real.
+@test "a badge directory that cannot be created on gh-pages fails loudly" {
+  BRANCH=main bash "$PUBLISH"
+  dir="$TMP/file-in-the-way"
+  git clone -q -b gh-pages "$REMOTE" "$dir"
+  git -C "$dir" config user.email t@example.com
+  git -C "$dir" config user.name test
+  git -C "$dir" rm -rq badges/main
+  mkdir -p "$dir/badges"
+  echo "not a directory" > "$dir/badges/main"
+  git -C "$dir" add -A
+  git -C "$dir" commit -qm "chore(ci): a file where the branch directory goes"
+  git -C "$dir" push -q origin gh-pages
+  before="$(git -C "$REMOTE" rev-parse gh-pages)"
+  BRANCH=main run bash "$PUBLISH"
+  [ "$status" -eq 1 ] || fail "publish succeeded without a badge directory: $output"
+  contains "$output" "::error::could not stage the badges for main (exit 2)" || fail "no diagnosis in: $output"
+  [ "$(git -C "$REMOTE" rev-parse gh-pages)" = "$before" ] || fail "the branch moved anyway"
 }

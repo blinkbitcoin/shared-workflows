@@ -65,7 +65,7 @@ their pin. Mark breaking changes with `!` (`feat(workflows)!: ...`) or a
 ## Before you push
 
 ```sh
-make check   # shellcheck, actionlint, zizmor, bats, test-package, check-versions, tool-versions, typos, gitleaks
+make check   # shellcheck, actionlint, zizmor, bats, test-package, test-script-modules, check-versions, tool-versions, typos, gitleaks
 ```
 
 The `pre-push` hook runs exactly that, and `pre-commit` runs a faster subset on
@@ -75,12 +75,30 @@ gate on every PR. Escape hatches exist for genuinely broken tooling
 (`git commit --no-verify`, `LEFTHOOK=0 git push`), and personal additions go in
 a gitignored `lefthook-local.yml` rather than in `lefthook.yml`.
 
-### A new script needs a test
+### A new script needs a test file of its own
 
-`test/script-coverage.bats` fails when a script under `scripts/` or
-`packages/dev-config/bin/` is executed by no test. Nothing enforced that before,
-which is how sixteen scripts came to have no coverage at all — three of them in
-the `setup` action, on the path of every job of every workflow.
+Every script has its own test file, named after it, that runs it and covers
+each of its exit paths:
+
+| Script | Its test |
+| --- | --- |
+| `scripts/ci/lint-ci.sh` | `test/lint-ci.bats` |
+| `scripts/ota/export.sh` | `test/ota-export.bats` (`scripts/web/export.sh` already has `test/export.bats`) |
+| `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-script-modules`, 100% gate) |
+| `packages/dev-config/bin/check-tool-versions.mjs` | `packages/dev-config/check-tool-versions.test.mjs` |
+
+A case in a shared suite such as `plumbing.bats` or `fallback-gates.bats` is
+fine on top, but it is never the script's own test: when the suite changes,
+the script silently loses its coverage, and a reader looking for a script's
+contract should find it in one file. Tests sit in `test/` rather than beside
+the script because `scripts/` is what callers check out and what shellcheck
+lints.
+
+`test/script-coverage.bats` fails naming every script under `scripts/` or
+`packages/dev-config/bin/` without such a file. It started as a check that some
+test runs each script, which is how sixteen scripts came to have coverage at
+all — three of them in the `setup` action, on the path of every job of every
+workflow — and now asks for the script's own file.
 
 "Executed" means a test runs it, not that a test mentions it. Ten scripts were
 named only by tests that read their source — a grep for a pattern, an assertion
@@ -90,7 +108,7 @@ about behaviour.
 If a script genuinely cannot run from a bats suite, add it to `ALLOWED` in that
 file **with the reason**. The list is checked both ways: an entry naming a
 script that no longer exists fails, and so does an entry for a script that has
-since gained a test. An allowlist that outlives what it excuses is where
+since gained its own test. An allowlist that outlives what it excuses is where
 coverage goes to be forgotten.
 
 `make test-package` holds the Node package at 100% lines, branches and
@@ -124,8 +142,10 @@ guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
 
 ### How consumers are held to the contract
 
-This repository never checks out a consumer, in CI or in a test. The direction
-is the other way round: each consumer's `check-code.yml` run starts with a
+This repository never checks out a consumer to check it against a rule, in
+CI or in a test. (The consumer rehearsal in `self-rehearsal.yml` checks the
+template out to execute this repository's `pr-release-notes.yml`, not to judge
+the template.) The direction is the other way round: each consumer's `check-code.yml` run starts with a
 `Contract` job, which reads [`packages/dev-config/contract.json`](packages/dev-config/contract.json)
 from the exact version of this repository that consumer calls and checks the
 consumer against it. A consumer that has drifted fails **its own** PR, and a
@@ -150,8 +170,10 @@ script a checks or unit step runs has a requirement, gated on that step's input.
 
 ### Running the release pipeline locally
 
-`make check` cannot execute a reusable workflow, and neither can the PR's CI:
-the workflows only ever run inside a consumer. v0.6.0 shipped a Prepare job
+`make check` cannot execute a reusable workflow, and the PR's CI executes only
+one: `pr-release-notes.yml`, in a dry run against the template
+(`self-rehearsal.yml`, the `Consumer rehearsal` jobs). The build and publish
+workflows only ever run inside a consumer. v0.6.0 shipped a Prepare job
 that exited 127 on every consumer's next push with every gate green. Before a
 change to `build-prepare.yml` or `build-android.yml` goes out, run the
 Linux half of a consumer's internal release here with [nektos/act]:
@@ -178,9 +200,10 @@ job" log on GitHub before merging.
 
 ## What a change usually needs
 
-- **A script change** needs a `test/*.bats` case, with every assertion ending
-  in `|| fail "..."` (see the header of `test/assertions-enforced.bats` for
-  why).
+- **A script change** needs a case in the script's own test file
+  (`test/<name>.bats`, or `test/<name>.test.mjs` for a Node script), with
+  every assertion ending in `|| fail "..."` (see the header of
+  `test/assertions-enforced.bats` for why).
 - **A workflow interface change** — an input, output, secret or env var — needs
   the matching row in [`docs/consumer-guide.md`](docs/consumer-guide.md), and
   the fixtures under `test/fixtures/consumer-min/` updated in the same commit.

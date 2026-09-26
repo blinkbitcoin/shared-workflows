@@ -178,3 +178,24 @@ $(cat "$BODY")
 --- stripped ---
 $output"
 }
+
+@test "squeeze collapses blank runs and drops trailing blank lines, from a file or stdin" {
+  printf 'a\n\n\n\nb\n \n\n' > "$BODY"
+  run lib squeeze_blank_lines "$BODY"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "$(printf 'a\n\nb')" ] || fail "not squeezed: $(printf '%s' "$output" | od -c)"
+  run bash -c 'source "$1/scripts/lib/body-section.sh"; printf "x\n\n" | squeeze_blank_lines -' _ "$REPO_ROOT"
+  [ "$output" = "x" ] || fail "stdin was not squeezed: $(printf '%s' "$output" | od -c)"
+}
+
+# pr-notes.sh compares a fetched body with one rebuilt from its stripped copy.
+# A body that differs only in a trailing blank line - what `gh pr view --jq`
+# returns for a body stored with a final newline - must compare equal.
+@test "squeezed, a body with a trailing blank line equals the body built from its stripped copy" {
+  printf 'intro\n---\n\n\n## [1.2.3]\n\n* fix\n---\nfooter\n\n' > "$BODY"
+  lib strip_section_block "$BODY" "Store notes" > "$BATS_TEST_TMPDIR/stripped"
+  run cmp -s "$BODY" "$BATS_TEST_TMPDIR/stripped"
+  [ "$status" -ne 0 ] || fail "the raw copies already match, so this case proves nothing"
+  run cmp -s <(lib squeeze_blank_lines "$BODY") <(lib squeeze_blank_lines "$BATS_TEST_TMPDIR/stripped")
+  [ "$status" -eq 0 ] || fail "the squeezed copies differ"
+}
