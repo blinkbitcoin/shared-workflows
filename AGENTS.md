@@ -26,7 +26,8 @@ scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version/notes resolution, fastlane invocation, release assets
 scripts/web/        web export, Playwright install and run
 scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
-                    dispatch-release-pr-ci, render-contract-table)
+                    dispatch-release-pr-ci, render-contract-table,
+                    check-rehearsal-section)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
@@ -110,8 +111,12 @@ Every row is a make target; nothing here is run through a package manager.
   holds both halves).
 - **A change to `build-prepare.yml`, `build-android.yml` or the scripts
   they run gets `make smoke-local` before the PR.** No gate in this repo
-  executes a reusable workflow - they only run inside a consumer - and v0.6.0
-  broke every consumer's internal release with `make check` green. The smoke
+  executes those workflows - they only run inside a consumer - and v0.6.0
+  broke every consumer's internal release with `make check` green. (The one
+  reusable workflow a gate here does execute is `pr-release-notes.yml`: the
+  `Consumer rehearsal` job in `self-ci.yml` runs it against the template in a
+  dry run on every change, and `self-release.yml` runs it again before `v0`
+  moves - see `self-rehearsal.yml`.) The smoke
   runs the Linux jobs for real with act, against the template, from the
   pushed branch. It cannot see the token a called workflow really receives,
   tag rules, or macOS; for those, push a throwaway caller on a `scratch/*`
@@ -157,7 +162,8 @@ Every row is a make target; nothing here is run through a package manager.
     pr->>main: squash merge
     main->>rel: push to main
     rel->>tags: release_created, tag vX.Y.Z and its release
-    rel->>tags: major-tag job moves v0 and the minor tag to that commit
+    rel->>rel: rehearsal job runs pr-release-notes.yml against the template, dry run, from that commit
+    rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after the rehearsal passed
     rel->>tags: publish-dev-config job publishes the npm package, when it released too
     rel->>pr: the other package's open release PR is rebuilt on the new main, manifest included
   ```
@@ -219,10 +225,16 @@ Every row is a make target; nothing here is run through a package manager.
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
 | That every script is executed by some test, or allow-listed with a reason | `test/script-coverage.bats` | `make test` |
+| `pr-release-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-rehearsal.yml`, `scripts/self/check-rehearsal-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
 
-**Nothing here checks out a consumer.** The suite reads this repository and
-`test/fixtures/consumer-min` only. A consumer is held to the contract by its own
+**Nothing here checks out a consumer, except to rehearse a workflow.** The
+suite reads this repository and `test/fixtures/consumer-min` only. The one CI
+job that checks a consumer out is the consumer rehearsal, and it tests this
+repository's `pr-release-notes.yml` against the template's `main`, not the
+template against a rule: a red rehearsal from a broken generator on that
+`main` is a deliberate trade, because the template is where every release here
+is first executed. A consumer is held to the contract by its own
 `Contract` job, against the version of this repository it calls, and it is the
 consumer's PR that fails when it drifts - see "The contract check" in
 `docs/consumer-guide.md`. A rule that spans this repository and its consumers is
