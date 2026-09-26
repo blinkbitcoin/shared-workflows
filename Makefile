@@ -13,9 +13,9 @@ MISE := $(shell command -v mise >/dev/null 2>&1 && echo 'mise exec --')
 
 # `find`, not `scripts/*/*.sh`: that glob is fixed at depth 2, so a script one
 # directory deeper is skipped silently. Same form as scripts/ci/lint-ci.sh.
-shellcheck: ## shellcheck every script (bash strict)
+lint-scripts: ## shellcheck every script (bash strict)
 	find scripts -name '*.sh' -exec $(MISE) shellcheck -x {} +
-actionlint: ## Lint workflows and composite actions
+lint-workflows: ## actionlint over the workflows and composite actions
 	$(MISE) actionlint -color
 test: ## bats unit tests for the pure scripts
 	$(MISE) bats test/
@@ -35,12 +35,16 @@ test-package: ## node:test for packages/dev-config, with coverage thresholds
 spell: ## typos over the whole repo
 	$(MISE) typos
 # --offline: the online audits call the GitHub API, and a gate must give the
-# same answer without a network. Policy (tag pins allowed) in .github/zizmor.yml.
-zizmor: ## Security audit of the workflows and actions (zizmor)
-	$(MISE) zizmor --offline --min-severity medium .github
+# same answer without a network. Policy (tag pins allowed) in .github/zizmor.yml,
+# passed with --config: zizmor looks for it at the nearest directory holding a
+# `.git` *directory*, and a worktree's `.git` is a file, so from a worktree
+# nested in another checkout (`.claude/worktrees/<name>/`) it would read that
+# checkout's policy instead of this one's.
+workflow-security: ## Security audit of the workflows and actions (zizmor)
+	$(MISE) zizmor --offline --min-severity medium --config .github/zizmor.yml .github
 secrets: ## Scan the whole git history for committed secrets (gitleaks)
 	$(MISE) gitleaks git --redact --no-banner .
-check: shellcheck actionlint zizmor test test-package check-versions tool-versions spell secrets ## Everything self-ci runs
+check: lint-scripts lint-workflows workflow-security test test-package check-versions tool-versions spell secrets ## Everything self-ci runs
 # Not part of `check`: needs Docker, a pushed branch and a few minutes. See
 # CONTRIBUTING.md, "Running the release pipeline locally".
 smoke-local: ## Run Prepare against the template with act (Linux only, needs Docker)
@@ -53,4 +57,4 @@ hooks: ## Install the git hooks (lefthook) - affects the whole clone, not just t
 	$(MISE) lefthook install
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
-.PHONY: shellcheck actionlint zizmor secrets test test-package check-versions tool-versions spell check smoke-local smoke-local-android hooks help
+.PHONY: lint-scripts lint-workflows workflow-security secrets test test-package check-versions tool-versions spell check smoke-local smoke-local-android hooks help

@@ -79,3 +79,39 @@ EOF
   [ "$output" = "e2e-ios
 ghost" ] || fail "listed_targets returned '$output', expected 'e2e-ios' and 'ghost'"
 }
+
+# The tools `.mise.toml` pins, one per line: the keys of its [tools] table,
+# without a backend prefix (`npm:foo` is foo).
+mise_tools() {
+  awk '/^\[tools\]/ { on = 1; next } /^\[/ { on = 0 } on && /^[a-zA-Z"]/ { print $1 }' "$REPO_ROOT/.mise.toml" |
+    tr -d '"' | sed -E 's/^[a-z]+://; s#.*/##' | sort -u
+}
+
+# Prints each documented target with a dash-separated word that is a tool's name.
+targets_named_after_tools() {
+  local target word
+  while read -r target; do
+    for word in ${target//-/ }; do
+      if mise_tools | grep -qxF "$word"; then
+        printf '%s (%s)\n' "$target" "$word"
+        break
+      fi
+    done
+  done
+  return 0
+}
+
+@test "no make target is named after the tool it runs" {
+  local named
+  named="$(documented_targets | targets_named_after_tools)"
+  [ -z "$named" ] || fail "name these targets for what they check, not the tool (the tool goes in the ## description):
+$named"
+}
+
+@test "the tool-name check reads .mise.toml and catches a target named after a tool" {
+  mise_tools | grep -qxF zizmor || fail "zizmor is pinned in .mise.toml but was not read: $(mise_tools | tr '\n' ' ')"
+  local named
+  named="$(printf '%s\n' zizmor check-shellcheck workflow-security | targets_named_after_tools)"
+  [ "$named" = "zizmor (zizmor)
+check-shellcheck (shellcheck)" ] || fail "expected zizmor and check-shellcheck, got: $named"
+}
