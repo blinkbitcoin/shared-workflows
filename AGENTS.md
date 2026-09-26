@@ -27,8 +27,9 @@ scripts/release/    version/notes resolution, fastlane invocation, release asset
 scripts/web/        web export, Playwright install and run
 scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
                     dispatch-release-pr-ci, render-contract-table,
-                    check-rehearsal-section)
-scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config)
+                    check-rehearsal-section, changed-gates)
+scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
+                    changed-files)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
                     forensics, runners

@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
-# Classify a diff range as docs-only or not, so callers can skip expensive
-# native builds/tests for PRs that only touch documentation.
+# Classify a diff range so callers skip the jobs it cannot affect. Writes:
+#
+#   docs-only      true when every changed path is documentation
+#   unit-changed   true when some changed path can affect the unit suite
+#   e2e-changed    true when some changed path can affect the native E2E suite
+#   web-changed    true when some changed path can affect the web build
+#
+# The three suite classes are ignore-based: a class is affected unless EVERY
+# changed path matches its irrelevant pattern (the docs pattern, the class's own
+# default and the caller's extra). A path nobody listed - a new directory, a new
+# config file - therefore runs the job. Getting a list wrong costs a needless
+# run, never a skipped regression.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
+source "$(dirname "$0")/../lib/changed-files.sh"
 base="${1:-}"
 head="${2:?usage: changed-class.sh BASE_SHA HEAD_SHA}"
 # DOCS_GLOBS *replaces* the default pattern (the escape hatch for a consumer
@@ -19,108 +30,65 @@ default_docs_globs='^docs/|\.md$|(^|/)LICENSE$|^\.github/ISSUE_TEMPLATE/|^\.gith
 docs_globs="${DOCS_GLOBS:-$default_docs_globs}"
 # An `[ ... ] && x` one-liner would exit the script under `set -e` when the
 # variable is empty (the list's status is the failing test's), so: an if.
-#
-# An empty alternative is rejected rather than appended. `docs/|` means "docs/ OR
-# the empty string", and the empty string matches every line, so `grep -Ev` would
-# select nothing, $non_docs would come back empty, and the classifier would
-# report docs-only=true for a pure code change - the whole matrix skipping green.
-# A trailing `|` is the easy way to write that by accident, in YAML especially.
 if [ -n "${DOCS_GLOBS_EXTRA:-}" ]; then
-  # Unlike the runtime paths below, a malformed *input* is a hard error. It is a
-  # human mistake in a workflow file, it is fixable in one edit, and failing open
-  # on it would mean quietly ignoring what the operator asked for on every run
-  # from here on.
-  case "$DOCS_GLOBS_EXTRA" in
-    '|'* | *'|' | *'||'*)
-      die "DOCS_GLOBS_EXTRA has an empty alternative ('$DOCS_GLOBS_EXTRA'): an empty alternative matches every path, which would classify every change as docs-only and skip the whole matrix"
-      ;;
-  esac
+  reject_empty_alternative DOCS_GLOBS_EXTRA "$DOCS_GLOBS_EXTRA"
   docs_globs="$docs_globs|$DOCS_GLOBS_EXTRA"
 fi
 
-# Every "cannot classify" path below fails OPEN: docs-only=false and exit 0, so
-# the caller runs the full pipeline. Under `set -euo pipefail` an abort here
-# would fail the step instead, and a red Checks job is a worse answer than a
-# needlessly complete matrix. An unreadable diff must never read as "docs".
-# Each path says why on stderr as a ::notice::, so a maintainer looking at a
-# full matrix can tell "could not classify" from "really not docs".
-if [ -z "$base" ]; then
-  log "::notice::no base sha for this event - running everything"
-  gh_output docs-only false
-  exit 0
-fi
+# What each suite never reads, beyond the docs. Test files are irrelevant to E2E
+# but not to the web build: Playwright's default testMatch takes `*.test.*` as
+# well as `*.spec.*`. Nothing under .github/ is on any list - a changed caller
+# workflow can change how every suite runs. `Gemfile` is irrelevant to unit and
+# web only: CocoaPods runs under it in the iOS E2E build.
+default_unit_ignore_globs='^\.maestro/|^e2e/|(^|/)playwright\.config\.[cm]?[jt]s$|^fastlane/|(^|/)Gemfile(\.lock)?$'
+default_e2e_ignore_globs='(^|/)__tests__/|(^|/)__snapshots__/|\.test\.[cm]?[jt]sx?$|(^|/)jest\.config\.[cm]?[jt]s$|^e2e/web/|(^|/)playwright\.config\.[cm]?[jt]s$|^fastlane/'
+default_web_ignore_globs='^\.maestro/|(^|/)__snapshots__/|(^|/)jest\.config\.[cm]?[jt]s$|^fastlane/|(^|/)Gemfile(\.lock)?$'
 
-# github.event.before is the all-zero sha on the first push of a new branch:
-# there is no previous commit to diff against.
-case "$base" in
-  *[!0]*) ;;
-  *)
-    log "::notice::base $base is the all-zero sha (first push of a branch) - running everything"
-    gh_output docs-only false
-    exit 0
-    ;;
-esac
+# class_globs DEFAULT EXTRA_NAME - the irrelevant pattern for one suite.
+class_globs() {
+  local globs="$docs_globs|$1" extra="${!2:-}"
+  if [ -n "$extra" ]; then
+    reject_empty_alternative "$2" "$extra"
+    globs="$globs|$extra"
+  fi
+  printf '%s' "$globs"
+}
+unit_globs=$(class_globs "$default_unit_ignore_globs" UNIT_IGNORE_GLOBS_EXTRA)
+e2e_globs=$(class_globs "$default_e2e_ignore_globs" E2E_IGNORE_GLOBS_EXTRA)
+web_globs=$(class_globs "$default_web_ignore_globs" WEB_IGNORE_GLOBS_EXTRA)
 
-# Both ends of the range have to be objects in THIS checkout, or `git diff`
-# exits non-zero and takes the step with it:
-#   - base: a force-push can strand the recorded `before`, and a shallow clone
-#     may never have fetched it;
-#   - head: `$HEAD_SHA` is `github.sha`, which names a commit of the *workflow's*
-#     repository, while the `changes` job checks out `inputs.repository` at
-#     `inputs.ref` - so a consumer that overrides either hands us a sha this
-#     repository has never seen.
-# `cat-file -e` tests that the object is PRESENT, not that it is reachable from
-# a ref; a dangling commit git has not gc'd yet passes and then diffs fine.
-if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-  log "::notice::base $base is not present in this checkout - running everything"
+# The answer when there is no answer: run everything.
+run_everything() {
   gh_output docs-only false
+  gh_output unit-changed true
+  gh_output e2e-changed true
+  gh_output web-changed true
   exit 0
-fi
-if ! git cat-file -e "$head^{commit}" 2>/dev/null; then
-  log "::notice::head $head is not present in this checkout - running everything"
-  gh_output docs-only false
-  exit 0
-fi
+}
 
-# Use merge-base (three-dot) semantics so commits landed on the target branch
-# after the PR branch forked don't leak into the diff and flip a docs-only PR
-# to false. Fall back to a plain two-dot diff only when merge-base can't be
-# computed (e.g. a shallow clone missing the common ancestor).
-if git merge-base "$base" "$head" >/dev/null 2>&1; then
-  files=$(git diff --name-only "$base...$head")
-else
-  log "warning: git merge-base failed for $base..$head; falling back to two-dot diff (may include unrelated target-branch changes)"
-  files=$(git diff --name-only "$base" "$head")
-fi
-if [ -z "$files" ]; then
-  gh_output docs-only false
-  exit 0
-fi
+# Every "cannot classify" path fails OPEN (see changed_files), and so does a
+# pattern that does not compile: a needlessly complete matrix is a far better
+# answer than a silently skipped one.
+files=$(changed_files "$base" "$head") || run_everything
 
-# `|| true` would swallow the one case that matters. grep has three outcomes,
-# and only two of them are answers:
-#
-#   0  some path is not a doc      -> not docs-only
-#   1  every path is a doc         -> docs-only
-#   2+ the pattern did not compile -> no answer at all
-#
-# On 2 grep also prints nothing, so an unswallowed `$non_docs` is empty and
-# indistinguishable from "every path is a doc" - which is how a malformed
-# `docs-globs` used to classify a pure code change as docs-only and skip the
-# entire matrix green. The status has to be read, not the output.
-set +e
-non_docs=$(printf '%s\n' "$files" | grep -Ev "$docs_globs")
-grep_status=$?
-set -e
-if [ "$grep_status" -ge 2 ]; then
-  # Fail open, like every other "cannot classify" path above: a needlessly
-  # complete matrix is a far better answer than a silently skipped one.
-  log "::notice::could not apply the docs pattern (grep exited $grep_status; pattern: $docs_globs) - running everything"
-  gh_output docs-only false
-  exit 0
-fi
-if [ "$grep_status" -eq 1 ] && [ -z "$non_docs" ]; then
-  gh_output docs-only true
-else
-  gh_output docs-only false
-fi
+# irrelevant CLASS PATTERN - set $answer to whether every changed path matches
+# PATTERN. Called directly, never inside a command substitution: from in there
+# run_everything's outputs would land in a variable, not in $GITHUB_OUTPUT.
+irrelevant() {
+  if ! answer=$(every_path_matches "$2" "$files"); then
+    log "::notice::could not apply the $1 pattern (it does not compile: $2) - running everything"
+    run_everything
+  fi
+}
+# changed IRRELEVANT - a suite class is the negation of "every path irrelevant".
+changed() { if [ "$1" = true ]; then echo false; else echo true; fi; }
+
+irrelevant docs "$docs_globs"; docs_only=$answer
+irrelevant unit "$unit_globs"; unit_changed=$(changed "$answer")
+irrelevant e2e "$e2e_globs"; e2e_changed=$(changed "$answer")
+irrelevant web "$web_globs"; web_changed=$(changed "$answer")
+
+gh_output docs-only "$docs_only"
+gh_output unit-changed "$unit_changed"
+gh_output e2e-changed "$e2e_changed"
+gh_output web-changed "$web_changed"

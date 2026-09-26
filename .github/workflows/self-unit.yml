@@ -10,6 +10,13 @@ name: Self unit
 # publishing its own badges.
 on:
   workflow_call:
+    # Set by self-ci.yml's `changes` job; true by default. Tests has no input:
+    # the bats suite reads the whole tree and runs on every change.
+    inputs:
+      package:
+        description: Run the packages/dev-config suite
+        type: boolean
+        default: true
 permissions: { contents: read }
 jobs:
   tests:
@@ -22,6 +29,7 @@ jobs:
       - run: make test
   package:
     name: Package
+    if: ${{ inputs.package }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

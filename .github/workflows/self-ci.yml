@@ -24,16 +24,48 @@ concurrency:
 # Local paths, not @v0: this repository's CI has to run the ref under review.
 # A tag here would test the last release on every pull request.
 jobs:
+  # Which of the narrow gates this change can affect: Code (shellcheck,
+  # actionlint), Tooling (the version checks) and Package (the dev-config
+  # suite). The rest - Tests, Security, Docs, Commits - read the whole tree or
+  # the whole history and run on every change. A skipped job counts as passing,
+  # which is why this is a job and not a `paths` filter on the trigger.
+  #
+  # The base is the PR's only. A push to main and the release PR's dispatch
+  # have none, so they fail open and run every gate: main's push run is the one
+  # that counts, and it stays complete.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      tooling: ${{ steps.classify.outputs.tooling }}
+      package: ${{ steps.classify.outputs.package }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: bash scripts/self/changed-gates.sh "$BASE_SHA" "$HEAD_SHA"
+  # `!= 'false'`, not `== 'true'`: an output that never arrived runs the gate.
   checks:
     name: Checks
+    needs: changes
     uses: ./.github/workflows/self-checks.yml
+    with:
+      code: ${{ needs.changes.outputs.code != 'false' }}
+      tooling: ${{ needs.changes.outputs.tooling != 'false' }}
   # No `needs: checks`. A consumer gates its unit job that way to keep a red
-  # run out of a twenty-minute E2E, and has a docs-only classifier to consult
-  # first. Here every job finishes in about two minutes and there is no
-  # classifier, so serializing would buy latency and nothing else.
+  # run out of a twenty-minute E2E. Here every job finishes in about two
+  # minutes, so serializing would buy latency and nothing else.
   unit:
     name: Unit
+    needs: changes
     uses: ./.github/workflows/self-unit.yml
+    with:
+      package: ${{ needs.changes.outputs.package != 'false' }}
   # pr-release-notes.yml run for real against the template, in a dry run: the
   # one reusable workflow a pull request here can execute (self-rehearsal.yml
   # says why). The grant is the one the called job declares, and a called

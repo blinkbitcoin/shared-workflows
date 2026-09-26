@@ -58,6 +58,14 @@ on:
         description: Space-separated browser names passed to `playwright install`
         type: string
         default: 'chromium'
+      docs-globs:
+        description: Extra regex alternatives (POSIX ERE, '|'-joined) added to the built-in docs pattern, which the web class also never reads
+        type: string
+        default: ''
+      web-ignore-globs:
+        description: Extra regex alternatives (POSIX ERE, '|'-joined) for paths the web build and its Playwright suite never read, added to the built-in list behind web-changed
+        type: string
+        default: ''
     secrets:
       consumer-token:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
@@ -66,15 +74,58 @@ on:
       page-url:
         description: 'URL of the deployed GitHub Pages site (empty unless deploy is true)'
         value: ${{ jobs.deploy.outputs.page-url }}
+      web-changed:
+        description: "'false' when no changed file can affect the web build, so neither the build nor its Playwright suite ran"
+        value: ${{ jobs.changes.outputs.web-changed }}
 permissions:
   contents: read
 jobs:
+  changes:
+    name: Changes
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 5
+    outputs:
+      web-changed: ${{ steps.classify.outputs.web-changed }}
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+          fetch-depth: 0
+      # No setup here, exactly as in check-code.yml: changed-class.sh is pure git,
+      # so this job reaches it through the plain .workflows checkout ($WORKFLOWS_DIR is
+      # published by the setup action, which never runs in this job).
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Classify changed files
+        id: classify
+        env:
+          # Byte-identical to check-code.yml's expression on purpose: one rule for
+          # what the diff is. A `release` event has neither operand, so the script
+          # logs "no base sha" and fails open - a release always builds and
+          # deploys.
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}
+          WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-globs }}
+        run: bash ".workflows/scripts/ci/changed-class.sh" "$BASE_SHA" "$HEAD_SHA"
   build:
     # Job names say what a step is for, not which tool does it - they show in
     # a consumer's PR as "<caller job> / <this>", read by people who have never
     # heard of Playwright. "Deploy" is also deliberately not "Deploy to Pages":
     # Pages is the target implemented today, not the interface.
     name: Build
+    needs: changes
+    # != 'false', not == 'true': an output that never arrived runs the build.
+    # `playwright` and `deploy` need this job, so a skip here skips them too.
+    if: ${{ needs.changes.outputs.web-changed != 'false' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:

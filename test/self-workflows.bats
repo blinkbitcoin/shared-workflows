@@ -203,3 +203,60 @@ ci_make_targets() {
   [ "$(ci_make_targets | wc -l)" -ge 5 ] \
     || fail "ci_make_targets found almost nothing: $(ci_make_targets | tr '\n' ' ')"
 }
+
+# --- which gates a change runs ------------------------------------------------
+#
+# self-ci.yml's `changes` job classifies the diff with scripts/self/changed-gates.sh
+# (its cases are in changed-gates.bats) and hands each narrow gate a boolean.
+# These cases hold the wiring: every class reaches its job, and the gates that
+# read the whole tree or the whole history carry no class at all.
+
+CHECKS="$REPO_ROOT/.github/workflows/self-checks.yml"
+UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
+
+@test "self-ci.yml classifies with changed-gates.sh against the PR base only" {
+  command -v yq >/dev/null || skip "yq not installed"
+  step=$(yq -r '.jobs.changes.steps[] | select(.id == "classify")' "$CI")
+  contains "$step" 'bash scripts/self/changed-gates.sh "$BASE_SHA" "$HEAD_SHA"' \
+    || fail "the classify step does not run changed-gates.sh: $step"
+  # PR only: a push to main and the release PR's dispatch then have no base and
+  # run every gate, so main's push run - the one that counts - stays complete.
+  [ "$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA' "$CI")" \
+    = '${{ github.event.pull_request.base.sha }}' ] || fail "BASE_SHA is not the PR base alone"
+  [ "$(yq -r '.jobs.changes.steps[0].with."fetch-depth"' "$CI")" = "0" ] \
+    || fail "the changes checkout is shallow; the base would be absent"
+}
+
+@test "self-ci.yml hands each class to its gate, reading an empty output as run" {
+  command -v yq >/dev/null || skip "yq not installed"
+  for pair in checks:code checks:tooling unit:package; do
+    job="${pair%%:*}" class="${pair##*:}"
+    [ "$(yq -r ".jobs.$job.needs" "$CI")" = "changes" ] || fail "$job does not need changes"
+    [ "$(yq -r ".jobs.$job.with.$class" "$CI")" = "\${{ needs.changes.outputs.$class != 'false' }}" ] \
+      || fail "$job does not pass $class as != 'false': $(yq -r ".jobs.$job.with" "$CI")"
+    [ "$(yq -r ".jobs.changes.outputs.$class" "$CI")" = "\${{ steps.classify.outputs.$class }}" ] \
+      || fail "the changes job does not expose $class"
+  done
+}
+
+@test "each narrow gate runs on its input, which defaults to true" {
+  command -v yq >/dev/null || skip "yq not installed"
+  for spec in "$CHECKS:code:code" "$CHECKS:tooling:tooling" "$UNIT:package:package"; do
+    file="${spec%%:*}" rest="${spec#*:}"
+    job="${rest%%:*}" input="${rest##*:}"
+    [ "$(yq -r ".jobs.$job.if" "$file")" = "\${{ inputs.$input }}" ] \
+      || fail "$(basename "$file") $job is not gated on inputs.$input"
+    [ "$(yq -r ".on.workflow_call.inputs.$input.default" "$file")" = "true" ] \
+      || fail "$(basename "$file") input $input does not default to true"
+  done
+}
+
+@test "the gates that read the whole tree or history carry no class" {
+  command -v yq >/dev/null || skip "yq not installed"
+  for job in security docs; do
+    [ "$(yq -r ".jobs.$job.if // \"\"" "$CHECKS")" = "" ] || fail "self-checks.yml $job gained an if"
+  done
+  [ "$(yq -r '.jobs.commits.if' "$CHECKS")" = "github.event_name == 'pull_request'" ] \
+    || fail "commits is gated on more than the event: $(yq -r '.jobs.commits.if' "$CHECKS")"
+  [ "$(yq -r '.jobs.tests.if // ""' "$UNIT")" = "" ] || fail "self-unit.yml tests gained an if"
+}

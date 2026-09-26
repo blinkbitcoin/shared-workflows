@@ -137,11 +137,19 @@ on:
         type: boolean
         default: false
       docs-only-detection:
-        description: Classify the PR as docs-only so callers can skip downstream jobs
+        description: Classify the change (docs-only, and whether it can affect the unit and E2E suites) so callers can skip downstream jobs
         type: boolean
         default: true
       docs-globs:
         description: Extra regex alternatives (POSIX ERE, '|'-joined) added to the built-in docs pattern for docs-only detection
+        type: string
+        default: ''
+      unit-ignore-globs:
+        description: Extra regex alternatives (POSIX ERE, '|'-joined) for paths the unit suite never reads, added to the built-in list behind unit-changed
+        type: string
+        default: ''
+      e2e-ignore-globs:
+        description: Extra regex alternatives (POSIX ERE, '|'-joined) for paths the native E2E suite never reads, added to the built-in list behind e2e-changed
         type: string
         default: ''
     secrets:
@@ -152,6 +160,12 @@ on:
       docs-only:
         description: 'true when every changed file matched the docs globs (empty when docs-only-detection is disabled)'
         value: ${{ jobs.changes.outputs.docs-only }}
+      unit-changed:
+        description: "'false' when no changed file can affect the unit suite (empty when docs-only-detection is disabled; gate on != 'false')"
+        value: ${{ jobs.changes.outputs.unit-changed }}
+      e2e-changed:
+        description: "'false' when no changed file can affect the native E2E suite (empty when docs-only-detection is disabled; gate on != 'false')"
+        value: ${{ jobs.changes.outputs.e2e-changed }}
 permissions:
   contents: read
 jobs:
@@ -162,6 +176,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       docs-only: ${{ steps.classify.outputs.docs-only }}
+      unit-changed: ${{ steps.classify.outputs.unit-changed }}
+      e2e-changed: ${{ steps.classify.outputs.e2e-changed }}
     steps:
       - name: Checkout consumer
         uses: actions/checkout@v7
@@ -195,6 +211,8 @@ jobs:
           # _EXTRA, not DOCS_GLOBS: the input is additive, so it must not
           # replace the built-in ^docs/|\.md$|... pattern.
           DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}
+          UNIT_IGNORE_GLOBS_EXTRA: ${{ inputs.unit-ignore-globs }}
+          E2E_IGNORE_GLOBS_EXTRA: ${{ inputs.e2e-ignore-globs }}
         run: bash ".workflows/scripts/ci/changed-class.sh" "$BASE_SHA" "$HEAD_SHA"
   contract:
     name: Contract
