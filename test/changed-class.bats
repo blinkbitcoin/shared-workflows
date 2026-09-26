@@ -440,3 +440,87 @@ expect() {
   cd "$repo" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$head" "$head"
   expect false true true true
 }
+
+# DOCS_GLOBS replaces the docs pattern, and the docs pattern is part of every
+# suite's irrelevant list - so the replacement has to reach the classes too, in
+# both directions.
+@test "DOCS_GLOBS replaces the docs part of every suite's list as well" {
+  commit_file "base.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  commit_file "handbook/x.txt"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && DOCS_GLOBS='^handbook/' run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  expect true false false false
+  commit_file "docs/x.md"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && DOCS_GLOBS='^handbook/' run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  # docs/ is no longer docs under the replacement, so it runs every suite.
+  expect false true true true
+}
+
+# When the two ends share no history, merge-base fails and the classifier falls
+# back to a two-dot diff with a warning - it still answers, it does not abort.
+@test "unrelated histories fall back to a two-dot diff and still classify" {
+  commit_file "docs/a.md"
+  base=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" checkout -q --orphan unrelated
+  git -C "$repo" rm -rq --cached .
+  rm -rf "$repo/docs"
+  commit_file ".maestro/flows/login.yaml"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  # The two-dot diff holds the deleted docs/a.md and the added flow.
+  expect false false true false
+  contains "$output" "falling back to two-dot diff" || fail "no warning about the fallback: $output"
+}
+
+# One representative path per list entry is what the cases above walk. This
+# walks the spellings each entry has to accept - every extension the pattern
+# promises, the entry nested below the root where it is not anchored - and the
+# near misses it must not accept.
+@test "every spelling of every built-in list entry classifies as documented" {
+  # path | unit-changed e2e-changed web-changed
+  checked=0
+  while IFS='|' read -r path want; do
+    [ -n "$path" ] || continue
+    checked=$((checked + 1))
+    commit_file "base.txt"
+    base=$(git -C "$repo" rev-parse HEAD)
+    commit_file "$path"
+    head=$(git -C "$repo" rev-parse HEAD)
+    cd "$repo" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+    [ "$status" -eq 0 ] || fail "$path: exited $status: $output"
+    read -r unit e2e web <<<"$want"
+    has_line "unit-changed=$unit" || fail "$path: expected unit-changed=$unit, got: $output"
+    has_line "e2e-changed=$e2e" || fail "$path: expected e2e-changed=$e2e, got: $output"
+    has_line "web-changed=$web" || fail "$path: expected web-changed=$web, got: $output"
+  done <<'CASES'
+jest.config.js|true false false
+jest.config.mjs|true false false
+packages/app/jest.config.cjs|true false false
+src/a.test.js|true false true
+src/a.test.jsx|true false true
+src/a.test.tsx|true false true
+src/a.test.mjs|true false true
+src/a.test.cts|true false true
+packages/app/src/__tests__/a.ts|true false true
+packages/app/Gemfile|false true false
+packages/app/Gemfile.lock|false true false
+playwright.config.js|false false true
+packages/web/playwright.config.mts|false false true
+e2e/native/helper.ts|false true true
+.maestro/config.yaml|false true false
+src/latest.ts|true true true
+src/test-utils.ts|true true true
+src/a.test-helpers.ts|true true true
+src/jest.config.ts.bak|true true true
+fastlane-plugin/a.rb|true true true
+app/fastlane/Fastfile|true true true
+Gemfile.local|true true true
+src/.maestro/x.yaml|true true true
+.github/workflows/ci-web.yml|true true true
+.github/ISSUE_TEMPLATE/bug.md|false false false
+CASES
+  # A loop that read nothing would pass by vacuum.
+  [ "$checked" -eq 25 ] || fail "walked $checked cases, expected 25"
+}

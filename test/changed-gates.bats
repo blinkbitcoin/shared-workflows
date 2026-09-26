@@ -185,3 +185,36 @@ expect() {
   run changed_files "$head" "$head"
   [ "$status" -eq 1 ] || fail "an empty range returned $status, not 1: $output"
 }
+
+@test "changed_files falls back to a two-dot diff, with a warning, when the ends share no history" {
+  source "$REPO_ROOT/scripts/lib/common.sh"
+  source "$REPO_ROOT/scripts/lib/changed-files.sh"
+  commit_file "a.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" checkout -q --orphan unrelated
+  git -C "$repo" rm -rq --cached .
+  rm -f "$repo/a.txt"
+  commit_file "packages/dev-config/x.json"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo"
+  run changed_files "$base" "$head"
+  [ "$status" -eq 0 ] || fail "the fallback failed: $output"
+  contains "$output" "falling back to two-dot diff" || fail "no warning: $output"
+  has_line "a.txt" || fail "the two-dot diff lost the deleted file: $output"
+  has_line "packages/dev-config/x.json" || fail "the two-dot diff lost the added file: $output"
+}
+
+@test "an unrelated-history range still classifies the self gates" {
+  commit_file "a.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" checkout -q --orphan unrelated
+  git -C "$repo" rm -rq --cached .
+  rm -f "$repo/a.txt"
+  commit_file "packages/dev-config/x.json"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && run bash "$REPO_ROOT/scripts/self/changed-gates.sh" "$base" "$head"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  has_line "code=false" || fail "expected code=false: $output"
+  has_line "tooling=false" || fail "expected tooling=false: $output"
+  has_line "package=true" || fail "expected package=true: $output"
+}
