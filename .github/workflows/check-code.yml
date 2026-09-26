@@ -152,6 +152,14 @@ on:
         description: Extra regex alternatives (POSIX ERE, '|'-joined) for paths the native E2E suite never reads, added to the built-in list behind e2e-changed
         type: string
         default: ''
+      unit-read-globs:
+        description: Regex alternatives (POSIX ERE, '|'-joined) for paths the unit suite does read although an ignore list or the docs pattern covers them; a changed one sets unit-changed
+        type: string
+        default: ''
+      e2e-read-globs:
+        description: Regex alternatives (POSIX ERE, '|'-joined) for paths the native E2E suite does read although an ignore list or the docs pattern covers them; a changed one sets e2e-changed
+        type: string
+        default: ''
     secrets:
       consumer-token:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
@@ -213,6 +221,8 @@ jobs:
           DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}
           UNIT_IGNORE_GLOBS_EXTRA: ${{ inputs.unit-ignore-globs }}
           E2E_IGNORE_GLOBS_EXTRA: ${{ inputs.e2e-ignore-globs }}
+          UNIT_READ_GLOBS: ${{ inputs.unit-read-globs }}
+          E2E_READ_GLOBS: ${{ inputs.e2e-read-globs }}
         run: bash ".workflows/scripts/ci/changed-class.sh" "$BASE_SHA" "$HEAD_SHA"
   contract:
     name: Contract

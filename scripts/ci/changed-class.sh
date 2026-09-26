@@ -10,7 +10,8 @@
 # changed path matches its irrelevant pattern (the docs pattern, the class's own
 # default and the caller's extra). A path nobody listed - a new directory, a new
 # config file - therefore runs the job. Getting a list wrong costs a needless
-# run, never a skipped regression.
+# run, never a skipped regression. A caller's read pattern takes paths back off
+# that list: a class is also affected when SOME changed path matches it.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/changed-files.sh"
@@ -57,6 +58,15 @@ unit_globs=$(class_globs "$default_unit_ignore_globs" UNIT_IGNORE_GLOBS_EXTRA)
 e2e_globs=$(class_globs "$default_e2e_ignore_globs" E2E_IGNORE_GLOBS_EXTRA)
 web_globs=$(class_globs "$default_web_ignore_globs" WEB_IGNORE_GLOBS_EXTRA)
 
+# What each suite reads after all (UNIT_READ_GLOBS, E2E_READ_GLOBS,
+# WEB_READ_GLOBS; empty by default). The ignore lists can only grow, and a suite
+# can read more than they assume - a unit job whose guards scan every tracked
+# file reads .maestro/ and fastlane/ too - so this is how a caller takes a path
+# back off a list, docs included. It is not checked for an empty alternative:
+# GNU grep matches every path with one and BSD grep refuses the pattern, which
+# runs everything below - either way more runs, the safe direction for a
+# mistake here.
+
 # The answer when there is no answer: run everything.
 run_everything() {
   gh_output docs-only false
@@ -83,10 +93,26 @@ irrelevant() {
 # changed IRRELEVANT - a suite class is the negation of "every path irrelevant".
 changed() { if [ "$1" = true ]; then echo false; else echo true; fi; }
 
+# suite CLASS IGNORE_PATTERN READ_NAME - set $answer to the class: true when some
+# changed path matches the read pattern named READ_NAME, else whether some path
+# falls outside IGNORE_PATTERN. Called directly, for the same reason as above.
+suite() {
+  local read="${!3:-}"
+  if [ -n "$read" ]; then
+    if ! answer=$(any_path_matches "$read" "$files"); then
+      log "::notice::could not apply the $1 read pattern (it does not compile: $read) - running everything"
+      run_everything
+    fi
+    if [ "$answer" = true ]; then return 0; fi
+  fi
+  irrelevant "$1" "$2"
+  answer=$(changed "$answer")
+}
+
 irrelevant docs "$docs_globs"; docs_only=$answer
-irrelevant unit "$unit_globs"; unit_changed=$(changed "$answer")
-irrelevant e2e "$e2e_globs"; e2e_changed=$(changed "$answer")
-irrelevant web "$web_globs"; web_changed=$(changed "$answer")
+suite unit "$unit_globs" UNIT_READ_GLOBS; unit_changed=$answer
+suite e2e "$e2e_globs" E2E_READ_GLOBS; e2e_changed=$answer
+suite web "$web_globs" WEB_READ_GLOBS; web_changed=$answer
 
 gh_output docs-only "$docs_only"
 gh_output unit-changed "$unit_changed"

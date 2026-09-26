@@ -66,6 +66,10 @@ on:
         description: Extra regex alternatives (POSIX ERE, '|'-joined) for paths the web build and its Playwright suite never read, added to the built-in list behind web-changed
         type: string
         default: ''
+      web-read-globs:
+        description: Regex alternatives (POSIX ERE, '|'-joined) for paths the web build or its Playwright suite does read although an ignore list or the docs pattern covers them; a changed one sets web-changed
+        type: string
+        default: ''
     secrets:
       consumer-token:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
@@ -115,6 +119,7 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
           DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}
           WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-globs }}
+          WEB_READ_GLOBS: ${{ inputs.web-read-globs }}
         run: bash ".workflows/scripts/ci/changed-class.sh" "$BASE_SHA" "$HEAD_SHA"
   build:
     # Job names say what a step is for, not which tool does it - they show in
