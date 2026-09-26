@@ -53,7 +53,10 @@ workflows_release_platform() {
 # called "fingerprint" and hash the app with it.
 workflows_fingerprint() {
   local platform override out root
-  platform="$(workflows_release_platform "${1:-}")"
+  # Every caller reads this through `$(...)`, where `set -e` does not reach, so
+  # each step that can fail says `|| return` itself; without it an unknown
+  # platform, or a working directory that does not exist, ran the CLI anyway.
+  platform="$(workflows_release_platform "${1:-}")" || return
   case "$platform" in
     ios) override="${WORKFLOWS_FINGERPRINT_IOS:-}" ;;
     android) override="${WORKFLOWS_FINGERPRINT_ANDROID:-}" ;;
@@ -61,7 +64,7 @@ workflows_fingerprint() {
   if [ -n "$override" ]; then printf '%s\n' "$override"; return 0; fi
 
   require_cmd npx
-  root="$(consumer_root)"
+  root="$(consumer_root)" || die "the consumer's working directory does not exist: ${GITHUB_WORKSPACE:-$PWD}/${WORKING_DIRECTORY:-.}"
   out="$(cd "$root" && npx --no fingerprint fingerprint:generate --platform "$platform")" ||
     die "fingerprint:generate failed for $platform (is @expo/fingerprint a devDependency of the consumer?)"
   case "$out" in

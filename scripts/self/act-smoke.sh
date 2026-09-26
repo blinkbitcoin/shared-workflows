@@ -61,8 +61,12 @@ substitute() {
   dir="$cache/$action-$tag"
   if [ ! -d "$dir" ]; then
     log "act smoke: fetching actions/$action@$tag into $dir (once)"
+    # `|| die`, not `set -e`: this runs inside `$(...)`, which `set -e` does
+    # not reach, and a half-cloned directory would make every later run skip
+    # the fetch.
     git -c advice.detachedHead=false clone -q --depth 1 --branch "$tag" \
-      "https://github.com/actions/$action" "$dir"
+      "https://github.com/actions/$action" "$dir" ||
+      { rm -rf "$dir"; die "could not fetch actions/$action@$tag into $dir"; }
   fi
   printf '%s\n' "$dir"
 }

@@ -1,21 +1,19 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# reserve-tag.sh and unreserve-tag.sh decide which commit a released version
-# names, and unreserve-tag.sh *deletes a git tag*. Both had no test of any kind:
-# the pair was the highest-risk gap in the repository - one script that creates
-# a permanent, public name for a commit and one that removes it, neither
-# exercised. unreserve-tag.sh has no `die` site at all, which is unusual enough
-# in this repo to be worth pinning deliberately rather than leaving implicit.
+# reserve-tag.sh decides which commit a released version names: it creates a
+# permanent, public name for a commit. It and unreserve-tag.sh, which removes
+# that name again, once had no test of any kind - the highest-risk gap in the
+# repository. unreserve-tag.sh's own cases are in unreserve-tag.bats; the last
+# case here is about the pair, as the workflow wires them.
 #
 # `gh` is stubbed: each call appends its arguments to a log, and the response
 # comes from a canned file. No network, and the exact API path is asserted -
-# deleting the wrong ref is the failure that matters here.
+# a tag created at the wrong ref is the failure that matters here.
 
 load test_helper
 
 RESERVE="$REPO_ROOT/scripts/release/reserve-tag.sh"
-UNRESERVE="$REPO_ROOT/scripts/release/unreserve-tag.sh"
 
 setup() {
   STUB="$BATS_TEST_TMPDIR/bin"
@@ -106,45 +104,6 @@ SH
   [ "$status" -ne 0 ] || fail "a missing sha must be a usage error"
   GH_REPO="" run bash "$RESERVE" v1.2.3-build.42 deadbeef
   [ "$status" -ne 0 ] || fail "an empty GH_REPO must be refused"
-}
-
-# --- unreserve -----------------------------------------------------------
-
-@test "unreserve deletes exactly the ref it was given" {
-  # The assertion that matters: the path, in full. A tag deleted by a wrong
-  # path is either a no-op or someone else's tag.
-  run bash "$UNRESERVE" v1.2.3-build.42
-  [ "$status" -eq 0 ] || fail "exited $status: $output"
-  run cat "$CALLS"
-  contains "$output" "-X DELETE repos/acme/app/git/refs/tags/v1.2.3-build.42" \
-    || fail "wrong delete call: $output"
-}
-
-@test "unreserve deletes one ref and nothing else" {
-  run bash "$UNRESERVE" v1.2.3-build.42
-  run cat "$CALLS"
-  [ "$(grep -c . <<< "$output")" -eq 1 ] || fail "expected exactly one gh call: $output"
-  not_contains "$output" "-X POST" || fail "a delete must not create anything: $output"
-}
-
-@test "unreserve needs a tag and GH_REPO, and names what is missing" {
-  run bash "$UNRESERVE"
-  [ "$status" -ne 0 ] || fail "no tag must be a usage error"
-  contains "$output" "usage" || fail "does not say how to call it: $output"
-  run cat "$CALLS"
-  [ ! -s "$CALLS" ] || fail "it called gh without a tag: $output"
-
-  GH_REPO="" run bash "$UNRESERVE" v1.2.3-build.42
-  [ "$status" -ne 0 ] || fail "an empty GH_REPO must be refused"
-  contains "$output" "GH_REPO" || fail "does not name the missing variable: $output"
-}
-
-@test "a failed delete is fatal rather than a silent success" {
-  # It runs under `if: failure()`, so its own failure is easy to miss - but a
-  # tag left behind names a commit that has no release, and the next run of the
-  # same version then refuses to build. Loud is right.
-  WORKFLOWS_TEST_FAIL="Not Found" run bash "$UNRESERVE" v1.2.3-build.42
-  [ "$status" -ne 0 ] || fail "a failed delete must not report success: $output"
 }
 
 # --- the pair, and the workflow that wires them -------------------------

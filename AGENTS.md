@@ -47,6 +47,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make workflow-security` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
 | `make test` | The bats suite over the pure scripts |
 | `make test-package` | `node:test` over `packages/dev-config` |
+| `make test-script-modules` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
 | `make check-versions` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
 | `make tool-versions` | Fail when an installed tool is not the version `packages/dev-config/versions.json` pins |
 | `make spell` | typos over the whole repo |
@@ -79,7 +80,8 @@ Every row is a make target; nothing here is run through a package manager.
 - **Every PR tests everything it adds or changes, in the same PR.** That means
   the happy path, every error path and every branch a reviewer could ask
   about, and the PR description names the tests that cover the change. Every
-  script gets bats cases for each exit path (the rule below), every workflow
+  script gets its own test file with a case for each exit path (the rule
+  below), every workflow
   rule gets a `test/workflow-shape.bats` or `test/consumer-contract.bats`
   assertion, and `packages/dev-config` is gated by `make test-package` at
   100% lines, branches and functions. A threshold is never lowered and no file
@@ -90,10 +92,31 @@ Every row is a make target; nothing here is run through a package manager.
   a run log; give it a file under the matching `scripts/<area>/` and a bats
   test. Everything under `scripts/` is `shellcheck -x` clean under
   `set -euo pipefail`.
-- **Every script gets bats coverage**, and every assertion ends in
-  `|| fail "..."` — bash 3.2 (macOS's `/bin/bash`) does not honour `errexit`
-  for a bare `[[ ]]`, so an unguarded assertion cannot fail a test locally.
-  `test/assertions-enforced.bats` enforces this.
+- **`set -e` does not reach everywhere, so a step that can fail there says
+  so.** It does not stop on a failing `$(...)` inside a command's arguments
+  or a `case` word, on a failure inside a function its caller reads through
+  `$(...)`, or on the command feeding a loop through `< <(...)`. Read the
+  value on a line of its own (`udid="$(workflows_sim_udid)"`), end a step
+  inside such a function with `|| return` or `|| die "..."`, and list into a
+  variable before looping over it. Each of these once let a script carry on
+  with an empty value (`ios-simulator.sh`, `workflows_app_id`,
+  `workflows_fingerprint`, `act-smoke.sh`, `cancel-runs.sh`).
+- **Every script has its own test file, and that file runs it and covers
+  each of its exit paths.** `scripts/ci/x.sh` has `test/x.bats`
+  (`test/ci-x.bats` when another script is also called `x`); a Node script
+  `scripts/lib/x.mjs` has `test/x.test.mjs` under `make test-script-modules`'
+  100% gate; a dev-config program `packages/dev-config/bin/x.mjs` has
+  `packages/dev-config/x.test.mjs`. A case in a shared suite (`plumbing.bats`,
+  `fallback-gates.bats`) is welcome on top but is never the script's own test,
+  and a file that only greps the script does not count. Tests live in `test/`
+  rather than beside the script because `scripts/` is what callers check out
+  and shellcheck lints. `test/script-coverage.bats` fails naming every script
+  without one; a script that truly cannot run from a test goes in its
+  `ALLOWED` list with the reason.
+- **Every assertion ends in `|| fail "..."`** — bash 3.2 (macOS's
+  `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
+  assertion cannot fail a test locally. `test/assertions-enforced.bats`
+  enforces this.
 - **Tool versions live in `scripts/lib/versions.sh`**, mirrored into
   `.mise.toml` and into workflow input defaults. Never bump one copy alone;
   `make check-versions` is what catches it.
@@ -215,7 +238,8 @@ Every row is a make target; nothing here is run through a package manager.
 
 | Layer | Where | Run with |
 |---|---|---|
-| Pure bash scripts | `test/*.bats` | `make test` |
+| Pure bash scripts, one test file each | `test/<name>.bats` | `make test` |
+| The Node scripts under `scripts/`, one test file each, 100% lines, branches and functions | `test/<name>.test.mjs` | `make test-script-modules` |
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
@@ -224,7 +248,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
-| That every script is executed by some test, or allow-listed with a reason | `test/script-coverage.bats` | `make test` |
+| That every script has its own test file that runs it, or is allow-listed with a reason | `test/script-coverage.bats` | `make test` |
 | `pr-release-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-rehearsal.yml`, `scripts/self/check-rehearsal-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
 

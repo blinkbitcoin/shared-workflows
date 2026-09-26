@@ -2,7 +2,9 @@
 # The consumer-contract checker, end to end, and the shape of the job that runs
 # it. The unit-level behaviour lives in
 # packages/dev-config/check-consumer-contract.test.mjs (node:test); what is here
-# is what only a real checkout and the real workflow file can answer.
+# is what only a real checkout and the real workflow file can answer. The
+# wrapper the Contract job runs, scripts/ci/contract-check.sh, has its own file:
+# contract-check.bats.
 
 load test_helper
 
@@ -200,26 +202,6 @@ JSON
   contains "$output" "known: " || fail "the message does not say what is valid: $output"
 }
 
-@test "the wrapper and the checker still work through a symlinked .workflows" {
-  # How this was found: node resolves symlinks when it loads a module, so
-  # `import.meta.url` is the real path while `process.argv[1]` is what the
-  # caller typed. The `am I the program?` guard compared the two directly, and
-  # through a link they differ - so the checker loaded, ran nothing, printed
-  # nothing and exited 0. A gate that silently passes is worse than one that
-  # fails, and this one is reached by a path a consumer may well link.
-  local ws="$BATS_TEST_TMPDIR/ws"
-  mkdir -p "$ws/.github/workflows"
-  printf '{"name":"app"}\n' > "$ws/package.json"
-  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' \
-    > "$ws/.github/workflows/ci.yml"
-  ln -s "$REPO_ROOT" "$ws/.workflows"
-
-  cd "$ws"
-  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash ".workflows/scripts/ci/contract-check.sh"
-  [ "$status" -eq 1 ] || fail "expected the unmet contract to fail, got $status: $output"
-  contains "$output" "FAIL" || fail "the checker produced no findings through a symlink: $output"
-}
-
 @test "every dev-config bin still runs when invoked through a symlink" {
   # A package manager installs a `bin` entry into node_modules/.bin as a link,
   # so `pnpm exec <bin>` - the usage the package README advertises - reaches
@@ -273,25 +255,6 @@ JSON
     if (missing.length > 0) throw new Error(`no section for: ${missing.join(", ")}`);
   '
   [ "$status" -eq 0 ] || fail "$output"
-}
-
-@test "a contract-only run gates nothing, and says so" {
-  # Opt-in and useful, but a green Checks that ran no gate is exactly the shape
-  # of result someone reads as "it passed".
-  local ws="$BATS_TEST_TMPDIR/ws"
-  mkdir -p "$ws/.github/workflows"
-  printf '{"name":"app","scripts":{}}\n' > "$ws/package.json"
-  ln -s "$REPO_ROOT" "$ws/.workflows"
-  local summary="$BATS_TEST_TMPDIR/summary.md"
-  : > "$summary"
-
-  cd "$ws"
-  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." WORKFLOWS_CONTRACT_ONLY=true \
-    GITHUB_STEP_SUMMARY="$summary" run bash ".workflows/scripts/ci/contract-check.sh"
-  contains "$output" "::warning::contract-only run" || fail "no warning: $output"
-  contains "$output" "NO gate ran" || fail "$output"
-  run cat "$summary"
-  contains "$output" "Contract-only run" || fail "the summary does not say it: $output"
 }
 
 @test "contract-only is off by default, and every gate job honours it" {

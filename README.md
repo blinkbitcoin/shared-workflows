@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->96<!--/count--> scripts · <!--count:tests-->700<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->96<!--/count--> scripts · <!--count:tests-->965<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -195,7 +195,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table, the rehearsal's section check |
-| `test/`                | <!--count:bats-files-->75<!--/count--> bats files, <!--count:tests-->700<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->107<!--/count--> bats files, <!--count:tests-->965<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
