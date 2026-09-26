@@ -30,14 +30,22 @@ fi
 # permissions, App tokens with blanket scope, dangerous triggers - none of which
 # actionlint looks at. --offline keeps it deterministic: the online audits ask
 # the GitHub API, and a gate must not change its answer with the network.
-# A consumer's own zizmor.yml (repo root or .github/) is its policy; without one
-# it gets this family's, which allows tag pins (see .github/zizmor.yml here).
+# A consumer's own zizmor.yml (.github/ first, then the repository root, the
+# order zizmor itself searches) is its policy; without one it gets this
+# family's, which allows tag pins (see .github/zizmor.yml here). The file is
+# always passed with --config rather than left to zizmor's discovery: that
+# stops at the nearest `.git` *directory*, and a worktree's `.git` is a file,
+# so a run from a worktree nested in another checkout would read that
+# checkout's policy instead.
 if [ "${WORKFLOWS_ZIZMOR:-true}" = "true" ] && [ -d .github/workflows ]; then
-  config=()
-  if [ ! -f zizmor.yml ] && [ ! -f .github/zizmor.yml ]; then
-    config=(--config "$(cd "$(dirname "$0")/../.." && pwd)/.github/zizmor.yml")
+  if [ -f .github/zizmor.yml ]; then
+    config=.github/zizmor.yml
+  elif [ -f zizmor.yml ]; then
+    config=zizmor.yml
+  else
+    config="$(cd "$(dirname "$0")/../.." && pwd)/.github/zizmor.yml"
   fi
-  mise x "zizmor@$ZIZMOR_VERSION" -- zizmor --offline --min-severity medium ${config[@]+"${config[@]}"} .github
+  mise x "zizmor@$ZIZMOR_VERSION" -- zizmor --offline --min-severity medium --config "$config" .github
 else
   log "lint-ci: skipping zizmor"
 fi

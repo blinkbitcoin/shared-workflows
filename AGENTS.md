@@ -43,7 +43,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make check` | Everything self-ci runs: the nine gates below |
 | `make shellcheck` | shellcheck every script under `scripts/` (bash strict) |
 | `make actionlint` | Lint the workflows and composite actions |
-| `make zizmor` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`) |
+| `make workflow-security` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
 | `make test` | The bats suite over the pure scripts |
 | `make test-package` | `node:test` over `packages/dev-config` |
 | `make check-versions` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
@@ -210,6 +210,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Both dev-config programs at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, and each program's flags, messages and exit codes | `packages/dev-config/*.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
+| That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
 | That every script is executed by some test, or allow-listed with a reason | `test/script-coverage.bats` | `make test` |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
