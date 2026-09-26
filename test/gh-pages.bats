@@ -393,3 +393,37 @@ HOOK
   out="$(gh_pages_checkout)"
   contains "$(cat "$out/badges/main/coverage.svg")" "88%" || fail "the second publish did not land"
 }
+
+@test "a skipped suite leaves its published status badge alone" {
+  BRANCH=main bash "$PUBLISH"
+  # A render script handed `skipped` draws a grey badge; it must not land.
+  echo '<svg>unit skipped</svg>' > "$CONSUMER/coverage/badge/unit.svg"
+  echo '<svg>e2e2</svg>' > "$CONSUMER/coverage/badge/e2e.svg"
+  BRANCH=main BADGE_UNIT=skipped BADGE_E2E=success run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  out="$(gh_pages_checkout)"
+  contains "$(cat "$out/badges/main/unit.svg")" "<svg>unit</svg>" \
+    || fail "a skipped Unit overwrote the published unit badge: $(cat "$out/badges/main/unit.svg")"
+  contains "$(cat "$out/badges/main/e2e.svg")" "e2e2" || fail "the E2E badge that did run did not land"
+}
+
+@test "a skipped E2E leaves its published status badge alone" {
+  BRANCH=main bash "$PUBLISH"
+  echo '<svg>e2e skipped</svg>' > "$CONSUMER/coverage/badge/e2e.svg"
+  BRANCH=main BADGE_UNIT=success BADGE_E2E=skipped run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  out="$(gh_pages_checkout)"
+  contains "$(cat "$out/badges/main/e2e.svg")" "<svg>e2e</svg>" \
+    || fail "a skipped E2E overwrote the published e2e badge"
+}
+
+@test "when every rendered badge belongs to a skipped suite, publish changes nothing" {
+  BRANCH=main bash "$PUBLISH"
+  before="$(git --git-dir="$REMOTE" rev-parse gh-pages)"
+  rm "$CONSUMER/coverage/badge/coverage.svg"
+  echo '<svg>grey</svg>' > "$CONSUMER/coverage/badge/unit.svg"
+  BRANCH=main BADGE_UNIT=skipped BADGE_E2E=skipped run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  contains "$output" "skipped suite" || fail "no log line saying why nothing was published: $output"
+  [ "$(git --git-dir="$REMOTE" rev-parse gh-pages)" = "$before" ] || fail "gh-pages moved"
+}

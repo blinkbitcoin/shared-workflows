@@ -26,8 +26,8 @@ scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version/notes resolution, fastlane invocation, release assets
 scripts/web/        web export, Playwright install and run
 scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
-                    dispatch-release-pr-ci, render-contract-table)
-scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config)
+                    dispatch-release-pr-ci, render-contract-table, changed-gates)
+scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config, changed-files)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
                     forensics, runners

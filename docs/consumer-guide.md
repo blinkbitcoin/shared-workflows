@@ -274,13 +274,22 @@ jobs:
   unit:
     name: Unit
     needs: checks
-    if: ${{ needs.checks.outputs.docs-only != 'true' }}
+    # `!= 'false'`: an output that never arrived runs the suite. A docs-only
+    # change is `false` here too.
+    if: ${{ needs.checks.outputs.unit-changed != 'false' }}
     uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
   e2e:
     name: E2E
-    # `unit` as well as `checks`: a failed unit run then never reaches E2E.
+    # `unit` as well as `checks`: a failed unit run then never reaches E2E. A
+    # *skipped* one must not stop it - a change to Maestro flows alone skips
+    # unit and still has to run here - hence `!cancelled()` and the explicit
+    # result check, in place of the implicit success() that `needs` adds.
     needs: [checks, unit]
-    if: ${{ needs.checks.outputs.docs-only != 'true' }}
+    if: >-
+      !cancelled() &&
+      needs.checks.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.unit.result) &&
+      needs.checks.outputs.e2e-changed != 'false'
     uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
     with:
       # iOS is opt-in because macOS bills at 10x on a private repo. On a
@@ -330,11 +339,20 @@ Notes:
   reusable workflows set it (a called workflow's `concurrency` would fight the
   caller's). Cancel in-flight runs on every branch except `main` (a `main`
   push after a merge should never be cancelled by the next one).
-- `docs-only` (from `check-code.yml`'s `changes` job) lets `unit` and `e2e` skip
-  entirely on a docs-only diff; wire it into any other downstream job you add.
-  A skipped job counts as passing for required checks, unlike a workflow that
-  never ran — which is exactly why the classifier, not the trigger, does the
-  skipping.
+- `unit-changed` and `e2e-changed` (from `check-code.yml`'s `changes` job) let
+  `unit` and `e2e` skip a change that cannot affect them: a Maestro flow edit
+  skips `unit`, a unit test edit skips `e2e`, a docs-only diff skips both. See
+  [the suite classes](#the-suite-classes) for what each one ignores. Gate on
+  `!= 'false'`, never `== 'true'`, so an output that never arrived runs the
+  suite. `docs-only` is still there; wire it into any other downstream job you
+  add. A skipped job counts as passing for required checks, unlike a workflow
+  that never ran — which is exactly why the classifier, not the trigger, does
+  the skipping.
+- **`e2e` must survive a skipped `unit`.** `needs: [checks, unit]` adds an
+  implicit `success()`, and a skipped `unit` is not a success — so a flows-only
+  change would skip `e2e` too, the one suite it can affect. Hence `!cancelled()`
+  and the explicit `needs.unit.result` check: a failed `unit` still keeps a red
+  run out of E2E, a skipped one does not.
 - **No `paths-ignore` on `push`.** It used to be there, back when the
   classifier only ever saw `pull_request.base.sha` and so classified nothing on
   a push. `check-code.yml` now derives its base from `github.event.before` on a
@@ -352,7 +370,7 @@ Notes:
   `contents: write` (granted on the job, not at the top of the file). What it
   publishes, what it skips and the GitHub Pages constraint that goes with it
   are in [`publish-badges.yml`](#publish-badgesyml).
-- **What a docs-only change still costs.** Only `unit` and `e2e` skip.
+- **What a docs-only change still costs.** Only `unit`, `e2e` and `badges` skip.
   `check-code.yml`'s own `code` job has no `docs-only` gate, so a documentation
   push to `main` still runs typecheck, lint, format, knip, spell, `check:docs`
   and audit — which is the point: those are the checks a documentation change
@@ -653,8 +671,10 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `release-checks` | `false` | Install Ruby (`ruby/setup-ruby@v1`, `bundler-cache: true`) and run the consumer's `check:release` script — the Fastfile/Gemfile and release-config validation behind the template's `make check-release`. Off by default because a repo with no release setup has no such script |
 | `contract-only` | `false` | Run the contract check and **nothing else** — for a repository still being wired up, it answers "would these workflows work here?" in seconds instead of runner-minutes. A run under this flag gates nothing, so it says so: the job logs a warning and the summary names it. Not a setting to leave on |
 | `contract-check` | `true` | Report every unmet requirement of this family in one place, before the gates that would each die on their own — see [The contract check](#the-contract-check). `false` makes the step a no-op; the job itself still runs, because every other job in this workflow `needs:` it |
-| `docs-only-detection` | `true` | Classify the change as docs-only — on a `pull_request` **and** on a `push` |
+| `docs-only-detection` | `true` | Classify the change — docs-only, and whether it can affect the unit and E2E suites — on a `pull_request` **and** on a `push`. `false` leaves every output empty, which a `!= 'false'` gate reads as "run" |
 | `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern (`^docs/\|\.md$\|(^\|/)LICENSE$\|^\.github/ISSUE_TEMPLATE/\|^\.github/PULL_REQUEST_TEMPLATE`), not a replacement for it |
+| `unit-ignore-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives for paths the unit suite never reads, **added to** the built-in list behind `unit-changed` (see [the suite classes](#the-suite-classes)) |
+| `e2e-ignore-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives for paths the native E2E suite never reads, **added to** the built-in list behind `e2e-changed` |
 
 Jobs: `Changes`, `Contract`, `Code`, `Generated`, `Docs`, `Dependencies`,
 `Prebuild`, `Secrets`, `Release`, `Tooling`, `Commits` — grouped by **who acts on a
@@ -670,7 +690,9 @@ inside `Code` stay together on purpose: same person, same fix (`make
 check-code`), seconds each.
 
 Outputs: `docs-only` (`'true'` when every changed file matched the docs
-globs; empty when detection is disabled). Secrets: `consumer-token` (optional).
+globs), `unit-changed` and `e2e-changed` (`'false'` when no changed file can
+affect that suite). All three are empty when detection is disabled. Secrets:
+`consumer-token` (optional).
 
 The base of the diff is `github.event.pull_request.base.sha` on a
 `pull_request` and `github.event.before` on a `push`, so a PR and the merge
@@ -680,9 +702,35 @@ the root, so a per-package copyright bump is docs too.
 
 The classifier **fails open**: when the range cannot be read at all — no base,
 the all-zero base of a branch's first push, or a base made unreachable by a
-force-push or a shallow clone — it emits `docs-only=false` and exits 0. The
-step stays green and the full pipeline runs; an unreadable diff is never read
-as "nothing but docs".
+force-push or a shallow clone — or a pattern does not compile, it emits
+`docs-only=false` and every `*-changed=true`, and exits 0. The step stays green
+and the full pipeline runs; an unreadable diff is never read as "nothing
+relevant". An `*-globs` input with an empty alternative (a stray leading,
+trailing or doubled `|`) is the one hard failure: an empty alternative matches
+every path, and would skip every job it gates.
+
+#### The suite classes
+
+Each suite class is **ignore-based**: it is `'true'` unless *every* changed
+path is on that suite's irrelevant list — the docs pattern, the built-in
+entries below, and the matching `*-ignore-globs` input. A path nobody listed —
+a new directory, a new config file — therefore runs the suite. Getting a list
+wrong costs a needless run, never a skipped regression.
+
+| Class | Built-in irrelevant paths, besides docs | Widened by |
+| --- | --- | --- |
+| `unit-changed` | `.maestro/`, `e2e/`, `playwright.config.*`, `fastlane/`, `Gemfile`, `Gemfile.lock` | `check-code.yml`'s `unit-ignore-globs` |
+| `e2e-changed` | `__tests__/`, `__snapshots__/`, `*.test.{js,ts,jsx,tsx,mjs,cjs,…}`, `jest.config.*`, `e2e/web/`, `playwright.config.*`, `fastlane/` | `check-code.yml`'s `e2e-ignore-globs` |
+| `web-changed` | `.maestro/`, `__snapshots__/`, `jest.config.*`, `fastlane/`, `Gemfile`, `Gemfile.lock` | `build-web.yml`'s `web-ignore-globs` |
+
+Nothing under `.github/` is on any built-in list: a changed caller workflow can
+change how every suite runs. Test files are irrelevant to native E2E but not to
+the web build, because Playwright's default `testMatch` takes `*.test.*` as well
+as `*.spec.*`. `Gemfile` runs E2E only: CocoaPods runs under it in the iOS
+build. A native change needs no class of its own — `check-e2e.yml`'s build jobs
+already restore the app from a cache keyed on the native inputs, so a
+JavaScript-only change reruns the suite without recompiling anything (a Debug
+build loads its JavaScript from Metro).
 
 #### The audit's failure policy
 
@@ -768,9 +816,17 @@ Secrets: `consumer-token` (optional).
 | `output-dir` | `dist` | Consumer-relative export output directory |
 | `e2e-script` | `test:e2e:web` | Script that runs the Playwright suite |
 | `playwright-browsers` | `chromium` | Space-separated browsers for `playwright install` |
+| `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives added to the built-in docs pattern, same as `check-code.yml`; docs are irrelevant to the web class |
+| `web-ignore-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives for paths the web build and its Playwright suite never read, **added to** the built-in list behind `web-changed` (see [the suite classes](#the-suite-classes)) |
 
-Outputs: `page-url` (empty unless `deploy` is true). Secrets: `consumer-token`
-(optional).
+Jobs: `Changes`, `Build`, `E2E`, `Deploy`. `Changes` runs the same classifier
+as `check-code.yml`, with a byte-identical base-sha expression, and `Build` —
+and with it `E2E` and `Deploy` — skips when `web-changed` is `'false'`. A
+`release` event has no base, so it fails open: a release always builds and
+deploys.
+
+Outputs: `page-url` (empty unless `deploy` is true), `web-changed`. Secrets:
+`consumer-token` (optional).
 
 ### `pr-title.yml`
 
@@ -837,13 +893,14 @@ own): `BADGE_OUT_DIR`, `BADGE_UNIT`, `BADGE_E2E`, `BADGE_UNIT_LABEL`,
 is why everything variable arrives as environment.
 
 **Guards.** The calling job runs under `always()`, so a *failed* Unit still
-publishes a red badge. Four cases are excluded, two by the caller and two by
+publishes a red badge. Five cases are excluded, two by the caller and three by
 this workflow:
 
 | Case | Why |
 | --- | --- |
 | an upstream job was `cancelled` | a cancelled run says nothing about the branch |
 | the change was docs-only | the jobs the badges describe never ran |
+| both `unit-result` and `e2e-result` are `skipped` | the same, for a change neither suite could see |
 | `github.event_name == 'release'` | a release is not a branch |
 | the PR came from a fork | its token cannot push to the base repository |
 
@@ -851,6 +908,12 @@ this workflow:
 renders no coverage badge at all, and `publish-badges.sh` copies only what was
 rendered — so a docs-only PR leaves the branch's published coverage badge
 exactly as it was instead of blanking it.
+
+**A skipped suite's status badge is not published either.** When one suite
+ran and the other was skipped by its class, `publish-badges.sh` drops the
+skipped suite's `unit.*` or `e2e.*` from what it copies, whatever the render
+script drew for `skipped`. A flows-only merge to `main` then updates the E2E
+badge and leaves the Unit badge showing the last run that looked.
 
 **Coexistence with GitHub Pages.** `build-web.yml`'s `deploy` job publishes the web
 export through `actions/deploy-pages`, which is an *artifact* deploy and reads
@@ -2081,7 +2144,8 @@ each one lives so a future edit doesn't quietly regress it.
 | A crash-report scan must not pick up a stale crash from a previous job on the same runner | `scripts/e2e/collect-forensics.sh` filters iOS `DiagnosticReports` to files newer than `$WORKFLOWS_RUN_START`, stamped once by `scripts/lib/e2e-env.sh` |
 | `docs-only` classification must use merge-base semantics, not raw two-dot diff, so a target-branch advance doesn't retroactively flip a PR to non-docs-only | `scripts/ci/changed-class.sh` (falls back to two-dot only when `git merge-base` itself fails, with a warning) |
 | One docs rule, not two: a caller's `paths-ignore` is a second, narrower list that drifts from the classifier's (it misses `LICENSE` and the issue/PR templates) | `check-code.yml` derives `BASE_SHA` from `github.event.before` on a push, so `scripts/ci/changed-class.sh` classifies pushes too and the caller's `ci.yml` carries no `paths-ignore` |
-| An unclassifiable range must fail open, not abort the step under `set -euo pipefail` | `scripts/ci/changed-class.sh` guards an empty base, the all-zero base of a branch's first push and an unreachable base (`git cat-file -e`), each emitting `docs-only=false` and exiting 0 |
+| An unclassifiable range must fail open, not abort the step under `set -euo pipefail` | `scripts/lib/changed-files.sh` guards an empty base, the all-zero base of a branch's first push and an unreachable base (`git cat-file -e`); `scripts/ci/changed-class.sh` then emits `docs-only=false` and every `*-changed=true`, and exits 0 |
+| A suite class must never skip a path nobody thought about | `scripts/ci/changed-class.sh`'s classes are ignore-based: a suite runs unless every changed path is on its irrelevant list, so a new directory runs everything |
 | `sudo`-based Linux-runner scripts (free disk, KVM) must no-op safely everywhere else (macOS, a laptop, self-hosted with different env) | `scripts/ci/free-disk.sh` / `scripts/ci/enable-kvm.sh` guard on `GITHUB_ACTIONS=true && RUNNER_OS=Linux`, overridable with `WORKFLOWS_FORCE_RUNNER_SCRIPTS=1` |
 | Forensics collection must never fail the job it's diagnosing | `scripts/e2e/collect-forensics.sh` (`set -uo pipefail`, no `-e`; explicit `exit 0`) |
 | E2E must never run against a production app id/scheme | `scripts/e2e/README.md`: "`APP_VARIANT` must not be `production` for E2E" |

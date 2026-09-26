@@ -120,6 +120,78 @@ setup() {
   [ "$needs" = "changes" ] || fail "analyze needs '$needs', expected changes"
 }
 
+# build-web.yml runs the same classifier for the web class, and the same rule
+# holds: one spelling of the base sha.
+@test "build-web.yml's BASE_SHA expression is byte-identical to check-code.yml's" {
+  command -v yq >/dev/null || skip "yq not installed"
+  read_base_sha() {
+    yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
+      "$REPO_ROOT/.github/workflows/$1.yml"
+  }
+  checks=$(read_base_sha check-code)
+  web=$(read_base_sha build-web)
+  [ -n "$web" ] || fail "no BASE_SHA env on build-web.yml's classify step"
+  [ "$web" = "$checks" ] \
+    || fail "build-web.yml classifies with '$web' but check-code.yml uses '$checks'"
+}
+
+# A web-irrelevant change builds nothing; `playwright` and `deploy` need `build`,
+# so they follow it. `!= 'false'`, so an output that never arrived builds.
+@test "build-web.yml's build job is gated on the web class, and the rest follow it" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/build-web.yml"
+  [ "$(yq -r '.jobs.build.needs' "$f")" = "changes" ] || fail "build does not need changes"
+  cond=$(yq -r '.jobs.build.if' "$f")
+  [[ "$cond" == *"needs.changes.outputs.web-changed != 'false'"* ]] \
+    || fail "build's if does not gate on web-changed != 'false': $cond"
+  [ "$(yq -r '.jobs.playwright.needs' "$f")" = "build" ] || fail "playwright no longer needs build"
+  contains "$(yq -r '.jobs.deploy.if' "$f")" "needs.build.result == 'success'" \
+    || fail "deploy no longer requires a successful build"
+  env=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env' "$f")
+  contains "$env" 'DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}' || fail "docs-globs is not wired: $env"
+  contains "$env" 'WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-globs }}' \
+    || fail "web-ignore-globs is not wired: $env"
+  [ "$(yq -r '.on.workflow_call.outputs."web-changed".value' "$f")" = '${{ jobs.changes.outputs.web-changed }}' ] \
+    || fail "the web-changed output is not wired from the changes job"
+  [ "$(yq -r '.jobs.changes | has("permissions")' "$f")" = "false" ] \
+    || fail "the changes job escalates permissions"
+}
+
+# Each suite class check-code.yml advertises is wired end to end: the input
+# reaches the script, the step output reaches the job output, and the job output
+# reaches the workflow output.
+@test "check-code.yml wires every suite class from input to workflow output" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-code.yml"
+  env=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env' "$f")
+  for pair in "unit:UNIT" "e2e:E2E"; do
+    class="${pair%%:*}" var="${pair##*:}"
+    contains "$env" "${var}_IGNORE_GLOBS_EXTRA: \${{ inputs.${class}-ignore-globs }}" \
+      || fail "${class}-ignore-globs is not wired to ${var}_IGNORE_GLOBS_EXTRA: $env"
+    [ "$(yq -r ".jobs.changes.outputs.\"${class}-changed\"" "$f")" = "\${{ steps.classify.outputs.${class}-changed }}" ] \
+      || fail "the changes job does not expose ${class}-changed"
+    [ "$(yq -r ".on.workflow_call.outputs.\"${class}-changed\".value" "$f")" = "\${{ jobs.changes.outputs.${class}-changed }}" ] \
+      || fail "the workflow does not expose ${class}-changed"
+  done
+}
+
+# The caller half. A skipped `unit` (a flows-only change) must not take `e2e`
+# down with it, and neither gate may read an empty output as "skip".
+@test "the fixture caller gates unit and e2e on their classes, and e2e survives a skipped unit" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$FIXTURES/consumer-min/.github/workflows/ci.yml"
+  unit=$(yq -r '.jobs.unit.if' "$f")
+  contains "$unit" "needs.checks.outputs.unit-changed != 'false'" || fail "unit's gate: $unit"
+  e2e=$(yq -r '.jobs.e2e.if' "$f")
+  for needle in \
+    "!cancelled()" \
+    "needs.checks.result == 'success'" \
+    "contains(fromJSON('[\"success\", \"skipped\"]'), needs.unit.result)" \
+    "needs.checks.outputs.e2e-changed != 'false'"; do
+    contains "$e2e" "$needle" || fail "e2e's gate no longer contains [$needle]: $e2e"
+  done
+}
+
 # The escalation is on the analyze job alone, and naming `permissions:` resets
 # the unnamed scopes to none - so dropping contents: read would break the
 # checkout rather than the upload. All three are asserted, and nothing more.
@@ -662,16 +734,18 @@ lane_step_count() {
     || fail "the badges job asks for more than contents: $(yq -r '.jobs.badges.permissions' "$f")"
 }
 
-# The four exclusions are the whole safety story of a job that runs under
+# The five exclusions are the whole safety story of a job that runs under
 # always(): each one is a case where publishing would be wrong (a cancelled or
-# never-run upstream) or impossible (a fork's token). Two are re-asserted here
-# because the caller cannot be trusted to have copied them.
-@test "the badges job skips cancelled upstreams, docs-only changes, releases and fork PRs" {
+# never-run upstream, both suites skipped by their classes) or impossible (a
+# fork's token). Two are re-asserted here because the caller cannot be trusted
+# to have copied them.
+@test "the badges job skips cancelled upstreams, docs-only and both-skipped changes, releases and fork PRs" {
   cond=$(yq -r '.jobs.badges.if' "$REPO_ROOT/.github/workflows/publish-badges.yml")
   for needle in \
     "inputs.unit-result != 'cancelled'" \
     "inputs.e2e-result != 'cancelled'" \
     "inputs.docs-only != 'true'" \
+    "!(inputs.unit-result == 'skipped' && inputs.e2e-result == 'skipped')" \
     "github.event_name != 'release'" \
     "github.event.pull_request.head.repo.full_name == github.repository"; do
     grep -qF "$needle" <<<"$cond" || fail "publish-badges.yml's guard no longer contains [$needle]: $cond"
@@ -697,6 +771,15 @@ lane_step_count() {
   [ "$(yq -r '.on.workflow_call.inputs."render-script".default' "$f")" = "badges:render" ]
   n=$(yq -r '[.jobs.badges.steps[] | select((.run // "") | test("publish-badges.sh"))] | length' "$f")
   [ "$n" -eq 1 ] || fail "publish-badges.yml runs publish-badges.sh $n times"
+}
+
+# A suite skipped by its class must not overwrite its published status badge,
+# and publish-badges.sh can only tell if it is handed both results.
+@test "publish-badges.yml hands publish-badges.sh both suite results" {
+  f="$REPO_ROOT/.github/workflows/publish-badges.yml"
+  env=$(yq -r '[.jobs.badges.steps[] | select(.name == "Publish to gh-pages")][0].env' "$f")
+  contains "$env" 'BADGE_UNIT: ${{ inputs.unit-result }}' || fail "no BADGE_UNIT on the publish step: $env"
+  contains "$env" 'BADGE_E2E: ${{ inputs.e2e-result }}' || fail "no BADGE_E2E on the publish step: $env"
 }
 
 # The caller half: without always() the job never runs on a red Unit, which is

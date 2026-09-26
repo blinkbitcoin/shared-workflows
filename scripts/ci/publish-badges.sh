@@ -8,7 +8,15 @@
 # write - a skipped Unit writes no coverage badge - is simply not copied, so the
 # one already published stays.
 #
-# Env: BRANCH (required), SHA (required), BADGE_DIR (default coverage/badge).
+# A *skipped* suite leaves its published status badge alone too. The caller
+# skips a suite its change cannot affect (check-code.yml's unit-changed and
+# e2e-changed), and a render script handed `skipped` draws a grey "skipped"
+# badge - publishing that would overwrite the branch's last real answer with
+# "this run did not look". So unit.* and e2e.* are dropped here when their
+# result is `skipped`, whatever the render script wrote.
+#
+# Env: BRANCH (required), SHA (required), BADGE_DIR (default coverage/badge),
+# BADGE_UNIT / BADGE_E2E (the suites' job results; optional).
 # CI: the Publish step of publish-badges.yml.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
@@ -28,6 +36,21 @@ while IFS= read -r file; do badges+=("$file"); done < <(
   find "$badge_dir" -maxdepth 1 -type f \( -name '*.svg' -o -name '*.json' \) | sort
 )
 [ "${#badges[@]}" -gt 0 ] || die "no .svg/.json badges in $root/$badge_dir - did the render script run?"
+
+kept=()
+for file in "${badges[@]}"; do
+  case "$(basename "$file")" in
+    unit.*) result="${BADGE_UNIT:-}" ;;
+    e2e.*) result="${BADGE_E2E:-}" ;;
+    *) result="" ;;
+  esac
+  if [ "$result" != skipped ]; then kept+=("$file"); fi
+done
+if [ "${#kept[@]}" -eq 0 ]; then
+  log "gh-pages: every rendered badge belongs to a skipped suite - leaving badges/$BRANCH as it is"
+  exit 0
+fi
+badges=("${kept[@]}")
 
 # The unit of work, as a function rather than a straight line, because
 # gh_pages_push re-runs it on the fresh tip when another job's publish beat us

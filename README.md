@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->95<!--/count--> scripts · <!--count:tests-->659<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->95<!--/count--> scripts · <!--count:tests-->711<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -87,12 +87,16 @@ jobs:
   unit:
     name: Unit
     needs: checks
-    if: ${{ needs.checks.outputs.docs-only != 'true' }}
+    if: ${{ needs.checks.outputs.unit-changed != 'false' }}
     uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
   e2e:
     name: E2E
     needs: [checks, unit]
-    if: ${{ needs.checks.outputs.docs-only != 'true' }}
+    # A skipped unit (a flows-only change) must not skip E2E with it.
+    if: >-
+      !cancelled() && needs.checks.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.unit.result) &&
+      needs.checks.outputs.e2e-changed != 'false'
     uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
 ```
 
@@ -128,7 +132,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 
 | Job            | What it checks                                                               |
 | -------------- | ---------------------------------------------------------------------------- |
-| `Changes`      | Classifies the diff. Its `docs-only` output is what lets the other jobs skip |
+| `Changes`      | Classifies the diff. `unit-changed`, `e2e-changed` and `docs-only` let callers skip a suite the change cannot affect |
 | `Contract`     | Every requirement of this family the consumer does not meet, in one report  |
 | `Code`         | Typecheck, lint, format, knip, spell — what `make check-code` runs           |
 | `Generated`    | i18n catalogs and GraphQL codegen match the sources they come from           |
@@ -146,7 +150,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | --------------- | -------------------------------------------------- | ------------------------------------------------------------------------ |
 | `check-unit.yml`      | `Tests`                                            | Jest with coverage thresholds; uploads the report                        |
 | `check-e2e.yml`       | `Build iOS` → `iOS`<br>`Build Android` → `Android` | A cached native build per platform, then boot, Metro, Maestro, forensics |
-| `build-web.yml`       | `Build`<br>`E2E`<br>`Deploy`                       | Expo web export, the browser suite against it, GitHub Pages              |
+| `build-web.yml`       | `Changes`<br>`Build`<br>`E2E`<br>`Deploy`          | Expo web export, the browser suite against it, GitHub Pages              |
 | `publish-badges.yml`    | `Publish`                                          | Unit, E2E and coverage badges pushed to `gh-pages/badges/<branch>/`      |
 | `check-codeql.yml`    | `Changes`<br>`Analyze`                             | CodeQL on the consumer's query suite. Informational, never required      |
 | `check-security.yml`  | `Config`<br>`Dependencies`<br>`Code`<br>`Policy`<br>`Bill of Materials`<br>`Bundle`<br>`Mobile`<br>`Binaries`<br>`Review`<br>`OpenAnt`<br>`Verdict` | The consumer's security scanners, one job each, then one verdict that merges the SARIF and applies the threshold. Pull requests run the source scanners, the release pull request adds the bundle and OpenAnt, and the production dispatch checks the built binaries |
@@ -172,7 +176,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Workflow           | Jobs                              | What it does                                                                                   |
 | ------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `self-ci.yml`      | `Checks / Code`<br>`Checks / Security`<br>`Checks / Tooling`<br>`Checks / Docs`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package` | The gates of `make check`, a job each so a run names the one that failed - this repository only |
+| `self-ci.yml`      | `Changes`<br>`Checks / Code`<br>`Checks / Security`<br>`Checks / Tooling`<br>`Checks / Docs`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package` | The gates of `make check`, a job each so a run names the one that failed - this repository only. `Changes` skips Code, Tooling and Package when the diff cannot affect them |
 | `self-checks.yml`  | `Code`<br>`Security`<br>`Tooling`<br>`Docs`<br>`Commits` | shellcheck and actionlint, zizmor and gitleaks, version agreement, spell, commitlint. Called by `self-ci.yml` |
 | `self-unit.yml`    | `Tests`<br>`Package`              | The bats suite, and node:test over `packages/dev-config`. Called by `self-ci.yml` |
 | `self-smoke.yml`   | `Checks`<br>`Unit`<br>`E2E`       | Runs the family against a real consumer repo. Weekly, and on dispatch                          |
@@ -194,7 +198,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table |
-| `test/`                | <!--count:bats-files-->73<!--/count--> bats files, <!--count:tests-->659<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->73<!--/count--> bats files, <!--count:tests-->711<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 

@@ -21,13 +21,22 @@ jobs:
   unit:
     name: Unit
     needs: checks
-    if: ${{ needs.checks.outputs.docs-only != 'true' }}
+    # `!= 'false'`: an output that never arrived runs the suite. A docs-only
+    # change is `false` here too.
+    if: ${{ needs.checks.outputs.unit-changed != 'false' }}
     uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
   e2e:
     name: E2E
-    # `unit` as well as `checks`: a failed unit run then never reaches E2E.
+    # `unit` as well as `checks`: a failed unit run then never reaches E2E. A
+    # *skipped* one must not stop it - a change to Maestro flows alone skips
+    # unit and still has to run here - hence `!cancelled()` and the explicit
+    # result check, in place of the implicit success() that `needs` adds.
     needs: [checks, unit]
-    if: ${{ needs.checks.outputs.docs-only != 'true' }}
+    if: >-
+      !cancelled() &&
+      needs.checks.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.unit.result) &&
+      needs.checks.outputs.e2e-changed != 'false'
     uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
     with:
       # iOS is opt-in because macOS bills at 10x on a private repo. On a

@@ -11,12 +11,24 @@ name: Self checks
 # would otherwise introduce.
 on:
   workflow_call:
+    # Set by self-ci.yml's `changes` job. True by default, so a caller that
+    # passes nothing runs every gate.
+    inputs:
+      code:
+        description: Run shellcheck and actionlint
+        type: boolean
+        default: true
+      tooling:
+        description: Run the version checks
+        type: boolean
+        default: true
 # A called workflow's permissions block replaces the caller's grant rather than
 # narrowing it, so read is stated here as well as in self-ci.yml.
 permissions: { contents: read }
 jobs:
   code:
     name: Code
+    if: ${{ inputs.code }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -37,6 +49,7 @@ jobs:
       - run: make zizmor secrets
   tooling:
     name: Tooling
+    if: ${{ inputs.tooling }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

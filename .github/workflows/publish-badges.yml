@@ -82,12 +82,14 @@ jobs:
     # badge. These are the cases where publishing would be wrong or impossible,
     # re-asserted here so a caller that forgets one still cannot do damage: a
     # cancelled upstream job tells us nothing about the branch, a docs-only
-    # change never ran the jobs the badges describe, a release is not a branch,
-    # and a fork PR's token cannot push to gh-pages.
+    # change never ran the jobs the badges describe, and nor did a change that
+    # both suites skipped, a release is not a branch, and a fork PR's token
+    # cannot push to gh-pages.
     if: >-
       inputs.unit-result != 'cancelled' &&
       inputs.e2e-result != 'cancelled' &&
       inputs.docs-only != 'true' &&
+      !(inputs.unit-result == 'skipped' && inputs.e2e-result == 'skipped') &&
       github.event_name != 'release' &&
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository)
@@ -142,4 +144,7 @@ jobs:
           BRANCH: ${{ github.head_ref || github.ref_name }}
           SHA: ${{ github.sha }}
           BADGE_DIR: ${{ inputs.badge-dir }}
+          # A skipped suite's status badge is not published (see the script).
+          BADGE_UNIT: ${{ inputs.unit-result }}
+          BADGE_E2E: ${{ inputs.e2e-result }}
         run: bash "$WORKFLOWS_DIR/scripts/ci/publish-badges.sh"
