@@ -91,6 +91,15 @@ Every row is a make target; nothing here is run through a package manager.
   a run log; give it a file under the matching `scripts/<area>/` and a bats
   test. Everything under `scripts/` is `shellcheck -x` clean under
   `set -euo pipefail`.
+- **`set -e` does not reach everywhere, so a step that can fail there says
+  so.** It does not stop on a failing `$(...)` inside a command's arguments
+  or a `case` word, on a failure inside a function its caller reads through
+  `$(...)`, or on the command feeding a loop through `< <(...)`. Read the
+  value on a line of its own (`udid="$(workflows_sim_udid)"`), end a step
+  inside such a function with `|| return` or `|| die "..."`, and list into a
+  variable before looping over it. Each of these once let a script carry on
+  with an empty value (`ios-simulator.sh`, `workflows_app_id`,
+  `workflows_fingerprint`, `act-smoke.sh`, `cancel-runs.sh`).
 - **Every script has its own test file, and that file runs it and covers
   each of its exit paths.** `scripts/ci/x.sh` has `test/x.bats`
   (`test/ci-x.bats` when another script is also called `x`); a Node script

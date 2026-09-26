@@ -110,6 +110,29 @@ setup() {
   contains "$args" "repository=blinkbitcoin/react-native-mobile-template" || fail "args: $args"
 }
 
+@test "a failed fetch of a substitute action stops the smoke, and leaves no half-cloned cache" {
+  cd "$work"
+  git push -q origin feature
+  rm -rf "$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2"
+  # git that fails a clone from GitHub part-way, after creating the directory,
+  # and is the real git for everything else.
+  local real_git
+  real_git="$(command -v git)"
+  cat > "$bin/git" <<STUB
+#!/usr/bin/env bash
+case "\$*" in
+  *clone*https://github.com/actions/*) mkdir -p "\${@: -1}/.git"; echo "fatal: unable to access" >&2; exit 128 ;;
+esac
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$bin/git"
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "the smoke carried on without its action: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+  [ ! -e "$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" ] ||
+    fail "a half-cloned action was left in the cache, so the next run would skip the fetch"
+}
+
 @test "--android turns the Android build on; an unknown flag is refused" {
   cd "$work"
   git push -q origin feature

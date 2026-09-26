@@ -61,7 +61,11 @@ workflows_expo_config() { bash "$WORKFLOWS_LIB_DIR/expo-config.sh" "$1"; }
 # nothing is appended here.
 workflows_app_id() {
   if [ -n "${WORKFLOWS_APP_ID:-}" ]; then printf '%s\n' "$WORKFLOWS_APP_ID"; return 0; fi
-  case "$(workflows_platform "${1:-}")" in
+  # Read on its own line: a failing `$(...)` in a `case` word never stops the
+  # shell, so an unknown platform used to answer an empty id with status 0.
+  local platform
+  platform="$(workflows_platform "${1:-}")" || return
+  case "$platform" in
     ios) workflows_expo_config ios.bundleIdentifier ;;
     android) workflows_expo_config android.package ;;
   esac
@@ -75,7 +79,8 @@ workflows_scheme() { workflows_expo_config scheme; }
 # authoritative, a disagreement is only a warning so the build still runs.
 workflows_ios_scheme() {
   local root ws ws_name cfg_name
-  root="$(consumer_root)"
+  # Read through `$(...)` by its callers, where `set -e` does not reach.
+  root="$(consumer_root)" || die "the consumer's working directory does not exist: ${GITHUB_WORKSPACE:-$PWD}/${WORKING_DIRECTORY:-.}"
   ws="$(find "$root/ios" -maxdepth 1 -name '*.xcworkspace' 2>/dev/null | head -1)"
   [ -n "$ws" ] || die "no ios/*.xcworkspace in $root - run prebuild.sh ios and pods.sh first"
   ws_name="$(basename "$ws" .xcworkspace)"
