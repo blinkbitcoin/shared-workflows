@@ -42,9 +42,9 @@ Every row is a make target; nothing here is run through a package manager.
 |---|---|
 | `make hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
 | `make check` | Everything self-ci runs: the nine gates below |
-| `make shellcheck` | shellcheck every script under `scripts/` (bash strict) |
-| `make actionlint` | Lint the workflows and composite actions |
-| `make zizmor` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`) |
+| `make lint-scripts` | shellcheck every script under `scripts/` (bash strict) |
+| `make lint-workflows` | Lint the workflows and composite actions (actionlint) |
+| `make workflow-security` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
 | `make test` | The bats suite over the pure scripts |
 | `make test-package` | `node:test` over `packages/dev-config` |
 | `make check-versions` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
@@ -176,6 +176,12 @@ Every row is a make target; nothing here is run through a package manager.
   expand an uncommon one on first use. A prefix made of the family's initials
   was rejected for exactly this reason; so was "ids" for identifiers in a
   status message.
+- **A make target is named for what it checks or does, never after the tool
+  that does it.** `workflow-security`, not `zizmor`; `lint-scripts`, not
+  `shellcheck`. A tool's name tells a reader nothing
+  until they already know the tool. It belongs in the `##` description, where
+  `make help` shows it beside the name. `test/docs-contract.bats` fails on a
+  target named after a tool pinned in `.mise.toml`.
 - **Workflow files carry their stage in the name.** GitHub reads only the top
   level of `.github/workflows/`, so the prefix is the only grouping there is:
   `check-` gates every change, `build-` makes artifacts, `publish-` ships to a
@@ -216,6 +222,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Both dev-config programs at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, and each program's flags, messages and exit codes | `packages/dev-config/*.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
+| That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
 | That every script is executed by some test, or allow-listed with a reason | `test/script-coverage.bats` | `make test` |
 | `pr-release-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-rehearsal.yml`, `scripts/self/check-rehearsal-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |

@@ -108,11 +108,30 @@ scripts() {
     || fail "fallback policy not passed: $(grep zizmor "$MISE_LOG")"
 }
 
-@test "a consumer's own zizmor config wins over the family's" {
+@test "a consumer's own .github/zizmor.yml wins over the family's, passed explicitly" {
   workflows
   printf 'rules: {}\n' > "$GITHUB_WORKSPACE/.github/zizmor.yml"
   run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
   [ "$status" -eq 0 ]
-  ! grep zizmor "$MISE_LOG" | grep -qF -- "--config" \
-    || fail "overrode the consumer's own zizmor.yml: $(grep zizmor "$MISE_LOG")"
+  grep zizmor "$MISE_LOG" | grep -qF -- "--config .github/zizmor.yml .github" \
+    || fail "the consumer's own .github/zizmor.yml was not passed: $(grep zizmor "$MISE_LOG")"
+}
+
+@test "a consumer's root zizmor.yml is passed explicitly when .github/ has none" {
+  workflows
+  printf 'rules: {}\n' > "$GITHUB_WORKSPACE/zizmor.yml"
+  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ]
+  grep zizmor "$MISE_LOG" | grep -qF -- "--config zizmor.yml .github" \
+    || fail "the consumer's root zizmor.yml was not passed: $(grep zizmor "$MISE_LOG")"
+}
+
+@test "with both, .github/zizmor.yml wins, the way zizmor's own search orders them" {
+  workflows
+  printf 'rules: {}\n' > "$GITHUB_WORKSPACE/zizmor.yml"
+  printf 'rules: {}\n' > "$GITHUB_WORKSPACE/.github/zizmor.yml"
+  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ]
+  grep zizmor "$MISE_LOG" | grep -qF -- "--config .github/zizmor.yml .github" \
+    || fail "picked the root zizmor.yml over .github/zizmor.yml: $(grep zizmor "$MISE_LOG")"
 }

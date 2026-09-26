@@ -650,7 +650,7 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `commitlint-commits` | `false` | Also lint every commit's message in the PR |
 | `actionlint` | `true` | Lint the consumer's `.github/workflows`. Reaches the built-in linter only; a consumer that ships `check:ci` owns this choice itself |
 | `shellcheck` | `true` | Lint the consumer's `scripts/` |
-| `zizmor` | `true` | Audit the consumer's `.github` with zizmor, offline, at medium severity and up: template injection, broad permissions, App tokens with blanket scope, dangerous triggers. Reaches the built-in linter only, like `actionlint`. Without a `zizmor.yml` of its own the consumer gets this family's policy, which allows tag pins |
+| `zizmor` | `true` | Audit the consumer's `.github` with zizmor, offline, at medium severity and up: template injection, broad permissions, App tokens with blanket scope, dangerous triggers. Reaches the built-in linter only, like `actionlint`. Without a `zizmor.yml` of its own the consumer gets this family's policy, which allows tag pins. Either way the policy file is passed with `--config` (`.github/zizmor.yml` first, then a root `zizmor.yml`), so a run from a worktree nested in another checkout cannot pick up that checkout's policy |
 | `secret-scan` | `true` | Run the consumer's `check:secrets`, or scan its **full git history** with gitleaks when it ships none. The Tooling job checks out with `fetch-depth: 0` for this. A `.gitleaks.toml` at the consumer's root is read either way |
 | `licenses` | `true` | Run the consumer's `deps:licenses` (dependency licence policy) |
 | `prebuild-check` | `false` | Run the consumer's `check-prebuild`: prebuild both platforms into a temp dir and assert the config plugins produced what they should. **Minutes, not seconds** — enable it where the coverage earns the wall clock (on `main`, on a release, behind a label), not on every PR |
@@ -1031,7 +1031,7 @@ that scans nothing while reporting green is worse than one that is red.
 | `mobile` | Allow the native project scanner (your `check-security-mobile`: mobsfscan over a fresh prebuild). Installs dependencies. Default `false` |
 | `binaries` | Allow the MASTG checks over the release's built binaries (your `check-security-binaries`). Needs `release-tag`. Default `false` |
 | `review` | Allow the LLM review of the change (your `check-security-review`). Gets full history and, on a pull request, its base. Default `false` |
-| `openant` | Allow the OpenAnt LLM scan (your `check-security-openant`). The build is cached, keyed on your `scripts/security/openant.sh`. Default `false` |
+| `openant` | Allow the OpenAnt LLM scan (your `check-security-review-codebase`). The build is cached, keyed on your `scripts/security/openant.sh`. Default `false` |
 | `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |
 | `build-env` | Non-secret environment for every job, as a flat JSON object: `SECURITY_LLM_PROVIDER`, `SECURITY_LLM_MODEL`, `SECURITY_LLM_EFFORT`, `SECURITY_LLM_EXTRA_PARAMS`,<br>`OPENAI_BASE_URL`, and any `SECURITY_*` twin of a `security-policy.json` setting. Default `{}` |

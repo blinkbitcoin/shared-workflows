@@ -33,9 +33,10 @@ pre-commit:
       run: mise exec -- actionlint -color
     zizmor:
       # Same shape as actionlint: it audits the whole .github tree, so the glob
-      # only decides whether to run. Same flags as `make zizmor`.
+      # only decides whether to run. Same flags as `make workflow-security`, --config
+      # included (see the Makefile for why discovery is not enough).
       glob: '.github/**/*'
-      run: mise exec -- zizmor --offline --min-severity medium .github
+      run: mise exec -- zizmor --offline --min-severity medium --config .github/zizmor.yml .github
     gitleaks:
       # Staged changes only; `make secrets` (pre-push, CI) reads the history.
       run: mise exec -- gitleaks git --pre-commit --staged --redact --no-banner .

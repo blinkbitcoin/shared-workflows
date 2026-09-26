@@ -162,7 +162,7 @@ check_prerequisites() {
 }
 
 # Every make target some job in the two called workflows actually runs. A step
-# may name several (`make shellcheck actionlint`), so the line is split too.
+# may name several (`make lint-scripts lint-workflows`), so the line is split too.
 ci_make_targets() {
   local f
   for f in "$SELF_CHECKS" "$SELF_UNIT"; do
