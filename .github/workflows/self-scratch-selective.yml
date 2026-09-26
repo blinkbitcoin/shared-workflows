@@ -1,0 +1,42 @@
+name: Scratch selective CI
+# Throwaway: a caller shaped like the consumer fixture's ci.yml, so GitHub
+# itself evaluates the class gates. Deleted with its scratch/* branches.
+on:
+  pull_request:
+permissions: { contents: read }
+jobs:
+  checks:
+    name: Checks
+    uses: ./.github/workflows/check-code.yml
+    with:
+      contract-only: true
+      contract-check: false
+  unit:
+    name: Unit
+    needs: checks
+    if: ${{ needs.checks.outputs.unit-changed != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "unit ran"
+  e2e:
+    name: E2E
+    needs: [checks, unit]
+    if: >-
+      !cancelled() &&
+      needs.checks.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.unit.result) &&
+      needs.checks.outputs.e2e-changed != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "e2e ran"
+  web:
+    name: Web
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/build-web.yml
+    with:
+      playwright: false
