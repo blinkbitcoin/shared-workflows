@@ -14,7 +14,7 @@
 //
 // The child processes get this process's environment spread into theirs, which
 // carries NODE_V8_COVERAGE, so the command-line entry counts toward the 100%
-// gate that `make test-node-scripts` holds over scripts/**/*.mjs.
+// gate that `make test-script-modules` holds over scripts/**/*.mjs.
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

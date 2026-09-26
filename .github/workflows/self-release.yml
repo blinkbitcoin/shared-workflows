@@ -94,9 +94,23 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PRS_JSON: ${{ steps.release.outputs.prs }}
         run: bash scripts/self/dispatch-release-pr-ci.sh
+  # pr-release-notes.yml, run for real against the template from this release
+  # commit before `v0` moves to it: `v0` is the one thing that puts a release
+  # in front of every consumer at once, and no other gate here executes a
+  # reusable workflow. Same called workflow as self-ci.yml.
+  rehearsal:
+    name: Consumer rehearsal
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/self-rehearsal.yml
+    permissions:
+      contents: read
+      pull-requests: write
   major-tag:
     name: Major tag
-    needs: release-please
+    # The rehearsal is a need, not a parallel job: a failed or skipped
+    # rehearsal skips this job, and the tags stay on the last release.
+    needs: [release-please, rehearsal]
     # Job outputs are strings and every non-empty string is truthy in a GitHub
     # expression, so a bare `outputs.release_created` also fires on the literal
     # "false" a no-release push produces - which would run tag-major.sh with an

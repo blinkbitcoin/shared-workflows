@@ -43,15 +43,36 @@ gh_output() { if [ -n "${GITHUB_OUTPUT:-}" ]; then printf '%s=%s\n' "$1" "$2" >>
 # The delimiter carries $RANDOM so it cannot be predicted from the outside, and
 # a value that contains it anyway is fatal rather than silently truncated.
 gh_env_multiline() {
-  local key="$1" value="$2" delim
-  delim="__workflows_eof_${RANDOM}${RANDOM}"
-  case "$value" in
-    *"$delim"*) die "value for $key contains the generated heredoc delimiter - refusing to write it to \$GITHUB_ENV" ;;
-  esac
+  local key="$1" value="$2"
+  new_heredoc_delimiter "$key" "$value" GITHUB_ENV
   if [ -n "${GITHUB_ENV:-}" ]; then
-    { printf '%s<<%s\n' "$key" "$delim"; printf '%s\n' "$value"; printf '%s\n' "$delim"; } >> "$GITHUB_ENV"
+    { printf '%s<<%s\n' "$key" "$heredoc_delimiter"; printf '%s\n' "$value"; printf '%s\n' "$heredoc_delimiter"; } >> "$GITHUB_ENV"
   fi
   export "$key=$value"
+}
+# gh_output_multiline KEY VALUE - gh_output for a value that may span lines:
+# the same heredoc delimiter form, into $GITHUB_OUTPUT when it is set and onto
+# stdout when it is not, as gh_output does. `$GITHUB_OUTPUT` is line-based
+# exactly like `$GITHUB_ENV`, so a bare `KEY=value` would cut the value at its
+# first newline and read the rest as more outputs.
+gh_output_multiline() {
+  local key="$1" value="$2"
+  new_heredoc_delimiter "$key" "$value" GITHUB_OUTPUT
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    { printf '%s<<%s\n' "$key" "$heredoc_delimiter"; printf '%s\n' "$value"; printf '%s\n' "$heredoc_delimiter"; } >> "$GITHUB_OUTPUT"
+  else
+    printf '%s<<%s\n%s\n%s\n' "$key" "$heredoc_delimiter" "$value" "$heredoc_delimiter"
+  fi
+}
+# new_heredoc_delimiter KEY VALUE CHANNEL - set heredoc_delimiter to a fresh
+# delimiter for KEY, and die when VALUE already contains it. Sets a variable
+# rather than printing one: a command substitution is a subshell, and bash
+# re-seeds $RANDOM there, which is the one thing a test needs to hold still.
+new_heredoc_delimiter() {
+  heredoc_delimiter="__workflows_eof_${RANDOM}${RANDOM}"
+  case "$2" in
+    *"$heredoc_delimiter"*) die "value for $1 contains the generated heredoc delimiter - refusing to write it to \$$3" ;;
+  esac
 }
 # gh_env KEY VALUE - publish KEY for every later step in the job. A value that
 # would break the line-based form is routed through gh_env_multiline, so no

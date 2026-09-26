@@ -152,7 +152,7 @@ $sorted"
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
   ln -s "$(command -v mise)" "$bin/mise"
-  for target in spell actionlint tool-versions; do
+  for target in spell lint-workflows tool-versions; do
     run env -i HOME="$HOME" PATH="$bin:/usr/bin:/bin" make -s -C "$REPO_ROOT" "$target"
     [ "$status" -eq 0 ] || fail "'make $target' failed without an activated shell: $output"
   done

@@ -30,4 +30,4 @@ jobs:
       # Carries the 100% line, branch and function thresholds; see the comment
       # on the target in the Makefile for why they ratchet and never drop.
       - run: make test-package
-      - run: make test-node-scripts
+      - run: make test-script-modules
