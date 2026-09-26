@@ -15,6 +15,12 @@ self="${GITHUB_RUN_ID:-0}"
 cancelled=0
 
 for status in queued in_progress; do
+  # Listed first, then looped over: a listing fed through `< <(...)` fails
+  # unseen, and a token that cannot read the runs then reported
+  # "cancelled 0 run(s)" and passed while the stale runs kept going.
+  runs="$(gh api --paginate "repos/$REPO/actions/runs?head_sha=$HEAD_SHA&status=$status&per_page=100" \
+    --jq ".workflow_runs[] | select(.id != $self) | \"\(.id) \(.name)\"")" ||
+    die "could not list $status runs for $HEAD_SHA in $REPO (does the job grant actions: write?)"
   while IFS=' ' read -r id name; do
     [ -n "$id" ] || continue
     log "cancelling run $id ($name)"
@@ -23,8 +29,7 @@ for status in queued in_progress; do
     else
       log "could not cancel run $id (already finished?)"
     fi
-  done < <(gh api --paginate "repos/$REPO/actions/runs?head_sha=$HEAD_SHA&status=$status&per_page=100" \
-    --jq ".workflow_runs[] | select(.id != $self) | \"\(.id) \(.name)\"")
+  done <<< "$runs"
 done
 
 log "cancelled $cancelled run(s)"

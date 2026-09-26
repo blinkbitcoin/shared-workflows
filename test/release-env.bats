@@ -248,6 +248,27 @@ android-passed" ] || fail "the passed-down values were not used: $output"
   [ ! -s "$CALLS" ] || fail "the CLI ran anyway: $(cat "$CALLS")"
 }
 
+# Every caller reads the fingerprint through `$(...)`, where `set -e` does not
+# reach: a failed step inside it used to be ignored, and the CLI then ran with
+# an empty platform or from whatever directory the step started in.
+@test "read through \$(...), an unknown platform still stops before the CLI runs" {
+  stub_npx
+  run release_env 'fp="$(workflows_fingerprint windows)"; echo "reached with fp=$fp"'
+  [ "$status" -ne 0 ] || fail "the caller carried on: $output"
+  contains "$output" "platform must be ios or android (got 'windows')" || fail "unexpected message: $output"
+  not_contains "$output" "reached with" || fail "the caller carried on: $output"
+  [ ! -s "$CALLS" ] || fail "the CLI ran anyway: $(cat "$CALLS")"
+}
+
+@test "read through \$(...), a working directory that does not exist stops before the CLI runs" {
+  stub_npx
+  export WORKFLOWS_TEST_FINGERPRINT_OUTPUT=abc
+  WORKING_DIRECTORY=missing run release_env 'fp="$(workflows_fingerprint ios)"; echo "reached with fp=$fp"'
+  [ "$status" -ne 0 ] || fail "the caller carried on: $output"
+  not_contains "$output" "reached with" || fail "the caller carried on: $output"
+  [ ! -s "$CALLS" ] || fail "the CLI ran from the wrong directory: $(cat "$CALLS")"
+}
+
 @test "no npx on PATH names the missing command" {
   PATH="$(bare_path)" run release_env 'workflows_fingerprint ios'
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"

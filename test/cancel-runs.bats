@@ -11,6 +11,7 @@ setup() {
   cat > "$fakebin/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1" = "api" ] && [ "$2" = "--paginate" ]; then
+  if [ -n "${FAKE_LIST_FAILS:-}" ]; then echo "HTTP 403: Resource not accessible by integration" >&2; exit 1; fi
   case "$3" in
     *status=queued*) printf '111 build\n222 test\n' ;;
     *status=in_progress*) ;;
@@ -38,4 +39,15 @@ EOF
   [[ "$output" == *"cancelling run 222"* ]] || fail "assertion failed; output: $output"
   [[ "$output" == *"could not cancel run 222"* ]] || fail "assertion failed; output: $output"
   [[ "$output" == *"cancelled 1 run(s)"* ]] || fail "assertion failed; output: $output"
+}
+
+# The listing used to feed the loop through `< <(...)`, whose failure nothing
+# sees: a token without actions access listed nothing, and the step reported
+# "cancelled 0 run(s)" and passed while the stale runs kept going.
+@test "a listing that fails fails the step, naming the repository and the likely cause" {
+  FAKE_LIST_FAILS=1 run bash "$REPO_ROOT/scripts/ci/cancel-runs.sh"
+  [ "$status" -ne 0 ] || fail "a failed listing passed: $output"
+  contains "$output" "could not list queued runs for deadbeef in org/repo" || fail "output: $output"
+  contains "$output" "HTTP 403" || fail "gh's own reason was dropped: $output"
+  not_contains "$output" "cancelled 0 run(s)" || fail "it still reported a count: $output"
 }

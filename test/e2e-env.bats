@@ -69,3 +69,50 @@ setup() {
   contains "$output" "::warning::" || fail "no warning; output: $output"
   contains "$output" "FromWorkspace" || fail "output: $output"
 }
+
+# The platform used to be read inside a `case` word, where a failing `$(...)`
+# never stops the shell: an unknown platform printed its error and the function
+# still returned 0 with an empty application id.
+@test "workflows_app_id with an unknown platform fails instead of answering an empty id" {
+  run bash -c "set -euo pipefail
+    source '$REPO_ROOT/scripts/lib/common.sh'
+    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
+    id=\"\$(workflows_app_id windows)\"
+    echo \"reached with id='\$id'\""
+  [ "$status" -ne 0 ] || fail "an unknown platform answered: $output"
+  contains "$output" "platform must be ios or android (got 'windows')" || fail "output: $output"
+  not_contains "$output" "reached with id" || fail "the caller carried on: $output"
+}
+
+@test "workflows_app_id prefers WORKFLOWS_APP_ID, and otherwise reads the platform's id from the Expo configuration" {
+  run bash -c "WORKFLOWS_APP_ID=com.example.override
+    source '$REPO_ROOT/scripts/lib/common.sh'
+    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
+    workflows_app_id windows"
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  contains "$output" "com.example.override" || fail "the override was not used: $output"
+
+  printf '{"ios":{"bundleIdentifier":"com.example.ios"},"android":{"package":"com.example.android"}}\n' \
+    > "$BATS_TEST_TMPDIR/expo.json"
+  local platform
+  for platform in ios android; do
+    run bash -c "export EXPO_CONFIG_JSON='$BATS_TEST_TMPDIR/expo.json'
+      source '$REPO_ROOT/scripts/lib/common.sh'
+      source '$REPO_ROOT/scripts/lib/e2e-env.sh'
+      workflows_app_id $platform"
+    [ "$status" -eq 0 ] || fail "$platform: status $status: $output"
+    contains "$output" "com.example.$platform" || fail "$platform: $output"
+  done
+}
+
+@test "read through \$(...), the iOS scheme stops on a working directory that does not exist" {
+  run bash -c "set -euo pipefail
+    export GITHUB_WORKSPACE='$BATS_TEST_TMPDIR' WORKING_DIRECTORY=missing
+    source '$REPO_ROOT/scripts/lib/common.sh'
+    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
+    scheme=\"\$(workflows_ios_scheme)\"
+    echo \"reached with scheme='\$scheme'\""
+  [ "$status" -ne 0 ] || fail "the caller carried on: $output"
+  not_contains "$output" "reached with" || fail "the caller carried on: $output"
+  not_contains "$output" "no ios/*.xcworkspace in  -" || fail "it looked for a workspace under an empty root: $output"
+}

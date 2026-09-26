@@ -41,7 +41,7 @@ log_pid_file="$WORKFLOWS_OUT/ios-unified-log.pid"
 approve_url_schemes() { # <App.app>
   local plist="$1/Info.plist" udid bundle_id schemes scheme
   require_cmd plutil
-  udid="$(workflows_sim_udid)"
+  udid="$sim_udid"
   bundle_id="$(plutil -extract CFBundleIdentifier raw -o - "$plist")" ||
     die "no CFBundleIdentifier in $plist"
   # No CFBundleURLTypes is a valid app (nothing to deep link into); the jq
@@ -58,6 +58,13 @@ approve_url_schemes() { # <App.app>
   done <<< "$schemes"
   log "pre-approved URL schemes for $bundle_id: $(printf '%s' "$schemes" | tr '\n' ' ')"
 }
+
+# The picked simulator, read on a line of its own. Inside a command's
+# arguments a failing `$(workflows_sim_udid)` does not stop a `set -e` script:
+# it printed "no simulator selected" and simctl then ran with an empty udid.
+case "${1:-}" in
+  wait | install | record) [ "${1:-}:${2:-}" = record:stop ] || sim_udid="$(workflows_sim_udid)" ;;
+esac
 
 case "${1:-}" in
   pick)
@@ -84,7 +91,7 @@ case "${1:-}" in
     xcrun simctl boot "$udid" || true
     ;;
   wait)
-    xcrun simctl bootstatus "$(workflows_sim_udid)" -b
+    xcrun simctl bootstatus "$sim_udid" -b
     ;;
   install)
     src="${2:?usage: ios-simulator.sh install <app.tar|App.app>}"
@@ -99,7 +106,7 @@ case "${1:-}" in
       app="$(find "$dest" -maxdepth 1 -name '*.app' | head -1)"
       [ -n "$app" ] || die "no .app inside $src"
     fi
-    xcrun simctl install "$(workflows_sim_udid)" "$app"
+    xcrun simctl install "$sim_udid" "$app"
     log "installed $app"
     approve_url_schemes "$app"
     ;;
@@ -109,7 +116,7 @@ case "${1:-}" in
         # h264 (not the hevc default): the artifact has to play in a browser.
         # Redirected, and not only for tidiness: a background job holding the
         # caller's stdout hangs anything that pipes this script's output.
-        xcrun simctl io "$(workflows_sim_udid)" recordVideo --codec=h264 --force "$WORKFLOWS_OUT/ios.mp4" \
+        xcrun simctl io "$sim_udid" recordVideo --codec=h264 --force "$WORKFLOWS_OUT/ios.mp4" \
           > "$WORKFLOWS_OUT/ios-record.log" 2>&1 &
         printf '%s\n' "$!" > "$rec_pid_file"
         log "recording to $WORKFLOWS_OUT/ios.mp4 (pid $(cat "$rec_pid_file"))"
@@ -119,7 +126,7 @@ case "${1:-}" in
         # screenshots. Bounded by predicate: SpringBoard's alert and scene
         # deactivation categories, FrontBoard's scene-action delivery in any
         # process, and any line naming the app id or the URL scheme.
-        xcrun simctl spawn "$(workflows_sim_udid)" log stream --level debug --style compact \
+        xcrun simctl spawn "$sim_udid" log stream --level debug --style compact \
           --predicate "$(workflows_ios_unified_log_predicate)" \
           > "$WORKFLOWS_OUT/ios-unified.log" 2>&1 &
         printf '%s\n' "$!" > "$log_pid_file"
@@ -144,7 +151,13 @@ case "${1:-}" in
     esac
     ;;
   shutdown)
-    xcrun simctl shutdown "$(workflows_sim_udid)" || true
+    # A teardown with nothing picked has nothing to shut down: it says so and
+    # succeeds rather than calling simctl with an empty udid.
+    if ! sim_udid="$(workflows_sim_udid 2>/dev/null)"; then
+      log "no simulator selected - nothing to shut down"
+      exit 0
+    fi
+    xcrun simctl shutdown "$sim_udid" || true
     ;;
   *) die "usage: ios-simulator.sh pick | wait | install <app.tar|App.app> | record start|stop | shutdown" ;;
 esac

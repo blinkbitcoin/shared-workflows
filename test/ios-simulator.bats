@@ -185,6 +185,36 @@ only_path() {
   contains "$output" "::error::no simulator selected - run ios-simulator.sh pick first" || fail "output: $output"
 }
 
+# A failing `$(...)` inside a command's arguments does not stop a `set -e`
+# script: before this was fixed, each subcommand below printed the error and
+# then called simctl with an empty udid anyway, and its status was simctl's.
+@test "wait before pick fails, and never calls simctl with an empty udid" {
+  unset WORKFLOWS_SIM_UDID
+  run sim wait
+  [ "$status" -ne 0 ] || fail "wait before pick succeeded: $output"
+  [ ! -s "$CALLS" ] || fail "simctl ran without a simulator: $(cat "$CALLS")"
+}
+
+@test "install before pick fails before installing anything" {
+  unset WORKFLOWS_SIM_UDID
+  install_app
+  [ "$status" -ne 0 ] || fail "install before pick succeeded: $output"
+  contains "$output" "no simulator selected" || fail "output: $output"
+  [ ! -s "$CALLS" ] || fail "simctl ran without a simulator: $(cat "$CALLS")"
+}
+
+@test "record start before pick fails, and starts no recording" {
+  unset WORKFLOWS_SIM_UDID
+  run sim record start
+  [ "$status" -ne 0 ] || fail "record start before pick succeeded: $output"
+  contains "$output" "no simulator selected" || fail "output: $output"
+  not_contains "$output" "recording to" || fail "it claimed a recording: $output"
+  [ ! -e "$WORKFLOWS_OUT/ios-record.pid" ] && [ ! -e "$WORKFLOWS_OUT/ios-unified-log.pid" ] ||
+    fail "a pid file was written: $(ls "$WORKFLOWS_OUT")"
+  sleep 0.2
+  [ ! -s "$CALLS" ] || fail "simctl ran without a simulator: $(cat "$CALLS")"
+}
+
 # --- install -------------------------------------------------------------
 #
 # install pre-approves every URL scheme the app declares, so `simctl openurl`
@@ -372,6 +402,15 @@ only_path() {
   # the result that matters.
   STUB_SIMCTL_STATUS=149 run sim shutdown
   [ "$status" -eq 0 ] || fail "a failed shutdown failed the step: status $status; output: $output"
+}
+
+@test "shutdown before pick has nothing to shut down, says so, and succeeds" {
+  unset WORKFLOWS_SIM_UDID
+  run sim shutdown
+  [ "$status" -eq 0 ] || fail "status $status; output: $output"
+  contains "$output" "no simulator selected - nothing to shut down" || fail "output: $output"
+  not_contains "$output" "::error::" || fail "an error annotation for a no-op: $output"
+  [ ! -s "$CALLS" ] || fail "simctl ran without a simulator: $(cat "$CALLS")"
 }
 
 @test "no subcommand, or an unknown one, is a usage error naming all of them" {
