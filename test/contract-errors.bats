@@ -8,6 +8,11 @@
 # missing a file or a script, the reader is often adopting these workflows and
 # has never seen this repo, and the fix is something they have to write. Those
 # get `die_fix`, which carries the remediation and a link to the contract.
+#
+# What each of those scripts says and when is in its own test file
+# (toolchain-preflight.bats, require-inputs.bats, run-script.bats,
+# pnpm-install.bats); the cases here hold the boundary as a whole, and where
+# the workflows run the checks.
 
 load test_helper
 
@@ -60,32 +65,6 @@ export BOUNDARY
   [ "$status" -eq 0 ] || fail "$output"
 }
 
-@test "a repo with no mise config is told which file is missing, not which command" {
-  local root="$BATS_TEST_TMPDIR/repo"
-  mkdir -p "$root"
-  GITHUB_WORKSPACE="$root" WORKING_DIRECTORY="." run bash "$REPO_ROOT/scripts/ci/toolchain-preflight.sh"
-  [ "$status" -eq 1 ] || fail "expected exit 1, got $status"
-  contains "$output" "no mise config" || fail "$output"
-  contains "$output" ".mise.toml" || fail "the message does not name the file: $output"
-  not_contains "$output" "missing command: pnpm" || fail "this is the message it exists to replace: $output"
-}
-
-@test "the preflight names each missing piece in turn, and passes on a complete repo" {
-  local root="$BATS_TEST_TMPDIR/repo"
-  mkdir -p "$root"
-  printf '[tools]\nnode = "24"\npnpm = "12"\n' > "$root/.mise.toml"
-  GITHUB_WORKSPACE="$root" WORKING_DIRECTORY="." run bash "$REPO_ROOT/scripts/ci/toolchain-preflight.sh"
-  contains "$output" "no package.json" || fail "$output"
-
-  printf '{"name":"app"}\n' > "$root/package.json"
-  GITHUB_WORKSPACE="$root" WORKING_DIRECTORY="." run bash "$REPO_ROOT/scripts/ci/toolchain-preflight.sh"
-  contains "$output" "no pnpm-lock.yaml" || fail "$output"
-
-  : > "$root/pnpm-lock.yaml"
-  GITHUB_WORKSPACE="$root" WORKING_DIRECTORY="." run bash "$REPO_ROOT/scripts/ci/toolchain-preflight.sh"
-  [ "$status" -eq 0 ] || fail "a complete repo must pass: $output"
-}
-
 @test "the setup action checks the toolchain before mise-action, not after" {
   # After mise-action is too late to be useful: with no config it installs
   # nothing and succeeds, so the first symptom is two steps further on.
@@ -110,22 +89,6 @@ export BOUNDARY
   run bash "$REPO_ROOT/scripts/ci/native-hash.sh" "$root"
   [ "$status" -eq 1 ] || fail "a lockfile this cannot read must fail, not hash nothing: $output"
   contains "$output" 'importers' || fail "the message does not name the shape it wanted: $output"
-}
-
-@test "an empty lane input is refused up front, naming the variable" {
-  # `required: true` does not reject "", and `vars.X` for an unset X is "".
-  APP_VERSION=1.2.3 APP_BUILD_NUMBER=1042 IOS_BUNDLE_ID="" IOS_SCHEME=App ANDROID_PACKAGE=com.example.app \
-    run bash "$REPO_ROOT/scripts/release/require-inputs.sh"
-  [ "$status" -eq 1 ] || fail "an empty contract variable must be refused: $output"
-  contains "$output" "IOS_BUNDLE_ID" || fail "the message does not name the empty one: $output"
-  not_contains "$output" "ANDROID_PACKAGE," || fail "it named a variable that was set: $output"
-}
-
-@test "a whitespace-only lane input counts as empty" {
-  APP_VERSION="  " APP_BUILD_NUMBER=1042 IOS_BUNDLE_ID=com.example.app IOS_SCHEME=App ANDROID_PACKAGE=com.example.app \
-    run bash "$REPO_ROOT/scripts/release/require-inputs.sh"
-  [ "$status" -eq 1 ] || fail "whitespace is not a version: $output"
-  contains "$output" "APP_VERSION" || fail "$output"
 }
 
 @test "every lane workflow checks its inputs before it installs or builds anything" {

@@ -32,6 +32,13 @@ test-package: ## node:test for packages/dev-config, with coverage thresholds
 	$(MISE) node --test --experimental-test-coverage \
 		--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \
 		"packages/dev-config/**/*.test.mjs"
+# The Node scripts under scripts/ each have their own node:test file under
+# test/, and the gate is 100% of lines, branches and functions over them.
+test-node-scripts: ## node:test for the Node scripts under scripts/, with the 100% coverage gate
+	$(MISE) node --test --experimental-test-coverage \
+		--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \
+		--test-coverage-include='scripts/**/*.mjs' \
+		"test/*.test.mjs"
 spell: ## typos over the whole repo
 	$(MISE) typos
 # --offline: the online audits call the GitHub API, and a gate must give the
@@ -40,7 +47,7 @@ zizmor: ## Security audit of the workflows and actions (zizmor)
 	$(MISE) zizmor --offline --min-severity medium .github
 secrets: ## Scan the whole git history for committed secrets (gitleaks)
 	$(MISE) gitleaks git --redact --no-banner .
-check: shellcheck actionlint zizmor test test-package check-versions tool-versions spell secrets ## Everything self-ci runs
+check: shellcheck actionlint zizmor test test-package test-node-scripts check-versions tool-versions spell secrets ## Everything self-ci runs
 # Not part of `check`: needs Docker, a pushed branch and a few minutes. See
 # CONTRIBUTING.md, "Running the release pipeline locally".
 smoke-local: ## Run Prepare against the template with act (Linux only, needs Docker)
@@ -53,4 +60,4 @@ hooks: ## Install the git hooks (lefthook) - affects the whole clone, not just t
 	$(MISE) lefthook install
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
-.PHONY: shellcheck actionlint zizmor secrets test test-package check-versions tool-versions spell check smoke-local smoke-local-android hooks help
+.PHONY: shellcheck actionlint zizmor secrets test test-package test-node-scripts check-versions tool-versions spell check smoke-local smoke-local-android hooks help
