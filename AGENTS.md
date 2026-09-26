@@ -41,8 +41,8 @@ Every row is a make target; nothing here is run through a package manager.
 |---|---|
 | `make hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
 | `make check` | Everything self-ci runs: the nine gates below |
-| `make shellcheck` | shellcheck every script under `scripts/` (bash strict) |
-| `make actionlint` | Lint the workflows and composite actions |
+| `make lint-scripts` | shellcheck every script under `scripts/` (bash strict) |
+| `make lint-workflows` | Lint the workflows and composite actions (actionlint) |
 | `make workflow-security` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
 | `make test` | The bats suite over the pure scripts |
 | `make test-package` | `node:test` over `packages/dev-config` |
@@ -170,6 +170,12 @@ Every row is a make target; nothing here is run through a package manager.
   expand an uncommon one on first use. A prefix made of the family's initials
   was rejected for exactly this reason; so was "ids" for identifiers in a
   status message.
+- **A make target is named for what it checks or does, never after the tool
+  that does it.** `workflow-security`, not `zizmor`; `lint-scripts`, not
+  `shellcheck`. A tool's name tells a reader nothing
+  until they already know the tool. It belongs in the `##` description, where
+  `make help` shows it beside the name. `test/docs-contract.bats` fails on a
+  target named after a tool pinned in `.mise.toml`.
 - **Workflow files carry their stage in the name.** GitHub reads only the top
   level of `.github/workflows/`, so the prefix is the only grouping there is:
   `check-` gates every change, `build-` makes artifacts, `publish-` ships to a

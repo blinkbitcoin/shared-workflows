@@ -1026,7 +1026,7 @@ that scans nothing while reporting green is worse than one that is red.
 | `mobile` | Allow the native project scanner (your `check-security-mobile`: mobsfscan over a fresh prebuild). Installs dependencies. Default `false` |
 | `binaries` | Allow the MASTG checks over the release's built binaries (your `check-security-binaries`). Needs `release-tag`. Default `false` |
 | `review` | Allow the LLM review of the change (your `check-security-review`). Gets full history and, on a pull request, its base. Default `false` |
-| `openant` | Allow the OpenAnt LLM scan (your `check-security-openant`). The build is cached, keyed on your `scripts/security/openant.sh`. Default `false` |
+| `openant` | Allow the OpenAnt LLM scan (your `check-security-review-codebase`). The build is cached, keyed on your `scripts/security/openant.sh`. Default `false` |
 | `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |
 | `build-env` | Non-secret environment for every job, as a flat JSON object: `SECURITY_LLM_PROVIDER`, `SECURITY_LLM_MODEL`, `SECURITY_LLM_EFFORT`, `SECURITY_LLM_EXTRA_PARAMS`,<br>`OPENAI_BASE_URL`, and any `SECURITY_*` twin of a `security-policy.json` setting. Default `{}` |

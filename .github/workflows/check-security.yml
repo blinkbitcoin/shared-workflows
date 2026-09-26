@@ -93,7 +93,7 @@ on:
       openant:
         description: >-
           Allow the OpenAnt LLM scan of the codebase (the consumer's
-          `check-security-openant`). Minutes and tokens, so the release pull
+          `check-security-review-codebase`). Minutes and tokens, so the release pull
           request is the tier that turns it on.
         type: boolean
         default: false
