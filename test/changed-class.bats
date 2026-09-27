@@ -417,6 +417,68 @@ expect() {
   done
 }
 
+# classify_with ASSIGNMENT PATH... - classify_change with one variable set, as
+# NAME=VALUE, for the classifier alone.
+classify_with() {
+  local assignment="$1"
+  shift
+  commit_file "base.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  local path
+  for path in "$@"; do commit_file "$path"; done
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && run env "$assignment" bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+}
+
+@test "UNIT_READ_GLOBS takes a built-in unit entry back, for the unit class alone" {
+  classify_with 'UNIT_READ_GLOBS=^\.maestro/' ".maestro/flows/home.yaml"
+  expect false true true false
+}
+
+@test "E2E_READ_GLOBS takes a built-in E2E entry back, for the E2E class alone" {
+  classify_with 'E2E_READ_GLOBS=(^|/)jest\.config\.' "jest.config.ts"
+  expect false true true false
+}
+
+@test "WEB_READ_GLOBS takes a built-in web entry back, for the web class alone" {
+  classify_with 'WEB_READ_GLOBS=^fastlane/' "fastlane/Fastfile"
+  expect false false false true
+}
+
+@test "a read pattern outranks the docs pattern, and docs-only still says docs" {
+  classify_with 'UNIT_READ_GLOBS=^docs/' "docs/x.md"
+  expect true true false false
+}
+
+@test "a read pattern outranks the caller's own ignore extra" {
+  commit_file "base.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  commit_file "tools/a.sh"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && UNIT_IGNORE_GLOBS_EXTRA='^tools/' UNIT_READ_GLOBS='^tools/' \
+    run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  expect false true true true
+}
+
+@test "a read pattern no changed path matches leaves the ignore answer standing" {
+  classify_with 'UNIT_READ_GLOBS=^scripts/' ".maestro/flows/home.yaml"
+  expect false false true false
+}
+
+# GNU grep matches every path on an empty alternative; BSD grep refuses the
+# pattern, and the classifier then runs everything. Both run the unit suite.
+@test "a read pattern with an empty alternative is accepted and runs its suite" {
+  classify_with 'UNIT_READ_GLOBS=^scripts/|' "fastlane/Fastfile"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  has_line "unit-changed=true" || fail "expected unit-changed=true, got: $output"
+}
+
+@test "a read pattern that does not compile fails open for every class" {
+  classify_with 'E2E_READ_GLOBS=[' "docs/x.md"
+  expect false true true true
+  contains "$output" "::notice::could not apply the e2e read pattern" || fail "no notice naming the pattern: $output"
+}
+
 @test "a suite extra that does not compile fails open for every class" {
   commit_file "base.txt"
   base=$(git -C "$repo" rev-parse HEAD)

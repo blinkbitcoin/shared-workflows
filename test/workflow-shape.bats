@@ -151,6 +151,8 @@ setup() {
   contains "$env" 'DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}' || fail "docs-globs is not wired: $env"
   contains "$env" 'WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-globs }}' \
     || fail "web-ignore-globs is not wired: $env"
+  contains "$env" 'WEB_READ_GLOBS: ${{ inputs.web-read-globs }}' \
+    || fail "web-read-globs is not wired: $env"
   [ "$(yq -r '.on.workflow_call.outputs."web-changed".value' "$f")" = '${{ jobs.changes.outputs.web-changed }}' ] \
     || fail "the web-changed output is not wired from the changes job"
   [ "$(yq -r '.jobs.changes | has("permissions")' "$f")" = "false" ] \
@@ -168,6 +170,8 @@ setup() {
     class="${pair%%:*}" var="${pair##*:}"
     contains "$env" "${var}_IGNORE_GLOBS_EXTRA: \${{ inputs.${class}-ignore-globs }}" \
       || fail "${class}-ignore-globs is not wired to ${var}_IGNORE_GLOBS_EXTRA: $env"
+    contains "$env" "${var}_READ_GLOBS: \${{ inputs.${class}-read-globs }}" \
+      || fail "${class}-read-globs is not wired to ${var}_READ_GLOBS: $env"
     [ "$(yq -r ".jobs.changes.outputs.\"${class}-changed\"" "$f")" = "\${{ steps.classify.outputs.${class}-changed }}" ] \
       || fail "the changes job does not expose ${class}-changed"
     [ "$(yq -r ".on.workflow_call.outputs.\"${class}-changed\".value" "$f")" = "\${{ jobs.changes.outputs.${class}-changed }}" ] \
