@@ -94,11 +94,10 @@ guide_yaml_block() {
 
 @test "the guide's caller examples match the fixture's workflow files byte for byte" {
   # `name:block` rather than a running counter: the guide has ```yaml blocks
-  # that are not caller examples (the secrets-policy snippet is block 5, the
-  # read-globs example block 6), so the
+  # that are not caller examples (the secrets-policy snippet is block 5), so the
   # index and the position in this list stopped being the same number once
   # check-codeql.yml's section landed further down the page.
-  for spec in ci:1 ci-web:2 ci-pr-closed:3 ci-pr-title:4 ci-codeql:7 ci-security:9; do
+  for spec in ci:1 ci-web:2 ci-pr-closed:3 ci-pr-title:4 ci-codeql:6 ci-security:8; do
     wf="${spec%:*}"
     n="${spec##*:}"
     file="$FIXTURES/consumer-min/.github/workflows/$wf.yml"
