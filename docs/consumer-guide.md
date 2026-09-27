@@ -680,8 +680,6 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern (`^docs/\|\.md$\|(^\|/)LICENSE$\|^\.github/ISSUE_TEMPLATE/\|^\.github/PULL_REQUEST_TEMPLATE`), not a replacement for it |
 | `unit-ignore-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives for paths the unit suite never reads, **added to** the built-in list behind `unit-changed` (see [the suite classes](#the-suite-classes)) |
 | `e2e-ignore-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives for paths the native E2E suite never reads, **added to** the built-in list behind `e2e-changed` |
-| `unit-read-globs` | `''` | `\|`-joined POSIX ERE alternatives for paths the unit suite **does** read although the docs pattern, the built-in list or `unit-ignore-globs` covers them: a changed path matching one sets `unit-changed` (see [the suite classes](#the-suite-classes)) |
-| `e2e-read-globs` | `''` | The same for the native E2E suite and `e2e-changed` |
 
 Jobs: `Changes`, `Contract`, `Code`, `Generated`, `Docs`, `Dependencies`,
 `Prebuild`, `Secrets`, `Release`, `Tooling`, `Commits` — grouped by **who acts on a
@@ -712,12 +710,9 @@ the all-zero base of a branch's first push, or a base made unreachable by a
 force-push or a shallow clone — or a pattern does not compile, it emits
 `docs-only=false` and every `*-changed=true`, and exits 0. The step stays green
 and the full pipeline runs; an unreadable diff is never read as "nothing
-relevant". A `docs-globs` or `*-ignore-globs` input with an empty alternative
-(a stray leading, trailing or doubled `|`) is the one hard failure: an empty
-alternative matches every path, and would skip every job it gates. A
-`*-read-globs` input is not checked for one, because there it can only run
-more: GNU grep matches every path with it, and a grep that refuses the pattern
-fails open like any other.
+relevant". An `*-globs` input with an empty alternative (a stray leading,
+trailing or doubled `|`) is the one hard failure: an empty alternative matches
+every path, and would skip every job it gates.
 
 #### The suite classes
 
@@ -727,29 +722,11 @@ entries below, and the matching `*-ignore-globs` input. A path nobody listed —
 a new directory, a new config file — therefore runs the suite. Getting a list
 wrong costs a needless run, never a skipped regression.
 
-| Class | Built-in irrelevant paths, besides docs | Widened by | Narrowed by |
-| --- | --- | --- | --- |
-| `unit-changed` | `.maestro/`, `e2e/`, `playwright.config.*`, `fastlane/`, `Gemfile`, `Gemfile.lock` | `check-code.yml`'s `unit-ignore-globs` | `check-code.yml`'s `unit-read-globs` |
-| `e2e-changed` | `__tests__/`, `__snapshots__/`, `*.test.{js,ts,jsx,tsx,mjs,cjs,…}`, `jest.config.*`, `e2e/web/`, `playwright.config.*`, `fastlane/` | `check-code.yml`'s `e2e-ignore-globs` | `check-code.yml`'s `e2e-read-globs` |
-| `web-changed` | `.maestro/`, `__snapshots__/`, `jest.config.*`, `fastlane/`, `Gemfile`, `Gemfile.lock` | `build-web.yml`'s `web-ignore-globs` | `build-web.yml`'s `web-read-globs` |
-
-A built-in list assumes what a suite reads, and a consumer's suite can read
-more. The common case is a unit job that also runs repository-wide guards —
-a test that rejects a hard-coded port anywhere in the tracked tree, or one that
-scans every shell script — which read `.maestro/` and `fastlane/` like any
-other path. The ignore inputs can only add to a list, so the read inputs are
-how a path comes back off one: a class is `'true'` when **some** changed path
-matches its `*-read-globs`, whatever the docs pattern, the built-in list or the
-ignore input says. Read patterns outrank docs too, so a guard that also reads
-`docs/` can say so; `docs-only` itself does not change. For a unit job whose
-guards read the whole tree except documentation:
-
-```yaml
-checks:
-  uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
-  with:
-    unit-read-globs: '^\.maestro/|^e2e/|(^|/)playwright\.config\.[cm]?[jt]s$|^fastlane/|(^|/)Gemfile(\.lock)?$'
-```
+| Class | Built-in irrelevant paths, besides docs | Widened by |
+| --- | --- | --- |
+| `unit-changed` | `.maestro/`, `e2e/`, `playwright.config.*`, `fastlane/`, `Gemfile`, `Gemfile.lock` | `check-code.yml`'s `unit-ignore-globs` |
+| `e2e-changed` | `__tests__/`, `__snapshots__/`, `*.test.{js,ts,jsx,tsx,mjs,cjs,…}`, `jest.config.*`, `e2e/web/`, `playwright.config.*`, `fastlane/` | `check-code.yml`'s `e2e-ignore-globs` |
+| `web-changed` | `.maestro/`, `__snapshots__/`, `jest.config.*`, `fastlane/`, `Gemfile`, `Gemfile.lock` | `build-web.yml`'s `web-ignore-globs` |
 
 Nothing under `.github/` is on any built-in list: a changed caller workflow can
 change how every suite runs. Test files are irrelevant to native E2E but not to
@@ -846,7 +823,6 @@ Secrets: `consumer-token` (optional).
 | `playwright-browsers` | `chromium` | Space-separated browsers for `playwright install` |
 | `docs-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives added to the built-in docs pattern, same as `check-code.yml`; docs are irrelevant to the web class |
 | `web-ignore-globs` | `''` | Extra `\|`-joined POSIX ERE alternatives for paths the web build and its Playwright suite never read, **added to** the built-in list behind `web-changed` (see [the suite classes](#the-suite-classes)) |
-| `web-read-globs` | `''` | `\|`-joined POSIX ERE alternatives for paths the web build or its Playwright suite **does** read although the docs pattern, the built-in list or `web-ignore-globs` covers them: a changed path matching one sets `web-changed` |
 
 Jobs: `Changes`, `Build`, `E2E`, `Deploy`. `Changes` runs the same classifier
 as `check-code.yml`, with a byte-identical base-sha expression, and `Build` —
@@ -2235,7 +2211,6 @@ each one lives so a future edit doesn't quietly regress it.
 | One docs rule, not two: a caller's `paths-ignore` is a second, narrower list that drifts from the classifier's (it misses `LICENSE` and the issue/PR templates) | `check-code.yml` derives `BASE_SHA` from `github.event.before` on a push, so `scripts/ci/changed-class.sh` classifies pushes too and the caller's `ci.yml` carries no `paths-ignore` |
 | An unclassifiable range must fail open, not abort the step under `set -euo pipefail` | `scripts/lib/changed-files.sh` guards an empty base, the all-zero base of a branch's first push and an unreachable base (`git cat-file -e`); `scripts/ci/changed-class.sh` then emits `docs-only=false` and every `*-changed=true`, and exits 0 |
 | A suite class must never skip a path nobody thought about | `scripts/ci/changed-class.sh`'s classes are ignore-based: a suite runs unless every changed path is on its irrelevant list, so a new directory runs everything |
-| An ignore list can only grow, but a consumer's suite can read what a built-in entry assumes it never does (repository-wide guards in a unit job) | `*-read-globs`: a class is `'true'` when some changed path matches its read pattern, whatever the docs pattern and ignore lists say (`scripts/ci/changed-class.sh`) |
 | `sudo`-based Linux-runner scripts (free disk, KVM) must no-op safely everywhere else (macOS, a laptop, self-hosted with different env) | `scripts/ci/free-disk.sh` / `scripts/ci/enable-kvm.sh` guard on `GITHUB_ACTIONS=true && RUNNER_OS=Linux`, overridable with `WORKFLOWS_FORCE_RUNNER_SCRIPTS=1` |
 | Forensics collection must never fail the job it's diagnosing | `scripts/e2e/collect-forensics.sh` (`set -uo pipefail`, no `-e`; explicit `exit 0`) |
 | E2E must never run against a production app id/scheme | `scripts/e2e/README.md`: "`APP_VARIANT` must not be `production` for E2E" |
