@@ -64,3 +64,39 @@ guide's tables are generated from the same file, so the two cannot disagree.
 
 Unlike `check-tool-versions`, this one is specific to the React Native workflow
 family rather than to any repository on the baseline.
+
+## Repository guards
+
+Six checks for rules a repository on the baseline holds itself to, each a
+program and a module (`@blinkbitcoin/dev-config/<name>`) whose functions a
+test can import. The template wrote them first; they live here so the template,
+this repository and the next consumer run the same code.
+
+```sh
+check-docs-tables [--max 120] [file...]     # a markdown table cell line over the limit
+check-diagrams [--all] [file...]            # a mermaid block that does not parse
+check-shell-locale [--root DIR]             # LC_ALL=C cmd instead of env LC_ALL=C cmd
+check-make-target-names [--allow T=REASON]  # a make target named after the tool it runs
+check-workflow-names --group ci=CI ...      # a workflow file or display name outside its group
+check-coverage-empty [summary.json]         # a Jest coverage row with nothing to cover
+```
+
+- `check-docs-tables` measures each `<br>` segment of a cell's visible text,
+  skipping fenced code. With no files it reads `README.md`, `AGENTS.md`,
+  `CONTRIBUTING.md`, `SECURITY.md` and `docs/**/*.md`, less `docs/superpowers/`.
+- `check-diagrams` renders a diagram of its own first and only then the docs',
+  so nothing in a doc can decide whether the gate runs. Offline on a laptop it
+  skips with a warning; under `CI` a toolchain that cannot render fails. With no
+  files it checks the docs changed against `origin/main`; `--all` checks them
+  all. The mermaid CLI version is pinned in the module.
+- `check-shell-locale` reads every tracked shell file: scripts, bats files, the
+  Makefile and the workflows' `run:` blocks. The prefix makes bash itself
+  switch locale, which crashes a forked Homebrew bash on macOS now and then.
+- `check-make-target-names` takes the tools from `.mise.toml` and the unscoped
+  packages in `package.json`, spares `setup-` targets, and fails on an
+  `--allow` that no longer applies.
+- `check-workflow-names` requires every file in `.github/workflows` to be
+  `PREFIX.yml` or `PREFIX-*.yml` for a group, and, where the group has a
+  display name, its `name:` to be `DISPLAY` or `DISPLAY / ...`.
+- `check-coverage-empty` fails on a file with zero statements in a
+  `coverage-summary.json`, which reads as 0% while the totals stay at 100%.

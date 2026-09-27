@@ -14,6 +14,7 @@
   },
   "files": [
     "bin",
+    "lib",
     "contract.json",
     "versions.json",
     "README.md"
@@ -22,11 +23,23 @@
     "./versions.json": "./versions.json",
     "./contract.json": "./contract.json",
     "./check-tool-versions": "./bin/check-tool-versions.mjs",
-    "./check-consumer-contract": "./bin/check-consumer-contract.mjs"
+    "./check-consumer-contract": "./bin/check-consumer-contract.mjs",
+    "./check-docs-tables": "./bin/check-docs-tables.mjs",
+    "./check-diagrams": "./bin/check-diagrams.mjs",
+    "./check-shell-locale": "./bin/check-shell-locale.mjs",
+    "./check-make-target-names": "./bin/check-make-target-names.mjs",
+    "./check-workflow-names": "./bin/check-workflow-names.mjs",
+    "./check-coverage-empty": "./bin/check-coverage-empty.mjs"
   },
   "bin": {
     "check-tool-versions": "./bin/check-tool-versions.mjs",
-    "check-consumer-contract": "./bin/check-consumer-contract.mjs"
+    "check-consumer-contract": "./bin/check-consumer-contract.mjs",
+    "check-docs-tables": "./bin/check-docs-tables.mjs",
+    "check-diagrams": "./bin/check-diagrams.mjs",
+    "check-shell-locale": "./bin/check-shell-locale.mjs",
+    "check-make-target-names": "./bin/check-make-target-names.mjs",
+    "check-workflow-names": "./bin/check-workflow-names.mjs",
+    "check-coverage-empty": "./bin/check-coverage-empty.mjs"
   },
   "engines": {
     "node": ">=20"
