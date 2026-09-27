@@ -22,7 +22,7 @@ setup() {
 @test "every reusable workflow this family publishes is present" {
   for w in check-code check-unit check-e2e build-web publish-badges pr-closed pr-title check-codeql \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-release-notes; do
+    publish-store publish-github-release publish-ota pr-release-notes publish-promotion-retry; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
       return 1
