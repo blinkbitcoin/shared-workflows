@@ -23,11 +23,12 @@ scripts/ci/         shared CI plumbing (changed-class, lint-ci, pnpm-install, to
 scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
 scripts/native/     prebuild, pods, iOS/Android builds and packaging
 scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
-scripts/release/    version/notes resolution, fastlane invocation, release assets
+scripts/release/    version/notes resolution, fastlane invocation, release assets,
+                    the release PR's dispatches (dispatch-release-pr-ci, dispatch-at-tag)
 scripts/web/        web export, Playwright install and run
 scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
-                    package-copies, dispatch-release-pr-ci, render-contract-table,
-                    check-rehearsal-section, changed-gates)
+                    package-copies, render-contract-table, check-rehearsal-section,
+                    changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
@@ -163,11 +164,12 @@ Every row is a make target; nothing here is run through a package manager.
   `scripts/self/tag-major.sh`; never move a tag or edit a version by hand.
   Each release PR it opens carries two CI runs: a red `pull_request` run that
   GitHub creates for a `GITHUB_TOKEN`-opened PR and never gives a job, and a
-  green `workflow_dispatch` run that `scripts/self/dispatch-release-pr-ci.sh`
-  starts on each release PR's branch. The green one is the signal. The red
-  one goes away only when the PR is opened by the RELEASE_TAGGER App (the
-  guarded step in `self-release.yml`; needs the App's two secrets on this
-  repo).
+  green `workflow_dispatch` run that `scripts/release/dispatch-release-pr-ci.sh`
+  starts on each release PR's branch. `self-release.yml` does this through
+  `pr-release.yml`, the reusable workflow consumers call, from the same
+  commit. The green one is the signal. The red one goes away only when the PR
+  is opened by the RELEASE_TAGGER App (the guarded step in `pr-release.yml`;
+  needs the App's two secrets on this repo).
   There are two release PRs, one per package (`separate-pull-requests`),
   and both bump `.release-please-manifest.json`. `always-update` in
   `release-please-config.json` rebuilds every open one on each push to
@@ -186,17 +188,17 @@ Every row is a make target; nothing here is run through a package manager.
     participant ci as self-ci.yml
     participant tags as tags and packages
     main->>rel: push to main
-    rel->>rel: mint an App token when both RELEASE_TAGGER secrets exist, else use GITHUB_TOKEN
+    rel->>rel: pr-release.yml mints an App token when both RELEASE_TAGGER secrets exist, else uses GITHUB_TOKEN
     rel->>pr: release-please opens each release PR, or rebuilds it on this main (always-update)
-    rel->>ci: dispatch-release-pr-ci.sh starts self-ci.yml on each PR branch
+    rel->>ci: dispatch-release-pr-ci.sh starts self-ci.yml (ci-workflow) on each PR branch
     ci-->>pr: the green dispatched run is the signal
     Note over pr: the pull_request run GitHub creates for a GITHUB_TOKEN-opened PR gets no job and is noise
     pr->>main: squash merge
     main->>rel: push to main
-    rel->>tags: release_created, tag vX.Y.Z and its release
+    rel->>tags: release-created, tag vX.Y.Z and its release
     rel->>rel: rehearsal job runs pr-release-notes.yml against the template, dry run, from that commit
     rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after the rehearsal passed
-    rel->>tags: publish-dev-config job publishes the npm package, when it released too
+    rel->>tags: publish-dev-config job publishes the npm package, when paths-released names it
     rel->>pr: the other package's open release PR is rebuilt on the new main, manifest included
   ```
 

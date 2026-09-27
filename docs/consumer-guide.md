@@ -43,7 +43,7 @@ A release here is five steps and one force-pushed tag:
 ```mermaid
 flowchart TD
   merged["feat or fix merged on main"]
-  release["self-release.yml, release-please job"]
+  release["self-release.yml, release-please job (pr-release.yml)"]
   pr["release PR: chore(main) release X.Y.Z"]
   tag["tag vX.Y.Z and its GitHub release"]
   rehearsal["rehearsal job: pr-release-notes.yml against the template, dry run"]
@@ -54,10 +54,10 @@ flowchart TD
   merged -->|"push to main"| release
   release -->|"opens, or rebuilds on each push"| pr
   pr -->|"squash merge, push to main"| release
-  release -->|"release_created is true"| tag
+  release -->|"release-created is true"| tag
   tag -->|"the release commit"| rehearsal
   rehearsal -->|"passed; a failure leaves the tags where they were"| major
-  tag -->|"tag_name"| major
+  tag -->|"tag-name"| major
   major -->|"git push -f to that commit"| moving
   moving -->|"the tag is resolved when a run starts"| consumer
   consumer -->|"no commit of its own"| run
@@ -1187,10 +1187,10 @@ jobs:
 
 ## Release workflows
 
-Eight more reusable workflows cover the release path: the store notes drafted
-into the release PR, version/notes preparation, signed store builds, arbitrary
-fastlane lanes, the GitHub release, OTA publishing, and a retry for a promotion
-the green gate gave up on. They are strictly opt-in — nothing in `ci.yml` calls them — and
+Nine more reusable workflows cover the release path: the release PR itself,
+the store notes drafted into it, version/notes preparation, signed store builds,
+arbitrary fastlane lanes, the GitHub release, OTA publishing, and a retry for a
+promotion the green gate gave up on. They are strictly opt-in — nothing in `ci.yml` calls them — and
 they follow every rule the workflows above do: `permissions: contents: read` at
 the top, no `concurrency` (the caller owns it), self-checkout into `.workflows/`,
 every `run:` a single `bash "$WORKFLOWS_DIR/scripts/..."` line, and **every secret
@@ -1212,6 +1212,7 @@ flowchart LR
     retryapp["cd-beta-retry.yml"]
   end
   subgraph shared["shared-workflows @v0"]
+    prrelease["pr-release.yml"]
     prnotes["pr-release-notes.yml"]
     prepare["build-prepare.yml"]
     ios["build-ios.yml"]
@@ -1222,6 +1223,7 @@ flowchart LR
     retry["publish-promotion-retry.yml"]
   end
   artifacts[("the run's artifacts")]
+  releasepr -->|"ci-workflow ci.yml, dispatch-on-release cd-beta.yml"| prrelease
   releasepr -->|"pr-number, ref the release branch"| prnotes
   internal -->|"stage internal, reserve-tag, require-green ci.yml"| prepare
   internal -->|"version, build-number"| ios
@@ -1249,7 +1251,7 @@ flowchart LR
   artifacts -.->|"attached as the release's assets, plus SHA256SUMS"| release
 ```
 
-Nothing in the figure is a fixed order between the eight: each caller decides its
+Nothing in the figure is a fixed order between the nine: each caller decides its
 own `needs:` chain, and the three tiers chain them differently. In
 `cd-internal.yml` the store uploads run **before** the pre-release, and the
 pre-release names the two build jobs directly rather than the uploads, so a
@@ -1552,6 +1554,84 @@ way to read a stack trace from it and they die with the runner otherwise.
 > the first time `ota-cli-version` is pinned in a real environment, and fix the
 > script and this note together. A wrong token name fails as an auth error, not
 > as a flag error.
+
+### `pr-release.yml`
+
+Keeps release-please's release PR open (one per package with
+`separate-pull-requests`), starts the caller's CI on each, and once a release is
+cut starts the caller's follow-on workflows at its tag.
+
+Both starts exist because of one GitHub rule: nothing that `GITHUB_TOKEN`
+created starts a workflow. A release PR opened with it gets a `pull_request`
+run that never has a job and is marked failed when the PR merges, and nothing
+listening for `release: published` runs at all. `workflow_dispatch` is the one
+exemption, so the caller's CI is started on each release PR branch, and the
+follow-ons at the tag, by name. With the optional App secrets release-please
+acts as the App instead, and the PR's own run is a real one; the dispatch still
+happens, so that run is doubled, not replaced.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Carried for consistency: release-please acts on the caller's repository through the API, and no consumer is checked out |
+| `config-file` | `release-please-config.json` | release-please's configuration, manifest mode. Release type, package names and changelog sections belong in it; the workflow passes nothing else, because an inline setting makes the action ignore the file |
+| `manifest-file` | `.release-please-manifest.json` | release-please's manifest |
+| `ci-workflow` | `ci.yml` | The caller's CI workflow file, started on each release PR branch the push created or updated; it needs a `workflow_dispatch` trigger. Empty starts none |
+| `dispatch-on-release` | `''` | Workflows started at the new tag, one per line: `workflow.yml key=value ...`, with `{tag}` in a value replaced by the tag. Blank lines and lines starting with `#` are skipped, so marker comments can sit in the list. A malformed line fails before anything starts |
+
+Outputs: `release-created` (`'true'` when the root package released),
+`tag-name`, `paths-released` (a JSON array of the package paths released, for a
+repository with several), `pr-number` and `pr-branch` (the root package's
+release PR, when the push created or updated one). Secrets, all optional:
+`RELEASE_TAGGER_APP_ID` and `RELEASE_TAGGER_APP_PRIVATE_KEY` (release-please as
+the App, the same App `publish-github-release.yml` uses), and
+`RELEASE_PLEASE_TOKEN` (used when there is no App; the caller's `github.token`
+otherwise).
+
+The caller triggers it on `push` to the default branch, owns the concurrency
+(keep it out of any store queue: nothing here touches a store, and a shared
+group would leave the release PR stale for the length of a build), and grants
+the job's three writes:
+
+```yaml
+# .github/workflows/cd-release.yml
+name: CD / Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release-please:
+    name: Release
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release.yml@v0
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write # required: the CI and follow-on dispatches
+    with:
+      dispatch-on-release: |
+        cd-beta.yml tag={tag}
+  store-notes:
+    name: Store Notes
+    needs: release-please
+    if: ${{ needs.release-please.outputs.pr-number != '' }}
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      pr-number: ${{ needs.release-please.outputs.pr-number }}
+      ref: ${{ needs.release-please.outputs.pr-branch }}
+```
+
+The internal build of the release commit runs before its tag exists, so
+`build-prepare.yml` reads the version from the commit's
+`chore(main): release X.Y.Z` subject. A squash or rebase merge puts the PR
+title there; a merge commit works too, through its second parent.
 
 ### `pr-release-notes.yml`
 

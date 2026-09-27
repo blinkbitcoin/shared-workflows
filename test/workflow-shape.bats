@@ -22,7 +22,7 @@ setup() {
 @test "every reusable workflow this family publishes is present" {
   for w in check-code check-unit check-e2e build-web publish-badges pr-closed pr-title check-codeql \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-release-notes publish-promotion-retry; do
+    publish-store publish-github-release publish-ota pr-release-notes publish-promotion-retry pr-release; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
       return 1
@@ -495,6 +495,35 @@ lane_step_count() {
     || fail "the release step does not read notes-text"
 }
 
+# pr-release.yml starts the caller's CI on each release PR and its follow-on
+# workflows at a cut tag, because GitHub starts no workflow from what
+# GITHUB_TOKEN created. Each start is gated on release-please having done the
+# thing it follows, and reads release-please's own outputs - a dispatch gated on
+# nothing would start the caller's CI on every push, and one reading `pr`
+# instead of `prs` would miss the second package's PR.
+@test "pr-release starts CI on each release PR and the follow-ons at a cut tag, each only when it happened" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/pr-release.yml"
+  for scope in contents pull-requests actions; do
+    [ "$(yq -r ".jobs.release.permissions.\"$scope\"" "$f")" = "write" ] || fail "the release job does not ask for $scope: write"
+  done
+  ci='[.jobs.release.steps[] | select((.run // "") | test("dispatch-release-pr-ci.sh"))][0]'
+  [ "$(yq -r "$ci.if" "$f")" = "\${{ steps.release.outputs.prs_created == 'true' && inputs.ci-workflow != '' }}" ] \
+    || fail "the CI dispatch is not gated on prs_created and ci-workflow: $(yq -r "$ci.if" "$f")"
+  [ "$(yq -r "$ci.env.PRS_JSON" "$f")" = '${{ steps.release.outputs.prs }}' ] || fail "the CI dispatch does not read prs"
+  [ "$(yq -r "$ci.env.CI_WORKFLOW" "$f")" = '${{ inputs.ci-workflow }}' ] || fail "the CI dispatch does not read ci-workflow"
+  [ "$(yq -r "$ci.env.GH_REPO" "$f")" = '${{ github.repository }}' ] || fail "the CI dispatch does not set GH_REPO"
+  tag='[.jobs.release.steps[] | select((.run // "") | test("dispatch-at-tag.sh"))][0]'
+  [ "$(yq -r "$tag.if" "$f")" = "\${{ steps.release.outputs.release_created == 'true' && inputs.dispatch-on-release != '' }}" ] \
+    || fail "the follow-on dispatch is not gated on release_created and dispatch-on-release: $(yq -r "$tag.if" "$f")"
+  [ "$(yq -r "$tag.env.TAG" "$f")" = '${{ steps.release.outputs.tag_name }}' ] || fail "the follow-ons are not started at the new tag"
+  pr='[.jobs.release.steps[] | select(.id == "pr")][0]'
+  [ "$(yq -r "$pr.if" "$f")" = "\${{ steps.release.outputs.prs_created == 'true' }}" ] || fail "the PR is read when none was created"
+  [ "$(yq -r '.jobs.release.outputs."pr-number"' "$f")" = '${{ steps.pr.outputs.number }}' ] || fail "pr-number is not wired from the read"
+  app='[.jobs.release.steps[] | select(.id == "app-token")][0]'
+  [ "$(yq -r "$app.if" "$f")" = "\${{ env.HAVE_RELEASE_TAGGER_APP == 'true' }}" ] || fail "the App token is minted without the App's secrets"
+}
+
 # pr-release-notes.yml's rehearsal path. `dry-run` defaults off and
 # `pr-number` keeps meaning what it did, so every existing caller is
 # unaffected; the step has to read both new inputs, and the `section` output
@@ -773,11 +802,11 @@ lane_step_count() {
   [[ "$android" != *"inputs.android != false"* ]] || fail "android toggle is a bare inputs comparison again: $android"
 }
 
-@test "self-release's major-tag job compares release_created to the string 'true'" {
+@test "self-release's major-tag job compares release-created to the string 'true'" {
   f="$REPO_ROOT/.github/workflows/self-release.yml"
   cond=$(yq -r '.jobs."major-tag".if' "$f")
   # Job outputs are strings; the literal "false" is truthy in a bare expression.
-  [[ "$cond" == *"release_created == 'true'"* ]] || fail "major-tag if does not compare to the string true: $cond"
+  [[ "$cond" == *"release-created == 'true'"* ]] || fail "major-tag if does not compare to the string true: $cond"
 }
 
 # ---------------------------------------------------------------------------
@@ -788,7 +817,7 @@ lane_step_count() {
 # so the write scope is pinned to the exact three jobs that need it - the two
 # gh-pages publishers and the one that cuts a GitHub release. Any new one has to
 # be added here deliberately.
-@test "contents: write is asked for by exactly the three jobs that write" {
+@test "contents: write is asked for by exactly the four jobs that write" {
   got=""
   for w in "${WORKFLOWS[@]}"; do
     while read -r j; do
@@ -797,7 +826,7 @@ lane_step_count() {
       [ "$perm" = "write" ] && got="$got$(basename "$w"):$j "
     done <<<"$(yq -r '.jobs | keys | .[]' "$w")"
   done
-  [ "$got" = "pr-closed.yml:badges-cleanup publish-badges.yml:badges publish-github-release.yml:release " ] \
+  [ "$got" = "pr-closed.yml:badges-cleanup pr-release.yml:release publish-badges.yml:badges publish-github-release.yml:release " ] \
     || fail "jobs asking for contents: write are now: $got"
 }
 

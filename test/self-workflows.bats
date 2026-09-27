@@ -36,25 +36,36 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
   [ -z "$top" ] || fail "self-release.yml grants '$top' at the top level; grant writes per job"
 }
 
-@test "self-release.yml starts self-ci on the release PR only when a PR was created" {
-  step="$(yq -r '.jobs."release-please".steps[] | select(.run != null and (.run | test("dispatch-release-pr-ci.sh")))' "$RELEASE")"
-  [ -n "$step" ] || fail "no step in self-release.yml runs scripts/self/dispatch-release-pr-ci.sh"
-  cond="$(yq -r '.if' <<<"$step")"
-  [[ "$cond" == *"steps.release.outputs.prs_created == 'true'"* ]] \
-    || fail "the dispatch step is not gated on prs_created == 'true': $cond"
-  [ "$(yq -r '.env.PRS_JSON' <<<"$step")" = '${{ steps.release.outputs.prs }}' ] \
-    || fail "the dispatch step does not pass release-please's prs output as PRS_JSON"
-  [ "$(yq -r '.env.GH_REPO' <<<"$step")" = '${{ github.repository }}' ] \
-    || fail "the dispatch step does not set GH_REPO"
+# self-release.yml keeps its release PR open with the same reusable workflow a
+# consumer calls, from this commit, and has it start self-ci.yml on each release
+# PR. How that workflow gates and wires the dispatch is held in
+# workflow-shape.bats; here, that this repository uses it that way.
+@test "self-release.yml runs the local pr-release.yml, starting self-ci on each release PR" {
+  [ "$(yq -r '.jobs."release-please".uses' "$RELEASE")" = "./.github/workflows/pr-release.yml" ] \
+    || fail "self-release.yml does not call the local pr-release.yml: $(yq -r '.jobs."release-please".uses' "$RELEASE")"
+  [ "$(yq -r '.jobs."release-please".with."ci-workflow"' "$RELEASE")" = "self-ci.yml" ] \
+    || fail "self-release.yml does not start self-ci.yml on the release PR"
+  for secret in RELEASE_TAGGER_APP_ID RELEASE_TAGGER_APP_PRIVATE_KEY RELEASE_PLEASE_TOKEN; do
+    [ "$(yq -r ".jobs.\"release-please\".secrets.$secret" "$RELEASE")" = "\${{ secrets.$secret }}" ] \
+      || fail "self-release.yml does not pass $secret"
+  done
 }
 
-# The script dispatches self-ci.yml by name. A rename of the workflow file
-# would leave it dispatching a name that no longer exists, failing only on a
-# real release - so the name is held to the file here.
-@test "the dispatch script names a workflow file that exists" {
-  grep -q 'gh workflow run self-ci.yml' "$REPO_ROOT/scripts/self/dispatch-release-pr-ci.sh" \
-    || fail "dispatch-release-pr-ci.sh no longer dispatches self-ci.yml by that name"
-  [ -f "$CI" ] || fail "self-ci.yml is gone; the dispatch script still names it"
+# The CI workflow is named in self-release.yml. A rename of the file would leave
+# the release PR dispatching a name that no longer exists, failing only on a real
+# release - so the name is held to the file here.
+@test "the CI workflow self-release.yml starts on the release PR exists" {
+  ci="$(yq -r '.jobs."release-please".with."ci-workflow"' "$RELEASE")"
+  [ -f "$REPO_ROOT/.github/workflows/$ci" ] || fail "self-release.yml starts $ci, which does not exist"
+}
+
+# The npm package releases on its own cadence: its job keys off paths-released,
+# and a path spelled wrong there would skip the publish rather than fail it.
+@test "self-release.yml publishes dev-config only when that package released" {
+  cond="$(yq -r '.jobs."publish-dev-config".if' "$RELEASE")"
+  [ "$cond" = "\${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/dev-config') }}" ] \
+    || fail "publish-dev-config is not gated on packages/dev-config being released: $cond"
+  [ -f "$REPO_ROOT/packages/dev-config/package.json" ] || fail "packages/dev-config moved; the gate names a path that is gone"
 }
 
 # One release PR per package, and both bump adjacent lines of the shared
@@ -125,7 +136,7 @@ REHEARSAL="$REPO_ROOT/.github/workflows/self-rehearsal.yml"
   [ "$(yq -r '.jobs.rehearsal.uses' "$RELEASE")" = "./.github/workflows/self-rehearsal.yml" ] \
     || fail "self-release.yml does not run the rehearsal"
   cond="$(yq -r '.jobs.rehearsal.if' "$RELEASE")"
-  [[ "$cond" == *"needs.release-please.outputs.release_created == 'true'"* ]] \
+  [[ "$cond" == *"needs.release-please.outputs.release-created == 'true'"* ]] \
     || fail "the rehearsal is not gated on a release: $cond"
   [ "$(yq -r '.jobs.rehearsal.permissions."pull-requests"' "$RELEASE")" = "write" ] \
     || fail "the release rehearsal does not grant pull-requests: write"
