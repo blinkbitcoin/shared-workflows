@@ -7,9 +7,12 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   activeProfiles,
+  callerCalls,
   callerInputs,
   callersUse,
+  callProblems,
   check,
+  checkCalls,
   checkRequirement,
   defaultIo,
   formatResult,
@@ -20,8 +23,10 @@ import {
   readCallers,
   readConsumer,
   readContract,
+  readInterfaces,
   readMakefile,
   readMiseTools,
+  scalarType,
   skeleton,
   summaryTable,
   toggleOn,
@@ -864,4 +869,225 @@ test('run as a program, it prints the report and exits with the report\'s code',
   const passing = spawnSync(process.execPath, [BIN, '--root', tree(), '--profile', 'codeql'], { encoding: 'utf8', env: CHILD_ENV });
   assert.equal(passing.status, 0);
   assert.match(passing.stdout, /1 degraded/);
+});
+
+// --- calls against the workflows' interfaces --------------------------------
+
+const RELEASE = `name: CD
+on: push
+jobs:
+  prepare:
+    name: Prepare
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-prepare.yml@abc # v0.14.0
+    with: # what to prepare
+      stage: internal
+      reserve-tag: true
+      build-env: >-
+        {"A": "b",
+        stage: not-a-key}
+      nested:
+        deeper: not-a-key
+    secrets:
+      ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+
+  store:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-store.yml@abc
+    secrets: inherit
+    with: {}
+  local:
+    uses: ./.github/workflows/local.yml
+  steps-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: blinkbitcoin/shared-workflows/.github/workflows/not-a-call.yml@abc
+  - not a job key
+    uses: blinkbitcoin/shared-workflows/.github/workflows/ignored.yml@abc
+  flow:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-title.yml@abc
+    with: {repository: x}
+  flow-secrets:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-title.yml@abc
+    secrets: {consumer-token: x}
+  empty-secrets:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-title.yml@abc
+    secrets: {}
+  after:
+    if: \${{ needs.prepare.outputs.version != '' && needs.prepare.outputs.version-code }}
+    runs-on: ubuntu-latest
+permissions: {}
+`;
+
+const calls = () => callerCalls([{ name: 'cd.yml', text: RELEASE }]);
+const call = (job) => calls().find((c) => c.job === job);
+
+test('the interfaces ship in the package, keyed by workflow file', () => {
+  const { workflows } = readInterfaces();
+  assert.equal(workflows['publish-store.yml'].inputs.version.required, true);
+  assert.equal(workflows['check-code.yml'].outputs.includes('docs-only'), true);
+});
+
+test('each job that calls a shared workflow is found, with its inputs, secrets and the outputs read from it', () => {
+  assert.deepEqual(
+    calls().map((c) => c.job),
+    ['prepare', 'store', 'flow', 'flow-secrets', 'empty-secrets'],
+  );
+  const prepare = call('prepare');
+  assert.equal(prepare.file, 'cd.yml');
+  assert.equal(prepare.workflow, 'build-prepare.yml');
+  assert.deepEqual([...prepare.with.keys()], ['stage', 'reserve-tag', 'build-env', 'nested']);
+  assert.equal(prepare.with.get('reserve-tag'), 'true');
+  assert.deepEqual([...prepare.secrets], ['ANTHROPIC_API_KEY']);
+  assert.deepEqual([...prepare.reads].sort(), ['version', 'version-code']);
+  assert.equal(prepare.unreadable, false);
+});
+
+test('secrets: inherit reads as null, and an empty with: or secrets: as nothing passed', () => {
+  assert.equal(call('store').secrets, null);
+  assert.deepEqual([...call('store').with], []);
+  assert.deepEqual([...call('empty-secrets').secrets], []);
+  assert.deepEqual([...call('store').reads], []);
+});
+
+test('an inline with: or secrets: mapping marks the call unreadable instead of guessing', () => {
+  assert.equal(call('flow').unreadable, true);
+  assert.equal(call('flow-secrets').unreadable, true);
+});
+
+test('a caller with no jobs, and a job indented under another shape, yield no calls', () => {
+  assert.deepEqual(callerCalls([{ name: 'x.yml', text: 'on: push\n' }]), []);
+  const odd = 'jobs:\n    deep:\n      uses: blinkbitcoin/shared-workflows/.github/workflows/pr-title.yml@a\n  shallow: {}\n';
+  assert.deepEqual(
+    callerCalls([{ name: 'x.yml', text: odd }]).map((c) => c.job),
+    ['deep'],
+  );
+});
+
+test('a scalar is typed the way YAML types it, and an expression or empty value is unknown', () => {
+  for (const [raw, type] of [
+    ['${{ inputs.x }}', 'unknown'],
+    ['', 'unknown'],
+    ['~', 'unknown'],
+    ['null', 'unknown'],
+    ['# only a comment', 'unknown'],
+    ["'true'", 'string'],
+    ['"10"', 'string'],
+    ['"a # b"', 'string'],
+    ['>-', 'string'],
+    ['|', 'string'],
+    ['true', 'boolean'],
+    ['False', 'boolean'],
+    ['TRUE # a comment', 'boolean'],
+    ['10', 'number'],
+    ['-1.5e3', 'number'],
+    ['.5', 'number'],
+    ['v1.2.3', 'string'],
+    ['internal', 'string'],
+  ]) {
+    assert.equal(scalarType(raw), type, raw);
+  }
+});
+
+const FACE = {
+  inputs: {
+    stage: { type: 'string', required: false },
+    'dry-run': { type: 'boolean', required: false },
+    version: { type: 'string', required: true },
+  },
+  secrets: { TOKEN: { required: false }, KEY: { required: true } },
+  outputs: ['sha'],
+};
+const aCall = (overrides = {}) => ({
+  workflow: 'x.yml',
+  with: new Map([['version', '${{ needs.p.outputs.version }}']]),
+  secrets: new Set(['KEY']),
+  reads: new Set(),
+  ...overrides,
+});
+
+test('a call that fits its interface has no problems', () => {
+  assert.deepEqual(callProblems(aCall({ reads: new Set(['sha']) }), FACE), []);
+});
+
+test('a workflow the interfaces do not know is one problem, naming it', () => {
+  assert.deepEqual(callProblems(aCall(), undefined), ['shared-workflows publishes no reusable x.yml at this version']);
+});
+
+test('an undeclared input, a literal of the wrong type and a missing required input are each named', () => {
+  const problems = callProblems(
+    aCall({ with: new Map([['nope', 'a'], ['dry-run', "'true'"], ['stage', 'true']]) }),
+    FACE,
+  );
+  assert.deepEqual(problems, [
+    'passes input nope, which x.yml does not declare',
+    "passes dry-run as a string ('true'), but x.yml declares it a boolean",
+    'passes stage as a boolean (true), but x.yml declares it a string',
+    'does not pass version, which x.yml requires',
+  ]);
+});
+
+test('an undeclared secret and a missing required one are named, and inherit passes them all', () => {
+  assert.deepEqual(callProblems(aCall({ secrets: new Set(['OTHER']) }), FACE), [
+    'passes secret OTHER, which x.yml does not declare',
+    'does not pass secret KEY, which x.yml requires',
+  ]);
+  assert.deepEqual(callProblems(aCall({ secrets: null }), FACE), []);
+});
+
+test('reading an output the workflow does not declare is named', () => {
+  assert.deepEqual(callProblems(aCall({ reads: new Set(['sha', 'version']) }), FACE), [
+    'reads output version, which x.yml does not declare',
+  ]);
+});
+
+const interfaces = { workflows: { 'build-prepare.yml': { inputs: {}, secrets: {}, outputs: [] } } };
+
+test('a repository that calls no shared workflow gets no call findings at all', () => {
+  assert.deepEqual(checkCalls(consumer({ callers: { 'ci.yml': 'on: push\n' } }), interfaces), []);
+});
+
+test('fitting calls are one pass naming how many, and an unreadable call is skipped, not counted', () => {
+  const text = `jobs:
+  a:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-prepare.yml@x
+  b:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-prepare.yml@x
+    with: {stage: internal}
+`;
+  const results = checkCalls(consumer({ callers: { 'cd.yml': text } }), interfaces);
+  assert.deepEqual(
+    results.map(({ level, req, reason, detail }) => [level, req.label, reason ?? detail]),
+    [
+      ['skip', 'cd.yml: b -> build-prepare.yml', 'its with: or secrets: is an inline mapping this cannot read'],
+      ['ok', 'calls to shared workflows', "1 within their workflows' interfaces"],
+    ],
+  );
+});
+
+test('each problem is a blocking finding that reads, sums up and serializes like a requirement', () => {
+  const text = `jobs:
+  a:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-prepare.yml@x
+    with:
+      nope: 1
+`;
+  const [finding, ...rest] = checkCalls(consumer({ callers: { 'cd.yml': text } }), interfaces);
+  assert.deepEqual(rest, []);
+  assert.equal(finding.level, 'fail');
+  assert.equal(finding.req.id, 'calls.interface');
+  assert.match(formatResult(finding), /^FAIL {2}cd\.yml: a -> build-prepare\.yml: passes input nope, which build-prepare\.yml does not declare\. Fix: pass only/);
+  assert.match(summaryTable([finding]), /\*\*blocked\*\* \| `cd\.yml: a -> build-prepare\.yml`<br>passes input nope/);
+  assert.equal(skeleton([finding]), '');
+});
+
+test('the program fails on a call that does not fit, and --json carries the call rule id', () => {
+  const root = tree({
+    'package.json': JSON.stringify({ scripts: { 'badges:render': 'x' } }),
+    '.github/workflows/cd.yml':
+      'jobs:\n  store:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-store.yml@x\n    with:\n      lane: upload\n',
+  });
+  const { code, stdout } = runMain(['--root', root, '--profile', 'badges']);
+  assert.equal(code, 1);
+  assert.match(stdout, /FAIL {2}cd\.yml: store -> publish-store\.yml: does not pass version, which publish-store\.yml requires/);
+  const json = JSON.parse(runMain(['--root', root, '--profile', 'badges', '--json']).stdout);
+  assert.ok(json.some((r) => r.id === 'calls.interface' && r.level === 'fail'), JSON.stringify(json));
 });

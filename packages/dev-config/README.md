@@ -62,6 +62,16 @@ runs, just not the one this repository defined. It reads your own
 input switches it off, whether a fallback exists, and the fix. The consumer
 guide's tables are generated from the same file, so the two cannot disagree.
 
+It also holds every call your workflows make to this family against
+`interfaces.json`: each reusable workflow's inputs (with their types and which
+are required), secrets and outputs, rendered from the workflows themselves.
+An input the workflow does not declare, a required one left out, a literal of
+the wrong type (`dry-run: 'true'` for a boolean), an undeclared secret, or an
+output read that the workflow does not produce are each a blocked finding,
+named by file and job. GitHub checks all of that only when the run starts, on
+`main`, after the change merged; and a renamed output is worse, because it
+reads as empty and a `!= 'false'` gate on it quietly runs every time.
+
 Unlike `check-tool-versions`, this one is specific to the React Native workflow
 family rather than to any repository on the baseline.
 

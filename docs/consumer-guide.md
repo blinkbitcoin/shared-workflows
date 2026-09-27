@@ -115,6 +115,17 @@ Two levels, and the difference matters:
   `check:ci`, `i18n:check` and `codegen:check` are the five that degrade; see
   [Script contract](#script-contract) for why that seam exists.
 
+The same run also holds **every call your workflows make to this family** to
+the interface the called workflow declares at the pinned version
+(`packages/dev-config/interfaces.json`, rendered from the workflows by
+`scripts/self/render-interfaces.sh`): an input it does not declare, a required
+input left out, a literal of the wrong type, an undeclared secret, or an output
+it does not produce. Each is a blocked finding named by file and job, such as
+`cd.yml: store -> publish-store.yml: does not pass version, which
+publish-store.yml requires`. GitHub checks these only when a run starts, after
+the change merged, and a renamed output never fails at all: it reads as empty.
+A `with:` or `secrets:` written as an inline mapping is skipped, not guessed at.
+
 **It is your repository that fails, never this one.** The check runs in your
 CI, from the version of shared-workflows your caller pins, so moving to a new
 `v0` is also when a new requirement starts to apply. shared-workflows' own CI
