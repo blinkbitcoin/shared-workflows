@@ -1382,6 +1382,8 @@ uploads, promotions, staged rollouts, halts.
 | `environment` | `''` | GitHub Environment gating the lane (this is where a production approval belongs) |
 | `env-json` | `{}` | Flat JSON object published into the lane's environment. **Configuration only** — the values are printed to the log; credentials belong in `secrets:` |
 | `artifacts` | `''` | Artifact name or glob pattern downloaded (merged) into `$WORKFLOWS_ASSETS_DIR` before the lane runs. The lane step then runs with **`WORKFLOWS_OUTPUT_DIR` = `$WORKFLOWS_ASSETS_DIR`**: the lanes read the binaries they upload out of `WORKFLOWS_OUTPUT_DIR`, and this workflow builds nothing, so the downloaded `.ipa`/`.aab` are what it has to point at. (The two build workflows leave `WORKFLOWS_OUTPUT_DIR` alone — there it is where the lane *writes*.) |
+| `release-assets` | `''` | Glob of assets downloaded from the `release-tag` release into the same `$WORKFLOWS_ASSETS_DIR`, after `artifacts`. For a lane whose binary is not in this run: a promotion tier builds nothing, and `download-artifact` only sees the current run. A store with no promote endpoint (Huawei AppGallery) re-uploads the bundle on every tier, and this hands it the exact bytes the release carries, e.g. `release-assets: '*.aab'`. No matching asset is fatal |
+| `release-tag` | `''` | The release `release-assets` come from; required when `release-assets` is set |
 | `version` / `build-number` | **required** | `APP_VERSION` / `APP_BUILD_NUMBER` |
 | `ios-bundle-id` / `ios-scheme` / `android-package` | **required** | All three on every lane, both platforms — see [The five Fastfile contract variables](#the-five-fastfile-contract-variables) |
 | `ruby` | `true` | Install Ruby (leave on unless the consumer has no Gemfile) |

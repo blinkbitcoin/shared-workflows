@@ -73,6 +73,14 @@ on:
         description: Artifact name or glob pattern to download before the lane runs (empty downloads nothing); all matches are merged into one directory
         type: string
         default: ''
+      release-assets:
+        description: Glob pattern of assets to download from the `release-tag` release into the same directory as `artifacts` (empty downloads nothing) - for a lane whose binary is not in this run, like a store with no promote endpoint on a promotion tier
+        type: string
+        default: ''
+      release-tag:
+        description: The release `release-assets` are downloaded from (required when `release-assets` is set)
+        type: string
+        default: ''
       version:
         description: App version passed to the lane as APP_VERSION
         type: string
@@ -231,6 +239,18 @@ jobs:
           # which artifact carried it.
           merge-multiple: true
           path: ${{ env.WORKFLOWS_ASSETS_DIR }}
+      # A lane whose binary is not in this run: a promotion tier builds nothing,
+      # and download-artifact only sees the current run's artifacts. A store
+      # with no promote endpoint re-uploads the bundle the release carries,
+      # into the same directory, so the lane finds it the same way.
+      - name: Download release assets
+        if: ${{ inputs.release-assets != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.consumer-token || github.token }}
+          GH_REPO: ${{ inputs.repository || github.repository }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          RELEASE_ASSETS: ${{ inputs.release-assets }}
+        run: bash "$WORKFLOWS_DIR/scripts/release/release-assets-fetch.sh" "$RELEASE_TAG" "$RELEASE_ASSETS" "$WORKFLOWS_ASSETS_DIR"
       - name: Publish build-env
         env:
           WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
