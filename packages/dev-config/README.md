@@ -64,3 +64,20 @@ guide's tables are generated from the same file, so the two cannot disagree.
 
 Unlike `check-tool-versions`, this one is specific to the React Native workflow
 family rather than to any repository on the baseline.
+
+## Release scripts
+
+`release/resolve-version.sh` and `release/build-info.sh` are the scripts
+`build-prepare.yml` runs to decide a build's version and build number and to
+write its `build-info.json`, with the two libraries they source in `lib/`. A
+consumer runs them on a laptop from the installed package, so `make version`
+there answers exactly what CI will build:
+
+```sh
+bash node_modules/@blinkbitcoin/dev-config/release/resolve-version.sh [dir]
+```
+
+They are byte-identical copies of `scripts/release/` and `scripts/lib/` in
+shared-workflows, refreshed by `scripts/self/package-copies.sh --write` and
+held identical on every commit by `test/package-copies.bats`, so they cannot
+say one thing on a laptop and another in a release.
