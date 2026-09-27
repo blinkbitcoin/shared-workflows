@@ -47,7 +47,7 @@ on:
         type: string
         default: ''
       baseline-tag:
-        description: Release tag whose `build-info.json` asset is the fingerprint baseline for this channel (the store build currently installed on it). Required whenever `ota-enabled` is true - a same-run artifact cannot serve, because it would compare the commit against itself
+        description: Release tag whose `build-info.json` asset is the fingerprint baseline for this channel (the store build currently installed on it); `latest` is the newest published release that is not a draft or a pre-release. Required whenever `ota-enabled` is true - a same-run artifact cannot serve, because it would compare the commit against itself
         type: string
         default: ''
       manifest-url:
@@ -55,7 +55,7 @@ on:
         type: string
         default: ''
       runtime-version:
-        description: Runtime version sent as the expo-runtime-version header in the smoke check
+        description: Runtime version sent as the expo-runtime-version header in the smoke check; empty takes the baseline's iOS fingerprint, which the fingerprint gate has just proven equal to this commit's
         type: string
         default: ''
     secrets:
@@ -145,4 +145,5 @@ jobs:
           CHANNEL: ${{ inputs.channel }}
           OTA_MANIFEST_URL: ${{ inputs.manifest-url }}
           OTA_RUNTIME_VERSION: ${{ inputs.runtime-version }}
+          OTA_BASELINE_BUILD_INFO: ${{ env.WORKFLOWS_ASSETS_DIR }}/build-info.json
         run: bash "$WORKFLOWS_DIR/scripts/ota/smoke.sh" "$CHANNEL"

@@ -7,9 +7,14 @@
 # client would fetch, with the same expo-* headers, and fails when it does not
 # come back.
 #
+# With no OTA_RUNTIME_VERSION, the runtime version is the platform's fingerprint
+# in OTA_BASELINE_BUILD_INFO, the channel's baseline: the fingerprint gate only
+# lets an update through when this commit fingerprints the same, and that
+# fingerprint is the runtime version the update is served under.
+#
 # Usage: smoke.sh CHANNEL
 # Env: OTA_MANIFEST_URL (empty skips the smoke), OTA_RUNTIME_VERSION,
-#      OTA_SMOKE_PLATFORM (default ios).
+#      OTA_BASELINE_BUILD_INFO, OTA_SMOKE_PLATFORM (default ios).
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/release-env.sh"
@@ -26,10 +31,19 @@ platform="${OTA_SMOKE_PLATFORM:-ios}"
 body="${RUNNER_TEMP:-/tmp}/workflows-ota-manifest"
 trap 'rm -f "$body"' EXIT
 
+runtime="${OTA_RUNTIME_VERSION:-}"
+baseline="${OTA_BASELINE_BUILD_INFO:-}"
+if [ -z "$runtime" ] && [ -n "$baseline" ] && [ -f "$baseline" ]; then
+  require_cmd yq
+  runtime="$(yq -r ".fingerprint.$platform // \"\"" "$baseline")" || die "could not read fingerprint.$platform from $baseline"
+  [ "$runtime" != "null" ] || runtime=""
+  [ -z "$runtime" ] || log "runtime version: the baseline's $platform fingerprint, $runtime"
+fi
+
 # Built as an array so an unset runtime version contributes no argument at all
 # (an unquoted ${VAR:+-H "..."} would word-split the header on its space).
 runtime_args=()
-[ -z "${OTA_RUNTIME_VERSION:-}" ] || runtime_args=(-H "expo-runtime-version: $OTA_RUNTIME_VERSION")
+[ -z "$runtime" ] || runtime_args=(-H "expo-runtime-version: $runtime")
 
 group "ota manifest smoke ($channel)"
 code="$(curl -sS -o "$body" -w '%{http_code}' \
