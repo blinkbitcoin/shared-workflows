@@ -136,6 +136,18 @@ on:
       ANTHROPIC_API_KEY:
         description: Key for Anthropic. Reaches the review and openant scan steps only
         required: false
+    outputs:
+      verdict:
+        description: >-
+          The security verdict as one line of JSON, {"verdict","highest","canBlock"}, for a badge.
+          {"verdict":"disabled"} when security-policy.json switches the gate off, {"verdict":"fail"} when a
+          scanner crashed, the Verdict job failed before its verdict, or the configuration job failed (it
+          writes every output or none, so an empty enabled means it failed)
+        value: >-
+          ${{ jobs.verdict.outputs.verdict
+          || (jobs.config.outputs.enabled == 'false' && '{"verdict":"disabled"}')
+          || (jobs.config.outputs.enabled == '' && '{"verdict":"fail"}')
+          || '' }}
 permissions:
   contents: read
 jobs:
@@ -668,6 +680,8 @@ jobs:
       contents: read
       actions: read # workflow metadata for the SARIF upload
       security-events: write # upload the merged SARIF to code scanning
+    outputs:
+      verdict: ${{ steps.output.outputs.verdict }}
     steps:
       - name: Checkout consumer
         uses: actions/checkout@v7
@@ -765,3 +779,17 @@ jobs:
         env:
           REASON: the caller passed sarif-upload false
         run: bash "$WORKFLOWS_DIR/scripts/security/sarif-upload-skipped.sh" "$REASON"
+      # The badge's input. Its own step, so the output exists even when the
+      # Verdict step failed on findings - that run is exactly the one the badge
+      # must show - and last, so it does not split the steps above.
+      # contains(needs.*.result, 'failure') catches a scanner that crashed and
+      # so reported nothing to the merge.
+      - name: Verdict output
+        id: output
+        if: ${{ !cancelled() }}
+        env:
+          SCANNER_FAILED: ${{ contains(needs.*.result, 'failure') }}
+          VERDICT_OUTCOME: ${{ steps.verdict.outcome }}
+        # .workflows/, not $WORKFLOWS_DIR: Setup exports that, and this step
+        # must still report fail when Setup is what failed.
+        run: bash ".workflows/scripts/security/verdict-output.sh"

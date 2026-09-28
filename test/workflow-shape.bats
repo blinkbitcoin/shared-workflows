@@ -1163,6 +1163,34 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
     || fail "a by-design skip on every pull request would put a warning on every change: $branch"
 }
 
+# The Security badge's input: a step after the Verdict step that still runs
+# when the Verdict step failed on findings, told whether a scanner crashed, and
+# carried out through the job's and the workflow's `verdict` output.
+@test "check-security.yml hands its verdict out for the badge, even from a failed run" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  step() { yq -r ".jobs.verdict.steps[] | select(.name == \"Verdict output\") | $1" "$f"; }
+  # .workflows/, not $WORKFLOWS_DIR: Setup exports that, and the output step
+  # has to run after a failed Setup too.
+  [ "$(step '.run')" = 'bash ".workflows/scripts/security/verdict-output.sh"' ] \
+    || fail "no Verdict output step running verdict-output.sh without Setup: $(step '.run')"
+  [ "$(step '.if')" = '${{ !cancelled() }}' ] \
+    || fail "the output step must run after a Verdict step that failed on findings: $(step '.if')"
+  [ "$(step '.env.SCANNER_FAILED')" = "\${{ contains(needs.*.result, 'failure') }}" ] \
+    || fail "the output step is not told a scanner crashed: $(step '.env.SCANNER_FAILED')"
+  [ "$(step '.env.VERDICT_OUTCOME')" = '${{ steps.verdict.outcome }}' ] \
+    || fail "the output step is not told how the Verdict step ended: $(step '.env.VERDICT_OUTCOME')"
+  [ "$(step '.id')" = output ] || fail "the output step's id is not output: $(step '.id')"
+  [ "$(yq -r '.jobs.verdict.outputs.verdict' "$f")" = '${{ steps.output.outputs.verdict }}' ] \
+    || fail "the verdict job does not expose the step's output"
+  value="$(yq -r '.on.workflow_call.outputs.verdict.value' "$f")"
+  contains "$value" 'jobs.verdict.outputs.verdict' || fail "the workflow output does not read the verdict job: $value"
+  contains "$value" "jobs.config.outputs.enabled == 'false' && '{\"verdict\":\"disabled\"}'" \
+    || fail "a gate switched off in security-policy.json does not read as disabled: $value"
+  contains "$value" "jobs.config.outputs.enabled == '' && '{\"verdict\":\"fail\"}'" \
+    || fail "a failed configuration job (a broken security-policy.json) does not read as fail: $value"
+}
+
 # label-sarif.sh carries the job names as a map, because a step cannot read its
 # own job's display name. The map and the workflow must name each job the same.
 @test "label-sarif.sh names each scanner exactly as check-security.yml names its job" {

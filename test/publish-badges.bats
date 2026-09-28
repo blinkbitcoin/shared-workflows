@@ -469,3 +469,36 @@ HOOK
   contains "$output" "::error::could not stage the badges for main (exit 2)" || fail "no diagnosis in: $output"
   [ "$(git -C "$REMOTE" rev-parse gh-pages)" = "$before" ] || fail "the branch moved anyway"
 }
+
+@test "a rendered security badge is published beside the others" {
+  printf '<svg>security passing</svg>\n' > "$CONSUMER/coverage/badge/security.svg"
+  printf '{"label":"Security"}\n' > "$CONSUMER/coverage/badge/security.json"
+  BRANCH=main run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  out="$(gh_pages_checkout)" || fail "no gh-pages branch on the remote after publishing"
+  contains "$(cat "$out/badges/main/security.svg")" "security passing" || fail "security.svg did not land"
+  [ -f "$out/badges/main/security.json" ] || fail "security.json did not land"
+}
+
+@test "a run that rendered no security badge leaves the published one alone" {
+  printf '<svg>security passing</svg>\n' > "$CONSUMER/coverage/badge/security.svg"
+  BRANCH=main bash "$PUBLISH"
+  # The render script writes no security.svg when it was handed no verdict
+  # (a docs-only change skipped Security).
+  rm "$CONSUMER/coverage/badge/security.svg"
+  echo '<svg>unit2</svg>' > "$CONSUMER/coverage/badge/unit.svg"
+  BRANCH=main run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  out="$(gh_pages_checkout)"
+  contains "$(cat "$out/badges/main/security.svg")" "security passing" \
+    || fail "the published security badge was removed by a run that rendered none"
+  contains "$(cat "$out/badges/main/unit.svg")" "unit2" || fail "the new unit badge did not land"
+}
+
+@test "the gh-pages README lists the security badge" {
+  BRANCH=main run bash "$PUBLISH"
+  [ "$status" -eq 0 ] || fail "publish failed: $output"
+  out="$(gh_pages_checkout)"
+  contains "$(cat "$out/README.md")" "{coverage,unit,e2e,security}.svg" \
+    || fail "the README does not list the security badge: $(cat "$out/README.md")"
+}

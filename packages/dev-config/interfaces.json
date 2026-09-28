@@ -794,7 +794,9 @@
           "required": false
         }
       },
-      "outputs": []
+      "outputs": [
+        "verdict"
+      ]
     },
     "check-unit.yml": {
       "inputs": {
@@ -1060,6 +1062,14 @@
           "required": false
         },
         "e2e-label": {
+          "type": "string",
+          "required": false
+        },
+        "security-verdict": {
+          "type": "string",
+          "required": false
+        },
+        "security-label": {
           "type": "string",
           "required": false
         },
