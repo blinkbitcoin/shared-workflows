@@ -38,3 +38,15 @@ setup() {
     [ "$bad" -eq 0 ]
   done
 }
+
+# native-key computes cache keys and needs only yq. mise also reads the
+# consumer's .mise.toml from the checkout, so an unrestricted install pulled in
+# every tool the consumer pins - a PyPI failure installing one of them failed
+# an Android build in a step that never uses it.
+@test "native-key installs yq and nothing else" {
+  a="$REPO_ROOT/.github/actions/native-key/action.yml"
+  step='[.runs.steps[] | select((.uses // "") | test("^jdx/mise-action@"))]'
+  [ "$(yq -r "$step | length" "$a")" -eq 1 ] || fail "native-key no longer has exactly one mise-action step"
+  [ "$(yq -r "$step[0].with.install_args" "$a")" = "yq" ] \
+    || fail "native-key's mise-action installs more than yq: install_args is '$(yq -r "$step[0].with.install_args" "$a")'"
+}
