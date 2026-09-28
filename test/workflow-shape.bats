@@ -459,6 +459,17 @@ lane_step_count() {
   done
 }
 
+# notes-text is the one way a caller hands publish-github-release notes it
+# composed itself, without a job to upload them as an artifact. It has to reach
+# the script, where it wins over the notes file.
+@test "publish-github-release hands notes-text to the release step" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/publish-github-release.yml"
+  [ "$(yq -r '.on.workflow_call.inputs."notes-text".default' "$f")" = "" ] || fail "notes-text does not default to empty"
+  [ "$(yq -r '[.jobs.release.steps[] | select(.id == "assets")][0].env.NOTES_TEXT' "$f")" = '${{ inputs.notes-text }}' ] \
+    || fail "the release step does not read notes-text"
+}
+
 # pr-release-notes.yml's rehearsal path. `dry-run` defaults off and
 # `pr-number` keeps meaning what it did, so every existing caller is
 # unaffected; the step has to read both new inputs, and the `section` output

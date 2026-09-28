@@ -1493,6 +1493,7 @@ Creates or moves a GitHub release and attaches the fixed asset set.
 | `title` | `''` | Release title; empty keeps GitHub's default (the tag) |
 | `notes-artifact` | `release-meta` | Artifact carrying the notes file |
 | `notes-file` | `notes.md` | File inside that artifact used as the body (or, in `append` mode, as the appended section) |
+| `notes-text` | `''` | The notes as text instead, winning over `notes-file`: for a caller whose section is a line it composes from its own inputs, such as a production stage, which would otherwise need a job of its own to upload that line as an artifact. `notes-artifact` is ignored for the notes when this is set |
 | `assets-artifacts` | `''` | Artifact name or glob pattern whose files are attached |
 | `body-note` | `''` | Text placed at the top of the release body as a Markdown note admonition, at creation time. For a fact the notes cannot know — that store uploads were off and this build never reached a store, say. With no notes file of its own it is prepended to gh's generated notes rather than replacing them |
 | `append-title` | `Update` | Heading for the section added in `append` mode |
