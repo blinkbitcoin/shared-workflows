@@ -377,6 +377,33 @@ EOF
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "rolled out to 10%" || fail "the body was not updated"
 }
 
+@test "append takes its section from NOTES_TEXT when there is no notes file" {
+  : > "$WORKFLOWS_TEST_EXISTS"
+  TAG=v1.2.3 NOTES_TEXT='release at 25%, platforms all' APPEND_TITLE='Production' RUNNER_TEMP="$BATS_TEST_TMPDIR" release append
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$(cat "$WORKFLOWS_TEST_BODY")" "## Production" || fail "no heading in: $(cat "$WORKFLOWS_TEST_BODY")"
+  contains "$(cat "$WORKFLOWS_TEST_BODY")" "release at 25%, platforms all" || fail "no text in: $(cat "$WORKFLOWS_TEST_BODY")"
+}
+
+@test "NOTES_TEXT wins over a notes file" {
+  : > "$WORKFLOWS_TEST_EXISTS"
+  printf 'from the file\n' > "$BATS_TEST_TMPDIR/section.md"
+  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" NOTES_TEXT='from the text' APPEND_TITLE='Production' \
+    RUNNER_TEMP="$BATS_TEST_TMPDIR" release append
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$(cat "$WORKFLOWS_TEST_BODY")" "from the text" || fail "the text was not used: $(cat "$WORKFLOWS_TEST_BODY")"
+  not_contains "$(cat "$WORKFLOWS_TEST_BODY")" "from the file" || fail "the file was used over the text: $(cat "$WORKFLOWS_TEST_BODY")"
+}
+
+@test "a release created with NOTES_TEXT gets it as its notes, not generated ones" {
+  TAG=v1.2.3 TARGET_SHA=deadbeef NOTES_TEXT='hand-written notes' RUNNER_TEMP="$BATS_TEST_TMPDIR" release create-prerelease
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  create="$(grep '^release create' "$WORKFLOWS_TEST_LOG")"
+  contains "$create" "--notes-file $BATS_TEST_TMPDIR/workflows-release-notes-text.md" || fail "the text was not the notes: $create"
+  not_contains "$create" "--generate-notes" || fail "notes were generated despite the text: $create"
+  [ "$(cat "$BATS_TEST_TMPDIR/workflows-release-notes-text.md")" = "hand-written notes" ] || fail "the notes file holds the wrong text"
+}
+
 @test "append without a notes file is fatal" {
   : > "$WORKFLOWS_TEST_EXISTS"
   TAG=v1.2.3 release append
