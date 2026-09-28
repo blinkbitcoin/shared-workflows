@@ -11,7 +11,7 @@
 # commit subjects as notes. A release whose notes are literally the commit log
 # is a bad release note, not a broken pipeline - so it warns loudly.
 #
-# Env: NOTES_LOCALES (default 'en'), RELEASE_BODY_FILE (a release body, from the
+# Env: NOTES_LOCALES (empty: the generator picks the locales), RELEASE_BODY_FILE (a release body, from the
 # release-body-file input or fetched by release-body.sh; switches notes.mjs to
 # --from-body --body-section).
 # Usage: notes.sh
@@ -27,6 +27,12 @@ cd "$root"
 # contract and a generator may still read it, but a CLI flag is what a
 # hand-run of notes.mjs is debugged with, and it is what the template's
 # generator takes. Built as an array so an empty value contributes no argument.
+#
+# Empty stays empty, in the flag and in the environment alike. The generator
+# knows which listings the app has (the template's reads the locale
+# directories under fastlane/metadata/ios); a default filled in here used to
+# win over that, so an app with de-DE metadata got en-US-only notes from CI and
+# both locales from the same command on a laptop.
 locale_args=()
 [ -z "${NOTES_LOCALES:-}" ] || locale_args=(--locales "$NOTES_LOCALES")
 
@@ -38,12 +44,12 @@ if [ -f "scripts/release/notes.mjs" ]; then
     # commit references); the generator takes the section a store listing can
     # actually use rather than the raw markdown.
     log "running the consumer's notes.mjs --from-body --body-section"
-    NOTES_LOCALES="${NOTES_LOCALES:-en-US}" \
+    NOTES_LOCALES="${NOTES_LOCALES:-}" \
       node scripts/release/notes.mjs --from-body "$RELEASE_BODY_FILE" --body-section \
       "${locale_args[@]+"${locale_args[@]}"}" --out "$WORKFLOWS_RELEASE_META_DIR"
   else
     log "running the consumer's notes.mjs --from-commits"
-    NOTES_LOCALES="${NOTES_LOCALES:-en-US}" \
+    NOTES_LOCALES="${NOTES_LOCALES:-}" \
       node scripts/release/notes.mjs --from-commits \
       "${locale_args[@]+"${locale_args[@]}"}" --out "$WORKFLOWS_RELEASE_META_DIR"
   fi

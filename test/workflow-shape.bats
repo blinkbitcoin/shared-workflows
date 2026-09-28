@@ -366,15 +366,17 @@ lane_step_count() {
   done
 }
 
-# A store listing is keyed on the full metadata locale name (en-US, de-DE,
-# pt-BR); a bare language code matches no listing, so the default cannot be
-# `en` however natural that reads.
-@test "build-prepare's notes-locales default is a store metadata locale" {
-  f="$REPO_ROOT/.github/workflows/build-prepare.yml"
-  got=$(yq -r '.on.workflow_call.inputs."notes-locales".default' "$f")
-  [ "$got" = "en-US" ] || fail "notes-locales defaults to '$got', expected en-US"
-  grep -q '| `notes-locales` | `en-US` |' "$REPO_ROOT/docs/consumer-guide.md" \
-    || fail "the consumer guide still documents a different notes-locales default"
+# Empty, so the consumer's generator picks the locales from the listings the
+# app actually has. A default here won over that: an app with de-DE metadata
+# got en-US-only store notes from CI.
+@test "notes-locales defaults to empty in both workflows that run the notes generator" {
+  for wf in build-prepare pr-release-notes; do
+    f="$REPO_ROOT/.github/workflows/$wf.yml"
+    got=$(yq -r '.on.workflow_call.inputs."notes-locales".default' "$f")
+    [ "$got" = "" ] || fail "$wf.yml notes-locales defaults to '$got', expected empty"
+  done
+  [ "$(grep -c '| `notes-locales` | `'"''"'` |' "$REPO_ROOT/docs/consumer-guide.md")" -eq 2 ] \
+    || fail "the consumer guide does not document the empty notes-locales default in both workflows"
 }
 
 # The digest step writes an enriched build-info.json into $WORKFLOWS_OUTPUT_DIR; the
