@@ -26,7 +26,7 @@ scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version/notes resolution, fastlane invocation, release assets
 scripts/web/        web export, Playwright install and run
 scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
-                    dispatch-release-pr-ci, render-contract-table,
+                    package-copies, dispatch-release-pr-ci, render-contract-table,
                     check-rehearsal-section, changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files)
@@ -102,6 +102,14 @@ Every row is a make target; nothing here is run through a package manager.
   variable before looping over it. Each of these once let a script carry on
   with an empty value (`ios-simulator.sh`, `workflows_app_id`,
   `workflows_fingerprint`, `act-smoke.sh`, `cancel-runs.sh`).
+- **Never set a locale as a command prefix in shell code.** Write
+  `env LC_ALL=C sort`, not `LC_ALL=C sort`: with the prefix, bash itself
+  switches locale for the one command, and a Homebrew bash on macOS doing that
+  inside `$(...)` or a pipeline now and then dies with SIGSEGV (status 139),
+  reported as if the command had failed. `env` sets the variable in the
+  command's own process, so bash never changes locale. The template learned
+  this from an intermittent release-verification failure; its
+  `scripts/shell-locale.test.mjs` is the guard.
 - **Every script has its own test file, and that file runs it and covers
   each of its exit paths.** `scripts/ci/x.sh` has `test/x.bats`
   (`test/ci-x.bats` when another script is also called `x`); a Node script

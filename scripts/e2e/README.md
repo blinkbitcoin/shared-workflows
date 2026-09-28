@@ -43,7 +43,7 @@ pure-bash fallback).
 | `WORKFLOWS_MAESTRO_EXCLUDE_TAGS` | (none) | Passed as `--exclude-tags` only when set. |
 | `WORKFLOWS_SUITE_TIMEOUT_MINUTES` | `10` | Per-attempt bound enforced inside the script (`maestro-bound.sh`), so forensics still run on a hang. |
 | `WORKFLOWS_METRO_PORT` | `8081` | Metro port; also the port reversed into the Android emulator. |
-| `WORKFLOWS_MOCK_API_PORT` | `4000` | Host-side mock-API port also reversed into the Android emulator by `android-emulator.sh prepare`. Set it empty to reverse nothing but Metro. |
+| `WORKFLOWS_MOCK_API_PORT` | `8082` | Host-side mock-API port also reversed into the Android emulator by `android-emulator.sh prepare`. The template's port base (8080) plus its mock-API offset, as Metro's default is offset 1. Set it empty to reverse nothing but Metro. |
 | `WORKFLOWS_OUT` | `${RUNNER_TEMP:-/tmp}/workflows` | Every artifact this family writes: `metro.log`, `metro.pid`, `sim-udid`, `<scheme>.app.tar`, `maestro/`, `forensics/`, videos. |
 | `WORKFLOWS_E2E_SETUP_SCRIPT` | (none) | **Local runs only.** Consumer-relative script run before the suite (e.g. start a mock API), from inside `ios-maestro.sh`/`android-maestro.sh`. A missing file is fatal. In CI the same hooks run as workflow steps on the host from `check-e2e.yml`'s `e2e-setup-script` input, and nothing sets this variable; setting both runs the hook twice. |
 | `WORKFLOWS_E2E_TEARDOWN_SCRIPT` | (none) | **Local runs only**, same contract as above (`check-e2e.yml`'s `e2e-teardown-script` is the CI path). Runs after the suite, pass or fail. |
