@@ -5,13 +5,11 @@
 #
 # Contract: this always sets PLAYWRIGHT_SKIP_EXPORT=1 in the environment
 # before invoking the consumer's E2E_SCRIPT (default test:e2e:web). A
-# consumer whose e2e script re-exports the app before running Playwright
-# (the template's test:e2e:web = `pnpm build:web --dev && playwright test`
-# does, as of this writing) should check that variable and skip its own
-# export step when it is set, since build-web.yml already exported and downloaded
-# dist/ for it. The template does not honour it yet -- a follow-up task
-# adapts it -- so today it re-exports redundantly but harmlessly; once
-# updated this avoids a duplicate, slower export in CI.
+# consumer whose e2e script exports the app before running Playwright should
+# check that variable and skip its own export when it is set: build-web.yml
+# already exported and downloaded dist/, and those are the bytes a deploy would
+# publish. The template's test:e2e:web (scripts/e2e/web.sh) does exactly that;
+# the consumer guide's "The Playwright / export contract" shows the shape.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd pnpm
