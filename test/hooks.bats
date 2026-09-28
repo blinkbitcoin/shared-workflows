@@ -104,10 +104,10 @@ GIT_HOOKS='applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-co
   "
   [ "$status" -eq 0 ] || fail "commitlint.config.mjs does not load or has no scope-enum: $output"
   [ -n "$output" ] || fail "the scope enum is empty"
-  sorted="$(printf '%s\n' "$output" | LC_ALL=C sort)"
+  sorted="$(printf '%s\n' "$output" | env LC_ALL=C sort)"
   [ "$output" = "$sorted" ] || fail "the scope enum is not sorted; expected:
 $sorted"
-  uniq_count="$(printf '%s\n' "$output" | LC_ALL=C sort -u | grep -c .)"
+  uniq_count="$(printf '%s\n' "$output" | env LC_ALL=C sort -u | grep -c .)"
   all_count="$(printf '%s\n' "$output" | grep -c .)"
   [ "$uniq_count" = "$all_count" ] || fail "the scope enum has duplicates ($all_count entries, $uniq_count distinct)"
 }
