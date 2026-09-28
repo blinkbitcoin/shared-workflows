@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.6.0...dev-config-v0.7.0) (2026-09-28)
+
+
+### Features
+
+* **dev-config:** hold every call a consumer makes to the workflows' declared interfaces ([#105](https://github.com/blinkbitcoin/shared-workflows/issues/105)) ([4d0c337](https://github.com/blinkbitcoin/shared-workflows/commit/4d0c337f78823f5ee0f3e64b9e5450def0d960b9))
+* **dev-config:** ship the release scripts a consumer runs on a laptop ([#109](https://github.com/blinkbitcoin/shared-workflows/issues/109)) ([aa03be4](https://github.com/blinkbitcoin/shared-workflows/commit/aa03be4b4e383b8193521c86c1e5d49ca2b01cc1))
+* **dev-config:** ship the repository guards the template wrote ([#108](https://github.com/blinkbitcoin/shared-workflows/issues/108)) ([6e6cde1](https://github.com/blinkbitcoin/shared-workflows/commit/6e6cde16f487ee09f9c1ca8cea6dbf90f654be5e))
+
 ## [0.6.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.5.0...dev-config-v0.6.0) (2026-09-24)
 
 
