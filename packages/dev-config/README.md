@@ -100,3 +100,20 @@ check-coverage-empty [summary.json]         # a Jest coverage row with nothing t
   display name, its `name:` to be `DISPLAY` or `DISPLAY / ...`.
 - `check-coverage-empty` fails on a file with zero statements in a
   `coverage-summary.json`, which reads as 0% while the totals stay at 100%.
+
+## Release scripts
+
+`release/resolve-version.sh` and `release/build-info.sh` are the scripts
+`build-prepare.yml` runs to decide a build's version and build number and to
+write its `build-info.json`, with the two libraries they source in `lib/`. A
+consumer runs them on a laptop from the installed package, so `make version`
+there answers exactly what CI will build:
+
+```sh
+bash node_modules/@blinkbitcoin/dev-config/release/resolve-version.sh [dir]
+```
+
+They are byte-identical copies of `scripts/release/` and `scripts/lib/` in
+shared-workflows, refreshed by `scripts/self/package-copies.sh --write` and
+held identical on every commit by `test/package-copies.bats`, so they cannot
+say one thing on a laptop and another in a release.
