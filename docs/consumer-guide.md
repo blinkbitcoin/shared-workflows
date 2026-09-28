@@ -1187,9 +1187,10 @@ jobs:
 
 ## Release workflows
 
-Seven more reusable workflows cover the release path: the store notes drafted
+Eight more reusable workflows cover the release path: the store notes drafted
 into the release PR, version/notes preparation, signed store builds, arbitrary
-fastlane lanes, the GitHub release, and OTA publishing. They are strictly opt-in — nothing in `ci.yml` calls them — and
+fastlane lanes, the GitHub release, OTA publishing, and a retry for a promotion
+the green gate gave up on. They are strictly opt-in — nothing in `ci.yml` calls them — and
 they follow every rule the workflows above do: `permissions: contents: read` at
 the top, no `concurrency` (the caller owns it), self-checkout into `.workflows/`,
 every `run:` a single `bash "$WORKFLOWS_DIR/scripts/..."` line, and **every secret
@@ -1208,6 +1209,7 @@ flowchart LR
     prod["cd-production.yml"]
     hotfix["cd-ota-hotfix.yml"]
     listing["cd-store-listing.yml"]
+    retryapp["cd-beta-retry.yml"]
   end
   subgraph shared["shared-workflows @v0"]
     prnotes["pr-release-notes.yml"]
@@ -1217,6 +1219,7 @@ flowchart LR
     lane["publish-store.yml"]
     release["publish-github-release.yml"]
     ota["publish-ota.yml"]
+    retry["publish-promotion-retry.yml"]
   end
   artifacts[("the run's artifacts")]
   releasepr -->|"pr-number, ref the release branch"| prnotes
@@ -1236,6 +1239,7 @@ flowchart LR
   prod -->|"channel production, baseline-tag vX.Y.Z"| ota
   hotfix -->|"channel and rollout from the dispatch, baseline-tag resolved"| ota
   listing -->|"lane pull_metadata or sync_metadata"| lane
+  retryapp -->|"workflow cd-beta.yml, head-sha of the green internal run"| retry
   prepare -.->|"uploads release-meta"| artifacts
   artifacts -.->|"release-meta: build-info.json, store notes"| ios
   artifacts -.->|"release-meta: build-info.json, store notes"| android
@@ -1245,7 +1249,7 @@ flowchart LR
   artifacts -.->|"attached as the release's assets, plus SHA256SUMS"| release
 ```
 
-Nothing in the figure is a fixed order between the seven: each caller decides its
+Nothing in the figure is a fixed order between the eight: each caller decides its
 own `needs:` chain, and the three tiers chain them differently. In
 `cd-internal.yml` the store uploads run **before** the pre-release, and the
 pre-release names the two build jobs directly rather than the uploads, so a
@@ -1256,10 +1260,11 @@ run already produced, then moves the release onto `vX.Y.Z` with
 `cd-production.yml` adds the staged-rollout lanes (`phased`, `rollout`,
 `halt`), each its own `publish-store.yml` call on the same tag — and, left out
 of the figure because it is not a release workflow, a final `build-web.yml` call
-that deploys the Pages site for the same tag. Two callers
+that deploys the Pages site for the same tag. Three callers
 never prepare anything: `cd-ota-hotfix.yml` resolves a baseline tag in a job of its
-own and calls only `publish-ota.yml`, and `cd-store-listing.yml` calls only
-`publish-store.yml`, once per platform.
+own and calls only `publish-ota.yml`, `cd-store-listing.yml` calls only
+`publish-store.yml`, once per platform, and `cd-beta-retry.yml` calls only
+`publish-promotion-retry.yml`, when an internal build goes green.
 
 `build-prepare` is the only job that decides *what* the release is; every later
 job is handed `version` / `build-number` and the `release-meta` artifact rather
@@ -1283,7 +1288,7 @@ writes `build-info.json` and the store notes, and uploads them as the
 | `build-env` | `{}` | Non-secret build environment — see [`build-env`](#build-env) |
 | `require-green-workflow` | `''` | Workflow file name (e.g. `cd-internal.yml`) that must have concluded `success` for the **resolved target sha** (the `release-tag` commit when `release-tag` is set, else `github.sha`) before preparing. Empty disables the gate. The gate step runs **before** `Setup` (so a red upstream fails before anything is installed), which means it uses the `gh` and `yq` from the runner image — true of GitHub-hosted `ubuntu-latest`, not necessarily of a self-hosted `linux-runner` |
 | `reserve-tag` | `false` | Create the `v<version>-build.<n>` tag at the target sha **in Prepare, before the green gate**, while the commit is still the default branch tip; `publish-github-release.yml` then creates the release on the existing tag. GitHub refuses `GITHUB_TOKEN` a *new* tag on a commit whose `.github/workflows/*` differ from the tip ("create or update workflow without `workflows` permission", surfaced by the releases API as a bare 403) - and by the time a build's release is published a later merge may have touched a workflow. Needs **`contents: write`** on the calling job. A red gate deletes the tag this run reserved |
-| `require-green-dispatch` | `false` | With `require-green-workflow`: when the gated workflow has **no** run for the target sha, or its newest run was **cancelled** or **failed**, dispatch it once at `release-tag` and wait for that run instead of failing. Self-healing for a release whose internal build was lost (concurrency-group eviction, a flaky runner): the beta no longer waits for a human to dispatch by hand. A dispatched run that also fails is fatal; `skipped` is never dispatched. Needs `release-tag` and **`actions: write`** on the calling job
+| `require-green-dispatch` | `false` | With `require-green-workflow`: when the gated workflow has **no** run for the target sha, or its newest run was **cancelled** or **failed**, dispatch it once at `release-tag` and wait for that run instead of failing. Self-healing for a release whose internal build was lost (concurrency-group eviction, a flaky runner): the beta no longer waits for a human to dispatch by hand. A dispatched run that also fails is fatal; `skipped` is never dispatched. Needs `release-tag` and **`actions: write`** on the calling job. A promotion that still gives up is what [`publish-promotion-retry.yml`](#publish-promotion-retryyml) re-runs
 | `release-meta-artifact` | `release-meta` | Artifact name for `build-info.json`, `store-notes.json`, `notes-store.txt`, `notes.md` |
 
 Outputs: `version`, `build-number`, `fp-ios`, `fp-android`, `sha` (the commit
@@ -1672,6 +1677,67 @@ pull request; without a key the generator drafts without the LLM pass. This
 repository runs the same rehearsal against the template's `main`, with that
 fixture, on every one of its own pull requests and before `v0` moves
 (`self-rehearsal.yml`).
+
+### `publish-promotion-retry.yml`
+
+The second line behind `build-prepare.yml`'s green gate. The gate waits for the
+gated build and, with `require-green-dispatch`, starts a missing or red one
+once. What it cannot fix is a promotion that gave up: one that timed out
+waiting (`WORKFLOWS_GREEN_TIMEOUT_MINUTES`, 45 by default, against a build that
+queued behind another), or whose dispatched build also failed and was re-run
+green by hand. release-please starts the beta promotion exactly once, so such a
+run stays failed with nothing to start it again.
+
+This workflow re-runs it. The caller listens for its build workflow to
+complete, and when it concluded `success`, this finds a concluded,
+unsuccessful run of the promotion workflow for the build's head commit and
+re-runs only its failed jobs (`gh run rerun --failed`), so nothing that already
+succeeded runs twice. `cancelled` and `timed_out` runs count as blocked too.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | `repository` names the repository whose runs are listed and re-run; the rest are carried for consistency, since the job checks out no consumer |
+| `workflow` | (required) | The promotion's workflow file in the caller's repository, e.g. `cd-beta.yml` |
+| `head-sha` | (required) | The commit whose promotion to retry: `github.event.workflow_run.head_sha` in the listener |
+
+No outputs and no secrets. A matching run is found by that commit exactly: a
+promotion dispatched at the release tag has the release commit as its head, and
+so does the build of it. If another commit reached the build's branch in
+between, nothing matches and the job does nothing, on purpose: matching more
+loosely risks re-running a promotion of a different release.
+
+The trigger has to live in the caller, and `workflow_run` matches the build
+workflow's **display name**, not its file name: a rename of the build's
+`name:` silently stops the listener.
+
+```yaml
+# .github/workflows/cd-beta-retry.yml
+name: CD / Beta Retry
+on:
+  workflow_run:
+    workflows: [CD / Internal]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: release-retry-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+jobs:
+  retry:
+    name: Retry Beta
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-promotion-retry.yml@v0
+    permissions:
+      contents: read
+      actions: write # required: gh run rerun
+    with:
+      workflow: cd-beta.yml
+      head-sha: ${{ github.event.workflow_run.head_sha }}
+```
+
+Keep its concurrency group per commit and out of the store queue: this has to
+run promptly once the build goes green, and it calls no store.
 
 ### `build-env`
 
