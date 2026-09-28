@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->16<!--/count--> reusable workflows · <!--count:scripts-->100<!--/count--> scripts · <!--count:tests-->1045<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->17<!--/count--> reusable workflows · <!--count:scripts-->101<!--/count--> scripts · <!--count:tests-->1051<!--/count--> tests · one pinned tag · one npm package</sub>
 
 </div>
 
@@ -20,7 +20,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
-<!--count:shell-scripts-->98<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
+<!--count:shell-scripts-->99<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
 hang, wait for Metro, hash the native inputs so a build cache means something,
 decode signing secrets without leaving them on disk, upload a build and then
 prove that the artifact uploaded is the one that was built.
@@ -168,6 +168,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | `publish-store.yml`      | `Store`              | One store operation: upload, promote, staged rollout or halt (a fastlane *lane*)                               |
 | `publish-github-release.yml`     | `Publish`            | Creates or moves a release with a fixed asset set and `SHA256SUMS`                                           |
 | `publish-ota.yml`   | `Publish`            | Publishes an OTA update only when the native fingerprint is unchanged                                        |
+| `publish-promotion-retry.yml` | `Retry`   | Re-runs the failed jobs of a promotion the green gate gave up on, once the build it waited for goes green |
 
 `build-prepare.yml` can also block until a named CI workflow is green for the
 same sha, which is how a release refuses to build on a red `main`.
@@ -188,7 +189,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Path                   | Responsibility                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/`   | The <!--count:workflows-->23<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
+| `.github/workflows/`   | The <!--count:workflows-->24<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
 | `.github/actions/`     | <!--count:actions-->5<!--/count--> composite actions — `setup`, `maestro`, `native-key`, `free-disk`, `forensics` — the steps repeated across workflows |
 | `scripts/checks/`      | A gate each: audit, codegen, commitlint, expo-doctor, i18n; plus the scripts that pick the consumer's over this repo's    |
 | `scripts/ci/`          | Runner plumbing: Android SDK, KVM, disk pressure, pnpm store, badges, cancel-runs, tool versions                          |
@@ -199,7 +200,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table, the rehearsal's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->111<!--/count--> bats files, <!--count:tests-->1045<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->112<!--/count--> bats files, <!--count:tests-->1051<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
