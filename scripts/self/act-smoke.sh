@@ -9,6 +9,8 @@
 #        (default: the template at main)
 #        WORKFLOWS_ACT_IMAGE - runner image for ubuntu-latest
 #        WORKFLOWS_ACT_CACHE - where the substitute artifact actions are kept
+#        WORKFLOWS_ACT_ARTIFACT_ADDR - where act's artifact server listens, and
+#        the address the job uploads to (default 127.0.0.1, see below)
 #        WORKFLOWS_ACT_ARGS  - extra arguments appended to act (e.g. -v)
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
@@ -73,17 +75,28 @@ substitute() {
 upload_v4="$(substitute upload-artifact v4.6.2)"
 download_v4="$(substitute download-artifact v4.3.0)"
 
+# act's artifact server listens on, and hands the job, one address: by default
+# the host's default-route address. Behind a VPN that is the tunnel's own
+# address, which nothing reaches - the release-meta upload timed out five times
+# against 10.2.0.2 on a Mac with a VPN up, after every step before it had
+# passed. The job runs on the host network (act's default), where loopback is
+# the host's own on Linux and forwarded to the Mac's under OrbStack, so the
+# default here is 127.0.0.1. A Docker whose host network cannot reach the
+# host's loopback takes an address that it can, through the variable.
+artifact_addr="${WORKFLOWS_ACT_ARTIFACT_ADDR:-127.0.0.1}"
+
 # The token is only read by the two checkouts (both public repositories) and,
 # with `reserve-tag: false`, never writes anything.
 token="$(gh auth token)"
 
-log "act smoke: branch $branch at ${local_sha:0:7}, android=$android"
+log "act smoke: branch $branch at ${local_sha:0:7}, android=$android, artifacts at $artifact_addr"
 # shellcheck disable=SC2086 # WORKFLOWS_ACT_ARGS is a deliberate word-split
 act workflow_dispatch \
   -W "$workflow" \
   -P "ubuntu-latest=$image" \
   "${arch_args[@]}" \
   --artifact-server-path "$artifacts" \
+  --artifact-server-addr "$artifact_addr" \
   --local-repository "actions/upload-artifact@v7=$upload_v4" \
   --local-repository "actions/download-artifact@v8=$download_v4" \
   -s GITHUB_TOKEN="$token" \

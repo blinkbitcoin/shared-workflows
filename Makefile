@@ -54,7 +54,7 @@ secrets: ## Scan the whole git history for committed secrets (gitleaks)
 check: lint-scripts lint-workflows workflow-security test test-package test-script-modules check-versions tool-versions spell secrets ## Everything self-ci runs
 # Not part of `check`: needs Docker, a pushed branch and a few minutes. See
 # CONTRIBUTING.md, "Running the release pipeline locally".
-smoke-local: ## Run Prepare against the template with act (Linux only, needs Docker)
+smoke-local: ## Run Prepare against the template with act (the Linux jobs, in Docker; needs a pushed branch)
 	$(MISE) bash scripts/self/act-smoke.sh
 smoke-local-android: ## smoke-local, then the unsigned Android build
 	$(MISE) bash scripts/self/act-smoke.sh --android
