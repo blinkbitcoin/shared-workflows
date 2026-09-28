@@ -1114,9 +1114,23 @@ that scans nothing while reporting green is worse than one that is red.
 Secrets: `consumer-token`, only for a private consumer repository, and
 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for the two LLM jobs. The keys reach the
 `Review` and `OpenAnt` scan steps and no other step; without them those jobs
-report skipped, never clean. There are no outputs: the caller already has
-`docs-only` from `check-code.yml`, and a second docs classifier would be a
+report skipped, never clean. There is no docs-only output: the caller already
+has `docs-only` from `check-code.yml`, and a second docs classifier would be a
 second rule that drifts.
+
+**Output: `verdict`**, for a badge. One line of JSON, which
+`publish-badges.yml`'s `security-verdict` input takes as it is:
+
+| Value | When |
+| --- | --- |
+| the consumer's `.security/verdict.json`, `{"verdict","highest","canBlock"}` | the `Verdict` job ran and the merge wrote the file |
+| `{"verdict":"fail"}` | a scanner job failed (it reported nothing to the merge), or the `Verdict` step failed without writing the file |
+| `{"verdict":"disabled"}` | `security-policy.json` switches the gate off |
+| empty | the `Verdict` job did not run (the configuration job failed), or the consumer's merge writes no `verdict.json` |
+
+`scripts/security/verdict-output.sh` sets it, in a step of its own at the end of
+the `Verdict` job that runs even when the `Verdict` step failed on findings: that
+run is the one a badge most needs to show.
 
 **The three tiers.** A scanner runs where what it reads exists. The template
 calls this workflow three ways; the inputs say which scanners a tier allows,

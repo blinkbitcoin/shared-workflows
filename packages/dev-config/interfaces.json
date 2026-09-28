@@ -794,7 +794,9 @@
           "required": false
         }
       },
-      "outputs": []
+      "outputs": [
+        "verdict"
+      ]
     },
     "check-unit.yml": {
       "inputs": {
