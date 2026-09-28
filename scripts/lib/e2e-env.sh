@@ -8,10 +8,12 @@ WORKFLOWS_DEV_CLIENT="${WORKFLOWS_DEV_CLIENT:-true}"
 WORKFLOWS_MAESTRO_FLOWS="${WORKFLOWS_MAESTRO_FLOWS:-.maestro}"
 WORKFLOWS_SUITE_TIMEOUT_MINUTES="${WORKFLOWS_SUITE_TIMEOUT_MINUTES:-10}"
 WORKFLOWS_METRO_PORT="${WORKFLOWS_METRO_PORT:-8081}"
-# Host-side mock API the E2E setup hook starts (the template's mock GraphQL
-# server listens on 4000). Reversed into the emulator so the app's localhost
-# URLs work unchanged; empty disables the reverse entirely.
-WORKFLOWS_MOCK_API_PORT="${WORKFLOWS_MOCK_API_PORT-4000}"
+# Host-side mock API the E2E setup hook starts. Reversed into the emulator so
+# the app's localhost URLs work unchanged; empty disables the reverse entirely.
+# 8082 is the template's port base (8080) plus its mock-API offset, beside
+# Metro's 8081 at offset 1: the template derives every port from one base so
+# two checkouts can run side by side, and its mock server moved from 4000.
+WORKFLOWS_MOCK_API_PORT="${WORKFLOWS_MOCK_API_PORT-8082}"
 WORKFLOWS_OUT="${WORKFLOWS_OUT:-${RUNNER_TEMP:-/tmp}/workflows}"
 export WORKFLOWS_DEV_CLIENT WORKFLOWS_MAESTRO_FLOWS WORKFLOWS_SUITE_TIMEOUT_MINUTES WORKFLOWS_METRO_PORT WORKFLOWS_MOCK_API_PORT WORKFLOWS_OUT
 mkdir -p "$WORKFLOWS_OUT"
