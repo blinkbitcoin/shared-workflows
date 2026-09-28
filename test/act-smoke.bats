@@ -101,6 +101,10 @@ setup() {
   contains "$args" ".github/workflows/self-act-smoke.yml" || fail "args: $args"
   contains "$args" "ubuntu-latest=catthehacker/ubuntu:act-latest" || fail "args: $args"
   contains "$args" "--artifact-server-path" || fail "args: $args"
+  # Loopback, not act's default-route guess: behind a VPN that is a tunnel
+  # address the job cannot reach, and every upload times out.
+  grep -A1 -x -- '--artifact-server-addr' "$BATS_TEST_TMPDIR/act.args" | tail -1 | grep -qx '127.0.0.1' \
+    || fail "the artifact server is not on 127.0.0.1: $args"
   contains "$args" "GITHUB_TOKEN=fake-token" || fail "args: $args"
   contains "$args" "android=false" || fail "args: $args"
   # act's artifact server cannot take upload-artifact@v7 / download-artifact@v8
@@ -108,6 +112,16 @@ setup() {
   contains "$args" "actions/upload-artifact@v7=$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" || fail "args: $args"
   contains "$args" "actions/download-artifact@v8=$WORKFLOWS_ACT_CACHE/download-artifact-v4.3.0" || fail "args: $args"
   contains "$args" "repository=blinkbitcoin/react-native-mobile-template" || fail "args: $args"
+}
+
+@test "WORKFLOWS_ACT_ARTIFACT_ADDR moves the artifact server, and the log says where it is" {
+  cd "$work"
+  git push -q origin feature
+  WORKFLOWS_ACT_ARTIFACT_ADDR=192.0.2.10 run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  grep -A1 -x -- '--artifact-server-addr' "$BATS_TEST_TMPDIR/act.args" | tail -1 | grep -qx '192.0.2.10' \
+    || fail "the override did not reach act: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  contains "$output" "artifacts at 192.0.2.10" || fail "the address was not logged: $output"
 }
 
 @test "a failed fetch of a substitute action stops the smoke, and leaves no half-cloned cache" {
