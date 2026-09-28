@@ -179,15 +179,25 @@ change to `build-prepare.yml` or `build-android.yml` goes out, run the
 Linux half of a consumer's internal release here with [nektos/act]:
 
 ```sh
-make smoke-local           # Prepare, against the template at main (~2 min)
+make smoke-local           # Prepare, against the template at main
 make smoke-local-android   # Prepare, then the unsigned Android build (much longer)
 ```
 
+Allow a quarter of an hour: Setup installs every pinned tool into a fresh
+container on each run (15 minutes of a 16-minute Prepare on an arm64 Mac).
 It needs Docker running and the current branch **pushed**: build-prepare checks
 this repository out into `.workflows` from GitHub at the local HEAD, so the
 working tree itself is not what runs, the pushed commit is. The script refuses
 an unpushed or detached HEAD rather than letting the job fail inside act.
 `WORKFLOWS_SMOKE_REPOSITORY` and `WORKFLOWS_SMOKE_REF` pick another consumer.
+
+The jobs are Linux containers, so a Mac runs them too (arm64 natively; tested
+with OrbStack). act's artifact server listens on `127.0.0.1`, which the job
+reaches over the host network act gives it. act would otherwise pick the host's
+default-route address, and behind a VPN that is the tunnel's own address: the
+`release-meta` upload then times out after every step before it has passed.
+A Docker that cannot reach the host's loopback from a host-network container
+takes another address through `WORKFLOWS_ACT_ARTIFACT_ADDR`.
 
 What it shows: the steps of the Linux jobs, in order, with the real scripts.
 What it cannot show: the token a called workflow really receives (act hands
