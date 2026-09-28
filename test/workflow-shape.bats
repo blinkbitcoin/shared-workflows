@@ -459,6 +459,31 @@ lane_step_count() {
   done
 }
 
+# A promotion tier builds nothing, so a store with no promote endpoint takes
+# its bundle from the release. The download has to land where the artifacts
+# land (the lane reads that one directory), come after them and after Setup
+# (it runs a $WORKFLOWS_DIR script), and happen only when asked for.
+@test "publish-store downloads release assets into the artifacts' directory, after them, only when asked" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/publish-store.yml"
+  for input in release-assets release-tag; do
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\".default" "$f")" = "" ] || fail "$input does not default to empty"
+  done
+  step='[.jobs.lane.steps[] | select(.name == "Download release assets")][0]'
+  [ "$(yq -r "$step.if" "$f")" = "\${{ inputs.release-assets != '' }}" ] || fail "the release download is not gated on release-assets"
+  [ "$(yq -r "$step.env.RELEASE_TAG" "$f")" = '${{ inputs.release-tag }}' ] || fail "the step does not read release-tag"
+  [ "$(yq -r "$step.env.RELEASE_ASSETS" "$f")" = '${{ inputs.release-assets }}' ] || fail "the step does not read release-assets"
+  contains "$(yq -r "$step.run" "$f")" '"$WORKFLOWS_ASSETS_DIR"' || fail "the release assets do not land in WORKFLOWS_ASSETS_DIR"
+  names="$(yq -r '.jobs.lane.steps[].name' "$f")"
+  setup_i="$(grep -nx 'Setup' <<<"$names" | cut -d: -f1)"
+  artifacts_i="$(grep -nx 'Download artifacts' <<<"$names" | cut -d: -f1)"
+  release_i="$(grep -nx 'Download release assets' <<<"$names" | cut -d: -f1)"
+  lane_i="$(grep -nx 'Fastlane lane' <<<"$names" | cut -d: -f1)"
+  [ -n "$setup_i" ] && [ -n "$artifacts_i" ] && [ -n "$release_i" ] && [ -n "$lane_i" ] || fail "a step is missing: $names"
+  [ "$setup_i" -lt "$release_i" ] && [ "$artifacts_i" -lt "$release_i" ] && [ "$release_i" -lt "$lane_i" ] \
+    || fail "the release download is out of order: $names"
+}
+
 # notes-text is the one way a caller hands publish-github-release notes it
 # composed itself, without a job to upload them as an artifact. It has to reach
 # the script, where it wins over the notes file.
