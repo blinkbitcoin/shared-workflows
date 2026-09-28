@@ -1,0 +1,73 @@
+name: Promotion Retry
+# The second line behind build-prepare.yml's green gate. The gate waits for the
+# gated build and, with require-green-dispatch, starts a missing or red one
+# once; what it cannot fix is a promotion that timed out waiting, or whose
+# dispatched build also failed and was later re-run green. The promotion was
+# dispatched exactly once, so nothing starts it again. The caller triggers this
+# on `workflow_run: [completed]` for the build workflow, gates the job on the
+# build's conclusion being `success`, and grants `actions: write`: it re-runs
+# the failed jobs of the promotion's blocked run for the same commit.
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Repository whose promotion run to re-run (defaults to the caller's repository)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref (unused by this workflow, which checks out no consumer; carried for input-set consistency across the family)
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for this workflow's job
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'v1'
+      workflow:
+        description: The promotion's workflow file in the caller's repository (e.g. cd-beta.yml), whose blocked run for head-sha is re-run
+        type: string
+        required: true
+      head-sha:
+        description: The commit whose promotion to retry - the build's head commit, `github.event.workflow_run.head_sha` in the caller's listener
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  retry:
+    name: Retry
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # `gh run rerun` writes to the Actions API.
+      actions: write
+    steps:
+      # No consumer checkout and no Setup: the script only calls the GitHub API,
+      # so it is reached through the plain .workflows/ path, as pr-closed.yml's
+      # cancel job reaches cancel-runs.sh.
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Re-run the promotion's failed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ inputs.repository || github.repository }}
+          WORKFLOW: ${{ inputs.workflow }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+        run: bash ".workflows/scripts/release/rerun-blocked.sh"
