@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.7.0...dev-config-v0.8.0) (2026-09-28)
+
+
+### Features
+
+* **ci:** publish a Security badge from check-security.yml's verdict ([#115](https://github.com/blinkbitcoin/shared-workflows/issues/115)) ([5586a23](https://github.com/blinkbitcoin/shared-workflows/commit/5586a23892557a3983342ea5adb260e3be0361ec))
+
 ## [0.7.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.6.0...dev-config-v0.7.0) (2026-09-28)
 
 
