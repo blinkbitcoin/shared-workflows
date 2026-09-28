@@ -140,12 +140,13 @@ on:
       verdict:
         description: >-
           The security verdict as one line of JSON, {"verdict","highest","canBlock"}, for a badge.
-          {"verdict":"disabled"} when security-policy.json switches the gate off, {"verdict":"fail"}
-          when a scanner crashed, empty when the verdict job did not run (the configuration job failed, or the
-          caller skipped the gate)
+          {"verdict":"disabled"} when security-policy.json switches the gate off, {"verdict":"fail"} when a
+          scanner crashed, the Verdict job failed before its verdict, or the configuration job failed (it
+          writes every output or none, so an empty enabled means it failed)
         value: >-
           ${{ jobs.verdict.outputs.verdict
           || (jobs.config.outputs.enabled == 'false' && '{"verdict":"disabled"}')
+          || (jobs.config.outputs.enabled == '' && '{"verdict":"fail"}')
           || '' }}
 permissions:
   contents: read
@@ -789,4 +790,6 @@ jobs:
         env:
           SCANNER_FAILED: ${{ contains(needs.*.result, 'failure') }}
           VERDICT_OUTCOME: ${{ steps.verdict.outcome }}
-        run: bash "$WORKFLOWS_DIR/scripts/security/verdict-output.sh"
+        # .workflows/, not $WORKFLOWS_DIR: Setup exports that, and this step
+        # must still report fail when Setup is what failed.
+        run: bash ".workflows/scripts/security/verdict-output.sh"

@@ -1132,13 +1132,15 @@ second rule that drifts.
 | Value | When |
 | --- | --- |
 | the consumer's `.security/verdict.json`, `{"verdict","highest","canBlock"}` | the `Verdict` job ran and the merge wrote the file |
-| `{"verdict":"fail"}` | a scanner job failed (it reported nothing to the merge), or the `Verdict` step failed without writing the file |
+| `{"verdict":"fail"}` | a scanner job failed (it reported nothing to the merge); the `Verdict` step failed, or never ran<br>because a step before it failed, without writing the file; or the configuration job failed (a broken `security-policy.json`) |
 | `{"verdict":"disabled"}` | `security-policy.json` switches the gate off |
-| empty | the `Verdict` job did not run (the configuration job failed), or the consumer's merge writes no `verdict.json` |
+| empty | the consumer's merge succeeded but writes no `verdict.json` (it predates the file) |
 
 `scripts/security/verdict-output.sh` sets it, in a step of its own at the end of
 the `Verdict` job that runs even when the `Verdict` step failed on findings: that
-run is the one a badge most needs to show.
+run is the one a badge most needs to show. It is called by its `.workflows/`
+path rather than `$WORKFLOWS_DIR`, so it still reports `fail` when Setup is what
+failed.
 
 **The three tiers.** A scanner runs where what it reads exists. The template
 calls this workflow three ways; the inputs say which scanners a tier allows,

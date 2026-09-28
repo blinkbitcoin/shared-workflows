@@ -47,6 +47,12 @@ verdict_file() { printf '%s\n' "$1" > "$GITHUB_WORKSPACE/.security/verdict.json"
   [ "$(cat "$GITHUB_OUTPUT")" = 'verdict={"verdict":"fail"}' ] || fail "wrong output: $(cat "$GITHUB_OUTPUT")"
 }
 
+@test "a Verdict step that never ran, because an earlier step failed, reads as fail" {
+  SCANNER_FAILED=false VERDICT_OUTCOME=skipped run bash "$REPO_ROOT/scripts/security/verdict-output.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(cat "$GITHUB_OUTPUT")" = 'verdict={"verdict":"fail"}' ] || fail "wrong output: $(cat "$GITHUB_OUTPUT")"
+}
+
 @test "a consumer that writes no verdict file gets no output, not a false fail" {
   SCANNER_FAILED=false VERDICT_OUTCOME=success run bash "$REPO_ROOT/scripts/security/verdict-output.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"

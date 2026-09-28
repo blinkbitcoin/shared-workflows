@@ -1170,8 +1170,10 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   step() { yq -r ".jobs.verdict.steps[] | select(.name == \"Verdict output\") | $1" "$f"; }
-  [ "$(step '.run')" = 'bash "$WORKFLOWS_DIR/scripts/security/verdict-output.sh"' ] \
-    || fail "no Verdict output step running verdict-output.sh: $(step '.run')"
+  # .workflows/, not $WORKFLOWS_DIR: Setup exports that, and the output step
+  # has to run after a failed Setup too.
+  [ "$(step '.run')" = 'bash ".workflows/scripts/security/verdict-output.sh"' ] \
+    || fail "no Verdict output step running verdict-output.sh without Setup: $(step '.run')"
   [ "$(step '.if')" = '${{ !cancelled() }}' ] \
     || fail "the output step must run after a Verdict step that failed on findings: $(step '.if')"
   [ "$(step '.env.SCANNER_FAILED')" = "\${{ contains(needs.*.result, 'failure') }}" ] \
@@ -1185,6 +1187,8 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
   contains "$value" 'jobs.verdict.outputs.verdict' || fail "the workflow output does not read the verdict job: $value"
   contains "$value" "jobs.config.outputs.enabled == 'false' && '{\"verdict\":\"disabled\"}'" \
     || fail "a gate switched off in security-policy.json does not read as disabled: $value"
+  contains "$value" "jobs.config.outputs.enabled == '' && '{\"verdict\":\"fail\"}'" \
+    || fail "a failed configuration job (a broken security-policy.json) does not read as fail: $value"
 }
 
 # label-sarif.sh carries the job names as a map, because a step cannot read its

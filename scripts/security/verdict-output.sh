@@ -11,14 +11,17 @@
 #   a scanner job failed          -> {"verdict":"fail"}: a crashed scanner
 #                                    reported nothing, so the merge could read pass
 #   the verdict file exists       -> its one line, as it is
-#   the Verdict step failed       -> {"verdict":"fail"}: no SARIF, no node, or the
-#                                    merge crashed; not a clean run
-#   otherwise                     -> no output: this consumer's verdict.mjs
+#   the Verdict step did not      -> {"verdict":"fail"}: no SARIF, no node, the merge
+#   succeed                          crashed, or an earlier step failed and it never
+#                                    ran (skipped); not a clean run
+#   it succeeded, with no file    -> no output: this consumer's verdict.mjs
 #                                    predates verdict.json, and saying "fail" would lie
 #
 # Env: SCANNER_FAILED (true|false), VERDICT_OUTCOME (the Verdict step's
 # outcome), SECURITY_DIR (default .security).
-# CI: the "Verdict output" step of check-security.yml's verdict job.
+# CI: the "Verdict output" step of check-security.yml's verdict job, run by its
+# .workflows/ path because it must still run when Setup (which exports
+# WORKFLOWS_DIR) failed.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 
@@ -33,7 +36,7 @@ elif [ -f "$file" ]; then
   # One line by construction (verdict.mjs); tr makes sure of it, because a
   # second line would end the output early.
   printf 'verdict=%s\n' "$(tr -d '\r\n' < "$file")" >> "$sink"
-elif [ "${VERDICT_OUTCOME:-}" = failure ]; then
+elif [ "${VERDICT_OUTCOME:-}" != success ]; then
   printf 'verdict={"verdict":"fail"}\n' >> "$sink"
 else
   log "no $file: this repository's verdict.mjs writes none, so there is no verdict output"
