@@ -50,6 +50,10 @@ on:
         description: File inside the notes artifact to use as the body
         type: string
         default: 'notes.md'
+      notes-text:
+        description: The notes as text, instead of `notes-file` from `notes-artifact` (in `append` mode, the section's body) - for a caller whose notes are composed from its own inputs
+        type: string
+        default: ''
       assets-artifacts:
         description: Artifact name or glob pattern whose files are attached to the release (empty attaches nothing); all matches are merged into one directory
         type: string
@@ -174,5 +178,6 @@ jobs:
           FROM_TAG: ${{ inputs.from-tag }}
           DELETE_SOURCE: ${{ inputs.delete-source }}
           NOTES_FILE: ${{ env.WORKFLOWS_ASSETS_DIR }}/${{ inputs.notes-file }}
+          NOTES_TEXT: ${{ inputs.notes-text }}
           BODY_NOTE: ${{ inputs.body-note }}
         run: bash ".workflows/scripts/release/release-assets.sh" "$MODE"

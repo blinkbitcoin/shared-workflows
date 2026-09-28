@@ -32,7 +32,7 @@
 # notes on the beta release, and handed that same build-info to the OTA
 # fingerprint gate downstream as its baseline.
 #
-# Env: TAG (required), TITLE, TARGET_SHA, NOTES_FILE, APPEND_TITLE, FROM_TAG,
+# Env: TAG (required), TITLE, TARGET_SHA, NOTES_FILE, NOTES_TEXT, APPEND_TITLE, FROM_TAG,
 #      DELETE_SOURCE, WORKFLOWS_ASSETS_DIR (default $WORKFLOWS_OUT/assets), GH_TOKEN,
 #      GH_REPO.
 set -euo pipefail
@@ -171,6 +171,14 @@ upload_assets() {
 # argument at all (an empty quoted "" would become a literal empty argument).
 title_args=()
 [ -z "${TITLE:-}" ] || title_args=(--title "$TITLE")
+# $NOTES_TEXT is notes given as text rather than as a file from an artifact. A
+# caller whose section is a line it composes from its own inputs - a production
+# stage: the action, the platforms, the rollout - otherwise needs a whole job to
+# upload that line as an artifact first. It wins over $NOTES_FILE.
+if [ -n "${NOTES_TEXT:-}" ]; then
+  NOTES_FILE="${RUNNER_TEMP:-/tmp}/workflows-release-notes-text.md"
+  printf '%s\n' "$NOTES_TEXT" > "$NOTES_FILE"
+fi
 notes_args=()
 if [ -n "${NOTES_FILE:-}" ] && [ -f "$NOTES_FILE" ]; then
   notes_args=(--notes-file "$NOTES_FILE")
@@ -317,7 +325,7 @@ case "$mode" in
     ;;
   append)
     release_exists || die "release $tag does not exist - nothing to append to"
-    [ "${#notes_args[@]}" -eq 2 ] || die "append needs NOTES_FILE pointing at an existing section file"
+    [ "${#notes_args[@]}" -eq 2 ] || die "append needs NOTES_FILE pointing at an existing section file, or NOTES_TEXT"
     title="${APPEND_TITLE:-Update}"
     # Re-running a failed job is the ordinary way an Actions failure is
     # recovered (it is why the asset upload uses --clobber), so append has to be
