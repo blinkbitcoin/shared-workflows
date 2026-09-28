@@ -52,6 +52,51 @@ commit_file() {
   has_line "docs-only=true" || fail "expected docs-only=true, got: $output"
 }
 
+@test "docs-only=false when only an LLM prompt changed, though it ends in .md" {
+  commit_file "README.md"
+  base=$(git -C "$repo" rev-parse HEAD)
+  commit_file "security-review.prompt.md"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  has_line "docs-only=false" || fail "a prompt-only change read as docs-only: $output"
+  # The suites still do not read a prompt, so none of them runs for it.
+  has_line "unit-changed=false" || fail "a prompt-only change ran the unit suite: $output"
+  has_line "e2e-changed=false" || fail "a prompt-only change ran the E2E suite: $output"
+  has_line "web-changed=false" || fail "a prompt-only change ran the web build: $output"
+}
+
+@test "docs-only=false when a prompt changed alongside docs, in any directory" {
+  commit_file "other.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  commit_file "docs/x.md"
+  commit_file "config/release-notes.prompt.md"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  has_line "docs-only=false" || fail "docs plus a prompt read as docs-only: $output"
+}
+
+@test "a replaced DOCS_GLOBS still never counts a prompt as docs" {
+  commit_file "other.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  commit_file "handbook/release-notes.prompt.md"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && DOCS_GLOBS='^handbook/' run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  has_line "docs-only=false" || fail "a prompt under a replaced docs pattern read as docs-only: $output"
+}
+
+@test "a markdown file that merely mentions prompt is still docs" {
+  commit_file "other.txt"
+  base=$(git -C "$repo" rev-parse HEAD)
+  commit_file "docs/prompt.md"
+  head=$(git -C "$repo" rev-parse HEAD)
+  cd "$repo" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  has_line "docs-only=true" || fail "docs/prompt.md stopped counting as docs: $output"
+}
+
 @test "docs-only=false when a workflow file changed" {
   commit_file "README.md"
   base=$(git -C "$repo" rev-parse HEAD)
