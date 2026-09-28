@@ -4,13 +4,16 @@
 // a named group, and where a group has a display name, the workflow's `name:`
 // says the same thing its filename does.
 //
-//   check-workflow-names --group PREFIX[=DISPLAY] ... [--root DIR]
+//   check-workflow-names --group PREFIX[=DISPLAY] ... [--root DIR] [--min-files N]
 //
 // `--group ci=CI --group cd=CD` is the template's rule: `ci.yml` shows as `CI`,
 // `ci-*.yml` as `CI / ...`, `cd-*.yml` as `CD / ...`. `--group check` alone
 // only requires the prefix (`check.yml` or `check-*.yml`), which is
 // shared-workflows' rule for its own stages. Files are spelled `.yml`: GitHub
 // reads `.yaml` too, but one spelling keeps a glob and a grep honest.
+//
+// --min-files N fails a directory holding fewer than N workflow files (default
+// 1), so a root that points somewhere else fails instead of passing.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
@@ -26,9 +29,10 @@ export function displayName(text) {
     : null;
 }
 
-/** Each `--group PREFIX[=DISPLAY]` and `--root DIR`, as `{ root, groups }`. */
+/** Each `--group PREFIX[=DISPLAY]`, `--root DIR` and `--min-files N`, as `{ root, groups, minFiles }`. */
 export function parseArgs(argv, cwd) {
   let root = cwd;
+  let minFiles = 1;
   const groups = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -36,10 +40,11 @@ export function parseArgs(argv, cwd) {
     const group = /^([a-z0-9]+)(?:=(\S.*))?$/.exec(value ?? '');
     if (arg === '--root' && value) root = path.resolve(cwd, value);
     else if (arg === '--group' && group) groups.push({ prefix: group[1], display: group[2] ?? null });
-    else throw new Error(`unexpected ${[arg, value].filter(Boolean).join(' ')}: pass --group PREFIX[=DISPLAY] and --root DIR`);
+    else if (arg === '--min-files' && /^[1-9][0-9]*$/.test(value ?? '')) minFiles = Number(value);
+    else throw new Error(`unexpected ${[arg, value].filter(Boolean).join(' ')}: pass --group PREFIX[=DISPLAY], --root DIR and --min-files N`);
   }
   if (groups.length === 0) throw new Error('name at least one --group');
-  return { root, groups };
+  return { root, groups, minFiles };
 }
 
 /** Why each workflow does not fit a group, one sentence per file. */
@@ -54,7 +59,12 @@ export function problems(workflows, groups) {
     if (!group.display) continue;
     const name = displayName(text);
     const want = file === `${group.prefix}.yml` ? group.display : `${group.display} / ...`;
-    const fits = file === `${group.prefix}.yml` ? name === group.display : name?.startsWith(`${group.display} / `) && name.length > group.display.length + 3;
+    // Something other than blanks has to follow `DISPLAY / `: a quoted name can
+    // keep trailing spaces, and `"CI /  "` names nothing.
+    const fits =
+      file === `${group.prefix}.yml`
+        ? name === group.display
+        : name?.startsWith(`${group.display} / `) && name.slice(group.display.length + 3).trim() !== '';
     if (!fits) found.push(`${file} displays as ${name === null ? 'nothing (no top-level name:)' : `"${name}"`}, not "${want}"`);
   }
   return found;
@@ -90,6 +100,10 @@ export function main(
   // A directory that reads empty would pass every rule below.
   if (workflows.length === 0) {
     error(`workflow names: no workflow file in ${dir}`);
+    return 1;
+  }
+  if (workflows.length < options.minFiles) {
+    error(`workflow names: ${workflows.length} workflow file(s) in ${dir}, fewer than --min-files ${options.minFiles}`);
     return 1;
   }
   const found = problems(workflows, options.groups);

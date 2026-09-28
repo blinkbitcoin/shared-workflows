@@ -10,7 +10,8 @@
 # each override, publishing once and not over an earlier step's value, no
 # GITHUB_ENV at all, the platform from an argument or from WORKFLOWS_PLATFORM and
 # its refusal, and every path through workflows_fingerprint: a value passed down,
-# JSON and bare-hash output, a failing CLI, output with no hash, no npx, no yq,
+# JSON and bare-hash output, a failing CLI, output with no hash or JSON that does
+# not parse, no npx, no node,
 # and a working directory that does not exist.
 
 load test_helper
@@ -275,11 +276,26 @@ android-passed" ] || fail "the passed-down values were not used: $output"
   contains "$output" "::error::missing command: npx" || fail "does not name the missing command: $output"
 }
 
-@test "JSON output with no yq on PATH names the missing command" {
+@test "JSON output with no node on PATH names the missing command" {
   stub_npx
   WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":"abc123"}' PATH="$(bare_path npx)" run release_env 'workflows_fingerprint ios'
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::missing command: yq" || fail "does not name the missing command: $output"
+  contains "$output" "::error::missing command: node" || fail "does not name the missing command: $output"
+}
+
+@test "JSON output that does not parse is fatal, not a stack trace" {
+  stub_npx
+  WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":' run release_env 'workflows_fingerprint ios'
+  [ "$status" -eq 1 ] || fail "a hash out of broken JSON must not be returned: $output"
+  contains "$output" "::error::could not read a fingerprint hash for ios" || fail "unexpected message: $output"
+  not_contains "$output" "SyntaxError" || fail "node's stack trace leaked: $output"
+}
+
+@test "a hash that is not a string reads as no hash" {
+  stub_npx
+  WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":42}' run release_env 'workflows_fingerprint ios'
+  [ "$status" -eq 1 ] || fail "a non-string hash must not be returned: $output"
+  contains "$output" "::error::could not read a fingerprint hash for ios" || fail "unexpected message: $output"
 }
 
 @test "a working directory that does not exist stops the fingerprint before the CLI runs" {

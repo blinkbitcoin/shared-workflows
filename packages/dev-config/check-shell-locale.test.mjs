@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { isShell, localePrefixes, main, scan } from './bin/check-shell-locale.mjs';
+import { isShell, localePrefixes, main, parseArgs, scan } from './bin/check-shell-locale.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./bin/check-shell-locale.mjs', import.meta.url));
 const roots = [];
@@ -101,6 +101,34 @@ test('main refuses a tree with no shell file, rather than passing by reading not
   const { err, io } = capture();
   assert.equal(main(['--root', 'x'], { ...io, cwd: '/repo', list: () => ['README.md'], read: () => '' }), 1);
   assert.deepEqual(err, ['shell locale: no shell file found under /repo/x; the file filter or the root is wrong']);
+});
+
+test('arguments: a root, a minimum file count, and anything else refused', () => {
+  assert.deepEqual(parseArgs([], '/repo'), { root: '/repo', minFiles: 1 });
+  assert.deepEqual(parseArgs(['--root', 'x', '--min-files', '10'], '/repo'), { root: '/repo/x', minFiles: 10 });
+  assert.throws(() => parseArgs(['--min-files', '0'], '/repo'), /unexpected --min-files 0/);
+  assert.throws(() => parseArgs(['--min-files', '1.5'], '/repo'), /unexpected --min-files 1\.5/);
+  assert.throws(() => parseArgs(['--min-files'], '/repo'), /unexpected --min-files:/);
+  assert.throws(() => parseArgs(['--nope', 'x'], '/repo'), /unexpected --nope x/);
+});
+
+test('main refuses bad arguments before it lists anything', () => {
+  const { err, io } = capture();
+  const list = () => {
+    throw new Error('listed anyway');
+  };
+  assert.equal(main(['--min-files', 'many'], { ...io, cwd: '/repo', list }), 1);
+  assert.deepEqual(err, ['shell locale: unexpected --min-files many: pass --root DIR and --min-files N (a whole number above 0)']);
+});
+
+test('--min-files fails a scan that read fewer shell files than it names, and passes one that read enough', () => {
+  const few = capture();
+  const two = { list: () => ['a.sh', 'b.sh'], read: () => 'env LC_ALL=C sort\n' };
+  assert.equal(main(['--min-files', '3'], { ...few.io, cwd: '/repo', ...two }), 1);
+  assert.deepEqual(few.err, ['shell locale: scanned 2 shell file(s) under /repo, fewer than --min-files 3; the file filter or the root is wrong']);
+  const enough = capture();
+  assert.equal(main(['--min-files', '2'], { ...enough.io, cwd: '/repo', ...two }), 0);
+  assert.deepEqual(enough.out, ['shell locale ok (2 shell files)']);
 });
 
 test('main reports a root git cannot list', () => {

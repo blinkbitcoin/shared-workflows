@@ -106,6 +106,104 @@ field() { node -e 'const i=require(process.argv[1]);const p=process.argv[2].spli
   [ ! -f "$DEST" ] || fail "wrote a build-info.json anyway"
 }
 
+# --- --standalone: a laptop, where no earlier step ran -------------------------
+
+# A fake npx standing in for the consumer's @expo/fingerprint bin: it records
+# its arguments and prints a JSON hash named after the platform it was asked for,
+# or fails when WORKFLOWS_TEST_FINGERPRINT_STATUS says so.
+stub_npx() {
+  STUB="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$STUB"
+  CALLS="$BATS_TEST_TMPDIR/npx-calls"
+  : > "$CALLS"
+  export WORKFLOWS_TEST_CALLS="$CALLS"
+  cat > "$STUB/npx" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$WORKFLOWS_TEST_CALLS"
+[ "${WORKFLOWS_TEST_FINGERPRINT_STATUS:-0}" = 0 ] || exit "$WORKFLOWS_TEST_FINGERPRINT_STATUS"
+printf '{"hash":"computed-%s"}' "${!#}"
+SH
+  chmod +x "$STUB/npx"
+  export PATH="$STUB:$PATH"
+}
+
+# The consumer as a git repository whose HEAD carries the tag v4.5.6.
+tagged_repo() {
+  git -C "$ROOT" init -q -b main
+  git -C "$ROOT" config user.email t@example.com
+  git -C "$ROOT" config user.name t
+  git -C "$ROOT" commit -q --allow-empty -m c
+  git -C "$ROOT" tag v4.5.6
+  unset RELEASE_PR_TITLE BUILD_NUMBER_OFFSET GITHUB_REF_NAME WORKFLOWS_RELEASE_SCOPE
+}
+
+@test "an unknown argument is fatal and names the one it accepts" {
+  APP_VERSION=1.2.3 APP_BUILD_NUMBER=1 run bash "$REPO_ROOT/scripts/release/build-info.sh" --stand-alone
+  [ "$status" -ne 0 ] || fail "accepted an unknown argument: $output"
+  contains "$output" "usage: build-info.sh [--standalone]" || fail "unexpected message: $output"
+  [ ! -f "$DEST" ] || fail "wrote a build-info.json anyway"
+}
+
+@test "--standalone resolves the version and computes both fingerprints when none is given" {
+  stub_npx
+  tagged_repo
+  WORKFLOWS_SHA=x run bash "$REPO_ROOT/scripts/release/build-info.sh" --standalone
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(field version)" = '"4.5.6"' ] || fail "the version was not resolved: $(cat "$DEST")"
+  # One first-parent commit plus the default offset of 1000.
+  [ "$(field buildNumber)" = '1001' ] || fail "the build number was not resolved: $(cat "$DEST")"
+  [ "$(field fingerprint.ios)" = '"computed-ios"' ] || fail "the ios fingerprint was not computed: $(cat "$DEST")"
+  [ "$(field fingerprint.android)" = '"computed-android"' ] || fail "the android fingerprint was not computed: $(cat "$DEST")"
+}
+
+@test "--standalone keeps every value the environment already has, and computes nothing" {
+  stub_npx
+  APP_VERSION=1.2.3 APP_BUILD_NUMBER=7 FINGERPRINT_IOS=fp-i FINGERPRINT_ANDROID=fp-a WORKFLOWS_SHA=x \
+    run bash "$REPO_ROOT/scripts/release/build-info.sh" --standalone
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(field version)" = '"1.2.3"' ] || fail "the given version was replaced: $(cat "$DEST")"
+  [ "$(field buildNumber)" = '7' ] || fail "the given build number was replaced: $(cat "$DEST")"
+  [ "$(field fingerprint.ios)" = '"fp-i"' ] || fail "the given ios fingerprint was replaced: $(cat "$DEST")"
+  [ ! -s "$CALLS" ] || fail "the fingerprint CLI ran anyway: $(cat "$CALLS")"
+}
+
+@test "--standalone resolves the build number alone when only the version is given" {
+  stub_npx
+  tagged_repo
+  APP_VERSION=9.9.9 FINGERPRINT_IOS=fp-i FINGERPRINT_ANDROID=fp-a WORKFLOWS_SHA=x \
+    run bash "$REPO_ROOT/scripts/release/build-info.sh" --standalone
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(field version)" = '"9.9.9"' ] || fail "the given version was replaced: $(cat "$DEST")"
+  [ "$(field buildNumber)" = '1001' ] || fail "the build number was not resolved: $(cat "$DEST")"
+}
+
+@test "--standalone stops when the version cannot be resolved" {
+  stub_npx
+  # No git repository at all: resolve-version.sh cannot count commits.
+  WORKFLOWS_SHA=x run bash "$REPO_ROOT/scripts/release/build-info.sh" --standalone
+  [ "$status" -ne 0 ] || fail "wrote a build-info without a version: $output"
+  contains "$output" "resolve-version.sh failed" || fail "unexpected message: $output"
+  [ ! -f "$DEST" ] || fail "wrote a build-info.json anyway"
+}
+
+@test "--standalone stops when a fingerprint cannot be computed" {
+  stub_npx
+  WORKFLOWS_TEST_FINGERPRINT_STATUS=1 APP_VERSION=1.2.3 APP_BUILD_NUMBER=1 WORKFLOWS_SHA=x \
+    run bash "$REPO_ROOT/scripts/release/build-info.sh" --standalone
+  [ "$status" -ne 0 ] || fail "wrote a build-info without a fingerprint: $output"
+  contains "$output" "fingerprint:generate failed for ios" || fail "unexpected message: $output"
+  [ ! -f "$DEST" ] || fail "wrote a build-info.json anyway"
+}
+
+@test "--standalone stops when only the android fingerprint cannot be computed" {
+  stub_npx
+  WORKFLOWS_TEST_FINGERPRINT_STATUS=1 APP_VERSION=1.2.3 APP_BUILD_NUMBER=1 FINGERPRINT_IOS=fp-i WORKFLOWS_SHA=x \
+    run bash "$REPO_ROOT/scripts/release/build-info.sh" --standalone
+  [ "$status" -ne 0 ] || fail "wrote a build-info without an android fingerprint: $output"
+  contains "$output" "fingerprint:generate failed for android" || fail "unexpected message: $output"
+  [ ! -f "$DEST" ] || fail "wrote a build-info.json anyway"
+}
+
 # --- parity with the consumer's own copy ------------------------------------
 #
 # TWO scripts write build-info.json: this one (CI, with the fingerprints already

@@ -52,8 +52,11 @@ test('arguments: a root, allowances with their reasons, and anything else refuse
   assert.deepEqual(parseArgs(['--root', 'sub', '--allow', 'gen-graphql=what it generates'], '/repo'), {
     root: '/repo/sub',
     allowed: new Map([['gen-graphql', 'what it generates']]),
+    requireMise: false,
   });
-  assert.deepEqual(parseArgs([], '/repo'), { root: '/repo', allowed: new Map() });
+  assert.deepEqual(parseArgs([], '/repo'), { root: '/repo', allowed: new Map(), requireMise: false });
+  // A flag with no value: the argument after it is read on its own.
+  assert.deepEqual(parseArgs(['--require-mise', '--root', 'sub'], '/repo'), { root: '/repo/sub', allowed: new Map(), requireMise: true });
   assert.throws(() => parseArgs(['--allow', 'gen-graphql'], '/repo'), /unexpected --allow gen-graphql/);
   assert.throws(() => parseArgs(['--allow', 'gen-graphql= '], '/repo'), /unexpected --allow/);
   assert.throws(() => parseArgs(['--allow'], '/repo'), /unexpected --allow:/);
@@ -108,7 +111,30 @@ test('main refuses no Makefile, a package.json that does not parse, and bad argu
   assert.match(broken.err[0], /^make target names: \/r\/package\.json is not valid JSON: /);
   const bad = capture();
   assert.equal(main(['--nope', 'x'], { ...bad.io, cwd: '/r', read: tree({}) }), 1);
-  assert.deepEqual(bad.err, ['make target names: unexpected --nope x: pass --root DIR and --allow TARGET=REASON']);
+  assert.deepEqual(bad.err, ['make target names: unexpected --nope x: pass --root DIR, --allow TARGET=REASON and --require-mise']);
+});
+
+test('--require-mise fails a repository with no .mise.toml, which otherwise reads as no tools', () => {
+  const { out, err, io } = capture();
+  assert.equal(main(['--require-mise'], { ...io, cwd: '/r', read: tree({ Makefile: MAKEFILE }) }), 1);
+  assert.deepEqual(out, []);
+  assert.deepEqual(err, ['make target names: --require-mise, and /r/.mise.toml is missing or pins no tool']);
+});
+
+test('--require-mise fails a .mise.toml that pins no tool', () => {
+  const { err, io } = capture();
+  assert.equal(main(['--require-mise'], { ...io, cwd: '/r', read: tree({ Makefile: MAKEFILE, '.mise.toml': '[env]\nA = "1"\n' }) }), 1);
+  assert.deepEqual(err, ['make target names: --require-mise, and /r/.mise.toml is missing or pins no tool']);
+});
+
+test('--require-mise passes when .mise.toml pins tools, and still checks the targets', () => {
+  const clean = capture();
+  assert.equal(main(['--require-mise'], { ...clean.io, cwd: '/r', read: tree({ Makefile: MAKEFILE, '.mise.toml': MISE }) }), 0);
+  assert.deepEqual(clean.out, ['make target names ok (3 targets, 1 tools)']);
+  const named = capture();
+  const read = tree({ Makefile: `${MAKEFILE}check-maestro: ## Flows\n\ttrue\n`, '.mise.toml': MISE });
+  assert.equal(main(['--require-mise'], { ...named.io, cwd: '/r', read }), 1);
+  assert.match(named.err[0], /^check-maestro \(maestro\) is named after a tool/);
 });
 
 test('as a command it reads the files of --root', () => {

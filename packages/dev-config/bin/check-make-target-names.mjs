@@ -4,7 +4,7 @@
 // nothing until they already know the tool; it belongs in the target's `##`
 // description, where `make help` shows it beside the name.
 //
-//   check-make-target-names [--root DIR] [--allow TARGET=REASON ...]
+//   check-make-target-names [--root DIR] [--allow TARGET=REASON ...] [--require-mise]
 //
 // The tools are the ones the repository pins in `.mise.toml` and the unscoped
 // packages in its `package.json` (either may be absent). A scoped package is
@@ -13,6 +13,10 @@
 // tool it names, so it is spared. Any other exception is an --allow with its
 // reason, and an allowance that no longer applies is itself a failure, so the
 // list cannot rot.
+//
+// --require-mise fails when `.mise.toml` is missing or pins no tool. Without it a
+// missing file reads as no tools, which is right for a repository without mise
+// and wrong for one that has it: every tool-named target would then pass.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
@@ -54,20 +58,25 @@ export function namedAfterTools(targets, tools, allowed) {
     });
 }
 
-/** `--root DIR` and each `--allow TARGET=REASON`, as `{ root, allowed }`. */
+/** `--root DIR`, each `--allow TARGET=REASON` and `--require-mise`, as `{ root, allowed, requireMise }`. */
 export function parseArgs(argv, cwd) {
   let root = cwd;
+  let requireMise = false;
   const allowed = new Map();
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
+    if (arg === '--require-mise') {
+      requireMise = true;
+      continue;
+    }
     const value = argv[++i];
     if (arg === '--root' && value) root = path.resolve(cwd, value);
     else if (arg === '--allow' && /^[a-zA-Z0-9_-]+=\s*\S/.test(value ?? '')) {
       const at = value.indexOf('=');
       allowed.set(value.slice(0, at), value.slice(at + 1).trim());
-    } else throw new Error(`unexpected ${[arg, value].filter(Boolean).join(' ')}: pass --root DIR and --allow TARGET=REASON`);
+    } else throw new Error(`unexpected ${[arg, value].filter(Boolean).join(' ')}: pass --root DIR, --allow TARGET=REASON and --require-mise`);
   }
-  return { root, allowed };
+  return { root, allowed, requireMise };
 }
 
 const readOrNull = (file) => {
@@ -90,7 +99,7 @@ export function main(
     error(`make target names: ${e.message}`);
     return 1;
   }
-  const { root, allowed } = options;
+  const { root, allowed, requireMise } = options;
   const makefile = read(path.join(root, 'Makefile'));
   if (makefile === null) {
     error(`make target names: no Makefile in ${root}`);
@@ -107,7 +116,12 @@ export function main(
       return 1;
     }
   }
-  const tools = [...miseTools(read(path.join(root, '.mise.toml')) ?? ''), ...packageNames(pkg)];
+  const mise = miseTools(read(path.join(root, '.mise.toml')) ?? '');
+  if (requireMise && mise.length === 0) {
+    error(`make target names: --require-mise, and ${path.join(root, '.mise.toml')} is missing or pins no tool`);
+    return 1;
+  }
+  const tools = [...mise, ...packageNames(pkg)];
   const problems = namedAfterTools(targets, tools, allowed).map(
     (found) => `${found} is named after a tool: name it for what it checks or does, and put the tool in its ## description`,
   );

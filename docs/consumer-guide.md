@@ -2129,10 +2129,12 @@ The lanes themselves read: `APP_VERSION`, `APP_BUILD_NUMBER`,
 
 Written by `scripts/release/build-info.sh`. Adding a key is fine; renaming one
 is a breaking change for the OTA gate and the store lanes alike. `expoSdk` and
-`reactNative` have their range operator stripped (`^54.0.0` is written as
-`54.0.0`) so the file is byte-comparable with the one the template's own
-`build-info.sh` produces. `stage` falls back to `development` when `WORKFLOWS_STAGE`
-is unset, matching the template; `build-prepare.yml`'s `stage` input defaults to
+`reactNative` are the installed versions, read from each package's own
+`package.json`, not the ranges your `package.json` declares; a package that is
+not installed is `null`. On a laptop, `build-info.sh --standalone` from
+`@blinkbitcoin/dev-config` writes the same record, resolving the version and
+computing the fingerprints itself. `stage` falls back to `development` when
+`WORKFLOWS_STAGE` is unset; `build-prepare.yml`'s `stage` input defaults to
 `internal` because a prepare run is by definition producing a build for at least
 the internal track.
 

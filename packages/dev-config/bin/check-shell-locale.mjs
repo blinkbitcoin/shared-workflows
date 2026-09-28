@@ -3,7 +3,11 @@
 // (`LC_ALL=C grep ...`); it hands the locale over with `env` instead
 // (`env LC_ALL=C grep ...`).
 //
-//   check-shell-locale [--root DIR]
+//   check-shell-locale [--root DIR] [--min-files N]
+//
+// --min-files N fails a run that scanned fewer than N shell files (default 1):
+// a repository that knows it has dozens can say so, and a file filter or root
+// that quietly lost most of them then fails instead of passing on the rest.
 //
 // Why a rule and not a style preference: with the prefix, bash sets the
 // variable for the one command and restores it afterwards, and each of those is
@@ -91,13 +95,34 @@ export function scan(root, { list = trackedFiles, read = readText } = {}) {
   return { scanned, offenders };
 }
 
+/** `--root DIR` and `--min-files N`, as `{ root, minFiles }`. */
+export function parseArgs(argv, cwd) {
+  let root = cwd;
+  let minFiles = 1;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    const value = argv[++i];
+    // A bare --root is the working directory, as it always was here.
+    if (arg === '--root') root = path.resolve(cwd, value ?? '');
+    else if (arg === '--min-files' && /^[1-9][0-9]*$/.test(value ?? '')) minFiles = Number(value);
+    else throw new Error(`unexpected ${[arg, value].filter(Boolean).join(' ')}: pass --root DIR and --min-files N (a whole number above 0)`);
+  }
+  return { root, minFiles };
+}
+
 /** Command-line entry; returns the exit code. */
 export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), list, read } = {},
 ) {
-  const at = argv.indexOf('--root');
-  const root = at === -1 ? cwd : path.resolve(cwd, argv[at + 1] ?? '');
+  let options;
+  try {
+    options = parseArgs(argv, cwd);
+  } catch (e) {
+    error(`shell locale: ${e.message}`);
+    return 1;
+  }
+  const { root, minFiles } = options;
   let result;
   try {
     result = scan(root, { list, read });
@@ -108,6 +133,10 @@ export function main(
   // A guard that silently scanned nothing would pass forever.
   if (result.scanned === 0) {
     error(`shell locale: no shell file found under ${root}; the file filter or the root is wrong`);
+    return 1;
+  }
+  if (result.scanned < minFiles) {
+    error(`shell locale: scanned ${result.scanned} shell file(s) under ${root}, fewer than --min-files ${minFiles}; the file filter or the root is wrong`);
     return 1;
   }
   if (result.offenders.length > 0) {
