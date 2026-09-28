@@ -649,6 +649,10 @@
           "type": "string",
           "required": false
         },
+        "maestro-sha256": {
+          "type": "string",
+          "required": false
+        },
         "maestro-flows": {
           "type": "string",
           "required": false

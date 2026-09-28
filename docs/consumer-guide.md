@@ -804,6 +804,7 @@ No outputs. Secrets: `consumer-token` (optional).
 | `xcode` | `''` | Xcode version to select (folded into the iOS cache key) |
 | `android-api-level` | `34` | Emulator + system image API level |
 | `maestro-version` | `2.10.0` | Maestro CLI version (kept equal to `scripts/lib/versions.sh`) |
+| `maestro-sha256` | `''` | SHA-256 of `maestro-version`'s release archive. Empty for the pinned version, whose checksum `scripts/lib/versions.sh` holds; required for any other, because the install refuses bytes it cannot verify |
 | `maestro-flows` | `.maestro` | Flows directory, consumer-relative |
 | `maestro-include-tags` / `maestro-exclude-tags` | `''` | Passed to Maestro when non-empty |
 | `suite-timeout-minutes` | `10` | Per-attempt bound; the step's own timeout is this plus 5 |
