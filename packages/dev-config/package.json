@@ -14,6 +14,8 @@
   },
   "files": [
     "bin",
+    "lib",
+    "release",
     "contract.json",
     "versions.json",
     "README.md"
