@@ -1237,7 +1237,7 @@ flowchart LR
   prod -->|"lane release_production, then phased, rollout or halt"| lane
   prod -->|"latest vX.Y.Z, then append"| release
   prod -->|"channel production, baseline-tag vX.Y.Z"| ota
-  hotfix -->|"channel and rollout from the dispatch, baseline-tag resolved"| ota
+  hotfix -->|"channel and rollout from the dispatch, baseline-tag latest"| ota
   listing -->|"lane pull_metadata or sync_metadata"| lane
   retryapp -->|"workflow cd-beta.yml, head-sha of the green internal run"| retry
   prepare -.->|"uploads release-meta"| artifacts
@@ -1261,10 +1261,10 @@ run already produced, then moves the release onto `vX.Y.Z` with
 `halt`), each its own `publish-store.yml` call on the same tag — and, left out
 of the figure because it is not a release workflow, a final `build-web.yml` call
 that deploys the Pages site for the same tag. Three callers
-never prepare anything: `cd-ota-hotfix.yml` resolves a baseline tag in a job of its
-own and calls only `publish-ota.yml`, `cd-store-listing.yml` calls only
-`publish-store.yml`, once per platform, and `cd-beta-retry.yml` calls only
-`publish-promotion-retry.yml`, when an internal build goes green.
+never prepare anything: `cd-ota-hotfix.yml` calls only `publish-ota.yml`, with
+`baseline-tag: latest` unless the dispatch names one, `cd-store-listing.yml`
+calls only `publish-store.yml`, once per platform, and `cd-beta-retry.yml` calls
+only `publish-promotion-retry.yml`, when an internal build goes green.
 
 `build-prepare` is the only job that decides *what* the release is; every later
 job is handed `version` / `build-number` and the `release-meta` artifact rather
@@ -1526,9 +1526,9 @@ Fingerprint gate → `expo export` → publish → manifest smoke check.
 | `rollout` | `0` | Rollout percentage 0–100 |
 | `environment` | `''` | GitHub Environment gating the publish |
 | `ota-cli-version` | `''` | Exact `eoas` version. Never leave this empty in a real caller: `scripts/ota/publish.sh` refuses to run unpinned |
-| `baseline-tag` | `''` | **Required whenever `ota-enabled` is true.** Release tag whose `build-info.json` asset is the fingerprint baseline for this channel — see [The OTA fingerprint gate](#the-ota-fingerprint-gate) |
+| `baseline-tag` | `''` | **Required whenever `ota-enabled` is true.** Release tag whose `build-info.json` asset is the fingerprint baseline for this channel — see [The OTA fingerprint gate](#the-ota-fingerprint-gate). `latest` is the newest published release that is neither a draft nor a pre-release: the store build a hotfix lands on |
 | `manifest-url` | `''` | Manifest URL fetched after publishing as a smoke check; empty skips it |
-| `runtime-version` | `''` | Sent as the `expo-runtime-version` header in that check |
+| `runtime-version` | `''` | Sent as the `expo-runtime-version` header in that check. Empty takes the baseline's iOS fingerprint: the gate only lets an update through when this commit fingerprints the same, and that fingerprint is the runtime version the update is served under |
 
 No outputs. Secrets: `consumer-token`, `OTA_PUBLISH_TOKEN` (both optional).
 
@@ -1931,7 +1931,17 @@ a same-run artifact would compare the current commit's fingerprint against
 itself — the gate would pass unconditionally and stop guarding anything. A
 missing tag, a missing release, or a release with no `build-info.json` asset is
 fatal for the same reason; there is no silent pass. Point `baseline-tag` at the
-release of the store build **currently installed on that channel**.
+release of the store build **currently installed on that channel**, or pass
+`latest` for the newest published release that is neither a draft nor a
+pre-release (the `-build.N` internal pre-releases never are). A hotfix wants
+exactly that, and `latest` with no such release is fatal too.
+
+The same file also answers the smoke check's question. Once the gate has
+passed, this commit fingerprints exactly as the baseline does, and that
+fingerprint is the runtime version the update is served under, so an empty
+`runtime-version` sends the baseline's iOS fingerprint (the platform the smoke
+check asks for). A caller no longer carries the fingerprint from a job of its
+own; one that passes `runtime-version` still wins.
 
 Fingerprints are computed with the consumer's own `@expo/fingerprint`
 devDependency: `npx --no fingerprint fingerprint:generate --platform <ios|android>`

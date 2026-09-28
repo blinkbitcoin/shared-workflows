@@ -27,6 +27,11 @@ stub_gh() {
   cat > "$STUB/gh" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
+if [ "$1 $2" = "release list" ]; then
+  [ -z "${WORKFLOWS_TEST_LIST_FAILS:-}" ] || { echo "HTTP 403: Resource not accessible" >&2; exit 1; }
+  printf '%s\n' "${WORKFLOWS_TEST_LATEST-v9.9.9}"
+  exit 0
+fi
 prev=""; out=""
 for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done
 [ -f "$WORKFLOWS_TEST_ASSET_MISSING" ] && exit 1
@@ -106,4 +111,30 @@ baseline() { run bash "$REPO_ROOT/scripts/ota/baseline.sh" "$@"; }
   [ "$status" -ne 0 ] || fail "ran without gh: $output"
   contains "$output" "missing command: gh" || fail "unexpected message: $output"
   [ ! -e "$WORKFLOWS_ASSETS_DIR/build-info.json" ] || fail "a baseline appeared without gh"
+}
+
+@test "latest resolves to the newest published release, never a draft or pre-release, and downloads from it" {
+  stub_gh
+  baseline latest
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -q -- '^release list --limit 1 --exclude-drafts --exclude-pre-releases ' "$WORKFLOWS_TEST_LOG" \
+    || fail "the listing did not exclude drafts and pre-releases: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -q '^release download v9.9.9 --pattern build-info.json' "$WORKFLOWS_TEST_LOG" \
+    || fail "did not download from the resolved tag: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "baseline-tag latest is v9.9.9" || fail "the resolved tag was not logged: $output"
+}
+
+@test "latest with no published release is fatal, and says to pass the tag" {
+  stub_gh
+  WORKFLOWS_TEST_LATEST='' baseline latest
+  [ "$status" -ne 0 ] || fail "accepted latest with no release: $output"
+  contains "$output" "no published release that is not a pre-release; pass the tag explicitly" || fail "unexpected message: $output"
+  ! grep -q '^release download' "$WORKFLOWS_TEST_LOG" || fail "downloaded anyway: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "latest whose listing fails is fatal" {
+  stub_gh
+  WORKFLOWS_TEST_LIST_FAILS=1 baseline latest
+  [ "$status" -ne 0 ] || fail "a failed listing passed: $output"
+  contains "$output" "could not list the releases to resolve baseline-tag latest" || fail "unexpected message: $output"
 }
