@@ -112,6 +112,13 @@ is a warning in the report, not a failure. See
 | `knip.json` | optional — a fallback runs | your own knip gate |
 | `typos.toml` | optional — a fallback runs | your own spell gate |
 | `.gitignore` | optional — a fallback runs | your own working tree |
+| no `scripts/check-coverage-empty.mjs`, `scripts/check-coverage-empty.test.mjs` or `scripts/fixtures/coverage-summary.json` | required | the check-coverage-empty program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-diagrams.mjs` or `scripts/check-diagrams.test.mjs` | required | the check-diagrams program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-docs-tables.mjs` or `scripts/check-docs-tables.test.mjs` | required | the check-docs-tables program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/make-target-names.test.mjs` | required | the check-make-target-names program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/shell-locale.test.mjs` | required | the check-shell-locale program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/workflow-names.test.mjs` | required | the check-workflow-names program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/release/resolve-version.sh` or `scripts/release/resolve-version.test.mjs` | required | release/resolve-version.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
 
 ### If you call `check-unit.yml`
 

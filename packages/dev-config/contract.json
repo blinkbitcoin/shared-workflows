@@ -2,7 +2,7 @@
   "$comment": "The consumer contract, as data. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-consumer-contract.mjs (the doctor), docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
 
   "$schema-notes": {
-    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. script-or-dep: either (knip, which is deliberately a binary and not a script). file: any one of target exists. dir-nonempty: target is a directory with at least one entry. mise-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist.",
+    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. script-or-dep: either (knip, which is deliberately a binary and not a script). file: any one of target exists. dir-nonempty: target is a directory with at least one entry. mise-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted.",
     "toggle": "The workflow_call input that decides whether this is needed at all, as `workflow.yml:input`. The doctor reads the caller's own `with:` block first and falls back to defaultOn.",
     "severity": "required: the gate cannot run without it and the job dies. degrades: shared-workflows has a fallback, so the gate still runs but not as the consumer defined it. optional: nothing happens unless the consumer opts in.",
     "guide": "Anchor in docs/consumer-guide.md."
@@ -743,6 +743,97 @@
       "severity": "degrades",
       "fix": "Add /.workflows to .gitignore. The setup action writes .git/info/exclude instead, which is local-only, so this is a convenience rather than a requirement - but without it a local .workflows/ checkout shows up as untracked.",
       "guide": "workflows-ignore-list-for-consumers"
+    },
+    {
+      "id": "no-copy.check-coverage-empty",
+      "kind": "no-copy",
+      "label": "no copy of check-coverage-empty",
+      "target": ["scripts/check-coverage-empty.mjs", "scripts/check-coverage-empty.test.mjs", "scripts/fixtures/coverage-summary.json"],
+      "profile": "checks",
+      "neededBy": "the check-coverage-empty program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and point the script that runs it at the package's program (\"check:coverage-empty\": \"check-coverage-empty\").",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-diagrams",
+      "kind": "no-copy",
+      "label": "no copy of check-diagrams",
+      "target": ["scripts/check-diagrams.mjs", "scripts/check-diagrams.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-diagrams program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and run the package's check-diagrams program from the docs check instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-docs-tables",
+      "kind": "no-copy",
+      "label": "no copy of check-docs-tables",
+      "target": ["scripts/check-docs-tables.mjs", "scripts/check-docs-tables.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-docs-tables program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and run the package's check-docs-tables program from the docs check instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-make-target-names",
+      "kind": "no-copy",
+      "label": "no copy of check-make-target-names",
+      "target": ["scripts/make-target-names.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-make-target-names program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the test that reimplements it, and run the package's check-make-target-names program from make check instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-shell-locale",
+      "kind": "no-copy",
+      "label": "no copy of check-shell-locale",
+      "target": ["scripts/shell-locale.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-shell-locale program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the test that reimplements it, and run the package's check-shell-locale program from make check instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-workflow-names",
+      "kind": "no-copy",
+      "label": "no copy of check-workflow-names",
+      "target": ["scripts/workflow-names.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-workflow-names program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the test that reimplements it, and run the package's check-workflow-names program from make check instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.resolve-version",
+      "kind": "no-copy",
+      "label": "no copy of resolve-version.sh",
+      "target": ["scripts/release/resolve-version.sh", "scripts/release/resolve-version.test.mjs"],
+      "profile": "checks",
+      "neededBy": "release/resolve-version.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and run node_modules/@blinkbitcoin/dev-config/release/resolve-version.sh (make version) instead.",
+      "guide": "no-copies-of-this-family"
     }
   ]
 }

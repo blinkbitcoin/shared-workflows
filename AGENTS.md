@@ -79,6 +79,16 @@ Every row is a make target; nothing here is run through a package manager.
   it is held to the fixture only where it must not diverge: its `ci.yml`
   trigger block, which is where a second docs rule (`paths-ignore`) would creep
   back in beside `check-code.yml`'s classifier.
+- **Anything generic lives here, and a consumer only calls it.** That covers
+  code (checks, runners, scanners, release scripts, test and build presets)
+  and it covers the pipeline itself: which jobs run, in what order, behind
+  which gates, and what they are called. A consumer keeps its own settings,
+  allowlists, baselines and prompts, and thin callers of about 20 lines: the
+  trigger, one `uses:` at the pin, its variables and secrets. If a change
+  here needs a consumer to rename, reorder or rewrite jobs, the change is in
+  the wrong place. When a consumer's copy of something is deleted, add a
+  `no-copy` row to `packages/dev-config/contract.json`, so the copy cannot
+  come back.
 - **Every PR tests everything it adds or changes, in the same PR.** That means
   the happy path, every error path and every branch a reviewer could ask
   about, and the PR description names the tests that cover the change. Every

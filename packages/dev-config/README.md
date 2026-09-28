@@ -61,6 +61,10 @@ runs, just not the one this repository defined. It reads your own
 `contract.json` is the table it reads — what wants each thing, which workflow
 input switches it off, whether a fallback exists, and the fix. The consumer
 guide's tables are generated from the same file, so the two cannot disagree.
+Its `no-copy` rows work the other way round: they block a repository that
+still holds its own copy of something this package or the workflows ship, such
+as a guard program or `resolve-version.sh`
+([No copies of this family](../../docs/consumer-guide.md#no-copies-of-this-family)).
 
 It also holds every call your workflows make to this family against
 `interfaces.json`: each reusable workflow's inputs (with their types and which

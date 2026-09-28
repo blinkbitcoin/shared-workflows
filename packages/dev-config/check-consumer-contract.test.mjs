@@ -80,6 +80,7 @@ test('every requirement declares the fields the report depends on', () => {
     'make-ci-reaches-ci',
     'ci-runs-make-ci',
     'fastlane-env-subset',
+    'no-copy',
   ]);
   const profiles = new Set(readContract().profiles);
   for (const r of readContract().requirements) {
@@ -647,6 +648,50 @@ test('a directory requirement wants the directory to hold something', () => {
   const withFlows = consumer({ dirs: ['.maestro'] });
   assert.deepEqual(checkRequirement(req('dir.maestro'), withFlows), { status: 'ok', detail: undefined });
   assert.deepEqual(checkRequirement(req('dir.maestro'), consumer()), { status: 'missing', reason: '.maestro/ is missing or empty' });
+});
+
+test('a no-copy requirement passes when the consumer holds none of the copies', () => {
+  assert.deepEqual(checkRequirement(req('no-copy.check-diagrams'), consumer()), { status: 'ok', detail: undefined });
+});
+
+test('a no-copy requirement names the one copy the consumer still holds', () => {
+  const c = consumer({ files: { 'scripts/check-diagrams.test.mjs': '' } });
+  assert.deepEqual(checkRequirement(req('no-copy.check-diagrams'), c), {
+    status: 'missing',
+    reason: 'scripts/check-diagrams.test.mjs is a copy of what this family ships',
+  });
+});
+
+test('a no-copy requirement names every copy the consumer still holds', () => {
+  const c = consumer({ files: { 'scripts/check-diagrams.mjs': '', 'scripts/check-diagrams.test.mjs': '' } });
+  assert.deepEqual(checkRequirement(req('no-copy.check-diagrams'), c), {
+    status: 'missing',
+    reason: 'scripts/check-diagrams.mjs, scripts/check-diagrams.test.mjs are copies of what this family ships',
+  });
+});
+
+test('a copy blocks the contract check wherever check-code.yml is called, named by what it copies', () => {
+  const c = consumer({
+    files: { 'scripts/release/resolve-version.sh': '' },
+    callers: { 'ci.yml': CALLER },
+  });
+  const result = check(readContract(), c).find((r) => r.req.id === 'no-copy.resolve-version');
+  assert.equal(result.level, 'fail');
+  assert.match(
+    formatResult(result),
+    /^FAIL {2}no copy of resolve-version\.sh: scripts\/release\/resolve-version\.sh is a copy of what this family ships\. Fix: Delete /,
+  );
+});
+
+test('every no-copy requirement lists paths, names what it copies and starts its fix with the deletion', () => {
+  const copies = readContract().requirements.filter((r) => r.kind === 'no-copy');
+  assert.ok(copies.length > 0);
+  for (const r of copies) {
+    assert.ok(Array.isArray(r.target) && r.target.length > 0, `${r.id}: target must be a list of paths`);
+    assert.match(r.label, /^no copy of /, `${r.id}: the report names what the files copy`);
+    assert.equal(r.guide, 'no-copies-of-this-family', `${r.id}: points at the guide section that explains the rule`);
+    assert.match(r.fix, /^Delete /, `${r.id}: the fix starts with what to delete`);
+  }
 });
 
 test('a requirement of a kind this version does not know is skipped, naming the kind', () => {

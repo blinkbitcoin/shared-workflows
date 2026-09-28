@@ -139,6 +139,13 @@ test('an environment subset names its prefix and the names the lanes may read', 
   );
 });
 
+test('copies a consumer must not hold read as what it must not have, any one of them', () => {
+  assert.equal(
+    targetOf({ kind: 'no-copy', target: ['scripts/x.mjs', 'scripts/x.test.mjs'] }),
+    'no `scripts/x.mjs` or `scripts/x.test.mjs`',
+  );
+});
+
 // --- the table -------------------------------------------------------------
 
 test('each profile with requirements gets a titled section, one row per requirement', () => {
