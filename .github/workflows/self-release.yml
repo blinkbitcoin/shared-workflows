@@ -10,90 +10,26 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  # The same reusable workflow a consumer calls, from this commit: release-please,
+  # as the RELEASE_TAGGER App when its secrets are set (a release PR opened by an
+  # App triggers CI like any other), then self-ci.yml started on each release PR
+  # by name, because one opened with GITHUB_TOKEN gets a pull_request run that
+  # never gets a job. Nothing is dispatched at the tag: the jobs below chain off
+  # its outputs instead.
   release-please:
     name: Release PR
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    uses: ./.github/workflows/pr-release.yml
     permissions:
       contents: write
       pull-requests: write
-      # `gh workflow run` in the dispatch step below.
+      # The CI dispatch writes to the Actions API.
       actions: write
-    env:
-      # Job-level on purpose: a step's `if` cannot read that step's own env.
-      HAVE_RELEASE_TAGGER_APP: ${{ secrets.RELEASE_TAGGER_APP_ID != '' && secrets.RELEASE_TAGGER_APP_PRIVATE_KEY != '' }}
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      # Manifest mode namespaces every per-package output by its path. The bare
-      # release_created above is the root package (the workflows themselves);
-      # this one is the npm package, which releases on its own cadence.
-      dev_config_released: ${{ steps.release.outputs['packages/dev-config--release_created'] }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      # A release PR opened with GITHUB_TOKEN gets a pull_request CI run that
-      # GitHub creates but never gives a job, and marks failed the moment the
-      # PR merges - a red run on every release since 0.3.1, executing nothing.
-      # Nothing gates on it (the release branch is exempt from the approval
-      # ruleset, no status check is required, and main's push run is the one
-      # that counts), but it is noise on every release. A PR opened by a
-      # GitHub App triggers CI like any other. The App is the one
-      # publish-github-release.yml already uses on the consumer side; with its two
-      # secrets absent this step is skipped and release-please falls back to
-      # GITHUB_TOKEN, exactly as before. Secrets cannot be read in `if`, so the
-      # presence check goes through the job's env.
-      - name: Mint an App token, so the release PR triggers CI
-        id: app-token
-        if: ${{ env.HAVE_RELEASE_TAGGER_APP == 'true' }}
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.RELEASE_TAGGER_APP_ID }}
-          private-key: ${{ secrets.RELEASE_TAGGER_APP_PRIVATE_KEY }}
-          # Only what release-please does with it: the release PR, its labels,
-          # the tag and the GitHub release. Without these the token carries
-          # every permission the App's installation has.
-          permission-contents: write
-          permission-pull-requests: write
-      # always-update in the config: every run rebuilds each open release PR
-      # on this main, so a release of one package cannot leave the other
-      # package's PR conflicting on the shared manifest.
-      - name: Release please
-        id: release
-        uses: googleapis/release-please-action@v5
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-          # App token when the App is configured, else the explicit PAT, else
-          # GITHUB_TOKEN. GitHub's `||` yields the first non-empty operand.
-          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_PLEASE_TOKEN || github.token }}
-
-      # The publish job keys off a path-namespaced output, and a typo there
-      # would make it skip silently rather than fail. Print what release-please
-      # actually released so a wrong key is visible in the run, not months later
-      # in a missing package version.
-      - name: Record which packages released
-        env:
-          PATHS_RELEASED: ${{ steps.release.outputs.paths_released }}
-        run: echo "paths_released=${PATHS_RELEASED:-none}" >> "$GITHUB_STEP_SUMMARY"
-
-      # The release PR is opened with GITHUB_TOKEN, so its own pull_request
-      # run never gets a job (see the App step above for the full story and
-      # the way to make that run real). workflow_dispatch is the one event
-      # that token still fires: start self-ci.yml on the PR's branch by name,
-      # once per release PR the push created or updated (separate-pull-requests:
-      # one per package; always-update: every open one, on every push). The branch is read in the script, not with
-      # fromJSON() in `env:` - the runner validates a step's env even when
-      # its `if` is false, and fromJSON('') is an error.
-      - name: Run CI on the release PR
-        if: ${{ steps.release.outputs.prs_created == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PRS_JSON: ${{ steps.release.outputs.prs }}
-        run: bash scripts/self/dispatch-release-pr-ci.sh
+    with:
+      ci-workflow: self-ci.yml
+    secrets:
+      RELEASE_TAGGER_APP_ID: ${{ secrets.RELEASE_TAGGER_APP_ID }}
+      RELEASE_TAGGER_APP_PRIVATE_KEY: ${{ secrets.RELEASE_TAGGER_APP_PRIVATE_KEY }}
+      RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
   # pr-release-notes.yml, run for real against the template from this release
   # commit before `v0` moves to it: `v0` is the one thing that puts a release
   # in front of every consumer at once, and no other gate here executes a
@@ -101,7 +37,7 @@ jobs:
   rehearsal:
     name: Consumer rehearsal
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: ${{ needs.release-please.outputs.release-created == 'true' }}
     uses: ./.github/workflows/self-rehearsal.yml
     permissions:
       contents: read
@@ -112,10 +48,10 @@ jobs:
     # rehearsal skips this job, and the tags stay on the last release.
     needs: [release-please, rehearsal]
     # Job outputs are strings and every non-empty string is truthy in a GitHub
-    # expression, so a bare `outputs.release_created` also fires on the literal
+    # expression, so a bare `outputs.release-created` also fires on the literal
     # "false" a no-release push produces - which would run tag-major.sh with an
     # empty TAG and leave main permanently red.
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: ${{ needs.release-please.outputs.release-created == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -126,13 +62,16 @@ jobs:
           fetch-depth: 0
       - name: Move the moving major/minor tags to this release
         env:
-          TAG: ${{ needs.release-please.outputs.tag_name }}
+          TAG: ${{ needs.release-please.outputs.tag-name }}
         run: bash scripts/self/tag-major.sh
 
   publish-dev-config:
     name: Publish dev-config
     needs: release-please
-    if: ${{ needs.release-please.outputs.dev_config_released == 'true' }}
+    # paths-released names every package this push released; the root package
+    # is `.`, the npm package its directory. The workflow also prints it to the
+    # job summary, so a path spelled wrong here shows up there.
+    if: ${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/dev-config') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -1,0 +1,165 @@
+name: Release PR
+# Keep release-please's release PR(s) open, start the caller's CI on each, and
+# once a release is cut, start the caller's follow-on workflows at its tag.
+#
+# Everything release-please creates - the PR, the tag, the release - is created
+# with GITHUB_TOKEN unless an App token is given, and GitHub starts no workflow
+# from an event that token caused: the PR's own pull_request run never gets a
+# job, and nothing listening for `release: published` runs. workflow_dispatch
+# is the one exemption, so both are started here by name. The caller triggers
+# this on `push` to its default branch, owns the concurrency, and grants the
+# job's three writes.
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Repository (unused - release-please acts on the caller's repository; carried for input-set consistency across the family)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref (unused - release-please reads the default branch; carried for input-set consistency across the family)
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for this workflow's job
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
+        type: string
+        default: 'v1'
+      config-file:
+        description: release-please's configuration file in the caller's repository (manifest mode)
+        type: string
+        default: 'release-please-config.json'
+      manifest-file:
+        description: release-please's manifest file in the caller's repository
+        type: string
+        default: '.release-please-manifest.json'
+      ci-workflow:
+        description: The caller's CI workflow file, started on each release PR's branch the push created or updated (empty starts none)
+        type: string
+        default: 'ci.yml'
+      dispatch-on-release:
+        description: 'Workflows started at the tag once a release is cut, one per line: `workflow.yml key=value ...`, with `{tag}` in a value replaced by the tag; blank and `#` lines are skipped (empty starts none)'
+        type: string
+        default: ''
+    secrets:
+      RELEASE_TAGGER_APP_ID:
+        description: GitHub App id; with its private key, release-please acts as the App, so the release PR's own pull_request run is a real one
+        required: false
+      RELEASE_TAGGER_APP_PRIVATE_KEY:
+        description: The GitHub App's private key
+        required: false
+      RELEASE_PLEASE_TOKEN:
+        description: A token release-please uses when no App is configured (falls back to the caller's github.token)
+        required: false
+    outputs:
+      release-created:
+        description: "'true' when this push cut a release of the root package"
+        value: ${{ jobs.release.outputs.release-created }}
+      tag-name:
+        description: The root package's new tag, when release-created
+        value: ${{ jobs.release.outputs.tag-name }}
+      paths-released:
+        description: JSON array of the package paths this push released, for a multi-package repository
+        value: ${{ jobs.release.outputs.paths-released }}
+      pr-number:
+        description: The root package's release PR, when this push created or updated one (empty otherwise)
+        value: ${{ jobs.release.outputs.pr-number }}
+      pr-branch:
+        description: That release PR's branch
+        value: ${{ jobs.release.outputs.pr-branch }}
+permissions:
+  contents: read
+jobs:
+  release:
+    name: Release
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      # The CI and follow-on dispatches write to the Actions API.
+      actions: write
+    env:
+      # Job-level on purpose: a step's `if` cannot read that step's own env, and
+      # secrets cannot be read in an `if` at all.
+      HAVE_RELEASE_TAGGER_APP: ${{ secrets.RELEASE_TAGGER_APP_ID != '' && secrets.RELEASE_TAGGER_APP_PRIVATE_KEY != '' }}
+    outputs:
+      release-created: ${{ steps.release.outputs.release_created }}
+      tag-name: ${{ steps.release.outputs.tag_name }}
+      paths-released: ${{ steps.release.outputs.paths_released }}
+      pr-number: ${{ steps.pr.outputs.number }}
+      pr-branch: ${{ steps.pr.outputs.branch }}
+    steps:
+      # No consumer checkout: release-please reads the configuration through the
+      # API, and the scripts below only call it too. They are reached through
+      # the plain .workflows/ path, without Setup.
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Mint an App token, so the release PR triggers CI
+        id: app-token
+        if: ${{ env.HAVE_RELEASE_TAGGER_APP == 'true' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.RELEASE_TAGGER_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TAGGER_APP_PRIVATE_KEY }}
+          # Only what release-please does with it: the release PR, its labels,
+          # the tag and the GitHub release.
+          permission-contents: write
+          permission-pull-requests: write
+      # Manifest mode only: release-type, package names and changelog sections
+      # live in the configuration file. Passing any of them here makes the
+      # action ignore the file and the manifest.
+      - name: Release please
+        id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          config-file: ${{ inputs.config-file }}
+          manifest-file: ${{ inputs.manifest-file }}
+          # App token when the App is configured, else the explicit token, else
+          # GITHUB_TOKEN. GitHub's `||` yields the first non-empty operand.
+          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+      - name: Record which packages released
+        env:
+          PATHS_RELEASED: ${{ steps.release.outputs.paths_released }}
+        run: bash ".workflows/scripts/release/release-summary.sh"
+      - name: Read the release PR
+        id: pr
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        env:
+          PR_JSON: ${{ steps.release.outputs.pr }}
+        run: bash ".workflows/scripts/release/release-pr-read.sh"
+      # Once per release PR the push created or updated: with
+      # separate-pull-requests there is one per package, and with
+      # always-update every open one is rebuilt on each push.
+      - name: Run CI on the release PRs
+        if: ${{ steps.release.outputs.prs_created == 'true' && inputs.ci-workflow != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRS_JSON: ${{ steps.release.outputs.prs }}
+          CI_WORKFLOW: ${{ inputs.ci-workflow }}
+        run: bash ".workflows/scripts/release/dispatch-release-pr-ci.sh"
+      - name: Start the follow-on workflows at the new tag
+        if: ${{ steps.release.outputs.release_created == 'true' && inputs.dispatch-on-release != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          DISPATCHES: ${{ inputs.dispatch-on-release }}
+        run: bash ".workflows/scripts/release/dispatch-at-tag.sh"

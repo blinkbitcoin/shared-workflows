@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 load test_helper
 
-SCRIPT="$REPO_ROOT/scripts/self/dispatch-release-pr-ci.sh"
+SCRIPT="$REPO_ROOT/scripts/release/dispatch-release-pr-ci.sh"
 
 setup() {
   # A fake gh that records its arguments; the script must never reach GitHub
@@ -11,20 +11,20 @@ setup() {
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >> "%s/gh.args"\n' "$BATS_TEST_TMPDIR" > "$bin/gh"
   chmod +x "$bin/gh"
   export PATH="$bin:$PATH"
-  export GH_TOKEN=fake GH_REPO=blinkbitcoin/shared-workflows
+  export GH_TOKEN=fake GH_REPO=blinkbitcoin/shared-workflows CI_WORKFLOW=ci.yml
 }
 
-@test "dispatches self-ci.yml on the release PR's head branch" {
+@test "dispatches the CI workflow on the release PR's head branch" {
   PRS_JSON='[{"headBranchName":"release-please--branches--main--components--shared-workflows","number":40}]' \
     run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
   args="$(tr '\n' ' ' < "$BATS_TEST_TMPDIR/gh.args")"
-  contains "$args" "workflow run self-ci.yml" || fail "args: $args"
+  contains "$args" "workflow run ci.yml" || fail "args: $args"
   contains "$args" "--repo blinkbitcoin/shared-workflows" || fail "args: $args"
   contains "$args" "--ref release-please--branches--main--components--shared-workflows" || fail "args: $args"
 }
 
-@test "dispatches self-ci.yml on every PR in a multi-package release" {
+@test "dispatches the CI workflow on every PR in a multi-package release" {
   PRS_JSON='[{"headBranchName":"release-please--branches--main--components--shared-workflows","number":40},{"headBranchName":"release-please--branches--main--components--dev-config","number":41}]' \
     run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
@@ -102,7 +102,7 @@ EOF
     run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "exited 0 despite a failed dispatch"
   contains "$output" "::error::" || fail "output: $output"
-  contains "$output" "could not dispatch self-ci.yml on release-please--branches--main--components--shared-workflows" \
+  contains "$output" "could not dispatch ci.yml on release-please--branches--main--components--shared-workflows" \
     || fail "output: $output"
   args="$(tr '\n' ' ' < "$BATS_TEST_TMPDIR/gh.args")"
   contains "$args" "--ref release-please--branches--main--components--shared-workflows" || fail "args: $args"
@@ -114,4 +114,18 @@ EOF
   PRS_JSON='[{"headBranchName":"x"}]' run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "exited 0 without GH_REPO"
   contains "$output" "GH_REPO" || fail "output: $output"
+}
+
+@test "the CI workflow is whichever CI_WORKFLOW names" {
+  CI_WORKFLOW=self-ci.yml PRS_JSON='[{"headBranchName":"b"}]' run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  contains "$(tr '\n' ' ' < "$BATS_TEST_TMPDIR/gh.args")" "workflow run self-ci.yml" || fail "args: $(cat "$BATS_TEST_TMPDIR/gh.args")"
+}
+
+@test "fails without CI_WORKFLOW, before any dispatch" {
+  unset CI_WORKFLOW
+  PRS_JSON='[{"headBranchName":"x"}]' run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "exited 0 without CI_WORKFLOW"
+  contains "$output" "CI_WORKFLOW not set" || fail "output: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/gh.args" ] || fail "gh was called anyway"
 }
