@@ -2,11 +2,13 @@
 # Publishes the branch's rendered badges to gh-pages/badges/<branch>/.
 #
 # The consumer's render script (publish-badges.yml's `render-script`, default
-# `badges:render`) has already written coverage/badge/{unit,e2e,coverage}.svg
+# `badges:render`) has already written coverage/badge/{unit,e2e,coverage,security}.svg
 # and their .json siblings; this only moves them onto the branch GitHub serves
 # through raw.githubusercontent.com. A badge the render script chose not to
 # write - a skipped Unit writes no coverage badge - is simply not copied, so the
-# one already published stays.
+# one already published stays. The Security badge follows the same rule: the
+# render script writes it only when handed a verdict (publish-badges.yml's
+# security-verdict), so a run without one leaves the published badge.
 #
 # A *skipped* suite leaves its published status badge alone too. The caller
 # skips a suite its change cannot affect (check-code.yml's unit-changed and
@@ -69,7 +71,7 @@ apply_badges() {
   printf '%s\n' \
     '# CI-owned branch' \
     '' \
-    'badges/<branch>/{coverage,unit,e2e}.svg (+ their .json siblings) - written by' \
+    'badges/<branch>/{coverage,unit,e2e,security}.svg (+ their .json siblings) - written by' \
     'the badges job in the CI workflow (shared-workflows publish-badges.yml ->' \
     'scripts/ci/publish-badges.sh) on every run; a branch directory is removed when' \
     "its pull request closes (badges-cleanup.sh). Do not edit by hand." \

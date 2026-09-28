@@ -1065,6 +1065,14 @@
           "type": "string",
           "required": false
         },
+        "security-verdict": {
+          "type": "string",
+          "required": false
+        },
+        "security-label": {
+          "type": "string",
+          "required": false
+        },
         "coverage-artifact": {
           "type": "string",
           "required": false

@@ -1,6 +1,6 @@
 name: Badges
 # Publishes a consumer's per-branch CI badges to its own `gh-pages` branch:
-# `badges/<branch>/{unit,e2e,coverage}.svg`. The README embeds main's the way a
+# `badges/<branch>/{unit,e2e,coverage,security}.svg`. The README embeds main's the way a
 # workflow-status badge takes `?branch=main`, and every other branch gets its
 # own set.
 #
@@ -57,6 +57,14 @@ on:
         description: Label on the e2e badge
         type: string
         default: 'E2E'
+      security-verdict:
+        description: check-security.yml's verdict output, handed to the render script as BADGE_SECURITY; empty renders no security badge and leaves the published one
+        type: string
+        default: ''
+      security-label:
+        description: Label on the security badge
+        type: string
+        default: 'Security'
       coverage-artifact:
         description: Artifact holding the consumer's coverage/ directory (check-unit.yml uploads it as `coverage`); downloaded only when the unit job succeeded
         type: string
@@ -137,6 +145,8 @@ jobs:
           BADGE_E2E: ${{ inputs.e2e-result }}
           BADGE_UNIT_LABEL: ${{ inputs.unit-label }}
           BADGE_E2E_LABEL: ${{ inputs.e2e-label }}
+          BADGE_SECURITY: ${{ inputs.security-verdict }}
+          BADGE_SECURITY_LABEL: ${{ inputs.security-label }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
       - name: Publish to gh-pages
         env:

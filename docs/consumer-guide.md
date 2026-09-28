@@ -870,7 +870,7 @@ to remove.
 ### `publish-badges.yml`
 
 Renders and publishes this branch's CI badges to the consumer's own `gh-pages`
-branch, as `badges/<branch>/{unit,e2e,coverage}.svg` (plus a `.json` sibling per
+branch, as `badges/<branch>/{unit,e2e,coverage,security}.svg` (plus a `.json` sibling per
 badge, the shields.io endpoint shape). The README embeds `main`'s through
 `raw.githubusercontent.com/<owner>/<repo>/gh-pages/badges/main/coverage.svg`,
 the way a workflow-status badge takes `?branch=main`; every other branch gets
@@ -894,6 +894,8 @@ the same paths and no merge of derived content can resolve that).
 | `e2e-result` | **required** | The caller's `needs.e2e.result` |
 | `docs-only` | `false` | `check-code.yml`'s `docs-only` output; `'true'` skips the job |
 | `unit-label` / `e2e-label` | `Unit` / `E2E` | Text on the left half of each status badge |
+| `security-verdict` | `''` | `check-security.yml`'s `verdict` output, as it is. Empty renders no security badge, so the published one stays |
+| `security-label` | `Security` | Text on the left half of the security badge |
 | `coverage-artifact` | `coverage` | Artifact holding the consumer's `coverage/` directory (`check-unit.yml` uploads it under this name). Downloaded only when `unit-result` is `success` |
 | `render-script` | `badges:render` | Consumer script that renders the badges into `badge-dir` |
 | `badge-dir` | `coverage/badge` | Consumer-relative directory the render script writes and `publish-badges.sh` copies from |
@@ -905,7 +907,8 @@ for exactly that reason.
 
 **The environment the render script is handed** (so a consumer can implement its
 own): `BADGE_OUT_DIR`, `BADGE_UNIT`, `BADGE_E2E`, `BADGE_UNIT_LABEL`,
-`BADGE_E2E_LABEL`. `run-script.sh` runs `pnpm run NAME` with no arguments, which
+`BADGE_E2E_LABEL`, `BADGE_SECURITY` (empty, or the verdict line to render
+`security.svg` from) and `BADGE_SECURITY_LABEL`. `run-script.sh` runs `pnpm run NAME` with no arguments, which
 is why everything variable arrives as environment.
 
 **Guards.** The calling job runs under `always()`, so a *failed* Unit still
@@ -930,6 +933,11 @@ ran and the other was skipped by its class, `publish-badges.sh` drops the
 skipped suite's `unit.*` or `e2e.*` from what it copies, whatever the render
 script drew for `skipped`. A flows-only merge to `main` then updates the E2E
 badge and leaves the Unit badge showing the last run that looked.
+
+**No security verdict, no security badge.** An empty `security-verdict` (the
+caller skipped `check-security.yml` on a docs-only change) renders no
+`security.svg`, and `publish-badges.sh` copies only what was rendered, so the
+branch's published security badge stays as it was.
 
 **Coexistence with GitHub Pages.** `build-web.yml`'s `deploy` job publishes the web
 export through `actions/deploy-pages`, which is an *artifact* deploy and reads
