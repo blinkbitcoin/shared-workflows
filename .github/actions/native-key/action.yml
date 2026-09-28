@@ -36,12 +36,18 @@ runs:
       id: yq-version
       shell: bash
       run: bash "${{ github.action_path }}/../../../scripts/ci/yq-version.sh"
+    # yq alone. mise also reads the consumer's own .mise.toml from the
+    # checkout, so without install_args this installed every tool the consumer
+    # pins - semgrep and mobsfscan through pipx included - in a step that only
+    # computes cache keys, and a PyPI hiccup (`sarif-om ... from versions:
+    # none`) failed the template's Android build before it began.
     - name: Install yq
       uses: jdx/mise-action@v4
       with:
         mise_toml: |
           [tools]
           yq = "${{ steps.yq-version.outputs.version }}"
+        install_args: yq
         cache: true
     - name: Compute native cache keys
       id: keys
