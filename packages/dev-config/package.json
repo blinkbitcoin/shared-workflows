@@ -17,12 +17,14 @@
     "lib",
     "release",
     "contract.json",
+    "interfaces.json",
     "versions.json",
     "README.md"
   ],
   "exports": {
     "./versions.json": "./versions.json",
     "./contract.json": "./contract.json",
+    "./interfaces.json": "./interfaces.json",
     "./check-tool-versions": "./bin/check-tool-versions.mjs",
     "./check-consumer-contract": "./bin/check-consumer-contract.mjs",
     "./check-docs-tables": "./bin/check-docs-tables.mjs",

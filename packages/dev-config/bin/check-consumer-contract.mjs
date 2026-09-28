@@ -211,6 +211,196 @@ function stripQuotes(value) {
 }
 
 // ---------------------------------------------------------------------------
+// The calls themselves
+// ---------------------------------------------------------------------------
+
+/** The reusable workflows' interfaces, as `{ workflows: { 'x.yml': { inputs, secrets, outputs } } }`. */
+export function readInterfaces(file = path.join(HERE, '..', 'interfaces.json')) {
+  return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+const SHARED_USES = /^\s*uses:\s*\S*shared-workflows\/\.github\/workflows\/([A-Za-z0-9._-]+\.yml)@/;
+const KEY_LINE = /^\s*([A-Za-z0-9._-]+):\s*(.*)$/;
+const indentOf = (raw) => raw.length - raw.trimStart().length;
+const isBlank = (raw) => raw.trim() === '' || raw.trim().startsWith('#');
+
+/**
+ * The keys of the mapping that starts after line `at`, as `Map(name -> raw value)`:
+ * the lines at the first indent deeper than `parent`, up to the first line at
+ * `parent` or shallower. Deeper lines are a value's own continuation (a block
+ * scalar, a nested mapping) and are not keys of this one.
+ */
+function childKeys(lines, at, parent) {
+  const keys = new Map();
+  let child = null;
+  for (let i = at + 1; i < lines.length; i++) {
+    const raw = lines[i];
+    if (isBlank(raw)) continue;
+    const indent = indentOf(raw);
+    if (indent <= parent) break;
+    child ??= indent;
+    if (indent !== child) continue;
+    const pair = KEY_LINE.exec(raw);
+    if (pair) keys.set(pair[1], pair[2].trim());
+  }
+  return keys;
+}
+
+/**
+ * Every job that calls a shared workflow, from the caller's text:
+ * `{ file, job, workflow, with, secrets, reads, unreadable }`. `with` maps each
+ * input to its raw YAML value; `secrets` is a Set of names, or null when the
+ * job passes `secrets: inherit`; `reads` is the outputs of that job the file
+ * reads (`needs.<job>.outputs.<name>`).
+ *
+ * Hand-rolled, like the rest of this file, and conservative in the same way: a
+ * `with:` or `secrets:` written inline as a flow mapping is not parsed, and the
+ * call is marked `unreadable` so it is skipped rather than failed for inputs it
+ * seems not to pass.
+ */
+export function callerCalls(callers) {
+  const calls = [];
+  for (const { name, text } of callers) {
+    const lines = text.split('\n');
+    const reads = new Map();
+    for (const [, job, output] of text.matchAll(/\bneeds\.([\w-]+)\.outputs\.([\w-]+)/g)) {
+      if (!reads.has(job)) reads.set(job, new Set());
+      reads.get(job).add(output);
+    }
+    const jobsAt = lines.findIndex((raw) => /^jobs:\s*$/.test(raw));
+    if (jobsAt === -1) continue;
+    let jobIndent = null;
+    let current = null;
+    let propIndent = null;
+    const finish = () => {
+      if (current?.workflow) calls.push({ ...current, reads: reads.get(current.job) ?? new Set() });
+    };
+    for (let i = jobsAt + 1; i < lines.length; i++) {
+      const raw = lines[i];
+      if (isBlank(raw)) continue;
+      const indent = indentOf(raw);
+      if (indent === 0) break;
+      jobIndent ??= indent;
+      if (indent === jobIndent) {
+        finish();
+        const job = /^\s*([A-Za-z0-9_-]+):\s*$/.exec(raw);
+        current = job ? { file: name, job: job[1], workflow: null, with: new Map(), secrets: new Set(), unreadable: false } : null;
+        propIndent = null;
+        continue;
+      }
+      if (!current || indent < jobIndent) continue;
+      propIndent ??= indent;
+      if (indent !== propIndent) continue;
+      const uses = SHARED_USES.exec(raw);
+      if (uses) {
+        current.workflow = uses[1];
+        continue;
+      }
+      const pair = KEY_LINE.exec(raw);
+      if (!pair || (pair[1] !== 'with' && pair[1] !== 'secrets')) continue;
+      const value = pair[2].replace(/(^|\s+)#.*$/, '').trim();
+      if (pair[1] === 'secrets' && value === 'inherit') current.secrets = null;
+      else if (value === '' || value === '{}') {
+        const keys = childKeys(lines, i, indent);
+        if (pair[1] === 'with') current.with = keys;
+        else current.secrets = new Set(keys.keys());
+      } else current.unreadable = true;
+    }
+    finish();
+  }
+  return calls;
+}
+
+/**
+ * What a raw YAML scalar is, as far as an input's type is concerned:
+ * `boolean`, `number`, `string`, or `unknown` - an expression decided at run
+ * time, or an empty value - which no type check applies to.
+ */
+export function scalarType(raw) {
+  const value = /^['"]/.test(raw) ? raw : raw.replace(/(^|\s+)#.*$/, '').trim();
+  if (value.includes('${{')) return 'unknown';
+  if (value === '' || value === '~' || value === 'null') return 'unknown';
+  if (/^['"]/.test(value) || /^[|>][-+0-9]*$/.test(value)) return 'string';
+  if (/^(true|True|TRUE|false|False|FALSE)$/.test(value)) return 'boolean';
+  if (/^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$/.test(value)) return 'number';
+  return 'string';
+}
+
+/**
+ * Why a call does not fit the interface its workflow declares, one sentence per
+ * problem, or none. GitHub checks all of this only when the run starts, on
+ * main, after the change merged - and a renamed output is worse: it reads as
+ * empty, so a `!= 'false'` gate on it quietly runs every time.
+ */
+export function callProblems(call, face) {
+  if (!face) return [`shared-workflows publishes no reusable ${call.workflow} at this version`];
+  const problems = [];
+  for (const [name, raw] of call.with) {
+    const input = face.inputs[name];
+    if (!input) {
+      problems.push(`passes input ${name}, which ${call.workflow} does not declare`);
+      continue;
+    }
+    const type = scalarType(raw);
+    if (type !== 'unknown' && type !== input.type) {
+      problems.push(`passes ${name} as a ${type} (${raw}), but ${call.workflow} declares it a ${input.type}`);
+    }
+  }
+  for (const [name, input] of Object.entries(face.inputs)) {
+    if (input.required && !call.with.has(name)) problems.push(`does not pass ${name}, which ${call.workflow} requires`);
+  }
+  if (call.secrets !== null) {
+    for (const name of call.secrets) {
+      if (!face.secrets[name]) problems.push(`passes secret ${name}, which ${call.workflow} does not declare`);
+    }
+    for (const [name, secret] of Object.entries(face.secrets)) {
+      if (secret.required && !call.secrets.has(name)) problems.push(`does not pass secret ${name}, which ${call.workflow} requires`);
+    }
+  }
+  for (const name of call.reads) {
+    if (!face.outputs.includes(name)) problems.push(`reads output ${name}, which ${call.workflow} does not declare`);
+  }
+  return problems;
+}
+
+const CALL_FIX =
+  "pass only the inputs and secrets the called workflow declares, every one it requires, each literal of the declared type, and read only the outputs it declares; the guide lists every workflow's interface";
+
+/** The call rule as a requirement, so a finding reads, sums up and serializes like every other. */
+const callRule = (label) => ({
+  id: 'calls.interface',
+  kind: 'call-interface',
+  label,
+  neededBy: 'every reusable workflow, at startup',
+  fix: CALL_FIX,
+  guide: 'inputs-outputs-and-secrets-per-workflow',
+  severity: 'required',
+});
+
+/** One failure per problem in any call, or one pass naming how many calls fit. */
+export function checkCalls(consumer, interfaces) {
+  const calls = callerCalls(consumer.callers);
+  if (calls.length === 0) return [];
+  const results = [];
+  let checked = 0;
+  for (const call of calls) {
+    const label = `${call.file}: ${call.job} -> ${call.workflow}`;
+    if (call.unreadable) {
+      results.push({ req: callRule(label), level: 'skip', reason: 'its with: or secrets: is an inline mapping this cannot read' });
+      continue;
+    }
+    checked += 1;
+    for (const reason of callProblems(call, interfaces.workflows[call.workflow])) {
+      results.push({ req: callRule(label), level: 'fail', reason });
+    }
+  }
+  if (!results.some((r) => r.level === 'fail')) {
+    results.push({ req: callRule('calls to shared workflows'), level: 'ok', detail: `${checked} within their workflows' interfaces` });
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Deciding what applies
 // ---------------------------------------------------------------------------
 
@@ -629,7 +819,7 @@ function run(argv, { io, stdout, stderr, env, cwd }) {
     throw new Error(`::error::unknown profile(s): ${unknown.join(', ')} (known: ${contract.profiles.join(', ')})`);
   }
   const consumer = readConsumer(path.resolve(options.root), io);
-  const results = check(contract, consumer, { profiles: options.profiles });
+  const results = [...check(contract, consumer, { profiles: options.profiles }), ...checkCalls(consumer, readInterfaces())];
 
   if (options.json) {
     stdout.write(`${JSON.stringify(results.map(({ req, level, reason, detail }) => ({ id: req.id, level, reason, detail })), null, 2)}\n`);
