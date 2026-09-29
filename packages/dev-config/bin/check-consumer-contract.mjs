@@ -514,6 +514,17 @@ export function checkRequirement(req, consumer) {
       return unresolved.length === 0 ? ok() : missing(unresolved.join('; '));
     }
 
+    case 'no-copy': {
+      // The reverse of every other kind: something this family already ships,
+      // which a consumer must therefore not hold. A copy is compared with the
+      // original by nothing, so it drifts, and the next fix lands in one place
+      // and not the other. The template carried seven of these for months.
+      const found = req.target.filter(has);
+      return found.length === 0
+        ? ok()
+        : missing(`${found.join(', ')} ${found.length === 1 ? 'is a copy' : 'are copies'} of what this family ships`);
+    }
+
     case 'fastlane-lane': {
       // A textual scan of fastlane/**.rb, not a Ruby parse: enough to catch a
       // lane that was never written, and honest about being no more than that.

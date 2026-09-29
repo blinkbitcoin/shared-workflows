@@ -226,6 +226,22 @@ what wants it, which input switches it off, whether a fallback exists, and the
 fix. The tables in this document and the checker read the same file, so a
 requirement cannot be true in one and absent from the other.
 
+### No copies of this family
+
+Most requirements say what your repository must have. The `no-copy` ones say
+what it must not: a file this family already ships, whether as a program in
+`@blinkbitcoin/dev-config` or as a script the workflows run. Nothing compares
+a copy with its original, so a copy drifts, and the next fix lands upstream
+and never reaches it. A copy blocks the contract check, and the fix names the
+program to call instead.
+
+Each `no-copy` requirement lists the paths a copy has had in a consumer. The
+list grows as each copy is deleted, so a deleted copy cannot come back. It is
+not a way to find copies nobody has named yet. The rule for those is the same:
+anything that would serve a second app belongs in this repository, and a
+consumer calls it. That includes the pipeline itself, not just scripts: which
+jobs run, in what order, behind which gates, and what they are called.
+
 ## When something is missing
 
 Two shapes of failure, and which one you get is deliberate.

@@ -49,7 +49,7 @@ export function need(req) {
 export function targetOf(req) {
   const all = Array.isArray(req.target) ? req.target : [req.target];
   const quoted = all.map((t) => `\`${t}\``);
-  const conjunction = req.kind === 'file' ? 'or' : 'and';
+  const conjunction = ['file', 'no-copy'].includes(req.kind) ? 'or' : 'and';
   const joined =
     quoted.length <= 2
       ? quoted.join(` ${conjunction} `)
@@ -59,6 +59,7 @@ export function targetOf(req) {
   if (req.kind === 'make-ci-reaches-ci') return 'every gate CI runs, reachable from `make ci`';
   if (req.kind === 'ci-runs-make-ci') return 'every gate `make ci` runs, run by CI';
   if (req.kind === 'fastlane-env-subset') return `lanes that read only these \`${req.prefix}*\` names: ${joined}`;
+  if (req.kind === 'no-copy') return `no ${joined}`;
   return joined;
 }
 
