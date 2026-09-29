@@ -113,6 +113,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 const out = process.argv[process.argv.indexOf("--out") + 1];
 mkdirSync(out, { recursive: true });
 writeFileSync(`${out}/argv.txt`, process.argv.slice(2).join(" ") + "\n");
+writeFileSync(`${out}/locales.txt`, JSON.stringify(process.env.NOTES_LOCALES ?? null) + "\n");
 writeFileSync(`${out}/store-notes.json`, "{}\n");
 writeFileSync(`${out}/notes-store.txt`, "- x\n");
 JS
@@ -123,6 +124,30 @@ JS
   # An empty notes-locales input contributes no flag at all, rather than
   # `--locales ''`, which the generator would read as "no locales".
   not_contains "$argv" "--locales" || fail "an empty NOTES_LOCALES became a flag: $argv"
+  # ...and no locale in the environment either: the generator picks them from
+  # the app's store metadata. A default filled in here used to win over that.
+  [ "$(cat "$WORKFLOWS_RELEASE_META_DIR/locales.txt")" = '""' ] \
+    || fail "an empty NOTES_LOCALES reached the generator as $(cat "$WORKFLOWS_RELEASE_META_DIR/locales.txt")"
+}
+
+@test "an empty NOTES_LOCALES stays empty on the release-body path too" {
+  mkdir -p "$ROOT/scripts/release"
+  cat > "$ROOT/scripts/release/notes.mjs" <<'JS'
+import { writeFileSync, mkdirSync } from "node:fs";
+const out = process.argv[process.argv.indexOf("--out") + 1];
+mkdirSync(out, { recursive: true });
+writeFileSync(`${out}/argv.txt`, process.argv.slice(2).join(" ") + "\n");
+writeFileSync(`${out}/locales.txt`, JSON.stringify(process.env.NOTES_LOCALES ?? null) + "\n");
+writeFileSync(`${out}/store-notes.json`, "{}\n");
+writeFileSync(`${out}/notes-store.txt`, "- x\n");
+JS
+  printf 'the release body\n' > "$BATS_TEST_TMPDIR/body.md"
+  RELEASE_BODY_FILE="$BATS_TEST_TMPDIR/body.md" notes
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$(cat "$WORKFLOWS_RELEASE_META_DIR/argv.txt")" "--from-body" || fail "the body path did not run"
+  not_contains "$(cat "$WORKFLOWS_RELEASE_META_DIR/argv.txt")" "--locales" || fail "an empty NOTES_LOCALES became a flag"
+  [ "$(cat "$WORKFLOWS_RELEASE_META_DIR/locales.txt")" = '""' ] \
+    || fail "an empty NOTES_LOCALES reached the generator as $(cat "$WORKFLOWS_RELEASE_META_DIR/locales.txt")"
 }
 
 # notes.mjs is the consumer's code: what it produces is asserted, not trusted.

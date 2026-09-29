@@ -1319,7 +1319,7 @@ writes `build-info.json` and the store notes, and uploads them as the
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | The consumer checkout uses `fetch-depth: 0` — version resolution reads `v*` tags and counts first-parent commits, and both are empty in a shallow clone |
 | `build-number-offset` | `1000` | Added to the first-parent commit count. Raise it, never lower it: App Store Connect and Play both permanently reject a build number that goes backwards |
-| `notes-locales` | `en-US` | Locales handed to the consumer's `scripts/release/notes.mjs`, and passed to it as `--locales`. **Store metadata locale names, not language codes** — App Store Connect and Play key their listings on the full form (`en-US`, `de-DE`, `pt-BR`); a bare `en` matches no listing |
+| `notes-locales` | `''` | Locales handed to the consumer's `scripts/release/notes.mjs`, and passed to it as `--locales`. **Store metadata locale names, not language codes** — App Store Connect and Play key their listings on the full form (`en-US`, `de-DE`, `pt-BR`); a bare `en` matches no listing. Empty lets the generator decide: the template's emits one per `fastlane/metadata/ios` locale directory |
 | `stage` | `internal` | Written to `build-info.json`'s `stage` |
 | `release-body-file` | `''` | Consumer-relative file holding a release body; switches note generation to `--from-body` |
 | `release-tag` | `''` | Existing release tag whose **body** becomes the store notes, fetched with `gh release view`. It also becomes the checked-out ref and the gated/stamped commit — see [Preparing from a release tag](#preparing-from-a-release-tag) |
@@ -1686,7 +1686,7 @@ never regenerate what was reviewed.
 | `dry-run` | `false` | Generate the section and edit no PR: the body a real run would write, and whether it would edit at all, go to the job summary. See [Rehearsing the release PR notes](#rehearsing-the-release-pr-notes) |
 | `body-file` | `''` | Path, relative to `working-directory`, of a release-please-shaped PR body to generate from instead of fetching the PR's. With `dry-run` the job needs no PR and calls no `gh`; without it, and with a `pr-number`, the edit writes this file's body plus the section to that PR |
 | `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `publish-github-release.yml` `append` replaces the block in place |
-| `notes-locales` | `en-US` | Locales handed to the consumer's `scripts/release/notes.mjs`; store metadata locale names, not language codes |
+| `notes-locales` | `''` | Locales handed to the consumer's `scripts/release/notes.mjs`; store metadata locale names, not language codes. Empty lets the generator decide |
 | `build-env` | `{}` | Non-secret environment for the generator: `RELEASE_NOTES_LLM_PROVIDER`, `RELEASE_NOTES_LLM_MODEL`, `OPENAI_BASE_URL`, `STORE_NOTES_INCLUDE_CHANGELOG` - see [`build-env`](#build-env) |
 
 Output: `section`, the rendered section as a multi-line string - the begin
