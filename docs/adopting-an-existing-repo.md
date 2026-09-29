@@ -124,6 +124,8 @@ is a warning in the report, not a failure. See
 | no `scripts/lib/workflow-calls.mjs`, `scripts/lib/workflow-calls.test.mjs` or `scripts/workflow-contract.test.mjs` | required | check-consumer-contract, which @blinkbitcoin/dev-config ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface |
 | no `scripts/check-lockfile.sh` or `scripts/check-lockfile.test.mjs` | required | the check-lockfile program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/release/build-info.sh`, `scripts/release/build-info.test.mjs` or `scripts/release/shared-copies.test.mjs` | required | release/build-info.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-i18n.sh` or `scripts/check-codegen.sh` | required | checks/i18n.sh and checks/codegen.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs; a copy in your repository is compared with them by nothing and drifts |
+| no `scripts/shellcheck.sh` | required | ci/lint-ci.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs: actionlint, zizmor and shellcheck at the pinned versions |
 
 ### If you call `check-unit.yml`
 

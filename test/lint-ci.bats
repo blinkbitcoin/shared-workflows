@@ -135,3 +135,36 @@ scripts() {
   grep zizmor "$MISE_LOG" | grep -qF -- "--config .github/zizmor.yml .github" \
     || fail "picked the root zizmor.yml over .github/zizmor.yml: $(grep zizmor "$MISE_LOG")"
 }
+
+@test "WORKFLOWS_SHELLCHECK_PATHS lints every directory it names and skips one that does not exist" {
+  scripts
+  mkdir -p "$GITHUB_WORKSPACE/.claude/skills/a"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$GITHUB_WORKSPACE/.claude/skills/a/y.sh"
+  WORKFLOWS_SHELLCHECK_PATHS="scripts .claude/skills missing" run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  line="$(grep shellcheck "$MISE_LOG")" || fail "shellcheck did not run: $(cat "$MISE_LOG")"
+  [[ "$line" == *"scripts/x.sh"* && "$line" == *".claude/skills/a/y.sh"* ]] || fail "not every directory was linted: $line"
+}
+
+@test "a named directory alone, with no scripts/ and no workflows, is still linted" {
+  mkdir -p "$GITHUB_WORKSPACE/tools"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$GITHUB_WORKSPACE/tools/z.sh"
+  WORKFLOWS_SHELLCHECK_PATHS=tools run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep shellcheck "$MISE_LOG" | grep -qF "tools/z.sh" || fail "tools/ was not linted: $(cat "$MISE_LOG")"
+  [[ "$output" != *"nothing to lint"* ]] || fail "gave up with a directory to lint: $output"
+}
+
+@test "names the directories it looked for when there is nothing to lint" {
+  WORKFLOWS_SHELLCHECK_PATHS="tools more" run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [[ "$output" == *"no tools more and no .github/workflows/"* ]] || fail "output: $output"
+}
+
+@test "run from the dev-config package, a consumer without a zizmor config gets the package's copy of the policy" {
+  workflows
+  run bash "$REPO_ROOT/packages/dev-config/ci/lint-ci.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep zizmor "$MISE_LOG" | grep -qF -- "--config $REPO_ROOT/packages/dev-config/zizmor.yml" \
+    || fail "the package's policy was not passed: $(grep zizmor "$MISE_LOG")"
+}
