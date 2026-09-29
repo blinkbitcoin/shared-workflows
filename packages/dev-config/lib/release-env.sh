@@ -69,8 +69,11 @@ workflows_fingerprint() {
     die "fingerprint:generate failed for $platform (is @expo/fingerprint a devDependency of the consumer?)"
   case "$out" in
     *'{'*)
-      require_cmd yq
-      out="$(printf '%s' "$out" | yq -r '.hash // ""')"
+      # node, not yq: dev-config ships this library to laptops that run
+      # build-info.sh --standalone, where node is always present and yq may not be.
+      # Output that does not parse reads as no hash, which the check below reports.
+      require_cmd node
+      out="$(printf '%s' "$out" | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c}).on("end",()=>{let h="";try{h=JSON.parse(s).hash}catch{}process.stdout.write(typeof h==="string"?h:"")})')"
       ;;
     *)
       out="$(printf '%s\n' "$out" | tr -d '[:space:]')"

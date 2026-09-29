@@ -89,8 +89,8 @@ this repository and the next consumer run the same code.
 ```sh
 check-docs-tables [--max 120] [file...]     # a markdown table cell line over the limit
 check-diagrams [--all] [file...]            # a mermaid block that does not parse
-check-shell-locale [--root DIR]             # LC_ALL=C cmd instead of env LC_ALL=C cmd
-check-make-target-names [--allow T=REASON]  # a make target named after the tool it runs
+check-shell-locale [--min-files N]          # LC_ALL=C cmd instead of env LC_ALL=C cmd
+check-make-target-names [--require-mise]    # a make target named after the tool it runs
 check-workflow-names --group ci=CI ...      # a workflow file or display name outside its group
 check-coverage-empty [summary.json]         # a Jest coverage row with nothing to cover
 ```
@@ -106,12 +106,16 @@ check-coverage-empty [summary.json]         # a Jest coverage row with nothing t
 - `check-shell-locale` reads every tracked shell file: scripts, bats files, the
   Makefile and the workflows' `run:` blocks. The prefix makes bash itself
   switch locale, which crashes a forked Homebrew bash on macOS now and then.
+  `--min-files N` fails a run that read fewer than N shell files, so a root or
+  filter that lost most of them fails rather than passing on the rest.
 - `check-make-target-names` takes the tools from `.mise.toml` and the unscoped
   packages in `package.json`, spares `setup-` targets, and fails on an
-  `--allow` that no longer applies.
+  `--allow` that no longer applies. A missing `.mise.toml` reads as no tools;
+  `--require-mise` fails instead, for a repository that pins its tools there.
 - `check-workflow-names` requires every file in `.github/workflows` to be
   `PREFIX.yml` or `PREFIX-*.yml` for a group, and, where the group has a
-  display name, its `name:` to be `DISPLAY` or `DISPLAY / ...`.
+  display name, its `name:` to be `DISPLAY` or `DISPLAY / ...`, with more than
+  blanks after the slash. `--min-files N` fails a directory with fewer files.
 - `check-coverage-empty` fails on a file with zero statements in a
   `coverage-summary.json`, which reads as 0% while the totals stay at 100%.
 
@@ -125,7 +129,13 @@ there answers exactly what CI will build:
 
 ```sh
 bash node_modules/@blinkbitcoin/dev-config/release/resolve-version.sh [dir]
+bash node_modules/@blinkbitcoin/dev-config/release/build-info.sh --standalone
 ```
+
+`--standalone` is for a laptop, where no earlier step ran: it resolves the
+version and build number and computes both fingerprints (the consumer's
+`fingerprint:generate`) for whatever is not already in the environment. In CI,
+without it, a missing version stays fatal.
 
 They are byte-identical copies of `scripts/release/` and `scripts/lib/` in
 shared-workflows, refreshed by `scripts/self/package-copies.sh --write` and

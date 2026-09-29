@@ -32,7 +32,12 @@ test('groups and a root are read from the arguments; anything else is refused', 
       { prefix: 'ci', display: 'CI' },
       { prefix: 'check', display: null },
     ],
+    minFiles: 1,
   });
+  assert.equal(parseArgs(['--group', 'ci', '--min-files', '10'], '/r').minFiles, 10);
+  assert.throws(() => parseArgs(['--group', 'ci', '--min-files', '0'], '/r'), /unexpected --min-files 0/);
+  assert.throws(() => parseArgs(['--group', 'ci', '--min-files', 'ten'], '/r'), /unexpected --min-files ten/);
+  assert.throws(() => parseArgs(['--group', 'ci', '--min-files'], '/r'), /unexpected --min-files:/);
   assert.throws(() => parseArgs([], '/r'), /name at least one --group/);
   assert.throws(() => parseArgs(['--group', 'CI='], '/r'), /unexpected --group CI=/);
   assert.throws(() => parseArgs(['--group'], '/r'), /unexpected --group:/);
@@ -65,6 +70,23 @@ test('a display name that does not match its prefix is named, with what it shoul
       'cd-x.yml displays as nothing (no top-level name:), not "CD / ..."',
     ],
   );
+});
+
+test('a display name with only blanks after the slash is named', () => {
+  assert.deepEqual(problems([wf('ci-web.yml', '"CI /  "'), wf('cd-beta.yml', "'CD / \t'")], TEMPLATE), [
+    'ci-web.yml displays as "CI /  ", not "CI / ..."',
+    'cd-beta.yml displays as "CD / \t", not "CD / ..."',
+  ]);
+});
+
+test('--min-files fails a directory holding fewer workflows than it names, and passes one with enough', () => {
+  const few = capture();
+  const two = () => [wf('ci.yml', 'CI'), wf('ci-web.yml', 'CI / Web')];
+  assert.equal(main(['--group', 'ci=CI', '--min-files', '3'], { ...few.io, cwd: '/r', read: two }), 1);
+  assert.deepEqual(few.err, ['workflow names: 2 workflow file(s) in /r/.github/workflows, fewer than --min-files 3']);
+  const enough = capture();
+  assert.equal(main(['--group', 'ci=CI', '--min-files', '2'], { ...enough.io, cwd: '/r', read: two }), 0);
+  assert.deepEqual(enough.out, ['workflow names ok (2 workflows)']);
 });
 
 test('a group without a display name requires only the prefix', () => {
