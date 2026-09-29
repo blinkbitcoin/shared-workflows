@@ -18,7 +18,7 @@ concurrency:
 # Callers rather than one job running `make check`, so a run graph names
 # the gate that failed: `Checks / Code`, `Checks / Security`, ...,
 # `Unit / Tests`, `Unit / Package`, `Release notes / Dry run / Draft` and
-# `Release notes / Check output`. That is the shape a consumer's own CI has,
+# `Release notes / Validate`. That is the shape a consumer's own CI has,
 # and the reason to match it is the same one - a reader should see which gate
 # went red without opening a log.
 #

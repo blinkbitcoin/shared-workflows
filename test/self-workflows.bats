@@ -111,10 +111,10 @@ RELEASE_NOTES="$REPO_ROOT/.github/workflows/self-release-notes.yml"
 
 @test "self-release-notes.yml checks the section output with its own script" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.jobs.check.name' "$RELEASE_NOTES")" = "Check output" ] || fail "the output check was renamed"
-  [ "$(yq -r '.jobs.check.needs' "$RELEASE_NOTES")" = "dry-run" ] || fail "the section check does not wait on the dry run"
-  [ "$(yq -r '.jobs.check."timeout-minutes"' "$RELEASE_NOTES")" != "null" ] || fail "the section check has no timeout"
-  step="$(yq -r '.jobs.check.steps[] | select(.run != null)' "$RELEASE_NOTES")"
+  [ "$(yq -r '.jobs."validate".name' "$RELEASE_NOTES")" = "Validate" ] || fail "the validate job was renamed"
+  [ "$(yq -r '.jobs.validate.needs' "$RELEASE_NOTES")" = "dry-run" ] || fail "the section check does not wait on the dry run"
+  [ "$(yq -r '.jobs.validate."timeout-minutes"' "$RELEASE_NOTES")" != "null" ] || fail "the section check has no timeout"
+  step="$(yq -r '.jobs.validate.steps[] | select(.run != null)' "$RELEASE_NOTES")"
   [ "$(yq -r '.run' <<<"$step")" = "bash scripts/self/check-release-notes-section.sh" ] \
     || fail "the section check does not run scripts/self/check-release-notes-section.sh: $step"
   [ "$(yq -r '.env.SECTION' <<<"$step")" = '${{ needs.dry-run.outputs.section }}' ] \

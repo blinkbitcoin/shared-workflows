@@ -1,7 +1,7 @@
 name: Self release notes
 # pr-release-notes.yml, executed for real against the template, in a dry run.
 # Called from self-ci.yml on every change, which turns these into
-# `Release notes / Dry run / Draft` and `Release notes / Check output`, and
+# `Release notes / Dry run / Draft` and `Release notes / Validate`, and
 # from self-release.yml, whose major-tag job waits on it: `v0` never moves to a
 # commit whose dry run failed.
 #
@@ -37,8 +37,8 @@ jobs:
       ref: main
       dry-run: true
       body-file: scripts/release/fixtures/release-body.md
-  check:
-    name: Check output
+  validate:
+    name: Validate
     needs: dry-run
     runs-on: ubuntu-latest
     timeout-minutes: 5
