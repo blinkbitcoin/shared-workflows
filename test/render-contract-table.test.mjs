@@ -146,6 +146,13 @@ test('copies a consumer must not hold read as what it must not have, any one of 
   );
 });
 
+test('the one-pin row reads as the agreement it checks, not its unused target', () => {
+  assert.equal(
+    targetOf({ kind: 'one-pin', target: null }),
+    'one shared-workflows commit for every call, package and lockfile entry',
+  );
+});
+
 // --- the table -------------------------------------------------------------
 
 test('each profile with requirements gets a titled section, one row per requirement', () => {

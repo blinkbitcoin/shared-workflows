@@ -119,6 +119,28 @@ check-coverage-empty [summary.json]         # a Jest coverage row with nothing t
 - `check-coverage-empty` fails on a file with zero statements in a
   `coverage-summary.json`, which reads as 0% while the totals stay at 100%.
 
+## One commit of shared-workflows
+
+A consumer calls the workflows pinned to a commit SHA and takes this family's
+packages as git dependencies at that same commit. Dependabot moves the `uses:`
+pins and cannot move a git dependency with them, so two programs keep the rest
+in step:
+
+```sh
+fix-tooling-pin [--root DIR]    # move every @blinkbitcoin/* git dependency to the workflows pin, then pnpm install
+check-lockfile [--root DIR]     # every lockfile resolution is the npm registry, or this family at the pin
+```
+
+- `fix-tooling-pin` refuses to run while the calls pin more than one commit, a
+  branch or tag, or a SHA with no `# vX.Y.Z` beside it. After the install it
+  checks the lockfile, so a pin it could not reach fails.
+- `check-lockfile` allows one git source, shared-workflows' `packages/<name>` at
+  the workflows pin. CI already runs that commit's code, so installing it adds
+  no trust. Another repository, path or commit fails, and so does every git
+  source when the calls pin no single commit.
+- `check-consumer-contract`'s `pin.one-commit` row asserts the same agreement:
+  every call, and each package in `package.json` and `pnpm-lock.yaml`.
+
 ## Release scripts
 
 `release/resolve-version.sh` and `release/build-info.sh` are the scripts

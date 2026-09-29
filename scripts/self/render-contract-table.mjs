@@ -47,6 +47,7 @@ export function need(req) {
  * "node or pnpm" would read as a choice the reader does not have.
  */
 export function targetOf(req) {
+  if (req.kind === 'one-pin') return 'one shared-workflows commit for every call, package and lockfile entry';
   const all = Array.isArray(req.target) ? req.target : [req.target];
   const quoted = all.map((t) => `\`${t}\``);
   const conjunction = ['file', 'no-copy'].includes(req.kind) ? 'or' : 'and';

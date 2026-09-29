@@ -2,7 +2,7 @@
   "$comment": "The consumer contract, as data. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-consumer-contract.mjs (the doctor), docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
 
   "$schema-notes": {
-    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. script-or-dep: either (knip, which is deliberately a binary and not a script). file: any one of target exists. dir-nonempty: target is a directory with at least one entry. mise-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted.",
+    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. script-or-dep: either (knip, which is deliberately a binary and not a script). file: any one of target exists. dir-nonempty: target is a directory with at least one entry. mise-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. one-pin: every shared-workflows call pins one full commit SHA with its # vX.Y.Z, and each of this family's packages in package.json and pnpm-lock.yaml is at that commit (target unused). no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted.",
     "toggle": "The workflow_call input that decides whether this is needed at all, as `workflow.yml:input`. The doctor reads the caller's own `with:` block first and falls back to defaultOn.",
     "severity": "required: the gate cannot run without it and the job dies. degrades: shared-workflows has a fallback, so the gate still runs but not as the consumer defined it. optional: nothing happens unless the consumer opts in.",
     "guide": "Anchor in docs/consumer-guide.md."
@@ -833,6 +833,71 @@
       "defaultOn": true,
       "severity": "required",
       "fix": "Delete the copy and its test, and run node_modules/@blinkbitcoin/dev-config/release/resolve-version.sh (make version) instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "pin.one-commit",
+      "kind": "one-pin",
+      "label": "one shared-workflows commit everywhere",
+      "target": null,
+      "profile": "checks",
+      "neededBy": "every call and every package of this family, read at one commit: a pin bump that moves the workflows and not the packages runs CI on one commit and a laptop on another",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Pin every shared-workflows call to the same full commit SHA with its # vX.Y.Z beside it, then run pnpm exec fix-tooling-pin to move this family's packages and the lockfile to that commit.",
+      "guide": "one-commit-everywhere"
+    },
+    {
+      "id": "no-copy.tooling-pin",
+      "kind": "no-copy",
+      "label": "no copy of tooling-pin.mjs",
+      "target": ["scripts/tooling-pin.mjs", "scripts/tooling-pin.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the fix-tooling-pin program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and run pnpm exec fix-tooling-pin (make fix-tooling-pin) instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.workflow-contract",
+      "kind": "no-copy",
+      "label": "no copy of the workflow call contract",
+      "target": ["scripts/lib/workflow-calls.mjs", "scripts/lib/workflow-calls.test.mjs", "scripts/workflow-contract.test.mjs"],
+      "profile": "checks",
+      "neededBy": "check-consumer-contract, which @blinkbitcoin/dev-config ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copies, and run pnpm exec check-consumer-contract (make check-contract) instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-lockfile",
+      "kind": "no-copy",
+      "label": "no copy of check-lockfile",
+      "target": ["scripts/check-lockfile.sh", "scripts/check-lockfile.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-lockfile program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and run pnpm exec check-lockfile instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.build-info",
+      "kind": "no-copy",
+      "label": "no copy of build-info.sh",
+      "target": ["scripts/release/build-info.sh", "scripts/release/build-info.test.mjs", "scripts/release/shared-copies.test.mjs"],
+      "profile": "checks",
+      "neededBy": "release/build-info.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its tests, and run node_modules/@blinkbitcoin/dev-config/release/build-info.sh --standalone on a laptop instead.",
       "guide": "no-copies-of-this-family"
     }
   ]

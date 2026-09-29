@@ -81,6 +81,7 @@ test('every requirement declares the fields the report depends on', () => {
     'ci-runs-make-ci',
     'fastlane-env-subset',
     'no-copy',
+    'one-pin',
   ]);
   const profiles = new Set(readContract().profiles);
   for (const r of readContract().requirements) {
@@ -648,6 +649,38 @@ test('a directory requirement wants the directory to hold something', () => {
   const withFlows = consumer({ dirs: ['.maestro'] });
   assert.deepEqual(checkRequirement(req('dir.maestro'), withFlows), { status: 'ok', detail: undefined });
   assert.deepEqual(checkRequirement(req('dir.maestro'), consumer()), { status: 'missing', reason: '.maestro/ is missing or empty' });
+});
+
+const PIN = '1'.repeat(40);
+const pinnedCaller = (sha = PIN) => ({
+  'ci.yml': `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@${sha} # v1.0.0\n`,
+});
+const pinnedPkg = (sha = PIN) => ({
+  devDependencies: { '@blinkbitcoin/dev-config': `github:blinkbitcoin/shared-workflows#${sha}&path:/packages/dev-config` },
+});
+const pinnedLock = (sha = PIN) => ({
+  'pnpm-lock.yaml': `    version: https://codeload.github.com/blinkbitcoin/shared-workflows/tar.gz/${sha}#path:/packages/dev-config\n`,
+});
+
+test('the one-pin requirement passes when calls, package.json and the lockfile share one commit', () => {
+  const c = consumer({ callers: pinnedCaller(), pkg: pinnedPkg(), files: pinnedLock() });
+  assert.deepEqual(checkRequirement(req('pin.one-commit'), c), { status: 'ok', detail: undefined });
+});
+
+test('the one-pin requirement names a package left behind by a pin bump', () => {
+  const old = '2'.repeat(40);
+  const c = consumer({ callers: pinnedCaller(), pkg: pinnedPkg(old), files: pinnedLock(old) });
+  assert.deepEqual(checkRequirement(req('pin.one-commit'), c), {
+    status: 'missing',
+    reason: `package.json takes @blinkbitcoin/dev-config at ${old}, but the workflows pin ${PIN}: run \`pnpm exec fix-tooling-pin\``,
+  });
+});
+
+test('the one-pin requirement joins every problem into one reason', () => {
+  const c = consumer({ callers: { ...pinnedCaller(), 'cd.yml': pinnedCaller('v0')['ci.yml'] } });
+  const result = checkRequirement(req('pin.one-commit'), c);
+  assert.equal(result.status, 'missing');
+  assert.match(result.reason, /the calls pin 2 refs/);
 });
 
 test('a no-copy requirement passes when the consumer holds none of the copies', () => {

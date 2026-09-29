@@ -242,6 +242,26 @@ anything that would serve a second app belongs in this repository, and a
 consumer calls it. That includes the pipeline itself, not just scripts: which
 jobs run, in what order, behind which gates, and what they are called.
 
+### One commit everywhere
+
+Every call pins shared-workflows to the same full commit SHA, with its
+`# vX.Y.Z` beside it. `@blinkbitcoin/dev-config` and any other package of this
+family come in as git dependencies at that same commit:
+
+```json
+"@blinkbitcoin/dev-config": "github:blinkbitcoin/shared-workflows#<sha>&path:/packages/dev-config"
+```
+
+One commit covers both, so a laptop runs the same contract, tool table and
+release scripts that CI runs. Dependabot moves the `uses:` pins and cannot move
+the package with them, so on its pull request run `pnpm exec fix-tooling-pin`.
+It moves every package to the pin and relocks. Until it runs, the contract's
+`pin.one-commit` row blocks. `pnpm exec check-lockfile` allows exactly that one
+git source in the lockfile and nothing else from outside the npm registry.
+
+A caller on the `@v0` tag passes as long as every call uses it. A tag moves, so
+no package can be held to it; pin a commit SHA to take packages from git.
+
 ## When something is missing
 
 Two shapes of failure, and which one you get is deliberate.
