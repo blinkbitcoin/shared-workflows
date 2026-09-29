@@ -9,13 +9,15 @@
 #
 # Covers: sourcing it succeeds silently under `set -euo pipefail`; each of the
 # ten pins is defined, non-empty, shaped like a version and exported to child
-# processes; and every line of the file that is not a comment is a plain
-# `export NAME="value"`, so sourcing it cannot run a command. Whether the pins agree with .mise.toml is
+# processes; each checksum (the SHA-256 of a pinned download) is 64 hex
+# digits and exported; and every line of the file that is not a comment is a
+# plain `export NAME="value"`, so sourcing it cannot run a command. Whether the pins agree with .mise.toml is
 # check-versions.sh's job, tested in test/plumbing.bats.
 
 load test_helper
 
 PINS="MAESTRO_VERSION ANDROID_API_LEVEL ACTIONLINT_VERSION SHELLCHECK_VERSION YQ_VERSION TYPOS_VERSION LEFTHOOK_VERSION ZIZMOR_VERSION GITLEAKS_VERSION BUNDLETOOL_VERSION"
+CHECKSUMS="MAESTRO_SHA256"
 
 @test "sourcing it succeeds silently under strict mode" {
   run bash -c 'set -euo pipefail; source "$REPO_ROOT/scripts/lib/versions.sh"'
@@ -41,16 +43,26 @@ PINS="MAESTRO_VERSION ANDROID_API_LEVEL ACTIONLINT_VERSION SHELLCHECK_VERSION YQ
   done
 }
 
-@test "the file defines exactly the known pins, and nothing else" {
-  # A new pin is added here in the same change, so it is checked above too.
+@test "every checksum is a SHA-256 and is exported to child processes" {
+  local name value
+  for name in $CHECKSUMS; do
+    value="$(bash -c 'source "$REPO_ROOT/scripts/lib/versions.sh"; printenv "$1"' _ "$name")" || true
+    [ -n "$value" ] || fail "$name is not exported to a child process"
+    printf '%s' "$value" | grep -qE '^[0-9a-f]{64}$' || fail "$name is not a SHA-256: $value"
+  done
+}
+
+@test "the file defines exactly the known pins and checksums, and nothing else" {
+  # A new pin or checksum is added here in the same change, so it is checked
+  # above too. Digits in the name pattern: `MAESTRO_SHA256` has two.
   local declared expected
-  declared="$(sed -n 's/^export \([A-Z_]*\)=.*/\1/p' "$REPO_ROOT/scripts/lib/versions.sh" | sort | tr '\n' ' ')"
-  expected="$(printf '%s\n' $PINS | sort | tr '\n' ' ')"
+  declared="$(sed -n 's/^export \([A-Z0-9_]*\)=.*/\1/p' "$REPO_ROOT/scripts/lib/versions.sh" | sort | tr '\n' ' ')"
+  expected="$(printf '%s\n' $PINS $CHECKSUMS | sort | tr '\n' ' ')"
   [ "$declared" = "$expected" ] || fail "declared: $declared; expected: $expected"
 }
 
 @test "every line but a comment is a plain export of a quoted value, so sourcing runs no command" {
   local bad
-  bad="$(grep -vnE '^(#.*|export [A-Z_]+="[0-9.]+")$' "$REPO_ROOT/scripts/lib/versions.sh" || true)"
+  bad="$(grep -vnE '^(#.*|export [A-Z_]+="[0-9.]+"|export [A-Z0-9_]+_SHA256="[0-9a-f]{64}")$' "$REPO_ROOT/scripts/lib/versions.sh" || true)"
   [ -z "$bad" ] || fail "lines that are not a plain pin: $bad"
 }

@@ -57,6 +57,10 @@ on:
         description: Maestro CLI version (kept equal to scripts/lib/versions.sh MAESTRO_VERSION; enforced by scripts/self/check-versions.sh)
         type: string
         default: '2.10.0'
+      maestro-sha256:
+        description: SHA-256 of maestro-version's release archive; empty for the pinned version, required for any other (the install refuses unverified bytes)
+        type: string
+        default: ''
       maestro-flows:
         description: Flows directory, consumer-relative
         type: string
@@ -299,6 +303,7 @@ jobs:
         uses: ./.workflows/.github/actions/maestro
         with:
           version: ${{ inputs.maestro-version }}
+          sha256: ${{ inputs.maestro-sha256 }}
       # A Release build embeds its bundle and never asks Metro for one, so
       # starting it - and prewarming a bundle nothing reads - is pure wall clock.
       # The setup hook stays unconditional: the mock API it starts is a runtime
@@ -474,6 +479,7 @@ jobs:
         uses: ./.workflows/.github/actions/maestro
         with:
           version: ${{ inputs.maestro-version }}
+          sha256: ${{ inputs.maestro-sha256 }}
       - name: Enable KVM
         run: bash "$WORKFLOWS_DIR/scripts/ci/enable-kvm.sh"
       - name: Start Metro
