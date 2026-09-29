@@ -17,7 +17,8 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 # Callers rather than one job running `make check`, so a run graph names
 # the gate that failed: `Checks / Code`, `Checks / Security`, ...,
-# `Unit / Tests`, `Unit / Package` and `Consumer rehearsal / Section`. That is the shape a consumer's own CI has,
+# `Unit / Tests`, `Unit / Package`, `Release notes / Dry run / Draft` and
+# `Release notes / Check output`. That is the shape a consumer's own CI has,
 # and the reason to match it is the same one - a reader should see which gate
 # went red without opening a log.
 #
@@ -67,12 +68,12 @@ jobs:
     with:
       package: ${{ needs.changes.outputs.package != 'false' }}
   # pr-release-notes.yml run for real against the template, in a dry run: the
-  # one reusable workflow a pull request here can execute (self-rehearsal.yml
+  # one reusable workflow a pull request here can execute (self-release-notes.yml
   # says why). The grant is the one the called job declares, and a called
   # workflow can never hold more than its caller grants.
-  rehearsal:
-    name: Consumer rehearsal
-    uses: ./.github/workflows/self-rehearsal.yml
+  release-notes:
+    name: Release notes
+    uses: ./.github/workflows/self-release-notes.yml
     permissions:
       contents: read
       pull-requests: write

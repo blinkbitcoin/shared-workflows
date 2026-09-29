@@ -46,7 +46,7 @@ flowchart TD
   release["self-release.yml, release-please job (pr-release.yml)"]
   pr["release PR: chore(main) release X.Y.Z"]
   tag["tag vX.Y.Z and its GitHub release"]
-  rehearsal["rehearsal job: pr-release-notes.yml against the template, dry run"]
+  notes["release-notes job: pr-release-notes.yml against the template, dry run"]
   major["major-tag job, scripts/self/tag-major.sh"]
   moving["v0 and v0.&lt;minor&gt;"]
   consumer["a consumer pinned @v0"]
@@ -55,8 +55,8 @@ flowchart TD
   release -->|"opens, or rebuilds on each push"| pr
   pr -->|"squash merge, push to main"| release
   release -->|"release-created is true"| tag
-  tag -->|"the release commit"| rehearsal
-  rehearsal -->|"passed; a failure leaves the tags where they were"| major
+  tag -->|"the release commit"| notes
+  notes -->|"passed; a failure leaves the tags where they were"| major
   tag -->|"tag-name"| major
   major -->|"git push -f to that commit"| moving
   moving -->|"the tag is resolved when a run starts"| consumer
@@ -70,7 +70,7 @@ touches one line of copy can fail in a build step that changed in this
 repository an hour earlier. Two consequences worth acting on: after a release
 here, the family watches the template's `CD / Internal` run, which is the first
 real execution of the reusable release workflows (the one gate in this
-repository that executes a reusable workflow is the consumer rehearsal of
+repository that executes a reusable workflow is the dry run of
 `pr-release-notes.yml`, which `v0` waits on; the build and publish workflows
 run only inside a consumer — see `AGENTS.md`); and a repository that wants to
 decide when it moves pins `@v0.<minor>` or a full commit sha instead of `@v0`,
@@ -1436,7 +1436,7 @@ uploads, promotions, staged rollouts, halts.
 | `platform` | (required) | `ios` or `android` |
 | `lane` | (required) | The fastlane lane to run - fastlane's word for a named task in the consumer's `Fastfile`; it never appears in a run graph, where this job shows as `<caller job> / Store`.<br>`ios build\|verify\|upload_internal\|promote_beta\|release_production\|phased\|upload_symbols`, `android build\|verify\|upload_internal\|promote_beta\|release_production\|rollout\|halt\|upload_huawei` |
 | `lane-args` | `''` | Space-separated fastlane `key:value` arguments (e.g. `percentage:0.1`) |
-| `dry-run` | `false` | Rehearse the lane instead of running it for real - see [Dry-running a lane](#dry-running-a-lane) |
+| `dry-run` | `false` | Run the lane without touching a store - see [Dry-running a lane](#dry-running-a-lane) |
 | `runner` | `ubuntu-latest` | An iOS lane that touches Xcode needs a macOS runner; a store-API-only lane does not |
 | `environment` | `''` | GitHub Environment gating the lane (this is where a production approval belongs) |
 | `env-json` | `{}` | Flat JSON object published into the lane's environment. **Configuration only** — the values are printed to the log; credentials belong in `secrets:` |
@@ -1527,11 +1527,11 @@ Connect or Play.
 
 This is also the variable the template's `cd-store-listing.yml` already
 forwards through `env-json`'s `DRY_RUN` key (that workflow's own `dry_run`
-dispatch input defaults to `true`, so a listing sync is a rehearsal unless
+dispatch input defaults to `true`, so a listing sync is a dry run unless
 someone opts out). The two are OR'd in the Fastlane lane step's env
 (`(inputs.dry-run || env.DRY_RUN == '1') && '1' || '0'`), not one replacing the
 other: this input's default of `false` leaves an env-json-supplied `DRY_RUN`
-alone, so `cd-store-listing.yml` keeps rehearsing by default exactly as it did
+alone, so `cd-store-listing.yml` keeps dry-running by default exactly as it did
 before this input existed, and a caller may now set either the input or
 `env-json`'s key - whichever reads better at the call site - and get the same
 result.
@@ -1668,7 +1668,7 @@ jobs:
       dispatch-on-release: |
         cd-beta.yml tag={tag}
   store-notes:
-    name: Store Notes
+    name: Release notes
     needs: release-please
     if: ${{ needs.release-please.outputs.pr-number != '' }}
     uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
@@ -1699,7 +1699,7 @@ never regenerate what was reviewed.
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Pass the release PR's head branch as `ref`, so the prompt template and the generator are the ones under release. `macos-runner` and `native-cache-version` are unused here |
 | `pr-number` | `''` | The release PR whose body receives the section: release-please's `pr` output, parsed in the caller's shell (`jq -r '.number // empty'`), never with `fromJSON()` in a step `env:` - the runner validates that even when the step's `if` is false, and the output is empty on a push that opens no PR. Required, except in a dry run with `body-file` |
-| `dry-run` | `false` | Generate the section and edit no PR: the body a real run would write, and whether it would edit at all, go to the job summary. See [Rehearsing the release PR notes](#rehearsing-the-release-pr-notes) |
+| `dry-run` | `false` | Generate the section and edit no PR: the body a real run would write, and whether it would edit at all, go to the job summary. See [Dry-running the release PR notes](#dry-running-the-release-pr-notes) |
 | `body-file` | `''` | Path, relative to `working-directory`, of a release-please-shaped PR body to generate from instead of fetching the PR's. With `dry-run` the job needs no PR and calls no `gh`; without it, and with a `pr-number`, the edit writes this file's body plus the section to that PR |
 | `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `publish-github-release.yml` `append` replaces the block in place |
 | `notes-locales` | `''` | Locales handed to the consumer's `scripts/release/notes.mjs`; store metadata locale names, not language codes. Empty lets the generator decide |
@@ -1713,7 +1713,7 @@ edited. Secrets: `consumer-token`, `ANTHROPIC_API_KEY` and
 generator drafts with an LLM, and without a generator the section is the
 commit-subject fallback, with a warning). The job declares
 `permissions: contents: read, pull-requests: write`, which the calling job
-must grant - in a dry run too, which writes nothing with it: a rehearsal asks
+must grant - in a dry run too, which writes nothing with it: a dry run asks
 for exactly what the real call asks for, so it fails where an under-granting
 caller would.
 
@@ -1744,7 +1744,7 @@ The template's `cd-release.yml` calls it as a second job:
 
 ```yaml
   store-notes:
-    name: Store Notes
+    name: Release notes
     needs: release-please
     if: ${{ needs.release-please.outputs.pr-number != '' }}
     uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
@@ -1766,10 +1766,10 @@ The template's `cd-release.yml` calls it as a second job:
 
 where the first job exposes `pr-number` and `pr-branch` from release-please's
 `pr` output, parsed in the shell. Nothing downstream waits on this job: the
-beta and web dispatches live in the first job, so a red `Store Notes` never
+beta and web dispatches live in the first job, so a red `Release notes` job never
 withholds a release, and `gh run rerun --failed` re-drafts the section.
 
-#### Rehearsing the release PR notes
+#### Dry-running the release PR notes
 
 A release PR exists only between a release-please push and its merge, so
 without a dry run this workflow is first executed by the push that needs it.
@@ -1786,14 +1786,14 @@ then stops before the edit:
 - a generator that fails, or notes carrying a line of dashes or an HTML tag,
   fail the job exactly as they would on the release PR.
 
-A consumer rehearses on its own pull requests with one more job in its CI
+A consumer dry-runs it on its own pull requests with one more job in its CI
 caller. The body file is release-please-shaped - a changelog entry, optionally
 between the two `---` lines of a PR body; one without the rules gets the
 section appended:
 
 ```yaml
-  notes-rehearsal:
-    name: Release PR notes rehearsal
+  release-notes-dry-run:
+    name: Release notes dry run
     uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
     permissions:
       contents: read
@@ -1803,14 +1803,14 @@ section appended:
       body-file: scripts/release/fixtures/release-body.md
 ```
 
-A job that `needs: notes-rehearsal` can then hold
-`needs.notes-rehearsal.outputs.section` to what a release PR must carry: not
-empty, the begin marker as its first line and the end marker as its last.
-Pass no secrets there unless the rehearsal should spend LLM tokens on every
+A job that `needs: release-notes-dry-run` can then hold
+`needs.release-notes-dry-run.outputs.section` to what a release PR must carry:
+not empty, the begin marker as its first line and the end marker as its last.
+Pass no secrets there unless the dry run should spend LLM tokens on every
 pull request; without a key the generator drafts without the LLM pass. This
-repository runs the same rehearsal against the template's `main`, with that
+repository runs the same dry run against the template's `main`, with that
 fixture, on every one of its own pull requests and before `v0` moves
-(`self-rehearsal.yml`).
+(`self-release-notes.yml`).
 
 ### `publish-promotion-retry.yml`
 

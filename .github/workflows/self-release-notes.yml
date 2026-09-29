@@ -1,9 +1,9 @@
-name: Self rehearsal
+name: Self release notes
 # pr-release-notes.yml, executed for real against the template, in a dry run.
 # Called from self-ci.yml on every change, which turns these into
-# `Consumer rehearsal / Release PR notes / Store Notes` and
-# `Consumer rehearsal / Section`, and from self-release.yml, whose major-tag
-# job waits on it: `v0` never moves to a commit whose rehearsal failed.
+# `Release notes / Dry run / Draft` and `Release notes / Check output`, and
+# from self-release.yml, whose major-tag job waits on it: `v0` never moves to a
+# commit whose dry run failed.
 #
 # Every other reusable workflow runs only inside a consumer (or under act, on
 # a laptop), so a mistake in one ships with every gate here green. This one
@@ -11,7 +11,7 @@ name: Self rehearsal
 # release PR and edits nothing: the template keeps a release-please-shaped
 # body at the path below for exactly this.
 #
-# The trade, taken on purpose: the rehearsal reads the template's main, so a
+# The trade, taken on purpose: the dry run reads the template's main, so a
 # broken generator there turns this repository's CI red until the template is
 # fixed. That is the consumer every release here is first executed by, so it
 # is also the failure a release here would otherwise ship into.
@@ -23,10 +23,10 @@ on:
   workflow_call:
 permissions: { contents: read }
 jobs:
-  notes:
-    name: Release PR notes
+  dry-run:
+    name: Dry run
     uses: ./.github/workflows/pr-release-notes.yml
-    # What the called job declares, so the rehearsal fails exactly where an
+    # What the called job declares, so the dry run fails exactly where an
     # under-granting consumer caller would. A dry run from a body file writes
     # nothing with it; on a fork's pull request the token is read-only anyway.
     permissions:
@@ -37,9 +37,9 @@ jobs:
       ref: main
       dry-run: true
       body-file: scripts/release/fixtures/release-body.md
-  section:
-    name: Section
-    needs: notes
+  check:
+    name: Check output
+    needs: dry-run
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,5 +47,5 @@ jobs:
         with:
           persist-credentials: false
       - env:
-          SECTION: ${{ needs.notes.outputs.section }}
-        run: bash scripts/self/check-rehearsal-section.sh
+          SECTION: ${{ needs.dry-run.outputs.section }}
+        run: bash scripts/self/check-release-notes-section.sh

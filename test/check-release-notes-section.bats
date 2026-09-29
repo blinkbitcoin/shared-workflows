@@ -6,7 +6,7 @@
 load test_helper
 
 setup() {
-  CHECK="$REPO_ROOT/scripts/self/check-rehearsal-section.sh"
+  CHECK="$REPO_ROOT/scripts/self/check-release-notes-section.sh"
   unset SECTION SECTION_TITLE
   printf '• close the alerts\n• speed up launch\n' > "$BATS_TEST_TMPDIR/notes"
 }

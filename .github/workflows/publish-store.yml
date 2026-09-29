@@ -44,11 +44,11 @@ on:
         default: ''
       dry-run:
         description: >-
-          Rehearse the lane instead of running it for real. Threads DRY_RUN=1
+          Run the lane without touching a store. Threads DRY_RUN=1
           into the environment the lane runs in, which is the consumer's own
           mechanism (fastlane/lanes/shared.rb's store_action gate, wrapping
           every deliver/pilot/supply/AppGallery call) rather than a bespoke
-          branch here - the rehearsal walks the exact same code path a real
+          branch here - the dry run walks the exact same code path a real
           run does, resolving credentials, building the lane's arguments and
           validating metadata paths, and stops short of only the store call
           itself. Same name and meaning as the template's cd-store-listing.yml

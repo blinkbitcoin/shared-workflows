@@ -80,73 +80,77 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 }
 
 # --------------------------------------------------------------------------
-# The consumer rehearsal: pr-release-notes.yml, executed for real.
+# The release notes dry run: pr-release-notes.yml, executed for real.
 #
 # Every other reusable workflow runs only inside a consumer, so a mistake in
-# one ships with every gate here green. self-rehearsal.yml runs this one
+# one ships with every gate here green. self-release-notes.yml runs this one
 # against the template in a dry run, on every change and before `v0` moves.
 # --------------------------------------------------------------------------
-REHEARSAL="$REPO_ROOT/.github/workflows/self-rehearsal.yml"
+RELEASE_NOTES="$REPO_ROOT/.github/workflows/self-release-notes.yml"
 
-@test "self-rehearsal.yml runs the local pr-release-notes.yml against the template in a dry run" {
+@test "self-release-notes.yml runs the local pr-release-notes.yml against the template in a dry run" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.on | has("workflow_call")' "$REHEARSAL")" = "true" ] || fail "self-rehearsal.yml is not callable"
-  # Local, not @v0: the rehearsal has to run the ref under review.
-  [ "$(yq -r '.jobs.notes.uses' "$REHEARSAL")" = "./.github/workflows/pr-release-notes.yml" ] \
-    || fail "the rehearsal does not call the local pr-release-notes.yml: $(yq -r '.jobs.notes.uses' "$REHEARSAL")"
-  [ "$(yq -r '.jobs.notes.with.repository' "$REHEARSAL")" = "blinkbitcoin/react-native-mobile-template" ] \
-    || fail "the rehearsal no longer targets the template"
-  [ "$(yq -r '.jobs.notes.with.ref' "$REHEARSAL")" = "main" ] || fail "the rehearsal no longer reads the template's main"
-  [ "$(yq -r '.jobs.notes.with."dry-run"' "$REHEARSAL")" = "true" ] || fail "the rehearsal is not a dry run - it would edit a PR"
-  [ "$(yq -r '.jobs.notes.with."body-file"' "$REHEARSAL")" = "scripts/release/fixtures/release-body.md" ] \
-    || fail "the rehearsal reads no body file, so it would need a release PR"
-  [ "$(yq -r '.jobs.notes.with."pr-number" // ""' "$REHEARSAL")" = "" ] || fail "the rehearsal names a PR"
-  [ "$(yq -r '.jobs.notes.secrets // "none"' "$REHEARSAL")" = "none" ] || fail "the rehearsal passes secrets"
-  [ "$(yq -r '.jobs.notes.permissions."pull-requests"' "$REHEARSAL")" = "write" ] \
-    || fail "the rehearsal does not grant what pr-release-notes.yml's job declares"
+  [ "$(yq -r '.on | has("workflow_call")' "$RELEASE_NOTES")" = "true" ] || fail "self-release-notes.yml is not callable"
+  [ "$(yq -r '.jobs."dry-run".name' "$RELEASE_NOTES")" = "Dry run" ] || fail "the dry run job was renamed"
+  [ "$(yq -r '.jobs.notes.name' "$REPO_ROOT/.github/workflows/pr-release-notes.yml")" = "Draft" ] \
+    || fail "pr-release-notes.yml's job was renamed"
+  # Local, not @v0: the dry run has to run the ref under review.
+  [ "$(yq -r '.jobs."dry-run".uses' "$RELEASE_NOTES")" = "./.github/workflows/pr-release-notes.yml" ] \
+    || fail "the dry run does not call the local pr-release-notes.yml: $(yq -r '.jobs."dry-run".uses' "$RELEASE_NOTES")"
+  [ "$(yq -r '.jobs."dry-run".with.repository' "$RELEASE_NOTES")" = "blinkbitcoin/react-native-mobile-template" ] \
+    || fail "the dry run no longer targets the template"
+  [ "$(yq -r '.jobs."dry-run".with.ref' "$RELEASE_NOTES")" = "main" ] || fail "the dry run no longer reads the template's main"
+  [ "$(yq -r '.jobs."dry-run".with."dry-run"' "$RELEASE_NOTES")" = "true" ] || fail "the dry-run input is off - it would edit a PR"
+  [ "$(yq -r '.jobs."dry-run".with."body-file"' "$RELEASE_NOTES")" = "scripts/release/fixtures/release-body.md" ] \
+    || fail "the dry run reads no body file, so it would need a release PR"
+  [ "$(yq -r '.jobs."dry-run".with."pr-number" // ""' "$RELEASE_NOTES")" = "" ] || fail "the dry run names a PR"
+  [ "$(yq -r '.jobs."dry-run".secrets // "none"' "$RELEASE_NOTES")" = "none" ] || fail "the dry run passes secrets"
+  [ "$(yq -r '.jobs."dry-run".permissions."pull-requests"' "$RELEASE_NOTES")" = "write" ] \
+    || fail "the dry run does not grant what pr-release-notes.yml's job declares"
 }
 
-@test "self-rehearsal.yml checks the section output with its own script" {
+@test "self-release-notes.yml checks the section output with its own script" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.jobs.section.needs' "$REHEARSAL")" = "notes" ] || fail "the section check does not wait on the rehearsal"
-  [ "$(yq -r '.jobs.section."timeout-minutes"' "$REHEARSAL")" != "null" ] || fail "the section check has no timeout"
-  step="$(yq -r '.jobs.section.steps[] | select(.run != null)' "$REHEARSAL")"
-  [ "$(yq -r '.run' <<<"$step")" = "bash scripts/self/check-rehearsal-section.sh" ] \
-    || fail "the section check does not run scripts/self/check-rehearsal-section.sh: $step"
-  [ "$(yq -r '.env.SECTION' <<<"$step")" = '${{ needs.notes.outputs.section }}' ] \
-    || fail "the section check does not read the rehearsal's section output: $step"
-  [ -f "$REPO_ROOT/scripts/self/check-rehearsal-section.sh" ] || fail "the check script is gone"
+  [ "$(yq -r '.jobs.check.name' "$RELEASE_NOTES")" = "Check output" ] || fail "the output check was renamed"
+  [ "$(yq -r '.jobs.check.needs' "$RELEASE_NOTES")" = "dry-run" ] || fail "the section check does not wait on the dry run"
+  [ "$(yq -r '.jobs.check."timeout-minutes"' "$RELEASE_NOTES")" != "null" ] || fail "the section check has no timeout"
+  step="$(yq -r '.jobs.check.steps[] | select(.run != null)' "$RELEASE_NOTES")"
+  [ "$(yq -r '.run' <<<"$step")" = "bash scripts/self/check-release-notes-section.sh" ] \
+    || fail "the section check does not run scripts/self/check-release-notes-section.sh: $step"
+  [ "$(yq -r '.env.SECTION' <<<"$step")" = '${{ needs.dry-run.outputs.section }}' ] \
+    || fail "the section check does not read the dry run's section output: $step"
+  [ -f "$REPO_ROOT/scripts/self/check-release-notes-section.sh" ] || fail "the check script is gone"
 }
 
-@test "self-ci.yml runs the rehearsal on every change, with the grant the called job declares" {
+@test "self-ci.yml runs the dry run on every change, with the grant the called job declares" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.jobs.rehearsal.uses' "$CI")" = "./.github/workflows/self-rehearsal.yml" ] \
-    || fail "self-ci.yml does not call self-rehearsal.yml"
-  [ "$(yq -r '.jobs.rehearsal.name' "$CI")" = "Consumer rehearsal" ] || fail "the rehearsal job was renamed"
-  [ "$(yq -r '.jobs.rehearsal.if // "always"' "$CI")" = "always" ] || fail "the rehearsal is gated: $(yq -r '.jobs.rehearsal.if' "$CI")"
-  [ "$(yq -r '.jobs.rehearsal.permissions.contents' "$CI")" = "read" ] || fail "the rehearsal job does not grant contents: read"
-  [ "$(yq -r '.jobs.rehearsal.permissions."pull-requests"' "$CI")" = "write" ] \
-    || fail "the rehearsal job does not grant pull-requests: write, so the called job cannot start"
+  [ "$(yq -r '.jobs."release-notes".uses' "$CI")" = "./.github/workflows/self-release-notes.yml" ] \
+    || fail "self-ci.yml does not call self-release-notes.yml"
+  [ "$(yq -r '.jobs."release-notes".name' "$CI")" = "Release notes" ] || fail "the release notes job was renamed"
+  [ "$(yq -r '.jobs."release-notes".if // "always"' "$CI")" = "always" ] || fail "the dry run is gated: $(yq -r '.jobs."release-notes".if' "$CI")"
+  [ "$(yq -r '.jobs."release-notes".permissions.contents' "$CI")" = "read" ] || fail "the dry run job does not grant contents: read"
+  [ "$(yq -r '.jobs."release-notes".permissions."pull-requests"' "$CI")" = "write" ] \
+    || fail "the dry run job does not grant pull-requests: write, so the called job cannot start"
 }
 
 # tag-major.sh force-moves `v0`, which every consumer resolves on its next run.
-# A release whose rehearsal failed must leave the tags where they were.
-@test "self-release.yml moves the major tag only after the release commit's rehearsal passed" {
+# A release whose dry run failed must leave the tags where they were.
+@test "self-release.yml moves the major tag only after the release commit's dry run passed" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.jobs.rehearsal.uses' "$RELEASE")" = "./.github/workflows/self-rehearsal.yml" ] \
-    || fail "self-release.yml does not run the rehearsal"
-  cond="$(yq -r '.jobs.rehearsal.if' "$RELEASE")"
+  [ "$(yq -r '.jobs."release-notes".uses' "$RELEASE")" = "./.github/workflows/self-release-notes.yml" ] \
+    || fail "self-release.yml does not run the dry run"
+  cond="$(yq -r '.jobs."release-notes".if' "$RELEASE")"
   [[ "$cond" == *"needs.release-please.outputs.release-created == 'true'"* ]] \
-    || fail "the rehearsal is not gated on a release: $cond"
-  [ "$(yq -r '.jobs.rehearsal.permissions."pull-requests"' "$RELEASE")" = "write" ] \
-    || fail "the release rehearsal does not grant pull-requests: write"
+    || fail "the dry run is not gated on a release: $cond"
+  [ "$(yq -r '.jobs."release-notes".permissions."pull-requests"' "$RELEASE")" = "write" ] \
+    || fail "the release dry run does not grant pull-requests: write"
   needs="$(yq -r '.jobs."major-tag".needs | (select(type == "!!seq") | join(",")) // .' "$RELEASE")"
-  [[ ",$needs," == *",rehearsal,"* ]] || fail "major-tag does not need the rehearsal: $needs"
+  [[ ",$needs," == *",release-notes,"* ]] || fail "major-tag does not need the dry run: $needs"
   [[ ",$needs," == *",release-please,"* ]] || fail "major-tag lost its release-please need: $needs"
   [ "$(yq -r '.jobs."major-tag".if' "$RELEASE")" != "null" ] || fail "major-tag lost its if"
-  # `always()` or `!cancelled()` would run it past a failed rehearsal.
-  not_contains "$(yq -r '.jobs."major-tag".if' "$RELEASE")" "always()" || fail "major-tag runs past a failed rehearsal"
-  not_contains "$(yq -r '.jobs."major-tag".if' "$RELEASE")" "cancelled()" || fail "major-tag runs past a failed rehearsal"
+  # `always()` or `!cancelled()` would run it past a failed dry run.
+  not_contains "$(yq -r '.jobs."major-tag".if' "$RELEASE")" "always()" || fail "major-tag runs past a failed dry run"
+  not_contains "$(yq -r '.jobs."major-tag".if' "$RELEASE")" "cancelled()" || fail "major-tag runs past a failed dry run"
 }
 
 # --------------------------------------------------------------------------
