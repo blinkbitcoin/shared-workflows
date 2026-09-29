@@ -4,7 +4,7 @@
 #
 # build-prepare.yml runs scripts/release/resolve-version.sh and build-info.sh;
 # a consumer runs the same two on a laptop (`make version`, a local build-info
-# rehearsal), where it has the package and not this repository. The package
+# run), where it has the package and not this repository. The package
 # therefore carries them, with the two libraries they source, at the same
 # relative paths (release/ beside lib/, as scripts/release/ sits beside
 # scripts/lib/), so each copy runs unchanged. Copies inside one repository,

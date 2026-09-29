@@ -4,10 +4,10 @@
 #      running. So it may only reference `UI` (stubbed in the tests) and plain
 #      Ruby -- no `lane`, no `sh`, no fastlane action outside `store_action`.
 #   2. Every call that talks to a store goes through `store_action`, which is
-#      what makes DRY_RUN=1 a real, testable rehearsal of a release.
+#      what makes DRY_RUN=1 a real, testable dry run of a release.
 require 'json'
 
-# Argument names whose values are credentials. A DRY_RUN=1 rehearsal is exactly
+# Argument names whose values are credentials. A DRY_RUN=1 run is exactly
 # the run someone pastes into a PR or leaves in a public Actions log, and
 # GitHub only masks values registered as secrets in that job -- so the dry-run
 # log redacts these itself. The pattern catches names this list has not met yet.
@@ -25,7 +25,7 @@ def require_env!(keys)
   UI.user_error!("Missing env: #{missing.join(', ')} (see docs/release-runbook.md)") unless missing.empty?
 end
 
-# What each store action returns under DRY_RUN=1. A dry run only rehearses the
+# What each store action returns under DRY_RUN=1. A dry run only exercises the
 # whole lane if the canned value has the shape the lane goes on to use: an
 # idempotency check that destructures an array, or compares a build number,
 # would otherwise blow up on the generic `[]` and hide everything after it.
@@ -72,8 +72,8 @@ end
 # is passed base64-encoded so it survives being a single-line secret.
 #
 # Under DRY_RUN=1 it is a placeholder: building the real key signs a JWT with
-# the .p8, so a rehearsal would otherwise demand live Apple credentials to
-# reach the first thing it is supposed to be able to rehearse without them.
+# the .p8, so a dry run would otherwise demand live Apple credentials to
+# reach the first thing it is supposed to be able to reach without them.
 def api_key
   if ENV['DRY_RUN'] == '1'
     UI.important('[dry-run] app_store_connect_api_key (no App Store Connect session)')

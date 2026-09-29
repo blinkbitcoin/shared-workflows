@@ -34,19 +34,19 @@ jobs:
   # commit before `v0` moves to it: `v0` is the one thing that puts a release
   # in front of every consumer at once, and no other gate here executes a
   # reusable workflow. Same called workflow as self-ci.yml.
-  rehearsal:
-    name: Consumer rehearsal
+  release-notes:
+    name: Release notes
     needs: release-please
     if: ${{ needs.release-please.outputs.release-created == 'true' }}
-    uses: ./.github/workflows/self-rehearsal.yml
+    uses: ./.github/workflows/self-release-notes.yml
     permissions:
       contents: read
       pull-requests: write
   major-tag:
     name: Major tag
-    # The rehearsal is a need, not a parallel job: a failed or skipped
-    # rehearsal skips this job, and the tags stay on the last release.
-    needs: [release-please, rehearsal]
+    # The dry run is a need, not a parallel job: a failed or skipped
+    # dry run skips this job, and the tags stay on the last release.
+    needs: [release-please, release-notes]
     # Job outputs are strings and every non-empty string is truthy in a GitHub
     # expression, so a bare `outputs.release-created` also fires on the literal
     # "false" a no-release push produces - which would run tag-major.sh with an

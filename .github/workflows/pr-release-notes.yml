@@ -21,8 +21,8 @@ name: Release PR Notes
 # keeps in its tree, edits no PR and calls no `gh`, and hands the section back
 # as the `section` output. That is what lets a pull request execute this
 # workflow: this repository's own CI does it against the template on every
-# pull request and before `v0` moves (self-rehearsal.yml), and a consumer can
-# do the same on its own pull requests. Not part of self-act-smoke.yml, which
+# pull request and before `v0` moves (self-release-notes.yml), and a consumer
+# can do the same on its own pull requests. Not part of self-act-smoke.yml, which
 # runs only the jobs act can: this one runs on GitHub, for real.
 on:
   workflow_call:
@@ -93,13 +93,13 @@ permissions:
   contents: read
 jobs:
   notes:
-    name: Store Notes
+    name: Draft
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     # `gh pr edit` writes the PR body; the calling job must grant the same.
-    # Kept in a dry run too, which never writes: a rehearsal has to ask for
-    # exactly what the real call asks for, or it cannot catch a caller that
-    # grants too little.
+    # Kept in a dry run too, which never writes: it has to ask for exactly
+    # what the real call asks for, or it cannot catch a caller that grants too
+    # little.
     permissions:
       contents: read
       pull-requests: write
@@ -138,7 +138,7 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           install: 'false'
-      - name: Store notes into the release PR
+      - name: Draft the release notes into the release PR
         id: notes
         env:
           GH_TOKEN: ${{ secrets.consumer-token || github.token }}
