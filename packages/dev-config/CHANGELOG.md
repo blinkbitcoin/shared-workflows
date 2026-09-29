@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.8.0...dev-config-v0.9.0) (2026-09-29)
+
+
+### Features
+
+* **dev-config:** block a consumer that holds a copy of what this family ships ([#118](https://github.com/blinkbitcoin/shared-workflows/issues/118)) ([3121715](https://github.com/blinkbitcoin/shared-workflows/commit/3121715a4b9eccb2814699b9956066c9ffa41076))
+* **dev-config:** strict guard options, and build-info.sh --standalone for a laptop ([#119](https://github.com/blinkbitcoin/shared-workflows/issues/119)) ([7f2e619](https://github.com/blinkbitcoin/shared-workflows/commit/7f2e619b9aebd5ba08999804747f1a0d26c4c855))
+
+
+### Bug Fixes
+
+* **actions:** install Maestro from its checksummed release archive, not curl|bash ([#122](https://github.com/blinkbitcoin/shared-workflows/issues/122)) ([6497296](https://github.com/blinkbitcoin/shared-workflows/commit/6497296d09a9a63988c4bd0345000511a37e1c8c))
+
 ## [0.8.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.7.0...dev-config-v0.8.0) (2026-09-28)
 
 
