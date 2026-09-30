@@ -200,15 +200,21 @@ jobs:
       # "nothing enabled" would switch the whole gate off in silence. The
       # consumer's .mise.toml pin is what makes that impossible.
       #
-      # install: 'false' - no job in this workflow reads node_modules. The
-      # scanners read source, pnpm-lock.yaml and pnpm-workspace.yaml, and the
-      # consumer's scripts/security/*.mjs are zero-dependency node. Quoted,
-      # because the composite action's inputs are strings.
+      # install: 'true' - every job in this workflow reads node_modules. The
+      # consumer's settings.mjs takes the LLM effort levels from
+      # @blinkbitcoin/app-tooling/llm (the contract's no-copy.llm row deleted
+      # its own copy), and every job runs it: this one directly, each scanner
+      # through its runner's sec_enabled, the verdict through verdict.mjs. The
+      # review's review.mjs imports the LLM adapters from the same package. So
+      # a job that skipped the install would die on ERR_MODULE_NOT_FOUND before
+      # it scanned anything. The install is the setup action's own, from the
+      # frozen lockfile. Quoted, because the composite action's inputs are
+      # strings.
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       - name: Resolve the security settings
         id: resolve
         run: bash "$WORKFLOWS_DIR/scripts/security/settings.sh"
@@ -246,7 +252,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       - name: Scan dependencies
         id: scan
         env:
@@ -295,7 +301,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       # The longest of the three: the consumer's code.sh fetches its registry
       # packs on every invocation, so this step can hang on the Semgrep registry
       # rather than on anything in the repository. A bound of its own, so the
@@ -345,7 +351,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       - name: Scan the install policy
         id: scan
         env:
@@ -389,7 +395,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       - name: Write the bill of materials
         id: scan
         timeout-minutes: 10
@@ -412,8 +418,9 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/sbom.cdx.json
           if-no-files-found: error
           retention-days: 90
-  # The two jobs here that install: expo export and expo prebuild both need
-  # node_modules. Every other job reads files and skips the install.
+  # Every job here installs (see the settings job), and these two would need it
+  # even without settings.mjs: expo export and expo prebuild both run from
+  # node_modules.
   bundle:
     name: Bundle
     needs: settings
@@ -531,7 +538,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       - name: Download the release binaries
         env:
           GH_TOKEN: ${{ secrets.consumer-token || github.token }}
@@ -584,7 +591,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       - name: Review the change
         id: scan
         timeout-minutes: 20
@@ -637,7 +644,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       - name: Cache the OpenAnt build
         uses: actions/cache@v6
         with:
@@ -707,7 +714,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          install: 'false'
+          install: 'true'
       # merge-multiple is safe here only because each artifact carries a file
       # named after its own job - dependencies.sarif, code.sarif, and so on. Two
       # artifacts carrying one filename would make the merge a coin toss, which
