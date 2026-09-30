@@ -17,13 +17,17 @@
 // --require-mise fails when `.mise.toml` is missing or pins no tool. Without it a
 // missing file reads as no tools, which is right for a repository without mise
 // and wrong for one that has it: every tool-named target would then pass.
+//
+// The Makefile's `include` and `-include` lines are followed to the files that
+// exist, so a target defined in a shared `.mk` fragment is held to the rule too.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { documentedTargets as documented, expandIncludes } from '../lib/makefile.mjs';
 
 /** The `##`-documented targets of a Makefile, the ones `make help` lists. */
 export function documentedTargets(makefile) {
-  return [...makefile.matchAll(/^([a-zA-Z0-9_-]+):[^#\n]*## /gm)].map((match) => match[1]);
+  return documented(makefile).map(({ target }) => target);
 }
 
 /** The tools a `.mise.toml` pins: its [tools] keys, without a backend prefix. */
@@ -100,7 +104,7 @@ export function main(
     return 1;
   }
   const { root, allowed, requireMise } = options;
-  const makefile = read(path.join(root, 'Makefile'));
+  const makefile = expandIncludes(path.join(root, 'Makefile'), read, root);
   if (makefile === null) {
     error(`make target names: no Makefile in ${root}`);
     return 1;

@@ -82,7 +82,7 @@ family rather than to any repository on the baseline.
 
 ## Repository guards
 
-Seven checks for rules a repository on the baseline holds itself to, each a
+Ten checks for rules a repository on the baseline holds itself to, each a
 program and a module (`@blinkbitcoin/dev-config/<name>`) whose functions a
 test can import. The template wrote them first; they live here so the template,
 this repository and the next consumer run the same code.
@@ -95,6 +95,9 @@ check-make-target-names [--require-mise]    # a make target named after the tool
 check-workflow-names --group ci=CI ...      # a workflow file or display name outside its group
 check-coverage-empty [summary.json]         # a Jest coverage row with nothing to cover
 check-make-recipes [--allow T=REASON]       # a make recipe with logic in it, not one call to a tested script
+check-test-siblings --source GLOB=SUFFIX    # a source file without a test file of its own
+check-docs [--architecture PREFIX]          # docs freshness, the command table, then three of the above
+check-licenses [--allow SPDX]               # a production dependency under a licence outside the allowlist
 ```
 
 - `check-docs-tables` measures each `<br>` segment of a cell's visible text,
@@ -114,6 +117,8 @@ check-make-recipes [--allow T=REASON]       # a make recipe with logic in it, no
   packages in `package.json`, spares `setup-` targets, and fails on an
   `--allow` that no longer applies. A missing `.mise.toml` reads as no tools;
   `--require-mise` fails instead, for a repository that pins its tools there.
+  It follows the Makefile's `include` and `-include` lines to the files that
+  exist, so a target in a shared `.mk` fragment is held to the rule too.
 - `check-workflow-names` requires every file in `.github/workflows` to be
   `PREFIX.yml` or `PREFIX-*.yml` for a group, and, where the group has a
   display name, its `name:` to be `DISPLAY` or `DISPLAY / ...`, with more than
@@ -127,6 +132,65 @@ check-make-recipes [--allow T=REASON]       # a make recipe with logic in it, no
   script its own test covers and that CI and a laptop can run without make. It
   follows `include`s, so a shared `.mk` fragment is held to the same rule, and
   fails on an `--allow` that no longer applies.
+- `check-test-siblings` holds every source file to a test file of its own,
+  beside it, so a module reached only through a caller's test fails the day
+  that caller stops calling it.
+  - `--source GLOB=SUFFIX[,SUFFIX]` (repeatable) says which files are sources
+    and what their test is called: the name without its last extension, plus a
+    suffix. The first `--source` a file matches decides.
+  - `--exclude GLOB` takes a class of files out of scope (generated code, test
+    support), and must be a glob or a directory; one naming a single file is
+    refused as the allowlist entry it would be, and one that matches nothing
+    fails.
+  - `--mirror FROM/=TO/` is for a directory whose every file is loaded as
+    something else (expo-router's `src/app/`): its files are tested from the
+    same path under TO, a test under FROM fails, and a test under TO that
+    mirrors nothing fails.
+  - There is no `--allow`, and passing one fails with the reason. The files are
+    the tracked ones plus untracked files git does not ignore.
+- `check-docs` is a docs check in one call. Its steps, in order:
+  1. An advisory: paths under an `--architecture PREFIX` changed without a
+     change under `--docs` (default `docs/`). A package.json counts only for a
+     structural change, not a dependency bump; a Dependabot pull request is
+     never warned about.
+  2. The command table in `--agents` (default `AGENTS.md`) and the Makefile's
+     `##`-documented targets agree both ways, includes followed.
+  3. `check-make-target-names`, each `--allow-target-name TARGET=REASON` passed
+     as its `--allow`.
+  4. `check-docs-tables`.
+  5. `check-diagrams`, with `--all` under CI.
+
+  The advisory compares a pull request with `origin/$BASE_REF`, a push with
+  `HEAD~1` and a laptop with `origin/<--default-branch>` (default `main`), and
+  fails open, out loud, when it cannot.
+- `check-licenses` reads `pnpm licenses list --json --prod` and fails on a
+  package whose SPDX expression the allowlist does not satisfy: every conjunct
+  of an AND, one alternative of an OR. The allowlist is the organisation's
+  (`MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`,
+  `CC0-1.0`, `Unlicense`, `MPL-2.0`, `CC-BY-4.0`, `Python-2.0`,
+  `BlueOak-1.0.0`) plus each `--allow` the repository adds.
+
+`make help` is a program too, so the one-liner every Makefile carried
+(`grep ... $(MAKEFILE_LIST) | sort | awk ...`) is not logic in a recipe:
+
+```sh
+make-help [--root DIR]    # every ##-documented target, sorted, includes followed
+```
+
+### How the template calls them
+
+Once the template takes the release that ships these, each of its own copies
+becomes one line:
+
+| Target or script | The call |
+| --- | --- |
+| `make help` | `pnpm exec make-help` |
+| `check-docs` | `pnpm exec check-docs --architecture app.config.ts --architecture plugins/`<br>`--architecture modules/ --architecture src/graphql/ --architecture scripts/`<br>`--architecture Makefile --allow-target-name 'gen-graphql=GraphQL is what it generates'` |
+| `test-scripts` (siblings) | `pnpm exec check-test-siblings --source 'scripts/**/*.{mjs,sh}=.test.mjs'`<br>`--source 'src/**/*.{ts,tsx}=.test.ts,.test.tsx' --source 'plugins/*.ts=.test.ts,.test.tsx'`<br>`--source 'modules/*/index.ts=.test.ts,.test.tsx' --exclude 'src/graphql/generated/**'`<br>`--exclude 'src/i18n/locales/**' --exclude 'src/test/**' --exclude 'src/__tests__/**'`<br>`--exclude '**/*.d.ts' --mirror src/app/=src/__tests__/app/` |
+| `deps:licenses` | `check-licenses` |
+
+Each deleted copy then has a `no-copy` row in `contract.json`, so it cannot
+come back.
 
 ## One commit of shared-workflows
 

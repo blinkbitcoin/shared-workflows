@@ -45,7 +45,11 @@
     "./status-badge": "./bin/status-badge.mjs",
     "./store-notes": "./bin/store-notes.mjs",
     "./llm": "./lib/llm.mjs",
-    "./llm-request": "./lib/llm-request.mjs"
+    "./llm-request": "./lib/llm-request.mjs",
+    "./check-test-siblings": "./bin/check-test-siblings.mjs",
+    "./check-docs": "./bin/check-docs.mjs",
+    "./check-licenses": "./bin/check-licenses.mjs",
+    "./make-help": "./bin/make-help.mjs"
   },
   "bin": {
     "check-tool-versions": "./bin/check-tool-versions.mjs",
@@ -62,7 +66,11 @@
     "render-badges": "./bin/render-badges.mjs",
     "coverage-badge": "./bin/coverage-badge.mjs",
     "status-badge": "./bin/status-badge.mjs",
-    "store-notes": "./bin/store-notes.mjs"
+    "store-notes": "./bin/store-notes.mjs",
+    "check-test-siblings": "./bin/check-test-siblings.mjs",
+    "check-docs": "./bin/check-docs.mjs",
+    "check-licenses": "./bin/check-licenses.mjs",
+    "make-help": "./bin/make-help.mjs"
   },
   "engines": {
     "node": ">=20"
