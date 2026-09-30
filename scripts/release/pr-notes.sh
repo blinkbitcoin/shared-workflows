@@ -5,15 +5,15 @@
 # release-please takes the GitHub release body from the text between the first
 # and the last `---` line of the merged PR body, so a `## <title>` block
 # placed before the closing rule reaches the release verbatim - and the
-# release lanes already read that section back (`notes.mjs --body-section`).
+# release lanes already read that section back (`store-notes --body-section`).
 # release-please rewrites the whole PR body on every push to main, so this
 # runs on every push too, and strips its own previous block before generating:
 # a stale draft never feeds the next one.
 #
-# The notes themselves are the consumer's business: this hands the stripped
-# body to notes.sh as RELEASE_BODY_FILE, which runs the consumer's
-# scripts/release/notes.mjs (or its own commit-subject fallback) and leaves
-# notes-store.txt in $WORKFLOWS_RELEASE_META_DIR. That file is the section.
+# The notes themselves are the generator's: this hands the stripped body to
+# notes.sh as RELEASE_BODY_FILE, which runs @blinkbitcoin/dev-config's
+# store-notes program in the consumer's directory and leaves notes-store.txt
+# in $WORKFLOWS_RELEASE_META_DIR. That file is the section.
 #
 # A dry run is the same work up to the edit, and then no edit: the would-be
 # body goes to the job summary instead. With PR_BODY_FILE as well it needs no
@@ -26,8 +26,8 @@
 #        fetching the PR's; a relative path is read from the consumer root);
 #      DRY_RUN (`1` or `true`: never edit the PR; `0`, `false` or unset: edit);
 #      GH_TOKEN and GH_REPO, only when `gh` is called (a fetch or an edit);
-#      plus whatever notes.sh reads (NOTES_LOCALES, the consumer's own
-#      variables and keys).
+#      plus whatever notes.sh reads (NOTES_LOCALES, the LLM variables and
+#      keys).
 # Out: `section`, the rendered marker-delimited block, in $GITHUB_OUTPUT (on
 #      stdout when that is unset), in both modes; in a dry run, the would-be
 #      body appended to $GITHUB_STEP_SUMMARY when that is set.
@@ -90,7 +90,7 @@ strip_section_block "$fetched" "$title" > "$stripped"
 endgroup
 
 # notes.sh generates from RELEASE_BODY_FILE when it is set (the changelog the
-# PR carries), through the consumer's generator or the fallback.
+# PR carries), through the store-notes program.
 RELEASE_BODY_FILE="$stripped" bash "$(dirname "$0")/notes.sh"
 notes="$WORKFLOWS_RELEASE_META_DIR/notes-store.txt"
 [ -s "$notes" ] || die "notes.sh left no notes-store.txt in $WORKFLOWS_RELEASE_META_DIR"

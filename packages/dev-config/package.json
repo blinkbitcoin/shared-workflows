@@ -1,7 +1,7 @@
 {
   "name": "@blinkbitcoin/dev-config",
   "version": "0.10.0",
-  "description": "The shared developer-tooling baseline: the pinned tool table, the checks that enforce it, and the CI badge renderer.",
+  "description": "The shared developer-tooling baseline: the pinned tool table, the checks that enforce it, the CI badge renderer and the store notes generator.",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -19,6 +19,7 @@
     "lib",
     "release",
     "zizmor.yml",
+    "store-notes.prompt.md",
     "contract.json",
     "interfaces.json",
     "versions.json",
@@ -41,7 +42,10 @@
     "./check-make-recipes": "./bin/check-make-recipes.mjs",
     "./render-badges": "./bin/render-badges.mjs",
     "./coverage-badge": "./bin/coverage-badge.mjs",
-    "./status-badge": "./bin/status-badge.mjs"
+    "./status-badge": "./bin/status-badge.mjs",
+    "./store-notes": "./bin/store-notes.mjs",
+    "./llm": "./lib/llm.mjs",
+    "./llm-request": "./lib/llm-request.mjs"
   },
   "bin": {
     "check-tool-versions": "./bin/check-tool-versions.mjs",
@@ -57,7 +61,8 @@
     "check-make-recipes": "./bin/check-make-recipes.mjs",
     "render-badges": "./bin/render-badges.mjs",
     "coverage-badge": "./bin/coverage-badge.mjs",
-    "status-badge": "./bin/status-badge.mjs"
+    "status-badge": "./bin/status-badge.mjs",
+    "store-notes": "./bin/store-notes.mjs"
   },
   "engines": {
     "node": ">=20"

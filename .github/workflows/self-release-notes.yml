@@ -8,17 +8,21 @@ name: Self release notes
 # Every other reusable workflow runs only inside a consumer (or under act, on
 # a laptop), so a mistake in one ships with every gate here green. This one
 # can run from a pull request, because `dry-run` with `body-file` needs no
-# release PR and edits nothing: the template keeps a release-please-shaped
-# body at the path below for exactly this.
+# release PR and edits nothing. The body is this repository's own
+# release-please-shaped fixture, read from the `.workflows` checkout of the
+# ref under review, so the template needs no copy of it.
 #
-# The trade, taken on purpose: the dry run reads the template's main, so a
-# broken generator there turns this repository's CI red until the template is
-# fixed. That is the consumer every release here is first executed by, so it
-# is also the failure a release here would otherwise ship into.
+# The generator is the store-notes program from that same checkout, so what
+# the dry run executes is this ref's code. The template contributes its
+# checkout, its store metadata locales and its release-notes.prompt.md; the
+# trade, taken on purpose, is that a broken setup on its main turns this
+# repository's CI red until the template is fixed. That is the consumer every
+# release here is first executed by, so it is also the failure a release here
+# would otherwise ship into.
 #
 # Local path, not @v0, for the same reason as self-ci.yml: this has to run the
-# ref under review. No secrets are passed: the template's generator drafts
-# without an LLM when no key is set, and a fork's pull request has none.
+# ref under review. No secrets are passed: the generator drafts without an LLM
+# when no key is set, and a fork's pull request has none.
 on:
   workflow_call:
 permissions: { contents: read }
@@ -36,7 +40,7 @@ jobs:
       repository: blinkbitcoin/react-native-mobile-template
       ref: main
       dry-run: true
-      body-file: scripts/release/fixtures/release-body.md
+      body-file: .workflows/packages/dev-config/fixtures/store-notes/release-body.md
   validate:
     name: Validate
     needs: dry-run

@@ -16,10 +16,11 @@ name: Release PR Notes
 # release PR. The caller runs this job on every run that reports a PR, and
 # the script strips its own previous block before generating.
 #
-# `dry-run` with `body-file` runs the whole job - checkout, setup, the
-# consumer's generator - against a release-please-shaped body the consumer
-# keeps in its tree, edits no PR and calls no `gh`, and hands the section back
-# as the `section` output. That is what lets a pull request execute this
+# `dry-run` with `body-file` runs the whole job - checkout, setup, the store
+# notes generator - against a release-please-shaped body (the consumer's own, or
+# the one this repository keeps in packages/dev-config/fixtures/store-notes/),
+# edits no PR and calls no `gh`, and hands the section back as the `section`
+# output. That is what lets a pull request execute this
 # workflow: this repository's own CI does it against the template on every
 # pull request and before `v0` moves (self-release-notes.yml), and a consumer
 # can do the same on its own pull requests. Not part of self-act-smoke.yml, which
@@ -32,7 +33,7 @@ on:
         type: string
         default: ''
       ref:
-        description: Consumer ref to check out; pass the release PR's head branch so the prompt template and generator are the ones under release
+        description: Consumer ref to check out; pass the release PR's head branch so the app's prompt addendum (release-notes.prompt.md) is the one under release
         type: string
         default: ''
       working-directory:
@@ -68,7 +69,7 @@ on:
         type: string
         default: 'Store notes'
       notes-locales:
-        description: "Locales the consumer's scripts/release/notes.mjs should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: the template's emits one per fastlane/metadata/ios locale directory, which are exactly the listings the lanes then look up"
+        description: "Locales the store notes generator (the store-notes program in @blinkbitcoin/dev-config) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
         type: string
         default: ''
       build-env:
@@ -84,10 +85,10 @@ on:
         description: Token for a private consumer checkout, and for editing the PR when the caller's GITHUB_TOKEN may not (defaults to github.token)
         required: false
       ANTHROPIC_API_KEY:
-        description: API key for the consumer's notes.mjs when it drafts store notes with Claude; unset simply means no LLM pass
+        description: API key for the store notes generator's LLM pass with Claude; unset simply means no LLM pass
         required: false
       OPENAI_API_KEY:
-        description: API key for the consumer's notes.mjs when it drafts store notes with an OpenAI-compatible endpoint
+        description: API key for the store notes generator's LLM pass with an OpenAI-compatible endpoint
         required: false
 permissions:
   contents: read
@@ -114,8 +115,8 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
-          # fetch-depth: 0 for the commit-subject fallback, which reads the
-          # v* tags when the consumer ships no generator.
+          # fetch-depth: 0 for the generator's --from-commits, which reads
+          # the v* tags when there is no body to generate from.
           fetch-depth: 0
       - name: Checkout shared-workflows
         uses: actions/checkout@v7
@@ -130,9 +131,9 @@ jobs:
         env:
           WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
         run: bash ".workflows/scripts/release/build-env.sh"
-      # No pnpm install: the consumer's generator has no runtime dependencies
-      # by contract (docs/consumer-guide.md, script contract), and the job only
-      # needs the node the consumer's .mise.toml pins.
+      # No pnpm install: the store notes generator runs from the
+      # .workflows checkout and has no dependencies, and the job only needs
+      # the node the consumer's .mise.toml pins.
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
@@ -148,7 +149,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry-run }}
           SECTION_TITLE: ${{ inputs.section-title }}
           NOTES_LOCALES: ${{ inputs.notes-locales }}
-          # The consumer's notes.mjs may draft store notes with an LLM; the
+          # The store notes generator may draft with an LLM; the
           # provider/model live in build-env, only the keys are secrets.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

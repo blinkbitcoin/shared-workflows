@@ -101,7 +101,7 @@ RELEASE_NOTES="$REPO_ROOT/.github/workflows/self-release-notes.yml"
     || fail "the dry run no longer targets the template"
   [ "$(yq -r '.jobs."dry-run".with.ref' "$RELEASE_NOTES")" = "main" ] || fail "the dry run no longer reads the template's main"
   [ "$(yq -r '.jobs."dry-run".with."dry-run"' "$RELEASE_NOTES")" = "true" ] || fail "the dry-run input is off - it would edit a PR"
-  [ "$(yq -r '.jobs."dry-run".with."body-file"' "$RELEASE_NOTES")" = "scripts/release/fixtures/release-body.md" ] \
+  [ "$(yq -r '.jobs."dry-run".with."body-file"' "$RELEASE_NOTES")" = ".workflows/packages/dev-config/fixtures/store-notes/release-body.md" ] \
     || fail "the dry run reads no body file, so it would need a release PR"
   [ "$(yq -r '.jobs."dry-run".with."pr-number" // ""' "$RELEASE_NOTES")" = "" ] || fail "the dry run names a PR"
   [ "$(yq -r '.jobs."dry-run".secrets // "none"' "$RELEASE_NOTES")" = "none" ] || fail "the dry run passes secrets"

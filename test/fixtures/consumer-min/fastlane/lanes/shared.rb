@@ -305,7 +305,7 @@ def metadata_locales(metadata_path)
      .sort
 end
 
-# store-notes.json (written by scripts/release/notes.mjs) holds per-locale text
+# store-notes.json (written by the store-notes program in @blinkbitcoin/dev-config) holds per-locale text
 # for each surface: { "<locale>": { "testflight": ..., "play": ..., "appstore": ... } }.
 # Absent, the single-locale notes-store.txt is still a correct answer, so the
 # lanes fall back rather than fail.

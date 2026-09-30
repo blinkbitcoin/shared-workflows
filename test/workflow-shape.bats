@@ -366,7 +366,7 @@ lane_step_count() {
   done
 }
 
-# Empty, so the consumer's generator picks the locales from the listings the
+# Empty, so the store notes generator picks the locales from the listings the
 # app actually has. A default here won over that: an app with de-DE metadata
 # got en-US-only store notes from CI.
 @test "notes-locales defaults to empty in both workflows that run the notes generator" {

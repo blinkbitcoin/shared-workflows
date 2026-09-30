@@ -643,18 +643,6 @@
       "guide": "consumer-side-release-scripts"
     },
     {
-      "id": "script.notes",
-      "kind": "file",
-      "target": ["scripts/release/notes.mjs"],
-      "profile": "release",
-      "neededBy": "build-prepare.yml, through scripts/release/notes.sh",
-      "toggle": null,
-      "defaultOn": true,
-      "severity": "degrades",
-      "fix": "Without scripts/release/notes.mjs the run warns and falls back to an empty store-notes.json and the commit subjects as notes - so your store listings get generic release notes rather than written ones.",
-      "guide": "consumer-side-release-scripts"
-    },
-    {
       "id": "dep.fingerprint",
       "kind": "package-dep",
       "target": "@expo/fingerprint",
@@ -931,6 +919,32 @@
       "defaultOn": true,
       "severity": "required",
       "fix": "Delete the copy, and run bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh; WORKFLOWS_SHELLCHECK_PATHS names the directories to lint when scripts/ is not all of them.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.store-notes",
+      "kind": "no-copy",
+      "label": "no copy of the store notes generator",
+      "target": ["scripts/release/notes.mjs", "scripts/release/notes.test.mjs", "scripts/release/llm/index.mjs", "scripts/release/llm/index.test.mjs", "scripts/release/fixtures/release-body.md", "scripts/release/fixtures/release-pr-body.md", "scripts/release/fixtures/anthropic-response.json", "scripts/release/fixtures/anthropic-invalid-response.json", "scripts/release/fixtures/openai-response.json"],
+      "profile": "checks",
+      "neededBy": "the store-notes program @blinkbitcoin/dev-config ships, which build-prepare.yml and pr-release-notes.yml run through scripts/release/notes.sh; a copy in your repository is not run, and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy, its tests and its fixtures. The workflows run the package's store-notes, and a laptop runs pnpm exec store-notes --from-commits --out -. Keep only what your app adds to the prompt (its product, audience and tone) in release-notes.prompt.md; a test that needs a release body reads $WORKFLOWS_DIR/packages/dev-config/fixtures/store-notes/.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.llm",
+      "kind": "no-copy",
+      "label": "no copy of the LLM adapters",
+      "target": ["scripts/lib/llm/index.mjs", "scripts/lib/llm/index.test.mjs", "scripts/lib/llm/anthropic.mjs", "scripts/lib/llm/anthropic.test.mjs", "scripts/lib/llm/openai.mjs", "scripts/lib/llm/openai.test.mjs", "scripts/lib/llm/request.mjs", "scripts/lib/llm/request.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the provider-portable LLM adapters @blinkbitcoin/dev-config ships (@blinkbitcoin/dev-config/llm and /llm-request), which its store-notes program uses; a copy in your repository is compared with them by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copies and their tests, and import from the package instead: adapterFor, KEY_ENV, EFFORTS, parseEffort and parseExtraParams from @blinkbitcoin/dev-config/llm, and thinks, mergeRequest and unfence from @blinkbitcoin/dev-config/llm-request.",
       "guide": "no-copies-of-this-family"
     }
   ]
