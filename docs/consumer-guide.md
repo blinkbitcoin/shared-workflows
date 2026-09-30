@@ -1139,6 +1139,17 @@ nothing else. It ships no fallback scanner: a job that is switched on but whose
 `scripts/security/<job>.sh` is missing fails, by name, rather than skipping
 quietly.
 
+**Every job installs your dependencies** (the `setup` action's
+`pnpm install --frozen-lockfile`) before it runs anything of yours. Your
+`scripts/security/` is not zero-dependency: `settings.mjs` takes the LLM effort
+levels from `@blinkbitcoin/app-tooling/llm`, and every job runs it — the
+`Settings` job directly, each scanner through its runner, the `Verdict` job
+through `verdict.mjs` — while `review.mjs` takes its provider adapters from
+`@blinkbitcoin/app-tooling/llm` and `@blinkbitcoin/app-tooling/llm-request`.
+Those are the package's own copies, which the contract's `no-copy.llm` row
+makes you use instead of your own, so a job without `node_modules` would fail
+on `ERR_MODULE_NOT_FOUND` before it scanned anything.
+
 **What decides whether a scanner runs.** Two things, together. The input below is
 what this *stage* allows, and `security-settings.json` in your repository is what
 your repository wants; a caller may narrow and may never widen. A job-level
@@ -1160,8 +1171,8 @@ that scans nothing while reporting green is worse than one that is red.
 | `code` | Allow the source scanner (your `check-security-code`, Semgrep over app source). Default `true` |
 | `policy` | Allow the install-policy scanner (your `check-security-policy`). Default `true` |
 | `sbom` | Allow the bill of materials (your `check-security-sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
-| `bundle` | Allow the bundle scanner (your `check-security-bundle`: exports the bundle and reads it). Installs dependencies. Default `false` |
-| `mobile` | Allow the native project scanner (your `check-security-mobile`: mobsfscan over a fresh prebuild). Installs dependencies. Default `false` |
+| `bundle` | Allow the bundle scanner (your `check-security-bundle`: exports the bundle and reads it). Default `false` |
+| `mobile` | Allow the native project scanner (your `check-security-mobile`: mobsfscan over a fresh prebuild). Default `false` |
 | `binaries` | Allow the MASTG checks over the release's built binaries (your `check-security-binaries`). Needs `release-tag`. Default `false` |
 | `review` | Allow the LLM review of the change (your `check-security-review`). Gets full history and, on a pull request, its base. Default `false` |
 | `review-codebase` | Allow the LLM security review of the whole codebase, with OpenAnt (your `check-security-review-codebase`). The build is cached, keyed on your `scripts/security/review-codebase.sh`. Default `false` |

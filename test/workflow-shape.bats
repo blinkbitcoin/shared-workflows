@@ -1143,6 +1143,32 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   contains "$vline" 'scripts/security/verdict.sh' || fail "the verdict step does not go through verdict.sh: $vline"
 }
 
+# The consumer's settings.mjs imports the LLM effort levels from
+# @blinkbitcoin/app-tooling/llm (contract.json's no-copy.llm row deleted its
+# own copy), and every job runs it: the settings job directly, each scanner
+# through its runner's sec_enabled, the verdict through verdict.mjs. review.mjs
+# imports the adapters from the same package. v0.19.0 ran every one of those
+# jobs with install: 'false', which ends in ERR_MODULE_NOT_FOUND on the runner.
+@test "every check-security.yml job installs the consumer's dependencies before its scripts run" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  # One Setup per job, and every one of them through the setup action.
+  setups="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("workflows/.github/actions/setup"))] | length' "$f")"
+  [ "$setups" -eq 11 ] || fail "expected one Setup step per job, found $setups"
+  # Quoted 'true' in the workflow on purpose: the composite action's inputs are
+  # strings, and yq -r prints the quoted value as the word.
+  for job in settings $SECURITY_JOBS verdict; do
+    install="$(yq -r ".jobs.\"$job\".steps[] | select(.name == \"Setup\") | .with.install" "$f")"
+    [ "$install" = "true" ] \
+      || fail "the $job job runs Setup with install '$install'; its scripts import @blinkbitcoin/app-tooling from node_modules"
+  done
+  jobs="$(yq -r '.jobs | keys | join(" ")' "$f")"
+  [ "$(wc -w <<<"$jobs" | tr -d ' ')" -eq "$(wc -w <<<"settings $SECURITY_JOBS verdict" | tr -d ' ')" ] \
+    || fail "check-security.yml has a job this test does not check: $jobs"
+  ! grep -n 'no job in this workflow reads node_modules\|zero-dependency' "$f" \
+    || fail "check-security.yml still claims its jobs need no node_modules"
+}
+
 # Every SARIF upload makes code scanning add checks under GitHub's fixed "Code
 # scanning results" heading, one per tool. On a pull request they only repeated
 # the Security / * jobs, so the upload happens from the default branch alone -
@@ -1246,19 +1272,6 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   [ "$pattern" = 'security-sarif-*' ] || fail "the verdict downloads '$pattern', which would pull in the bill of materials" 
   merge="$(yq -r '[.jobs.verdict.steps[] | select((.uses // "") | test("download-artifact"))][0].with."merge-multiple"' "$f")"
   [ "$merge" = "true" ] || fail "the verdict does not merge the scanner artifacts into one directory: $merge"
-  # These jobs read source, a lockfile and a workspace file. None of them reads
-  # node_modules, and a pnpm install in each is minutes added to every consumer's
-  # pull request for nothing. Quoted 'false' on purpose: unquoted, yq returns a
-  # boolean and this assertion fails on correct YAML.
-  setups="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("workflows/.github/actions/setup"))] | length' "$f")"
-  [ "$setups" -eq 11 ] || fail "expected one Setup step per job, found $setups"
-  # Only an expo export (bundle) and an expo prebuild (mobile) need the install.
-  installing=""
-  for job in $(yq -r '.jobs | keys | .[]' "$f"); do
-    n="$(yq -r "[.jobs.\"$job\".steps[]? | select((.uses // \"\") | test(\"workflows/.github/actions/setup\")) | select(.with.install != \"false\")] | length" "$f")"
-    [ "$n" -eq 0 ] || installing="$installing${installing:+,}$job"
-  done
-  [ "$installing" = "bundle,mobile" ] || fail "jobs running pnpm install: '$installing', expected bundle,mobile"
 }
 
 # The provider keys are the only secrets here besides the consumer token, and
