@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# Run one of the consumer's security runners, and insist it reported.
+# Run one of the security runners beside this script against the consumer, and
+# insist it reported.
 #
 # Usage: run-job.sh JOB
 #
-# Shared ships no fallback runner. A job that is switched on but whose
-# scripts/security/<job>.sh does not exist fails here, by name - it never skips
-# quietly, because a pipeline that scans nothing while reporting green is worse
-# than one that is red. When a second, non-template consumer appears, the shared
-# subset moves into @blinkbitcoin/app-tooling; a duplicate here would serve
-# nobody today.
+# The runners are this family's, not the consumer's: a consumer keeps only its
+# settings (security-settings.json) and the files they name. The same runners
+# ship in @blinkbitcoin/app-tooling, so `check-security` on a laptop runs what
+# this job runs.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd node
 
 job="${1:?usage: run-job.sh JOB}"
+# The nine jobs by name, never a path: a job is how the workflow names a
+# runner, and anything else beside this script (a bridge, lib/runner) is not one.
+case "$job" in
+  dependencies | code | policy | sbom | bundle | mobile | binaries | review | review-codebase) ;;
+  *) die "not a security job: $job (expected one of dependencies, code, policy, sbom, bundle, mobile, binaries, review, review-codebase)" ;;
+esac
+runner="$(cd "$(dirname "$0")" && pwd -P)/$job.sh"
 root="$(consumer_root)"
 cd "$root"
-
-runner="scripts/security/$job.sh"
-[ -f "$runner" ] || die_fix \
-  "the $job scanner is switched on, but this repository has no $runner" \
-  "add $runner, or set \"jobs\": { \"$job\": { \"enabled\": false } } in security-settings.json, or pass $job: false to check-security.yml" \
-  "check-securityyml"
 
 out="${SECURITY_DIR:-.security}"
 mkdir -p "$out"
@@ -35,5 +35,5 @@ sarif="$out/$job.sarif"
 # -s, not -f: a zero-byte file is the same silence as no file. A runner that
 # exits 0 without reporting would reach the verdict as nothing at all, and the
 # verdict cannot tell "found nothing" from "reported nothing".
-[ -s "$sarif" ] || die "$runner exited 0 but left no $sarif. Every runner writes exactly one SARIF, a skipped one included (scripts/security/lib/common.sh: sec_skip)"
+[ -s "$sarif" ] || die "$job.sh exited 0 but left no $sarif. Every runner writes exactly one SARIF, a skipped one included (scripts/security/lib/runner.sh: sec_skip)"
 log "$job: $sarif"

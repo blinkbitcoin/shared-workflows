@@ -4,8 +4,9 @@ The shared app tooling, in one package. Install it as a devDependency in any
 repo on the baseline, whatever package manager or toolchain provisioner that
 repo uses. Its top level is the developer tooling that is not React Native
 specific: the pinned tool table, the checks that enforce it, the contract
-checker, the repository guards, the CI badge renderer and the store notes
-generator the release workflows run ([`gen-store-notes`](#gen-store-notes)). Under
+checker, the repository guards, the security scanners `check-security.yml`
+runs ([Security scanning](#security-scanning)), the CI badge renderer and the
+store notes generator the release workflows run ([`gen-store-notes`](#gen-store-notes)). Under
 `expo/` are the presets an Expo app extends ([Expo presets](#expo-presets)).
 
 ```sh
@@ -405,6 +406,41 @@ bash node_modules/@blinkbitcoin/app-tooling/ci/check-ci.sh         # actionlint,
 - **zizmor policy:** a repository without its own `.github/zizmor.yml` gets this family's, which the package carries as `zizmor.yml`.
 - **The Expo health check:** `expo install --check` is advisory. Drift is printed, counted in a warning (an annotation under Actions) and never fails: Expo publishes patches most weeks, and a release cooldown refuses each for a day. Doctor then runs with its own version check off, and its status is the gate's. It is your pinned `expo-doctor` devDependency, or the latest through `pnpm dlx`; with no `expo` dependency the drift half is skipped.
 - **Run with `bash`, not as a program:** the scripts source `lib/` beside them, and a `node_modules/.bin` link would break that.
+
+## Security scanning
+
+`check-security.yml` runs the scanners under `scripts/security/` in
+shared-workflows, and the modules they call (`lib/security-*.mjs`: the
+settings resolver, the SARIF helpers, the bundle, binaries and review checks,
+and the verdict). The package carries byte-identical copies of the runners in
+`security/`, beside those modules, so a laptop runs what CI runs:
+
+```sh
+pnpm exec check-security              # every job security-settings.json switches on, then the verdict
+pnpm exec check-security code bundle  # those jobs only, then their verdict
+```
+
+- **What you keep:** `security-settings.json` at your repository root, which is
+  optional. `security-settings.json` in this package is every key at its
+  default, with a `$comment` beside each option, ready to copy. You also keep
+  the files the settings name: your Semgrep rules (`jobs.code.rules`) and, if
+  you need one, a `.mobsf` with reasoned mobsfscan suppressions. You keep no
+  scanner code. A `scripts/security/` in your repository is a
+  `no-copy.security` failure in the contract check.
+- **The jobs:**
+  - `dependencies`: osv-scanner over `pnpm-lock.yaml`.
+  - `code`: Semgrep's TypeScript, secrets and OWASP packs plus your rules.
+  - `policy`: your `pnpm-workspace.yaml` install policy.
+  - `sbom`: a CycloneDX bill from the lockfile.
+  - `bundle`: `expo export`, then what the bundle gives away.
+  - `mobile`: mobsfscan over a fresh Expo prebuild.
+  - `binaries`: MASTG checks over `APK=` / `IPA=`.
+  - `review` and `review-codebase`: the LLM reviews. These are off until a
+    provider, a model and a key are set.
+- **Missing tools:** a tool that is not installed is a skip on a laptop and a
+  failure under `CI`.
+- **Output:** one SARIF per job in `.security/` (`SECURITY_DIR`).
+- **Exit code:** the verdict's. The program exits 1 while a finding blocks.
 
 ## `gen-store-notes`
 

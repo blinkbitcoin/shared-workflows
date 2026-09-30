@@ -19,6 +19,8 @@
     "lib",
     "hooks",
     "release",
+    "security",
+    "security-settings.json",
     "zizmor.yml",
     "store-notes.prompt.md",
     "contract.json",
@@ -53,6 +55,8 @@
     "./check-docs": "./bin/check-docs.mjs",
     "./check-licenses": "./bin/check-licenses.mjs",
     "./check-code-scanning": "./bin/check-code-scanning.mjs",
+    "./check-security": "./bin/check-security.mjs",
+    "./security-settings.json": "./security-settings.json",
     "./help": "./bin/help.mjs",
     "./expo/jest": {
       "types": "./expo/jest.d.mts",
@@ -121,6 +125,7 @@
     "check-docs": "./bin/check-docs.mjs",
     "check-licenses": "./bin/check-licenses.mjs",
     "check-code-scanning": "./bin/check-code-scanning.mjs",
+    "check-security": "./bin/check-security.mjs",
     "help": "./bin/help.mjs"
   },
   "peerDependencies": {

@@ -1125,30 +1125,34 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   done
 }
 
-# The consumer owns every scanner, the merge and the verdict. Shared owns the
-# job graph and nothing else. A fallback runner here would serve only a consumer
-# not generated from the template, and no such consumer exists - "a baseline
-# with one consumer is not a baseline".
-@test "check-security.yml runs the consumer's scripts and shares no runner of its own" {
+# This family owns every scanner, the resolver and the merge; the consumer keeps
+# only its settings. Each scanner job goes through run-job.sh to a runner of its
+# own name under scripts/security/, and the Node modules live once, in the
+# package, where check-security on a laptop finds the same files.
+@test "check-security.yml runs this family's runners, one per job, and the modules live in the package" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for job in $SECURITY_JOBS; do
     line="$(yq -r ".jobs.\"$job\".steps[] | select(.id == \"scan\") | .run" "$f")"
     contains "$line" 'scripts/security/run-job.sh' \
-      || fail "the $job job does not go through run-job.sh, which is what fails loudly on a missing runner: $line"
+      || fail "the $job job does not go through run-job.sh, which insists the runner reported: $line"
+    [ -f "$REPO_ROOT/scripts/security/$job.sh" ] || fail "the $job job has no runner at scripts/security/$job.sh"
   done
   ! ls "$REPO_ROOT"/scripts/security/*.mjs >/dev/null 2>&1 \
-    || fail "shared-workflows has grown its own security modules; the resolver, the scanners and the merge live in the consumer"
+    || fail "a security module under scripts/security/; the modules live once, in packages/app-tooling/lib/security-*.mjs"
+  for module in settings sarif verdict; do
+    [ -f "$REPO_ROOT/packages/app-tooling/lib/security-$module.mjs" ] || fail "no packages/app-tooling/lib/security-$module.mjs"
+  done
   vline="$(yq -r '.jobs.verdict.steps[] | select(.id == "verdict") | .run' "$f")"
   contains "$vline" 'scripts/security/verdict.sh' || fail "the verdict step does not go through verdict.sh: $vline"
 }
 
-# The consumer's settings.mjs imports the LLM effort levels from
-# @blinkbitcoin/app-tooling/llm (contract.json's no-copy.llm row deleted its
-# own copy), and every job runs it: the settings job directly, each scanner
-# through its runner's sec_enabled, the verdict through verdict.mjs. review.mjs
-# imports the adapters from the same package. v0.19.0 ran every one of those
-# jobs with install: 'false', which ends in ERR_MODULE_NOT_FOUND on the runner.
+# One Setup, installing, in every job. The runners and modules come from the
+# .workflows checkout and import nothing from node_modules, but the bundle and
+# mobile runners call the consumer's expo out of it, and one job shape keeps the
+# node every job resolves the settings with the same. v0.19.0 ran the jobs with
+# install: 'false', which ended in ERR_MODULE_NOT_FOUND while the modules were
+# still the consumer's.
 @test "every check-security.yml job installs the consumer's dependencies before its scripts run" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
@@ -1160,7 +1164,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   for job in settings $SECURITY_JOBS verdict; do
     install="$(yq -r ".jobs.\"$job\".steps[] | select(.name == \"Setup\") | .with.install" "$f")"
     [ "$install" = "true" ] \
-      || fail "the $job job runs Setup with install '$install'; its scripts import @blinkbitcoin/app-tooling from node_modules"
+      || fail "the $job job runs Setup with install '$install'; every job installs, one shape for all"
   done
   jobs="$(yq -r '.jobs | keys | join(" ")' "$f")"
   [ "$(wc -w <<<"$jobs" | tr -d ' ')" -eq "$(wc -w <<<"settings $SECURITY_JOBS verdict" | tr -d ' ')" ] \

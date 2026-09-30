@@ -27,6 +27,9 @@ scripts/native/     prebuild, pods, iOS/Android builds and packaging
 scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version and store notes resolution, fastlane invocation, release assets,
                     the release PR's dispatches (dispatch-release-pr-ci, dispatch-at-tag)
+scripts/security/   check-security.yml: one scanner runner per job and their lib/runner.sh,
+                    scan.sh (every job, then the verdict), and the CI bridges
+                    (settings, run-job, verdict, label-sarif, binaries-fetch)
 scripts/web/        web export, Playwright install and run
 scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
 scripts/self/       this repo's own upkeep (check-version-pins, tag-major, smoke-local,
@@ -36,6 +39,7 @@ scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
 packages/           app-tooling (tooling any repo installs; expo/ holds the Expo presets,
+                    security/ the scanner copies and lib/security-*.mjs their modules,
                     fixtures/template/ the template's files, before and after)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
                     forensics, runners

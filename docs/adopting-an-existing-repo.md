@@ -174,18 +174,8 @@ is a warning in the report, not a failure. See
 
 | What | You need | Why |
 | --- | --- | --- |
-| `scripts/security/settings.mjs` | required | check-security.yml (the Settings job), through scripts/security/settings.sh |
-| `scripts/security/dependencies.sh` | required, or pass `dependencies: false` | check-security.yml (dependencies), through scripts/security/run-job.sh |
-| `scripts/security/code.sh` | required, or pass `code: false` | check-security.yml (code), through scripts/security/run-job.sh |
-| `scripts/security/policy.sh` | required, or pass `policy: false` | check-security.yml (policy), through scripts/security/run-job.sh |
-| `scripts/security/sbom.sh` | only if you set `sbom: true` | check-security.yml (sbom), through scripts/security/run-job.sh |
-| `scripts/security/bundle.sh` | only if you set `bundle: true` | check-security.yml (bundle), through scripts/security/run-job.sh |
-| `scripts/security/mobile.sh` | only if you set `mobile: true` | check-security.yml (mobile), through scripts/security/run-job.sh |
-| `scripts/security/binaries.sh` | only if you set `binaries: true` | check-security.yml (binaries), through scripts/security/run-job.sh |
-| `scripts/security/review.sh` | only if you set `review: true` | check-security.yml (review), through scripts/security/run-job.sh |
-| `scripts/security/review-codebase.sh` | only if you set `review-codebase: true` | check-security.yml (review-codebase), through scripts/security/run-job.sh |
-| `scripts/security/verdict.mjs` | required | check-security.yml (the Verdict job), through scripts/security/verdict.sh |
-| `security-settings.json` | optional — a fallback runs | scripts/security/settings.mjs, the settings resolver the Settings job runs |
+| no `scripts/security` | required | the scanners, the settings resolver and the verdict check-security.yml runs from this family (scripts/security/, packages/app-tooling/lib/security-*.mjs) and @blinkbitcoin/app-tooling ships as check-security; a copy in your repository is run by nothing and drifts |
+| `security-settings.json` | optional — a fallback runs | the settings resolver (packages/app-tooling/lib/security-settings.mjs) the Settings job and every runner read it with |
 
 ### If you call the release workflows
 

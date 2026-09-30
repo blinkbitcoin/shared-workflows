@@ -590,9 +590,10 @@ key named, rather than publishing it.
 
 Configuration in this family has landed on one shape, worked out first for
 security scanning and now the pattern every feature with more than an on/off
-switch follows: the template's `scripts/security/settings.mjs` and
-`security-settings.json` (see the template's `docs/security.md`, "Turning
-things off") are the reference implementation, not a one-off.
+switch follows: the package's settings resolver
+(`packages/app-tooling/lib/security-settings.mjs`) and its reference
+`security-settings.json` (every key at its default, with a `$comment` beside
+each option) are the reference implementation, not a one-off.
 
 ### The four rules
 
@@ -1130,31 +1131,36 @@ same rule somewhere else still shows up.
 Jobs: `Settings`, `Dependencies`, `Code`, `Policy`, `Bill of Materials`, `Bundle`,
 `Mobile`, `Binaries`, `Review`, `Review codebase`, `Verdict`.
 
-The consumer's own security scanners, run in CI. Every scanner, the settings
-resolver and the merge live in **your** repository under `scripts/security/`,
-and `make check-security` runs the same files — so a green laptop and a green
-pipeline are the same claim. This workflow owns the job graph, the permissions,
-the artifact passing, the upload to code scanning and the run summary, and
-nothing else. It ships no fallback scanner: a job that is switched on but whose
-`scripts/security/<job>.sh` is missing fails, by name, rather than skipping
-quietly.
+The family's security scanners, run in CI against your repository. Every
+scanner, the settings resolver and the merge live **here**: the runners under
+`scripts/security/`, the modules they call in `packages/app-tooling/lib/`.
+`@blinkbitcoin/app-tooling` ships the same files, so running them on a laptop
+is the package's program:
+
+```bash
+pnpm exec check-security              # every job your settings switch on, then the verdict
+pnpm exec check-security code         # one scanner, then its own verdict
+```
+
+A green laptop and a green pipeline are the same claim. **You ship no scanner
+code.** You keep `security-settings.json` (optional: without it the defaults
+apply; `@blinkbitcoin/app-tooling/security-settings.json` is every key at its
+default, ready to copy) and the files it names: your own Semgrep rules
+(`jobs.code.rules`), and a `.mobsf` with reasoned mobsfscan suppressions if you
+need one. A copy of the scanners in your repository is a `no-copy.security`
+failure in the contract check.
 
 **Every job installs your dependencies** (the `setup` action's
-`pnpm install --frozen-lockfile`) before it runs anything of yours. Your
-`scripts/security/` is not zero-dependency: `settings.mjs` takes the LLM effort
-levels from `@blinkbitcoin/app-tooling/llm`, and every job runs it — the
-`Settings` job directly, each scanner through its runner, the `Verdict` job
-through `verdict.mjs` — while `review.mjs` takes its provider adapters from
-`@blinkbitcoin/app-tooling/llm` and `@blinkbitcoin/app-tooling/llm-request`.
-Those are the package's own copies, which the contract's `no-copy.llm` row
-makes you use instead of your own, so a job without `node_modules` would fail
-on `ERR_MODULE_NOT_FOUND` before it scanned anything.
+`pnpm install --frozen-lockfile`). The runners themselves come from the
+`.workflows/` checkout and need only node, but the `Bundle` and `Mobile`
+scanners call your `expo` out of `node_modules`, and one job shape for all of
+them keeps the node every job resolves the settings with the same.
 
 **What decides whether a scanner runs.** Two things, together. The input below is
 what this *stage* allows, and `security-settings.json` in your repository is what
 your repository wants; a caller may narrow and may never widen. A job-level
-`if:` cannot read a file, so the `Settings` job runs your `scripts/security/settings.mjs`
-once and publishes the answer as job outputs the other jobs read. Values —
+`if:` cannot read a file, so the `Settings` job runs the settings resolver over your
+`security-settings.json` once and publishes the answer as job outputs the other jobs read. Values —
 `severity`, `failOn` — are never inputs here: they live in
 `security-settings.json`, with environment twins that win over it.
 
@@ -1167,15 +1173,15 @@ that scans nothing while reporting green is worse than one that is red.
 | Input | Meaning |
 | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | The family's common six. `macos-runner` and `native-cache-version` are unused here and carried for consistency |
-| `dependencies` | Allow the dependency scanner (your `check-security-dependencies`, osv-scanner over the lockfile). Default `true` |
-| `code` | Allow the source scanner (your `check-security-code`, Semgrep over app source). Default `true` |
-| `policy` | Allow the install-policy scanner (your `check-security-policy`). Default `true` |
-| `sbom` | Allow the bill of materials (your `check-security-sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
-| `bundle` | Allow the bundle scanner (your `check-security-bundle`: exports the bundle and reads it). Default `false` |
-| `mobile` | Allow the native project scanner (your `check-security-mobile`: mobsfscan over a fresh prebuild). Default `false` |
-| `binaries` | Allow the MASTG checks over the release's built binaries (your `check-security-binaries`). Needs `release-tag`. Default `false` |
-| `review` | Allow the LLM review of the change (your `check-security-review`). Gets full history and, on a pull request, its base. Default `false` |
-| `review-codebase` | Allow the LLM security review of the whole codebase, with OpenAnt (your `check-security-review-codebase`). The build is cached, keyed on your `scripts/security/review-codebase.sh`. Default `false` |
+| `dependencies` | Allow the dependency scanner (`check-security dependencies`, osv-scanner over the lockfile). Default `true` |
+| `code` | Allow the source scanner (`check-security code`, Semgrep's TypeScript, secrets and OWASP packs plus your `jobs.code.rules`). Default `true` |
+| `policy` | Allow the install-policy scanner (`check-security policy`, your `pnpm-workspace.yaml` install policy). Default `true` |
+| `sbom` | Allow the bill of materials (`check-security sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
+| `bundle` | Allow the bundle scanner (`check-security bundle`: exports the bundle with your `expo` and reads it). Default `false` |
+| `mobile` | Allow the native project scanner (`check-security mobile`: mobsfscan over a fresh Expo prebuild). Default `false` |
+| `binaries` | Allow the MASTG checks over the release's built binaries (`check-security binaries`). Needs `release-tag`. Default `false` |
+| `review` | Allow the LLM review of the change (`check-security review`). Gets full history and, on a pull request, its base. Default `false` |
+| `review-codebase` | Allow the LLM security review of the whole codebase, with OpenAnt (`check-security review-codebase`). The build is cached, keyed on the OpenAnt commit `scripts/security/review-codebase.sh` pins. Default `false` |
 | `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |
 | `environment-variables` | Non-secret environment for every job, as a flat JSON object: `SECURITY_LLM_PROVIDER`, `SECURITY_LLM_MODEL`, `SECURITY_LLM_EFFORT`, `SECURITY_LLM_EXTRA_PARAMS`,<br>`OPENAI_BASE_URL`, and any `SECURITY_*` twin of a `security-settings.json` setting. Default `{}` |
@@ -1193,10 +1199,10 @@ second rule that drifts.
 
 | Value | When |
 | --- | --- |
-| the consumer's `.security/verdict.json`, `{"verdict","highest","canBlock"}` | the `Verdict` job ran and the merge wrote the file |
+| `.security/verdict.json`, `{"verdict","highest","canBlock"}` | the `Verdict` job ran and the merge wrote the file |
 | `{"verdict":"fail"}` | a scanner job failed (it reported nothing to the merge); the `Verdict` step failed, or never ran<br>because a step before it failed, without writing the file; or the configuration job failed (a broken `security-settings.json`) |
 | `{"verdict":"disabled"}` | `security-settings.json` switches the gate off |
-| empty | the consumer's merge succeeded but writes no `verdict.json` (it predates the file) |
+| empty | the merge succeeded but wrote no `verdict.json` |
 
 `scripts/security/verdict-output.sh` sets it, in a step of its own at the end of
 the `Verdict` job that runs even when the `Verdict` step failed on findings: that
