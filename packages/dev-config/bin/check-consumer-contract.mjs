@@ -24,6 +24,7 @@
 import { appendFileSync, existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pinProblems } from '../lib/pin.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -523,6 +524,19 @@ export function checkRequirement(req, consumer) {
       return found.length === 0
         ? ok()
         : missing(`${found.join(', ')} ${found.length === 1 ? 'is a copy' : 'are copies'} of what this family ships`);
+    }
+
+    case 'one-pin': {
+      // One commit of shared-workflows everywhere: every workflow call, and each
+      // of this family's packages in package.json and the lockfile. A pin bump
+      // that moves one and not the others runs CI on one commit and a laptop on
+      // another, and the contract below is then read from neither.
+      const problems = pinProblems({
+        callers: consumer.callers,
+        pkg: consumer.pkg,
+        lockfile: io.read(path.join(root, 'pnpm-lock.yaml')),
+      });
+      return problems.length === 0 ? ok() : missing(problems.join('; '));
     }
 
     case 'fastlane-lane': {

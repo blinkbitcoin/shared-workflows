@@ -119,6 +119,11 @@ is a warning in the report, not a failure. See
 | no `scripts/shell-locale.test.mjs` | required | the check-shell-locale program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/workflow-names.test.mjs` | required | the check-workflow-names program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/release/resolve-version.sh` or `scripts/release/resolve-version.test.mjs` | required | release/resolve-version.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
+| one shared-workflows commit for every call, package and lockfile entry | required | every call and every package of this family, read at one commit: a pin bump that moves the workflows and not the packages runs CI on one commit and a laptop on another |
+| no `scripts/tooling-pin.mjs` or `scripts/tooling-pin.test.mjs` | required | the fix-tooling-pin program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/lib/workflow-calls.mjs`, `scripts/lib/workflow-calls.test.mjs` or `scripts/workflow-contract.test.mjs` | required | check-consumer-contract, which @blinkbitcoin/dev-config ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface |
+| no `scripts/check-lockfile.sh` or `scripts/check-lockfile.test.mjs` | required | the check-lockfile program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/release/build-info.sh`, `scripts/release/build-info.test.mjs` or `scripts/release/shared-copies.test.mjs` | required | release/build-info.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
 
 ### If you call `check-unit.yml`
 

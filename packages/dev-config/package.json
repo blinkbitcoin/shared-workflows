@@ -32,7 +32,9 @@
     "./check-shell-locale": "./bin/check-shell-locale.mjs",
     "./check-make-target-names": "./bin/check-make-target-names.mjs",
     "./check-workflow-names": "./bin/check-workflow-names.mjs",
-    "./check-coverage-empty": "./bin/check-coverage-empty.mjs"
+    "./check-coverage-empty": "./bin/check-coverage-empty.mjs",
+    "./check-lockfile": "./bin/check-lockfile.mjs",
+    "./fix-tooling-pin": "./bin/fix-tooling-pin.mjs"
   },
   "bin": {
     "check-tool-versions": "./bin/check-tool-versions.mjs",
@@ -42,7 +44,9 @@
     "check-shell-locale": "./bin/check-shell-locale.mjs",
     "check-make-target-names": "./bin/check-make-target-names.mjs",
     "check-workflow-names": "./bin/check-workflow-names.mjs",
-    "check-coverage-empty": "./bin/check-coverage-empty.mjs"
+    "check-coverage-empty": "./bin/check-coverage-empty.mjs",
+    "check-lockfile": "./bin/check-lockfile.mjs",
+    "fix-tooling-pin": "./bin/fix-tooling-pin.mjs"
   },
   "engines": {
     "node": ">=20"
