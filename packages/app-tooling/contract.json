@@ -424,15 +424,15 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "file.security-deps",
+      "id": "file.security-dependencies",
       "kind": "file",
-      "target": ["scripts/security/deps.sh"],
+      "target": ["scripts/security/dependencies.sh"],
       "profile": "security",
-      "neededBy": "check-security.yml (deps), through scripts/security/run-job.sh",
-      "toggle": "check-security.yml:deps",
+      "neededBy": "check-security.yml (dependencies), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:dependencies",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add scripts/security/deps.sh, or pass deps: false in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "fix": "Add scripts/security/dependencies.sh, or pass dependencies: false in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
       "guide": "check-securityyml"
     },
     {

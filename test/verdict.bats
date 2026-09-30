@@ -35,13 +35,13 @@ path_without_node() {
 @test "verdict.sh runs the consumer's merge, prints it, and keeps its exit code" {
   local consumer
   consumer="$(consumer_with fails scripts/security/verdict.mjs <<'EOF'
-console.log('deps: 1 finding(s), highest high');
+console.log('dependencies: 1 finding(s), highest high');
 console.log('security: fail, highest high, 1 finding(s), 0 suppressed, 0 job(s) skipped');
 process.exit(1);
 EOF
 )"
   mkdir -p "$consumer/.security"
-  printf '{"version":"2.1.0","runs":[]}' > "$consumer/.security/deps.sarif"
+  printf '{"version":"2.1.0","runs":[]}' > "$consumer/.security/dependencies.sarif"
   export GITHUB_WORKSPACE="$consumer"
   export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"
   run bash "$REPO_ROOT/scripts/security/verdict.sh"
@@ -66,7 +66,7 @@ EOF
 @test "verdict.sh fails by name when the consumer ships no merge" {
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR/nomerge"
   mkdir -p "$GITHUB_WORKSPACE/.security"
-  printf '{}' > "$GITHUB_WORKSPACE/.security/deps.sarif"
+  printf '{}' > "$GITHUB_WORKSPACE/.security/dependencies.sarif"
   run bash "$REPO_ROOT/scripts/security/verdict.sh"
   [ "$status" -eq 1 ] || fail "expected a hard failure, got $status: $output"
   contains "$output" 'scripts/security/verdict.mjs' || fail "the error does not name the missing file: $output"
@@ -101,7 +101,7 @@ console.log('security: pass, 0 finding(s)');
 EOF
 )"
   mkdir -p "$consumer/.security"
-  printf '{"version":"2.1.0","runs":[]}' > "$consumer/.security/deps.sarif"
+  printf '{"version":"2.1.0","runs":[]}' > "$consumer/.security/dependencies.sarif"
   export GITHUB_WORKSPACE="$consumer"
   run bash "$REPO_ROOT/scripts/security/verdict.sh"
   [ "$status" -eq 0 ] || fail "a passing merge failed the step: $status / $output"
@@ -117,7 +117,7 @@ console.log(`merged ${process.argv[2]}`);
 EOF
 )"
   mkdir -p "$consumer/reports/security"
-  printf '{"version":"2.1.0","runs":[]}' > "$consumer/reports/security/deps.sarif"
+  printf '{"version":"2.1.0","runs":[]}' > "$consumer/reports/security/dependencies.sarif"
   export GITHUB_WORKSPACE="$consumer"
   export SECURITY_DIR="reports/security"
   export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"

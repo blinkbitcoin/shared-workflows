@@ -175,7 +175,7 @@ is a warning in the report, not a failure. See
 | What | You need | Why |
 | --- | --- | --- |
 | `scripts/security/settings.mjs` | required | check-security.yml (the Settings job), through scripts/security/settings.sh |
-| `scripts/security/deps.sh` | required, or pass `deps: false` | check-security.yml (deps), through scripts/security/run-job.sh |
+| `scripts/security/dependencies.sh` | required, or pass `dependencies: false` | check-security.yml (dependencies), through scripts/security/run-job.sh |
 | `scripts/security/code.sh` | required, or pass `code: false` | check-security.yml (code), through scripts/security/run-job.sh |
 | `scripts/security/policy.sh` | required, or pass `policy: false` | check-security.yml (policy), through scripts/security/run-job.sh |
 | `scripts/security/sbom.sh` | only if you set `sbom: true` | check-security.yml (sbom), through scripts/security/run-job.sh |

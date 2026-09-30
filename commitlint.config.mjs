@@ -15,7 +15,7 @@ export default {
         'app-tooling', // packages/app-tooling/** the published npm package: tooling, checks and the Expo presets
         'checks', // scripts/checks/**   + check.yml
         'ci', // scripts/ci/**       + self-ci.yml
-        'deps', // dependabot and pinned tool bumps
+        'dependencies', // dependabot and pinned tool bumps
         'docs', // docs/** and README
         'e2e', // scripts/e2e/**      + test-e2e.yml
         'lib', // scripts/lib/**      shared bash helpers

@@ -9,7 +9,7 @@
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 load test_helper
 
-JOBS="deps code policy sbom bundle mobile binaries review review-codebase"
+JOBS="dependencies code policy sbom bundle mobile binaries review review-codebase"
 
 sarif() {
   printf '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"%s","rules":[{"id":"r"}]}},"results":[{"ruleId":"r"}]}]}' "$1"
@@ -30,9 +30,9 @@ setup() {
   names="$(for job in $JOBS; do jq -r '.runs[].tool.driver.name' "$GITHUB_WORKSPACE/.security/$job.sarif"; done | paste -sd, -)"
   [ "$names" = "Dependencies,Code,Policy,Bill of Materials,Bundle,Mobile,Binaries,Review,Review codebase" ] \
     || fail "the runs are not named after the jobs: $names"
-  [ "$(jq '.runs[0].results | length' "$GITHUB_WORKSPACE/.security/deps.sarif")" -eq 1 ] \
+  [ "$(jq '.runs[0].results | length' "$GITHUB_WORKSPACE/.security/dependencies.sarif")" -eq 1 ] \
     || fail "labelling dropped the findings"
-  [ "$(jq -r '.runs[0].tool.driver.rules[0].id' "$GITHUB_WORKSPACE/.security/deps.sarif")" = r ] \
+  [ "$(jq -r '.runs[0].tool.driver.rules[0].id' "$GITHUB_WORKSPACE/.security/dependencies.sarif")" = r ] \
     || fail "labelling dropped the rules code scanning reads severities from"
   ! ls "$GITHUB_WORKSPACE/.security/"*.labelled >/dev/null 2>&1 \
     || fail "a temporary file was left behind for upload-sarif to pick up"
@@ -53,10 +53,10 @@ setup() {
 @test "label-sarif.sh reads the directory SECURITY_DIR names" {
   export SECURITY_DIR=reports
   mkdir -p "$GITHUB_WORKSPACE/reports"
-  sarif osv-scanner > "$GITHUB_WORKSPACE/reports/deps.sarif"
+  sarif osv-scanner > "$GITHUB_WORKSPACE/reports/dependencies.sarif"
   run bash "$REPO_ROOT/scripts/security/label-sarif.sh"
   [ "$status" -eq 0 ] || fail "$output"
-  [ "$(jq -r '.runs[0].tool.driver.name' "$GITHUB_WORKSPACE/reports/deps.sarif")" = Dependencies ] \
+  [ "$(jq -r '.runs[0].tool.driver.name' "$GITHUB_WORKSPACE/reports/dependencies.sarif")" = Dependencies ] \
     || fail "SECURITY_DIR was not read"
 }
 

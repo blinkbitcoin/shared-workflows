@@ -637,7 +637,7 @@ A single on/off switch does not need one — a plain `type: boolean` workflow
 input (rule 4) covers it, the same as `docs` or `commits` in
 `check.yml` above. The line is what the feature has to tune beyond "on
 or off": the moment a feature grows a threshold (`severity`), an allowlist or
-excludes, or independent per-part switches (`jobs.deps`, `jobs.code`, ...),
+excludes, or independent per-part switches (`jobs.dependencies`, `jobs.code`, ...),
 those settings need a home that is diffable and reviewable in the consumer,
 which a workflow input — read once per run, with no history of its own — is
 not. Security scanning needed all three from the start, which is why it has
@@ -1156,7 +1156,7 @@ that scans nothing while reporting green is worse than one that is red.
 | Input | Meaning |
 | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | The family's common six. `macos-runner` and `native-cache-version` are unused here and carried for consistency |
-| `deps` | Allow the dependency scanner (your `check-security-deps`, osv-scanner over the lockfile). Default `true` |
+| `dependencies` | Allow the dependency scanner (your `check-security-dependencies`, osv-scanner over the lockfile). Default `true` |
 | `code` | Allow the source scanner (your `check-security-code`, Semgrep over app source). Default `true` |
 | `policy` | Allow the install-policy scanner (your `check-security-policy`). Default `true` |
 | `sbom` | Allow the bill of materials (your `check-security-sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
@@ -1199,7 +1199,7 @@ and your `security-settings.json` still decides which of those actually run:
 
 | Stage | Caller | Inputs on |
 | --- | --- | --- |
-| Every pull request, every push to `main` | `ci.yml` | `deps`, `code`, `policy`; `review` on pull requests |
+| Every pull request, every push to `main` | `ci.yml` | `dependencies`, `code`, `policy`; `review` on pull requests |
 | The release pull request (release-please's branch) | `ci.yml` | the above plus `bundle`, `review-codebase`, `review-full-range` |
 | The production dispatch, before any store job | `cd-production.yml` | `binaries`, `mobile`, `bundle`, `sbom`, with `release-tag` and `ref` set to the tag |
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Hash of every input the native (Xcode/Gradle) build consumes in an Expo prebuild app:
-# the lockfile-resolved versions of runtime deps + native-adjacent dev deps, plus the
+# the lockfile-resolved versions of runtime dependencies + native-adjacent development dependencies, plus the
 # config/plugin/module/patch files. A jest/eslint bump does not change it.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
