@@ -518,7 +518,42 @@ bash node_modules/@blinkbitcoin/app-tooling/ci/maestro-install.sh
   action runs. `MAESTRO_DIR` (default `~/.maestro`) is where it goes;
   `MAESTRO_VERSION` with its `MAESTRO_SHA256` picks another version.
 
+### Machine setup and the doctor
+
+A machine with [mise](https://mise.jdx.dev) becomes one that builds and tests
+the app in the current directory. Run each script from the app's root; each is
+idempotent, so it is also the first thing to re-run when the toolchain
+misbehaves:
+
+```sh
+bash node_modules/@blinkbitcoin/app-tooling/setup/all.sh [--yes] [--boot]   # all of the below, then the doctor
+bash node_modules/@blinkbitcoin/app-tooling/setup/toolchain.sh              # mise's pinned tools, watchman, the app's install
+bash node_modules/@blinkbitcoin/app-tooling/setup/android.sh [--yes] [--boot]  # SDK, React Native's SDK pins, the emulator
+bash node_modules/@blinkbitcoin/app-tooling/setup/ios.sh [--boot]             # Xcode checks, the simulator runtime, CocoaPods
+pnpm exec doctor                                                              # what is installed, and the fix for what is not
+```
+
+- **Pins:** the Android command-line tools, the emulator, CocoaPods and Maestro
+  are pinned in `lib/versions.sh`. The SDK packages React Native builds with
+  come from the app's own `node_modules/react-native`.
+- **Install step:** `toolchain.sh` runs the app's `make install` when its
+  Makefile has one. Otherwise it runs `pnpm install --frozen-lockfile`, and
+  `bundle install` when there is a Gemfile.
+- **`ANDROID_HOME`:** `android.sh` records it in the app's `.env.local`.
+- **The doctor's checks:** `doctor.requirements.json` lists the tools, commands
+  and environment the doctor checks, each with the script that fixes it. An app
+  adds or replaces entries by name in its own `doctor.requirements.json`, and
+  drops one with `"skip": true`. An entry with `when` applies only when that
+  file exists (the Ruby gems only where there is a Gemfile).
+
 ## Release scripts
+
+`release/verify-ios.sh <ipa-or-app> [--no-signing] [--dsym DIR]` and
+`release/verify-android.sh <aab> <apk> [--cert-sha256 X]` are the release
+artifact gates your fastlane `verify` lanes run, with `lib/verify-common.sh`
+beside them. Run them from the repository root (they read `build-info.json`,
+`.env.example` and the store metadata there, and skip what is absent), with
+`bash`.
 
 `release/resolve-version.sh` and `release/build-info.sh` are the scripts
 `build-prepare.yml` runs to decide a build's version and build number and to

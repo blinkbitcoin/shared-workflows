@@ -104,6 +104,7 @@ is a warning in the report, not a failure. See
 | `Gemfile` | only if you set `release: true` | check.yml (release) via bundler-cache, and scripts/release/fastlane.sh |
 | every gate CI runs, reachable from `make ci` | required | check.yml and test-unit.yml, against your Makefile |
 | every gate `make ci` runs, run by CI | required | your Makefile, against check.yml and test-unit.yml |
+| no `scripts/setup`, `scripts/doctor.mjs` or `scripts/doctor.test.mjs` | required | the machine setup (setup/*.sh) and the doctor (bin/doctor.mjs, doctor.requirements.json) @blinkbitcoin/app-tooling ships; a copy in your repository is compared with them by nothing and drifts |
 | `biome.json` | optional — a fallback runs | your own lint gate, which walks the whole tree |
 | `eslint.config.mjs` | optional — a fallback runs | your own lint gate, which walks the whole tree |
 | `tsconfig.json` | optional — a fallback runs | your own type check gate |
@@ -184,8 +185,7 @@ is a warning in the report, not a failure. See
 | `fastlane/Fastfile` | required | build-ios.yml, build-android.yml, publish-store.yml |
 | the `ios:build`, `ios:verify`, `android:build` and `android:verify` lanes | required | build-ios.yml, build-android.yml |
 | lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_NOTES` and `APP_REVIEW_PHONE` | required | publish-store.yml, which passes exactly these as secrets |
-| `scripts/release/verify-ios.sh` | required | the ios verify lane |
-| `scripts/release/verify-android.sh` | required | the android verify lane |
+| no `scripts/release/verify-ios.sh`, `scripts/release/verify-android.sh`, `scripts/release/lib/verify-common.sh` or `scripts/release/verify.test.mjs` | required | the release verifiers @blinkbitcoin/app-tooling ships as release/verify-ios.sh and release/verify-android.sh (with lib/verify-common.sh), which your verify lanes run; a copy in your repository is compared with them by nothing and drifts |
 | `@expo/fingerprint` | required | build-prepare.yml and publish-ota.yml, through scripts/lib/release-env.sh |
 
 <!-- contract-table:end -->

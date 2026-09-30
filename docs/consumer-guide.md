@@ -1467,7 +1467,7 @@ Prebuild → `fastlane android build` → `fastlane android verify`, on
 | `mapping-path` | `android/app/build/outputs/mapping/**/mapping.txt` | Consumer-relative glob for the mapping file. Override it when the consumer uses a non-default variant output directory — the upload is `if-no-files-found: warn`, so a wrong path yields a green build and permanently unreadable Play crash reports |
 | `bundletool-version` | `1.17.2` | bundletool release downloaded before the lane runs (the `android build` lane derives the universal APK from the .aab with it, and no runner image ships it). Kept equal to `scripts/lib/versions.sh` by `scripts/self/check-version-pins.sh` |
 | `bundletool-sha256` | `''` | Expected sha256 of the jar; empty skips verification. Google publishes no checksum file alongside the release, so pinning the bytes is opt-in |
-| `environment-variables` | `{}` | Non-secret build environment, published before prebuild — see [`environment-variables`](#environment-variables). Put `ANDROID_UPLOAD_CERT_SHA256` here: the `android verify` lane forwards it to `verify-android.sh` as `--cert-sha256`, which turns "the aab is signed" into "the aab is signed by the expected key" |
+| `environment-variables` | `{}` | Non-secret build environment, published before prebuild — see [`environment-variables`](#environment-variables). Put `ANDROID_UPLOAD_CERT_SHA256` here: the `android verify` lane forwards it to the package's `verify-android.sh` as `--cert-sha256`, which turns "the aab is signed" into "the aab is signed by the expected key" |
 
 No outputs. Secrets (all optional): `consumer-token`,
 `ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`,
@@ -2198,7 +2198,7 @@ job that produces the binaries: `build-android.yml` runs
 `scripts/release/artifact-hashes.sh` between the `build` and `verify` lanes,
 which writes an enriched **copy** into `$WORKFLOWS_OUTPUT_DIR` carrying
 `artifacts.apkSha256` / `artifacts.aabSha256`. The `verify` lane reads that copy
-(`BUILD_INFO_FILE` points at it), so the consumer's `verify-android` can compare
+(`BUILD_INFO_FILE` points at it), so the `verify-android` your lane runs can compare
 the universal apk against the digest recorded for it. The build-info copy is
 never edited in place: both platform jobs download it, and two jobs must not
 write one file.
@@ -2315,13 +2315,19 @@ tests use are in `packages/app-tooling/fixtures/store-notes/`, at
 
 ### Consumer-side release scripts
 
-The workflows call two things the **consumer** owns (the store notes are no
-longer one of them: see [Store notes](#store-notes)):
+The workflows run your fastlane lanes, and your `verify` lanes run the release
+verifiers this family ships. You ship none of them: the package carries them,
+and a copy in your repository is a `no-copy.release-verify` failure in the
+contract check.
 
-| Consumer path | Called by | If missing |
+| Package path | Called by | Checks |
 | --- | --- | --- |
-| `scripts/release/verify-ios.sh <ipa-or-app> [--no-signing]` | the `ios verify` lane | The lane fails |
-| `scripts/release/verify-android.sh <aab> <apk> [--cert-sha256 X]` | the `android verify` lane | The lane fails |
+| `node_modules/@blinkbitcoin/app-tooling/release/verify-ios.sh <ipa-or-app> [--no-signing]` | your `ios verify` lane | The archive, its signing, its bundle and its OTA configuration |
+| `node_modules/@blinkbitcoin/app-tooling/release/verify-android.sh <aab> <apk> [--cert-sha256 X]` | your `android verify` lane | The bundle and the universal APK, their signing and the digests `build-info.json` records |
+
+Run them with `bash`, not through `node_modules/.bin`: they source
+`lib/verify-common.sh` beside them. The originals are `scripts/release/` and
+`scripts/lib/verify-common.sh` here.
 
 A consumer may also ship its own `scripts/release/resolve-version.sh`.
 `build-prepare.yml` uses **this repo's copy**, and the two must never *disagree*:

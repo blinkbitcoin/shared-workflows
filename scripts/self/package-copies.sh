@@ -5,10 +5,11 @@
 # build-prepare.yml runs scripts/release/resolve-version.sh and build-info.sh,
 # check.yml runs scripts/checks/{generated,secrets}.sh and
 # scripts/ci/check-ci.sh, and check-security.yml runs the scanners under
-# scripts/security/. A consumer runs the same ones on a laptop (`make
+# scripts/security/; a consumer's verify lanes run scripts/release/verify-*.sh
+# and its machine setup scripts/setup/. A consumer runs the same ones on a laptop (`make
 # version`, `make check`), where it has the package and not this repository.
 # The package therefore carries them, with the libraries they source, at the
-# same relative paths (release/, checks/, ci/ and security/ beside lib/, as under
+# same relative paths (release/, checks/, ci/, security/ and setup/ beside lib/, as under
 # scripts/), so each copy runs unchanged. check-ci.sh's default zizmor policy,
 # .github/zizmor.yml here, rides along as zizmor.yml at the package root. Copies inside one repository,
 # held identical on every commit by test/package-copies.bats, cannot drift the
@@ -26,6 +27,14 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 copies=(
   scripts/release/resolve-version.sh:release/resolve-version.sh
   scripts/release/build-info.sh:release/build-info.sh
+  scripts/release/verify-ios.sh:release/verify-ios.sh
+  scripts/release/verify-android.sh:release/verify-android.sh
+  scripts/lib/verify-common.sh:lib/verify-common.sh
+  scripts/setup/all.sh:setup/all.sh
+  scripts/setup/toolchain.sh:setup/toolchain.sh
+  scripts/setup/android.sh:setup/android.sh
+  scripts/setup/ios.sh:setup/ios.sh
+  scripts/setup/lib.sh:setup/lib.sh
   scripts/checks/generated.sh:checks/generated.sh
   scripts/checks/secrets.sh:checks/secrets.sh
   scripts/checks/run-script.sh:checks/run-script.sh

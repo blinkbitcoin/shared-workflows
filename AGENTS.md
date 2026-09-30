@@ -26,10 +26,12 @@ scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
 scripts/native/     prebuild, pods, iOS/Android builds and packaging
 scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version and store notes resolution, fastlane invocation, release assets,
+                    the artifact verifiers (verify-ios, verify-android; lib/verify-common.sh),
                     the release PR's dispatches (dispatch-release-pr-ci, dispatch-at-tag)
 scripts/security/   check-security.yml: one scanner runner per job and their lib/runner.sh,
                     scan.sh (every job, then the verdict), and the CI bridges
                     (settings, run-job, verdict, label-sarif, binaries-fetch)
+scripts/setup/      a consumer's machine setup (toolchain, android, ios, all), pins in lib/versions.sh
 scripts/web/        web export, Playwright install and run
 scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
 scripts/self/       this repo's own upkeep (check-version-pins, tag-major, smoke-local,

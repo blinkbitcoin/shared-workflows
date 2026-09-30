@@ -476,28 +476,30 @@
       "guide": "the-contract-check"
     },
     {
-      "id": "file.verify-ios",
-      "kind": "file",
-      "target": ["scripts/release/verify-ios.sh"],
+      "id": "no-copy.release-verify",
+      "kind": "no-copy",
+      "label": "no copy of the release verifiers",
+      "target": ["scripts/release/verify-ios.sh", "scripts/release/verify-android.sh", "scripts/release/lib/verify-common.sh", "scripts/release/verify.test.mjs"],
       "profile": "release",
-      "neededBy": "the ios verify lane",
+      "neededBy": "the release verifiers @blinkbitcoin/app-tooling ships as release/verify-ios.sh and release/verify-android.sh (with lib/verify-common.sh), which your verify lanes run; a copy in your repository is compared with them by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Ship scripts/release/verify-ios.sh <ipa-or-app> [--no-signing]. The verify lane calls it by path and fails without it.",
-      "guide": "consumer-side-release-scripts"
+      "fix": "Delete the copies and their tests, and point your verify lanes at the package's: bash node_modules/@blinkbitcoin/app-tooling/release/verify-ios.sh <ipa-or-app> [--no-signing], and release/verify-android.sh <aab> <apk> [--cert-sha256 X].",
+      "guide": "no-copies-of-this-family"
     },
     {
-      "id": "file.verify-android",
-      "kind": "file",
-      "target": ["scripts/release/verify-android.sh"],
-      "profile": "release",
-      "neededBy": "the android verify lane",
+      "id": "no-copy.setup",
+      "kind": "no-copy",
+      "label": "no copy of the machine setup or the doctor",
+      "target": ["scripts/setup", "scripts/doctor.mjs", "scripts/doctor.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the machine setup (setup/*.sh) and the doctor (bin/doctor.mjs, doctor.requirements.json) @blinkbitcoin/app-tooling ships; a copy in your repository is compared with them by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Ship scripts/release/verify-android.sh <aab> <apk> [--cert-sha256 X]. The verify lane calls it by path and fails without it.",
-      "guide": "consumer-side-release-scripts"
+      "fix": "Delete the copies and their tests, run bash node_modules/@blinkbitcoin/app-tooling/setup/all.sh (or toolchain.sh, android.sh, ios.sh) and pnpm exec doctor instead, and keep only your own additions in doctor.requirements.json, which the doctor merges over the package's by name.",
+      "guide": "no-copies-of-this-family"
     },
     {
       "id": "package-dep.fingerprint",
