@@ -30,6 +30,9 @@ copies=(
   scripts/checks/secrets.sh:checks/secrets.sh
   scripts/checks/run-script.sh:checks/run-script.sh
   scripts/ci/lint-ci.sh:ci/lint-ci.sh
+  scripts/ci/maestro-install.sh:ci/maestro-install.sh
+  scripts/checks/expo-doctor.sh:checks/expo-doctor.sh
+  scripts/hooks/install-if-lockfile-changed.sh:hooks/install-if-lockfile-changed.sh
   scripts/lib/common.sh:lib/common.sh
   scripts/lib/release-env.sh:lib/release-env.sh
   scripts/lib/git-clean.sh:lib/git-clean.sh

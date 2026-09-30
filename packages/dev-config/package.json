@@ -17,6 +17,7 @@
     "checks",
     "ci",
     "lib",
+    "hooks",
     "release",
     "zizmor.yml",
     "store-notes.prompt.md",
@@ -47,8 +48,10 @@
     "./llm": "./lib/llm.mjs",
     "./llm-request": "./lib/llm-request.mjs",
     "./check-test-siblings": "./bin/check-test-siblings.mjs",
+    "./check-ignored-directories": "./bin/check-ignored-directories.mjs",
     "./check-docs": "./bin/check-docs.mjs",
     "./check-licenses": "./bin/check-licenses.mjs",
+    "./check-code-scanning": "./bin/check-code-scanning.mjs",
     "./make-help": "./bin/make-help.mjs"
   },
   "bin": {
@@ -68,8 +71,10 @@
     "status-badge": "./bin/status-badge.mjs",
     "store-notes": "./bin/store-notes.mjs",
     "check-test-siblings": "./bin/check-test-siblings.mjs",
+    "check-ignored-directories": "./bin/check-ignored-directories.mjs",
     "check-docs": "./bin/check-docs.mjs",
     "check-licenses": "./bin/check-licenses.mjs",
+    "check-code-scanning": "./bin/check-code-scanning.mjs",
     "make-help": "./bin/make-help.mjs"
   },
   "engines": {

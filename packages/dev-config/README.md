@@ -82,7 +82,7 @@ family rather than to any repository on the baseline.
 
 ## Repository guards
 
-Ten checks for rules a repository on the baseline holds itself to, each a
+Twelve checks for rules a repository on the baseline holds itself to, each a
 program and a module (`@blinkbitcoin/dev-config/<name>`) whose functions a
 test can import. The template wrote them first; they live here so the template,
 this repository and the next consumer run the same code.
@@ -96,8 +96,10 @@ check-workflow-names --group ci=CI ...      # a workflow file or display name ou
 check-coverage-empty [summary.json]         # a Jest coverage row with nothing to cover
 check-make-recipes [--allow T=REASON]       # a make recipe with logic in it, not one call to a tested script
 check-test-siblings [--source GLOB=SUFFIX]  # a source file without a test file of its own
+check-ignored-directories                   # a tool that walks into .workflows/ or .claude/worktrees/
 check-docs [--architecture PREFIX]          # docs freshness, the command table, then three of the above
 check-licenses [--allow SPDX]               # a production dependency under a licence outside the allowlist
+check-code-scanning [--config FILE]         # CodeQL on this machine, with the configuration CI reads
 ```
 
 - `check-docs-tables` measures each `<br>` segment of a cell's visible text,
@@ -150,6 +152,20 @@ check-licenses [--allow SPDX]               # a production dependency under a li
     under TO that mirrors nothing fails.
   - There is no `--allow`, and passing one fails with the reason. The files are
     the tracked ones plus untracked files git does not ignore.
+- `check-ignored-directories` asks each tool that walks the tree whether it
+  skips `.workflows/` (every CI job's checkout of this repository) and
+  `.claude/worktrees/` (Claude Code's whole checkouts of the repository):
+  - Jest, Metro and ESLint by behaviour, loading the repository's own
+    configuration and ESLint from its node_modules, so install first.
+  - Biome, tsc, knip, typos, `.gitignore`, `.semgrepignore` and the CodeQL
+    configuration by what their files say.
+  - Every zizmor call in a tracked file must pass `--config`, since a worktree's
+    `.git` is a file and zizmor would read the outer checkout's policy.
+  - A tool whose configuration file is absent is skipped. `--directory DIR`
+    (repeatable) replaces the pair.
+  - `--worktrees DIR` names the one that holds checkouts of this repository,
+    where Jest's patterns must be anchored to `<rootDir>`: a worktree's own root
+    is under it.
 - `check-docs` is a docs check in one call. Its rules are the `docs` section
   of [`dev-config.json`](#the-configuration-file) (`architecture`, and
   `allowTargetNames` as target to reason), or the flags below. Its steps, in
@@ -174,6 +190,14 @@ check-licenses [--allow SPDX]               # a production dependency under a li
   (`MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`,
   `CC0-1.0`, `Unlicense`, `MPL-2.0`, `CC-BY-4.0`, `Python-2.0`,
   `BlueOak-1.0.0`) plus each `--allow` the repository adds.
+- `check-code-scanning` runs CodeQL on this machine with the language, query
+  suite, packs and `paths-ignore` of the configuration `check-codeql.yml` reads
+  (`--config`, default `.github/codeql/codeql-config.yml`), so an inline
+  `// codeql[rule-id]` marker shows as suppressing its finding or not before a
+  push. It needs `codeql` on PATH or the `gh codeql` extension, writes to
+  `.codeql/`, and fails while a finding is open. Only
+  `javascript-typescript` is mapped, and an entry it cannot map stops the run
+  rather than analysing less than CI.
 
 `make help` is a program too, so the one-liner every Makefile carried
 (`grep ... $(MAKEFILE_LIST) | sort | awk ...`) is not logic in a recipe:
@@ -227,7 +251,13 @@ becomes one line:
 | `make help` | `pnpm exec make-help` |
 | `check-docs` | `pnpm exec check-docs` |
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
+| worktree ignores | `pnpm exec check-ignored-directories` |
 | `deps:licenses` | `check-licenses` |
+| `check-code-scanning` | `pnpm exec check-code-scanning` |
+| `deps:check` | `bash node_modules/@blinkbitcoin/dev-config/checks/expo-doctor.sh` |
+| lefthook `post-merge` | `bash node_modules/@blinkbitcoin/dev-config/hooks/install-if-lockfile-changed.sh post-merge {1}` |
+| lefthook `post-checkout` | `bash node_modules/@blinkbitcoin/dev-config/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}` |
+| `setup-maestro` | `MAESTRO_DIR=... bash node_modules/@blinkbitcoin/dev-config/ci/maestro-install.sh` |
 
 Each deleted copy then has a `no-copy` row in `contract.json`, so it cannot
 come back.
@@ -284,15 +314,16 @@ status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
 
 ## The checks CI runs, for a laptop
 
-`check-code.yml` runs four shell checks from this repository. The package
+`check-code.yml` runs five shell checks from this repository. The package
 carries byte-identical copies, so a consumer's `make check` runs exactly what
 CI runs, at the same commit:
 
 ```sh
-bash node_modules/@blinkbitcoin/dev-config/checks/i18n.sh      # runs your i18n:extract, fails on a diff under I18N_PATHS
-bash node_modules/@blinkbitcoin/dev-config/checks/codegen.sh   # runs your codegen, fails on a diff under CODEGEN_PATHS
-bash node_modules/@blinkbitcoin/dev-config/checks/secrets.sh   # gitleaks over the whole history, at the pinned version
-bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh       # actionlint, zizmor and shellcheck at the pinned versions
+bash node_modules/@blinkbitcoin/dev-config/checks/i18n.sh         # runs your i18n:extract, fails on a diff under I18N_PATHS
+bash node_modules/@blinkbitcoin/dev-config/checks/codegen.sh      # runs your codegen, fails on a diff under CODEGEN_PATHS
+bash node_modules/@blinkbitcoin/dev-config/checks/secrets.sh      # gitleaks over the whole history, at the pinned version
+bash node_modules/@blinkbitcoin/dev-config/checks/expo-doctor.sh  # Expo SDK drift as a warning, then expo-doctor
+bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh          # actionlint, zizmor and shellcheck at the pinned versions
 ```
 
 - **Paths:**
@@ -301,6 +332,7 @@ bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh       # actionlint, ziz
   - `WORKFLOWS_SHELLCHECK_PATHS` names the directories shellcheck lints (default `scripts`).
 - **Switches:** `WORKFLOWS_ACTIONLINT`, `WORKFLOWS_ZIZMOR` and `WORKFLOWS_SHELLCHECK` turn one half off.
 - **zizmor policy:** a repository without its own `.github/zizmor.yml` gets this family's, which the package carries as `zizmor.yml`.
+- **Expo doctor:** `expo install --check` is advisory. Drift is printed, counted in a warning (an annotation under Actions) and never fails: Expo publishes patches most weeks, and a release cooldown refuses each for a day. Doctor then runs with its own version check off, and its status is the gate's. It is your pinned `expo-doctor` devDependency, or the latest through `pnpm dlx`; with no `expo` dependency the drift half is skipped.
 - **Run with `bash`, not as a program:** the scripts source `lib/` beside them, and a `node_modules/.bin` link would break that.
 
 ## `store-notes`
@@ -357,6 +389,27 @@ The provider adapters are exported for an app's own LLM calls:
 The consumer guide's
 [Store notes](../../docs/consumer-guide.md#store-notes) section has the
 whole contract, with an example of what an app adds to the prompt.
+
+## Git hooks and machine setup
+
+Two more scripts, for a repository's own hooks and setup rather than for CI:
+
+```sh
+bash node_modules/@blinkbitcoin/dev-config/hooks/install-if-lockfile-changed.sh post-merge {1}
+bash node_modules/@blinkbitcoin/dev-config/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}
+bash node_modules/@blinkbitcoin/dev-config/ci/maestro-install.sh
+```
+
+- `hooks/install-if-lockfile-changed.sh` reinstalls dependencies when a merge or
+  a branch checkout moved the lockfile, from lefthook's `post-merge` and
+  `post-checkout` with git's own hook arguments. It works out the revisions
+  itself: lefthook's `{1}` expands inside `HEAD@{1}`. `WORKFLOWS_LOCKFILE`
+  (default `pnpm-lock.yaml`) and `WORKFLOWS_INSTALL_CMD` (default
+  `pnpm install --frozen-lockfile`) change what it watches and runs.
+- `ci/maestro-install.sh` installs Maestro at the pinned version from the
+  release archive, checked against its pinned SHA-256: the script the `maestro`
+  action runs. `MAESTRO_DIR` (default `~/.maestro`) is where it goes;
+  `MAESTRO_VERSION` with its `MAESTRO_SHA256` picks another version.
 
 ## Release scripts
 

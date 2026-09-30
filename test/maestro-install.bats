@@ -190,3 +190,25 @@ $MAESTRO_PIN"
   sha="$(bash -c 'source "$REPO_ROOT/scripts/lib/versions.sh"; echo "$MAESTRO_SHA256"')"
   [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || fail "MAESTRO_SHA256 is not a SHA-256: '$sha'"
 }
+
+@test "MAESTRO_DIR installs somewhere other than ~/.maestro, and GITHUB_PATH gets that bin" {
+  local dir="$BATS_TEST_TMPDIR/tools/maestro"
+  sha="$(make_archive "$MAESTRO_PIN")"
+  serve_file "$BATS_TEST_TMPDIR/maestro.zip"
+  export GITHUB_PATH="$BATS_TEST_TMPDIR/github-path"
+  MAESTRO_DIR="$dir" MAESTRO_SHA256="$sha" install
+  [ "$status" -eq 0 ] || fail "expected success, got $status: $output"
+  [ -x "$dir/bin/maestro" ] || fail "nothing was installed in MAESTRO_DIR"
+  [ ! -e "$HOME/.maestro/bin/maestro" ] || fail "it installed into ~/.maestro as well"
+  [ "$(cat "$GITHUB_PATH")" = "$dir/bin" ] || fail "GITHUB_PATH: $(cat "$GITHUB_PATH")"
+  : > "$CURL_CALLS"
+  MAESTRO_DIR="$dir" install
+  [ "$status" -eq 0 ] || fail "the install in MAESTRO_DIR was not kept: $output"
+  [ ! -s "$CURL_CALLS" ] || fail "downloaded again: $(cat "$CURL_CALLS")"
+}
+
+@test "the package's copy installs from where a consumer has it, with its libraries beside it" {
+  plant_maestro "$MAESTRO_PIN"
+  run bash "$REPO_ROOT/packages/dev-config/ci/maestro-install.sh"
+  [ "$status" -eq 0 ] || fail "the packaged copy did not run: $output"
+}
