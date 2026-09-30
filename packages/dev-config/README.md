@@ -140,6 +140,26 @@ check-lockfile [--root DIR]     # every lockfile resolution is the npm registry,
   source when the calls pin no single commit.
 - `check-consumer-contract`'s `pin.one-commit` row asserts the same agreement:
   every call, and each package in `package.json` and `pnpm-lock.yaml`.
+## The checks CI runs, for a laptop
+
+`check-code.yml` runs four shell checks from this repository. The package
+carries byte-identical copies, so a consumer's `make check` runs exactly what
+CI runs, at the same commit:
+
+```sh
+bash node_modules/@blinkbitcoin/dev-config/checks/i18n.sh      # runs your i18n:extract, fails on a diff under I18N_PATHS
+bash node_modules/@blinkbitcoin/dev-config/checks/codegen.sh   # runs your codegen, fails on a diff under CODEGEN_PATHS
+bash node_modules/@blinkbitcoin/dev-config/checks/secrets.sh   # gitleaks over the whole history, at the pinned version
+bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh       # actionlint, zizmor and shellcheck at the pinned versions
+```
+
+- **Paths:**
+  - `I18N_PATHS` defaults to `src/i18n/locales`.
+  - `CODEGEN_PATHS` defaults to `src/graphql/generated`.
+  - `WORKFLOWS_SHELLCHECK_PATHS` names the directories shellcheck lints (default `scripts`).
+- **Switches:** `WORKFLOWS_ACTIONLINT`, `WORKFLOWS_ZIZMOR` and `WORKFLOWS_SHELLCHECK` turn one half off.
+- **zizmor policy:** a repository without its own `.github/zizmor.yml` gets this family's, which the package carries as `zizmor.yml`.
+- **Run with `bash`, not as a program:** the scripts source `lib/` beside them, and a `node_modules/.bin` link would break that.
 
 ## Release scripts
 

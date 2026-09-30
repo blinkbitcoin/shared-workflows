@@ -1,34 +1,39 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/self/package-copies.sh: the release scripts packages/dev-config ships
-# must be byte-identical to the ones build-prepare.yml runs, or a consumer's
-# laptop resolves a version one way and its release another.
+# scripts/self/package-copies.sh: the scripts packages/dev-config ships must be
+# byte-identical to the ones the workflows run, or a consumer's laptop resolves
+# a version, or passes a check, one way and CI another.
 load test_helper
 
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (4 files)" || fail "output: $output"
+  contains "$output" "package copies ok (12 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
 tree() {
   tree="$BATS_TEST_TMPDIR/tree"
-  mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release"
+  mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release" "$tree/scripts/checks" "$tree/scripts/ci" "$tree/.github"
   cp "$REPO_ROOT/scripts/self/package-copies.sh" "$tree/scripts/self/"
-  cp "$REPO_ROOT/scripts/lib/common.sh" "$REPO_ROOT/scripts/lib/release-env.sh" "$tree/scripts/lib/"
+  cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions}.sh "$tree/scripts/lib/"
   cp "$REPO_ROOT/scripts/release/resolve-version.sh" "$REPO_ROOT/scripts/release/build-info.sh" "$tree/scripts/release/"
+  cp "$REPO_ROOT"/scripts/checks/{i18n,codegen,secrets,run-script}.sh "$tree/scripts/checks/"
+  cp "$REPO_ROOT/scripts/ci/lint-ci.sh" "$tree/scripts/ci/"
+  cp "$REPO_ROOT/.github/zizmor.yml" "$tree/.github/"
 }
 
 @test "--write copies every original into the package, and the copies then check clean" {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 4 files into packages/dev-config" || fail "output: $output"
-  for rel in release/resolve-version.sh release/build-info.sh lib/common.sh lib/release-env.sh; do
+  contains "$output" "copied 12 files into packages/dev-config" || fail "output: $output"
+  for rel in release/resolve-version.sh release/build-info.sh checks/i18n.sh checks/codegen.sh checks/secrets.sh \
+    checks/run-script.sh ci/lint-ci.sh lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh; do
     cmp -s "$tree/scripts/$rel" "$tree/packages/dev-config/$rel" || fail "packages/dev-config/$rel is not a copy"
   done
+  cmp -s "$tree/.github/zizmor.yml" "$tree/packages/dev-config/zizmor.yml" || fail "packages/dev-config/zizmor.yml is not a copy"
   [ -x "$tree/packages/dev-config/release/resolve-version.sh" ] || [ ! -x "$tree/scripts/release/resolve-version.sh" ] \
     || fail "the copy lost the original's executable bit"
   run bash "$tree/scripts/self/package-copies.sh"
@@ -61,4 +66,33 @@ tree() {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh" --check
   [ "$status" -ne 0 ] || fail "accepted --check: $output"
   contains "$output" "usage: package-copies.sh [--write]" || fail "output: $output"
+}
+
+# The copies must run from where a consumer has them: node_modules/.../dev-config,
+# with lib/ beside checks/ and no repository around them.
+packaged_consumer() {
+  consumer="$BATS_TEST_TMPDIR/app"
+  mkdir -p "$consumer/src/i18n/locales"
+  printf 'msgid ""\n' > "$consumer/src/i18n/locales/en.po"
+  printf '{"scripts":{"i18n:extract":"%s"}}\n' "$1" > "$consumer/package.json"
+  git -C "$consumer" init -q
+  git -C "$consumer" -c user.email=t@t -c user.name=t add -A
+  git -C "$consumer" -c user.email=t@t -c user.name=t commit -qm init
+}
+
+@test "the packaged i18n check runs from the package against a consumer that is current" {
+  command -v pnpm >/dev/null || skip "pnpm not installed"
+  packaged_consumer "true"
+  cd "$consumer"
+  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/dev-config/checks/i18n.sh"
+  [ "$status" -eq 0 ] || fail "a current consumer failed: $output"
+}
+
+@test "the packaged i18n check fails, naming the fix, when extraction changes the catalogs" {
+  command -v pnpm >/dev/null || skip "pnpm not installed"
+  packaged_consumer "echo changed >> src/i18n/locales/en.po"
+  cd "$consumer"
+  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/dev-config/checks/i18n.sh"
+  [ "$status" -ne 0 ] || fail "stale catalogs passed: $output"
+  contains "$output" "run \"pnpm run i18n:extract\" and commit the result" || fail "output: $output"
 }

@@ -14,8 +14,11 @@
   },
   "files": [
     "bin",
+    "checks",
+    "ci",
     "lib",
     "release",
+    "zizmor.yml",
     "contract.json",
     "interfaces.json",
     "versions.json",

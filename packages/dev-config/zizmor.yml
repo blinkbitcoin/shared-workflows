@@ -1,0 +1,16 @@
+# zizmor policy for this repository, and the fallback policy scripts/ci/lint-ci.sh
+# hands to a consumer that ships no zizmor config of its own. `make workflow-security` and
+# the lefthook hook pass this file with --config rather than relying on zizmor's
+# discovery, which from a worktree nested in another checkout finds that
+# checkout's policy instead (see the Makefile).
+#
+# The gate runs at --min-severity medium (Makefile, lint-ci.sh). Low findings
+# (artipacked, self-repository) are real hardening but not yet a merge blocker.
+rules:
+  # Tags, not commit SHAs, across the family: consumers call these workflows at
+  # the moving `@v0` tag by design, and first- and third-party actions are held
+  # to the same rule so there is one policy to reason about. Dependabot moves
+  # the tags. Decided 2026-09-22; revisit by switching this off, not by
+  # ignoring findings one at a time.
+  unpinned-uses:
+    disable: true

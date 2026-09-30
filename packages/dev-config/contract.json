@@ -899,6 +899,32 @@
       "severity": "required",
       "fix": "Delete the copy and its tests, and run node_modules/@blinkbitcoin/dev-config/release/build-info.sh --standalone on a laptop instead.",
       "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.generated-drift",
+      "kind": "no-copy",
+      "label": "no copy of the generated-file drift checks",
+      "target": ["scripts/check-i18n.sh", "scripts/check-codegen.sh"],
+      "profile": "checks",
+      "neededBy": "checks/i18n.sh and checks/codegen.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs; a copy in your repository is compared with them by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copies, and point i18n:check and codegen:check at bash node_modules/@blinkbitcoin/dev-config/checks/i18n.sh and checks/codegen.sh; each runs your i18n:extract or codegen script and fails on a diff.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.lint-ci",
+      "kind": "no-copy",
+      "label": "no copy of the CI lint",
+      "target": ["scripts/shellcheck.sh"],
+      "profile": "checks",
+      "neededBy": "ci/lint-ci.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs: actionlint, zizmor and shellcheck at the pinned versions",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy, and run bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh; WORKFLOWS_SHELLCHECK_PATHS names the directories to lint when scripts/ is not all of them.",
+      "guide": "no-copies-of-this-family"
     }
   ]
 }
