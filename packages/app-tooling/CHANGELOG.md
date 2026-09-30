@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.3.0...app-tooling-v0.4.0) (2026-09-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **workflows:** a consumer's scripts/e2e/maestro-ios.sh and scripts/e2e/maestro-android.sh now fail the contract check (no-copy.e2e-suite), and scripts/e2e/serve-dist.mjs with its test fails no-copy.serve-dist. Run the package's e2e/ copies with your ports exported, and start the preview server as pnpm exec serve-dist.
+
+### Features
+
+* **workflows:** ship the Maestro suite runners and the web preview server for a laptop ([#161](https://github.com/blinkbitcoin/shared-workflows/issues/161)) ([0dafa26](https://github.com/blinkbitcoin/shared-workflows/commit/0dafa2652ae720f2fb04f0b0cdce030b599034a6))
+
 ## [0.3.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.2.0...app-tooling-v0.3.0) (2026-09-30)
 
 
