@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isCommit, pinProblems, pinsIn, sharedDeps, specFor, tarballFor, workflowsPin } from './lib/pin.mjs';
+import { isCommit, locksAt, pinProblems, pinsIn, sharedDeps, specFor, tarballFor, workflowsPin } from './lib/pin.mjs';
 
 const SHA = 'a'.repeat(40);
 const OTHER = 'b'.repeat(40);
@@ -11,6 +11,9 @@ const pkgAt = (sha, dir = '/packages/app-tooling') => ({
   devDependencies: { '@blinkbitcoin/app-tooling': specFor(sha, dir), typescript: '^6.0.0' },
 });
 const lockAt = (sha, dir = '/packages/app-tooling') => `    version: ${tarballFor(sha, dir)}\n`;
+// What pnpm writes for a package with peer dependencies: the tarball, then a peer hash.
+const PEER = '(5dfd4c12eb1b14f8f0fa10ac317d7ad0)';
+const peerLockAt = (sha, dir = '/packages/app-tooling') => `    version: ${tarballFor(sha, dir)}${PEER}\n`;
 
 test('pinsIn reads each shared call with its line, workflow, ref and comment', () => {
   const text = `name: CI\n${call()}    other:\n    uses: actions/checkout@v7\n    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@${OTHER}\n`;
@@ -78,6 +81,35 @@ test('pinProblems names a lockfile that was not refreshed', () => {
   assert.deepEqual(pinProblems({ callers: callers(call()), pkg: pkgAt(SHA), lockfile: lockAt(OTHER) }), [
     `pnpm-lock.yaml does not resolve @blinkbitcoin/app-tooling at ${SHA}: run \`pnpm exec fix-tooling-pin\``,
   ]);
+});
+
+test('pinProblems accepts the lockfile entry pnpm writes with a peer suffix', () => {
+  assert.deepEqual(pinProblems({ callers: callers(call()), pkg: pkgAt(SHA), lockfile: peerLockAt(SHA) }), []);
+});
+
+test('pinProblems still names a peer-suffixed lockfile entry at another commit', () => {
+  assert.deepEqual(pinProblems({ callers: callers(call()), pkg: pkgAt(SHA), lockfile: peerLockAt(OTHER) }), [
+    `pnpm-lock.yaml does not resolve @blinkbitcoin/app-tooling at ${SHA}: run \`pnpm exec fix-tooling-pin\``,
+  ]);
+});
+
+test('pinProblems still names a peer-suffixed lockfile entry at another path', () => {
+  assert.deepEqual(pinProblems({ callers: callers(call()), pkg: pkgAt(SHA), lockfile: peerLockAt(SHA, '/packages/expo-runtime') }), [
+    `pnpm-lock.yaml does not resolve @blinkbitcoin/app-tooling at ${SHA}: run \`pnpm exec fix-tooling-pin\``,
+  ]);
+});
+
+test('locksAt takes the tarball alone or with peer suffixes, and nothing else after it', () => {
+  const tarball = tarballFor(SHA, '/packages/app-tooling');
+  assert.equal(locksAt(`    version: ${tarball}\n`, SHA, '/packages/app-tooling'), true);
+  assert.equal(locksAt(`    version: ${tarball}${PEER}\n`, SHA, '/packages/app-tooling'), true);
+  assert.equal(locksAt(`    version: ${tarball}(react@19.0.0)(typescript@6.0.2)\n`, SHA, '/packages/app-tooling'), true);
+  assert.equal(locksAt(`    version: ${tarball}-extra\n`, SHA, '/packages/app-tooling'), false);
+  assert.equal(locksAt(`    version: ${tarball}${PEER}-extra\n`, SHA, '/packages/app-tooling'), false);
+  assert.equal(locksAt(`    version: ${tarball}()\n`, SHA, '/packages/app-tooling'), false);
+  assert.equal(locksAt(`    version: ${tarball}${PEER}`, SHA, '/packages/app-tooling'), false);
+  assert.equal(locksAt(`    version: ${tarball.replace('.com', 'Xcom')}\n`, SHA, '/packages/app-tooling'), false);
+  assert.equal(locksAt(`    version: ${tarballFor(OTHER, '/packages/app-tooling')}${PEER}\n`, SHA, '/packages/app-tooling'), false);
 });
 
 test('pinProblems names a spec that is not the pinned github form', () => {

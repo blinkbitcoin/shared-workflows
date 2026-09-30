@@ -69,6 +69,14 @@ test('moves every package of this family to the workflows pin, relocks, and says
   assert.deepEqual(out.error, []);
 });
 
+test('passes when the install writes the peer suffix pnpm adds for peer dependencies', () => {
+  const root = consumer();
+  const suffixed = lockAt(SHA).replaceAll('\n', '(5dfd4c12eb1b14f8f0fa10ac317d7ad0)\n');
+  const { out, options } = io(root, suffixed);
+  assert.equal(main([], options), 0);
+  assert.deepEqual(out.error, []);
+});
+
 test('--root works on another directory', () => {
   const root = consumer();
   const { options } = io(root, lockAt(SHA));
