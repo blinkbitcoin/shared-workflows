@@ -29,7 +29,7 @@ head="${2:?usage: changed-class.sh BASE_SHA HEAD_SHA}"
 default_docs_globs='^docs/|\.md$|(^|/)LICENSE$|^\.github/ISSUE_TEMPLATE/|^\.github/PULL_REQUEST_TEMPLATE'
 docs_globs="${DOCS_GLOBS:-$default_docs_globs}"
 # Markdown that is input, not documentation: an LLM prompt a gate or a release
-# step reads (security-review.prompt.md, release-notes.prompt.md). `\.md$`
+# step reads (security-review.prompt.md, store-notes.prompt.md). `\.md$`
 # matched it, so a PR that changed only the security review's prompt read as
 # docs-only and skipped the very Security job the prompt drives. Applied to
 # docs-only whatever DOCS_GLOBS says: no caller's docs include a prompt.

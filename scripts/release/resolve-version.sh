@@ -15,7 +15,7 @@
 # it into a job's environment are two jobs, and the consumer's copy also runs on
 # a developer machine under `make version`, where $GITHUB_ENV does not exist. The
 # steps that need APP_VERSION / APP_BUILD_NUMBER take them from this step's
-# outputs explicitly - see the Build info and Release notes steps in
+# outputs explicitly - see the Build info and Store notes steps in
 # .github/workflows/build-prepare.yml. That also keeps the two copies comparable:
 # test/resolve-version.bats compares stdout and $GITHUB_OUTPUT, and a write to a
 # third channel from only one copy is a drift the test cannot see.

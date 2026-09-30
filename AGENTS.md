@@ -25,12 +25,12 @@ scripts/ci/         shared CI plumbing (changed-class, lint-ci, pnpm-install, to
 scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
 scripts/native/     prebuild, pods, iOS/Android builds and packaging
 scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
-scripts/release/    version/notes resolution, fastlane invocation, release assets,
+scripts/release/    version and store notes resolution, fastlane invocation, release assets,
                     the release PR's dispatches (dispatch-release-pr-ci, dispatch-at-tag)
 scripts/web/        web export, Playwright install and run
 scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
 scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
-                    package-copies, render-contract-table, check-release-notes-section,
+                    package-copies, render-contract-table, check-store-notes-section,
                     changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files)
@@ -162,10 +162,10 @@ Every row is a make target; nothing here is run through a package manager.
   they run gets `make smoke-local` before the PR.** No gate in this repo
   executes those workflows - they only run inside a consumer - and v0.6.0
   broke every consumer's internal release with `make check` green. (The one
-  reusable workflow a gate here does execute is `pr-release-notes.yml`: the
-  `Release notes` job in `self-ci.yml` runs it against the template in a
+  reusable workflow a gate here does execute is `pr-store-notes.yml`: the
+  `Store notes` job in `self-ci.yml` runs it against the template in a
   dry run on every change, and `self-release.yml` runs it again before `v0`
-  moves - see `self-release-notes.yml`.) The smoke
+  moves - see `self-store-notes.yml`.) The smoke
   runs the Linux jobs for real with act, against the template, from the
   pushed branch. It cannot see the token a called workflow really receives,
   tag rules, or macOS; for those, push a throwaway caller on a `scratch/*`
@@ -213,7 +213,7 @@ Every row is a make target; nothing here is run through a package manager.
     pr->>main: squash merge
     main->>rel: push to main
     rel->>tags: release-created, tag vX.Y.Z and its release
-    rel->>rel: release-notes job runs pr-release-notes.yml against the template, dry run, from that commit
+    rel->>rel: store-notes job runs pr-store-notes.yml against the template, dry run, from that commit
     rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after that dry run passed
     rel->>tags: publish-dev-config job publishes the npm package, when paths-released names it
     rel->>pr: the other components' open release PRs are rebuilt on the new main, manifest included
@@ -278,13 +278,13 @@ Every row is a make target; nothing here is run through a package manager.
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
 | That every script has its own test file that runs it, with no exceptions | `test/script-coverage.bats` | `make test` |
-| `pr-release-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-release-notes.yml`, `scripts/self/check-release-notes-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |
+| `pr-store-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-store-notes.yml`, `scripts/self/check-store-notes-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
 
 **Nothing here checks out a consumer, except to dry-run a workflow.** The
 suite reads this repository and `test/fixtures/consumer-min` only. The one CI
-job that checks a consumer out is the release notes dry run, and it tests this
-repository's `pr-release-notes.yml` against the template's `main`, not the
+job that checks a consumer out is the store notes dry run, and it tests this
+repository's `pr-store-notes.yml` against the template's `main`, not the
 template against a rule: the generator it runs is this repository's own
 `store-notes`, and a red dry run from a broken setup on that `main` (its store
 metadata, its prompt addendum) is a deliberate trade, because the template is where every release here

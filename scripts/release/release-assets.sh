@@ -26,13 +26,13 @@
 # The carried-forward files never overwrite this run's: they land in a scratch
 # directory and are copied into $WORKFLOWS_ASSETS_DIR only where no file of that name
 # is already there. Both sides carry build-info.json, store-notes.json,
-# notes-store.txt and notes.md, and the source is by definition an *earlier*
+# store-notes.txt and release-notes.md, and the source is by definition an *earlier*
 # stage - promoting a beta from an internal pre-release with --clobber shipped
 # the internal run's `"stage": "internal"` build-info and its commit-derived
 # notes on the beta release, and handed that same build-info to the OTA
 # fingerprint gate downstream as its baseline.
 #
-# Env: TAG (required), TITLE, TARGET_SHA, NOTES_FILE, NOTES_TEXT, APPEND_TITLE, FROM_TAG,
+# Env: TAG (required), TITLE, TARGET_SHA, RELEASE_NOTES_FILE, RELEASE_NOTES_TEXT, APPEND_TITLE, FROM_TAG,
 #      DELETE_SOURCE, WORKFLOWS_ASSETS_DIR (default $WORKFLOWS_OUT/assets), GH_TOKEN,
 #      GH_REPO.
 set -euo pipefail
@@ -59,8 +59,8 @@ trap 'rm -f "$body_file" "$stripped_file" "${RUNNER_TEMP:-/tmp}/workflows-releas
 ASSET_GLOBS=(
   'build-info.json'
   'store-notes.json'
-  'notes-store.txt'
-  'notes.md'
+  'store-notes.txt'
+  'release-notes.md'
   '*.ipa'
   '*.aab'
   '*.apk'
@@ -171,17 +171,17 @@ upload_assets() {
 # argument at all (an empty quoted "" would become a literal empty argument).
 title_args=()
 [ -z "${TITLE:-}" ] || title_args=(--title "$TITLE")
-# $NOTES_TEXT is notes given as text rather than as a file from an artifact. A
+# $RELEASE_NOTES_TEXT is notes given as text rather than as a file from an artifact. A
 # caller whose section is a line it composes from its own inputs - a production
 # stage: the action, the platforms, the rollout - otherwise needs a whole job to
-# upload that line as an artifact first. It wins over $NOTES_FILE.
-if [ -n "${NOTES_TEXT:-}" ]; then
-  NOTES_FILE="${RUNNER_TEMP:-/tmp}/workflows-release-notes-text.md"
-  printf '%s\n' "$NOTES_TEXT" > "$NOTES_FILE"
+# upload that line as an artifact first. It wins over $RELEASE_NOTES_FILE.
+if [ -n "${RELEASE_NOTES_TEXT:-}" ]; then
+  RELEASE_NOTES_FILE="${RUNNER_TEMP:-/tmp}/workflows-release-notes-text.md"
+  printf '%s\n' "$RELEASE_NOTES_TEXT" > "$RELEASE_NOTES_FILE"
 fi
 notes_args=()
-if [ -n "${NOTES_FILE:-}" ] && [ -f "$NOTES_FILE" ]; then
-  notes_args=(--notes-file "$NOTES_FILE")
+if [ -n "${RELEASE_NOTES_FILE:-}" ] && [ -f "$RELEASE_NOTES_FILE" ]; then
+  notes_args=(--notes-file "$RELEASE_NOTES_FILE")
 fi
 
 # $BODY_NOTE goes at the top of the body, at creation time. It exists so a
@@ -213,7 +213,7 @@ if [ -n "${BODY_NOTE:-}" ]; then
     printf '\n'
   } > "$note_file"
   if [ "$had_notes_file" = true ]; then
-    cat "$NOTES_FILE" >> "$note_file"
+    cat "$RELEASE_NOTES_FILE" >> "$note_file"
   fi
   notes_args=(--notes-file "$note_file")
   # The same fact in the run summary. The release body is the durable record,
@@ -325,17 +325,17 @@ case "$mode" in
     ;;
   append)
     release_exists || die "release $tag does not exist - nothing to append to"
-    [ "${#notes_args[@]}" -eq 2 ] || die "append needs NOTES_FILE pointing at an existing section file, or NOTES_TEXT"
+    [ "${#notes_args[@]}" -eq 2 ] || die "append needs RELEASE_NOTES_FILE pointing at an existing section file, or RELEASE_NOTES_TEXT"
     title="${APPEND_TITLE:-Update}"
     # Re-running a failed job is the ordinary way an Actions failure is
     # recovered (it is why the asset upload uses --clobber), so append has to be
     # idempotent too: the block is stripped and re-added, never stacked. The
     # marker format and the strip live in scripts/lib/body-section.sh, shared
-    # with the release PR body (pr-notes.sh).
+    # with the release PR body (pr-store-notes.sh).
     gh release view "$tag" --json body --jq '.body' > "$body_file"
     {
       strip_section_block "$body_file" "$title"
-      render_section_block "$title" "$NOTES_FILE"
+      render_section_block "$title" "$RELEASE_NOTES_FILE"
     } > "$stripped_file"
     gh release edit "$tag" --notes-file "$stripped_file"
     # No upload_assets here, deliberately. `append` records what a store action

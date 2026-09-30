@@ -264,7 +264,7 @@
           "type": "number",
           "required": false
         },
-        "notes-locales": {
+        "store-notes-locales": {
           "type": "string",
           "required": false
         },
@@ -861,72 +861,6 @@
       "secrets": {},
       "outputs": []
     },
-    "pr-release-notes.yml": {
-      "inputs": {
-        "repository": {
-          "type": "string",
-          "required": false
-        },
-        "ref": {
-          "type": "string",
-          "required": false
-        },
-        "working-directory": {
-          "type": "string",
-          "required": false
-        },
-        "linux-runner": {
-          "type": "string",
-          "required": false
-        },
-        "macos-runner": {
-          "type": "string",
-          "required": false
-        },
-        "native-cache-version": {
-          "type": "string",
-          "required": false
-        },
-        "pr-number": {
-          "type": "string",
-          "required": false
-        },
-        "dry-run": {
-          "type": "boolean",
-          "required": false
-        },
-        "body-file": {
-          "type": "string",
-          "required": false
-        },
-        "section-title": {
-          "type": "string",
-          "required": false
-        },
-        "notes-locales": {
-          "type": "string",
-          "required": false
-        },
-        "build-env": {
-          "type": "string",
-          "required": false
-        }
-      },
-      "secrets": {
-        "consumer-token": {
-          "required": false
-        },
-        "ANTHROPIC_API_KEY": {
-          "required": false
-        },
-        "OPENAI_API_KEY": {
-          "required": false
-        }
-      },
-      "outputs": [
-        "section"
-      ]
-    },
     "pr-release.yml": {
       "inputs": {
         "repository": {
@@ -987,6 +921,72 @@
         "paths-released",
         "pr-number",
         "pr-branch"
+      ]
+    },
+    "pr-store-notes.yml": {
+      "inputs": {
+        "repository": {
+          "type": "string",
+          "required": false
+        },
+        "ref": {
+          "type": "string",
+          "required": false
+        },
+        "working-directory": {
+          "type": "string",
+          "required": false
+        },
+        "linux-runner": {
+          "type": "string",
+          "required": false
+        },
+        "macos-runner": {
+          "type": "string",
+          "required": false
+        },
+        "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "pr-number": {
+          "type": "string",
+          "required": false
+        },
+        "dry-run": {
+          "type": "boolean",
+          "required": false
+        },
+        "body-file": {
+          "type": "string",
+          "required": false
+        },
+        "section-title": {
+          "type": "string",
+          "required": false
+        },
+        "store-notes-locales": {
+          "type": "string",
+          "required": false
+        },
+        "build-env": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "secrets": {
+        "consumer-token": {
+          "required": false
+        },
+        "ANTHROPIC_API_KEY": {
+          "required": false
+        },
+        "OPENAI_API_KEY": {
+          "required": false
+        }
+      },
+      "outputs": [
+        "section"
       ]
     },
     "pr-title.yml": {
@@ -1139,15 +1139,15 @@
           "type": "string",
           "required": false
         },
-        "notes-artifact": {
+        "release-notes-artifact": {
           "type": "string",
           "required": false
         },
-        "notes-file": {
+        "release-notes-file": {
           "type": "string",
           "required": false
         },
-        "notes-text": {
+        "release-notes-text": {
           "type": "string",
           "required": false
         },

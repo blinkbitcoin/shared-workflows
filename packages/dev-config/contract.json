@@ -927,11 +927,11 @@
       "label": "no copy of the store notes generator",
       "target": ["scripts/release/notes.mjs", "scripts/release/notes.test.mjs", "scripts/release/llm/index.mjs", "scripts/release/llm/index.test.mjs", "scripts/release/fixtures/release-body.md", "scripts/release/fixtures/release-pr-body.md", "scripts/release/fixtures/anthropic-response.json", "scripts/release/fixtures/anthropic-invalid-response.json", "scripts/release/fixtures/openai-response.json"],
       "profile": "checks",
-      "neededBy": "the store-notes program @blinkbitcoin/dev-config ships, which build-prepare.yml and pr-release-notes.yml run through scripts/release/notes.sh; a copy in your repository is not run, and drifts",
+      "neededBy": "the store-notes program @blinkbitcoin/dev-config ships, which build-prepare.yml and pr-store-notes.yml run through scripts/release/store-notes.sh; a copy in your repository is not run, and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copy, its tests and its fixtures. The workflows run the package's store-notes, and a laptop runs pnpm exec store-notes --from-commits --out -. Keep only what your app adds to the prompt (its product, audience and tone) in release-notes.prompt.md; a test that needs a release body reads $WORKFLOWS_DIR/packages/dev-config/fixtures/store-notes/.",
+      "fix": "Delete the copy, its tests and its fixtures. The workflows run the package's store-notes, and a laptop runs pnpm exec store-notes --from-commits --out -. Keep only what your app adds to the prompt (its product, audience and tone) in store-notes.prompt.md; a test that needs a release body reads $WORKFLOWS_DIR/packages/dev-config/fixtures/store-notes/.",
       "guide": "no-copies-of-this-family"
     },
     {

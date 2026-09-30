@@ -180,7 +180,7 @@ on_block() {
   missing=()
   for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-release-notes publish-promotion-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-promotion-retry pr-release; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     [ -n "$section" ] || fail "no '### \`$wf.yml\`' section in docs/consumer-guide.md"
@@ -205,7 +205,7 @@ on_block() {
   phantom=()
   for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-release-notes publish-promotion-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-promotion-retry pr-release; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     inputs="$(yq -r '.on.workflow_call.inputs | keys | .[]' "$file")"

@@ -16,7 +16,7 @@ setup() {
   cat > "$STUB/fastlane" <<'SH'
 #!/usr/bin/env bash
 printf 'argv: %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
-for v in WORKFLOWS_OUTPUT_DIR BUILD_INFO_FILE RELEASE_NOTES_STORE_FILE STORE_NOTES_JSON \
+for v in WORKFLOWS_OUTPUT_DIR BUILD_INFO_FILE STORE_NOTES_FILE STORE_NOTES_JSON \
   ANDROID_UPLOAD_KEYSTORE_PATH PLAY_SERVICE_ACCOUNT_JSON_PATH ASC_KEY_P8_PATH BUNDLETOOL_JAR; do
   printf '%s=%s\n' "$v" "${!v-}" >> "$WORKFLOWS_TEST_LOG"
 done
@@ -34,7 +34,7 @@ SH
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR" WORKING_DIRECTORY=app
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   mkdir -p "$RUNNER_TEMP"
-  unset GITHUB_ENV LANE_ARGS BUILD_INFO_FILE RELEASE_NOTES_STORE_FILE STORE_NOTES_JSON
+  unset GITHUB_ENV LANE_ARGS BUILD_INFO_FILE STORE_NOTES_FILE STORE_NOTES_JSON
 }
 
 lane() { run bash "$REPO_ROOT/scripts/release/fastlane.sh" "$@"; }
@@ -60,7 +60,7 @@ lane() { run bash "$REPO_ROOT/scripts/release/fastlane.sh" "$@"; }
 @test "every path variable reaches the lane absolute" {
   root="$(cd "$ROOT" && pwd -P)"
   BUILD_INFO_FILE=release-meta/build-info.json \
-    RELEASE_NOTES_STORE_FILE=release-meta/notes-store.txt \
+    STORE_NOTES_FILE=release-meta/store-notes.txt \
     STORE_NOTES_JSON=release-meta/store-notes.json \
     ANDROID_UPLOAD_KEYSTORE_PATH=secrets/upload.jks \
     PLAY_SERVICE_ACCOUNT_JSON_PATH=/already/absolute.json \
@@ -68,8 +68,8 @@ lane() { run bash "$REPO_ROOT/scripts/release/fastlane.sh" "$@"; }
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   grep -qx "BUILD_INFO_FILE=$root/release-meta/build-info.json" "$WORKFLOWS_TEST_LOG" \
     || fail "BUILD_INFO_FILE was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"
-  grep -qx "RELEASE_NOTES_STORE_FILE=$root/release-meta/notes-store.txt" "$WORKFLOWS_TEST_LOG" \
-    || fail "RELEASE_NOTES_STORE_FILE was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -qx "STORE_NOTES_FILE=$root/release-meta/store-notes.txt" "$WORKFLOWS_TEST_LOG" \
+    || fail "STORE_NOTES_FILE was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"
   grep -qx "STORE_NOTES_JSON=$root/release-meta/store-notes.json" "$WORKFLOWS_TEST_LOG" \
     || fail "STORE_NOTES_JSON was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"
   grep -qx "ANDROID_UPLOAD_KEYSTORE_PATH=$root/secrets/upload.jks" "$WORKFLOWS_TEST_LOG" \

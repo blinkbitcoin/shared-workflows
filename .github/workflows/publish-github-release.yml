@@ -42,16 +42,16 @@ on:
         description: Release title (empty keeps GitHub's default, which is the tag)
         type: string
         default: ''
-      notes-artifact:
-        description: Artifact carrying notes.md (used as the release body, or as the appended section in `append` mode); empty falls back to GitHub's generated notes
+      release-notes-artifact:
+        description: Artifact carrying release-notes.md (used as the release body, or as the appended section in `append` mode); empty falls back to GitHub's generated release notes
         type: string
         default: 'release-meta'
-      notes-file:
-        description: File inside the notes artifact to use as the body
+      release-notes-file:
+        description: File inside the release notes artifact to use as the release body
         type: string
-        default: 'notes.md'
-      notes-text:
-        description: The notes as text, instead of `notes-file` from `notes-artifact` (in `append` mode, the section's body) - for a caller whose notes are composed from its own inputs
+        default: 'release-notes.md'
+      release-notes-text:
+        description: The release notes as text, instead of `release-notes-file` from `release-notes-artifact` (in `append` mode, the section's body) - for a caller whose release notes are composed from its own inputs
         type: string
         default: ''
       assets-artifacts:
@@ -134,15 +134,15 @@ jobs:
           # it at push time), so creating, editing and deleting releases and
           # their tags is all this token does - no `workflows` scope needed.
           permission-contents: write
-      # Notes first, assets second - but the staging order is not what decides
+      # Release notes first, assets second - but the staging order is not what decides
       # the release's build-info.json: `merge-multiple` has no defined order, so
       # the per-platform record ships as `build-info.<platform>.json` (it cannot
       # collide) and the Merge step below folds it in explicitly.
-      - name: Download notes
-        if: ${{ inputs.notes-artifact != '' }}
+      - name: Download release notes
+        if: ${{ inputs.release-notes-artifact != '' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.notes-artifact }}
+          name: ${{ inputs.release-notes-artifact }}
           path: ${{ env.WORKFLOWS_ASSETS_DIR }}
       - name: Download assets
         if: ${{ inputs.assets-artifacts != '' }}
@@ -177,7 +177,7 @@ jobs:
           APPEND_TITLE: ${{ inputs.append-title }}
           FROM_TAG: ${{ inputs.from-tag }}
           DELETE_SOURCE: ${{ inputs.delete-source }}
-          NOTES_FILE: ${{ env.WORKFLOWS_ASSETS_DIR }}/${{ inputs.notes-file }}
-          NOTES_TEXT: ${{ inputs.notes-text }}
+          RELEASE_NOTES_FILE: ${{ env.WORKFLOWS_ASSETS_DIR }}/${{ inputs.release-notes-file }}
+          RELEASE_NOTES_TEXT: ${{ inputs.release-notes-text }}
           BODY_NOTE: ${{ inputs.body-note }}
         run: bash ".workflows/scripts/release/release-assets.sh" "$MODE"

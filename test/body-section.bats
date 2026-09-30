@@ -3,7 +3,7 @@
 #
 # scripts/lib/body-section.sh owns the marker-delimited section that both the
 # release body (`release-assets.sh append`) and the release PR body
-# (`pr-notes.sh`) carry. One implementation, so the two can never disagree
+# (`pr-store-notes.sh`) carry. One implementation, so the two can never disagree
 # about what a block looks like or how a stale one is found.
 load test_helper
 
@@ -188,7 +188,7 @@ $output"
   [ "$output" = "x" ] || fail "stdin was not squeezed: $(printf '%s' "$output" | od -c)"
 }
 
-# pr-notes.sh compares a fetched body with one rebuilt from its stripped copy.
+# pr-store-notes.sh compares a fetched body with one rebuilt from its stripped copy.
 # A body that differs only in a trailing blank line - what `gh pr view --jq`
 # returns for a body stored with a final newline - must compare equal.
 @test "squeezed, a body with a trailing blank line equals the body built from its stripped copy" {

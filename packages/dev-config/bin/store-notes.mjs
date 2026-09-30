@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Store release notes for a build, from a release-please body or from
+// Store notes for a build, from a release-please body or from
 // conventional commit subjects.
 //
 // The deterministic renderer is the product: it always runs, always produces
 // something a store will accept, and is what the optional LLM pass falls back
 // to. Nothing here talks to a store -- the lanes read `store-notes.json` and
-// `notes-store.txt` (see the consumer's fastlane/lanes/shared.rb `store_notes`).
+// `store-notes.txt` (see the consumer's fastlane/lanes/shared.rb `store_notes`).
 //
 // It runs in the app's repository: the working directory is the app, where
 // its commits, its fastlane/metadata/ios locales and its optional
-// release-notes.prompt.md are. shared-workflows' scripts/release/notes.sh runs
+// store-notes.prompt.md are. shared-workflows' scripts/release/store-notes.sh runs
 // it from the workflows checkout; on a laptop it is `pnpm exec store-notes`.
 //
 //   store-notes --from-body RELEASE_BODY.md --out dist/
@@ -42,7 +42,7 @@ const USER_VISIBLE_MARKER = /\s*\[user-visible\]\s*/i;
  * APP_PROMPT_FILE in its repository, for its product and tone.
  */
 export const DEFAULT_PROMPT_FILE = fileURLToPath(new URL('../store-notes.prompt.md', import.meta.url));
-export const APP_PROMPT_FILE = 'release-notes.prompt.md';
+export const APP_PROMPT_FILE = 'store-notes.prompt.md';
 /** Where the app's store listing locales are, relative to its repository. */
 const IOS_METADATA_DIR = path.join('fastlane', 'metadata', 'ios');
 
@@ -386,23 +386,23 @@ export async function buildNotes({
 
 export const USAGE = `usage: store-notes (--from-body FILE | --from-commits [RANGE] | --tag TAG | --pr N | --preview) [options]
 
-Store release notes for a build, from a release-please body or from
+Store notes for a build, from a release-please body or from
 conventional commit subjects, for the app in the working directory. Nothing
-here talks to a store: the lanes read store-notes.json and notes-store.txt
-(fastlane/lanes/shared.rb). An LLM pass runs when $RELEASE_NOTES_LLM_PROVIDER
-is set; ./release-notes.prompt.md is added to its prompt when present.
+here talks to a store: the lanes read store-notes.json and store-notes.txt
+(fastlane/lanes/shared.rb). An LLM pass runs when $STORE_NOTES_LLM_PROVIDER
+is set; ./store-notes.prompt.md is added to its prompt when present.
 
   --from-body FILE      render from a release body (e.g. the GitHub release)
   --from-commits [R]    render from conventional commit subjects in range R
   --tag TAG             render from release TAG's body (gh release view), with --body-section
   --pr N                render from pull request N's body (gh pr view), with --body-section
   --preview             render from --tag or --pr when given, else $TAG or $PR,
-                        else the commits since the last v* tag (what make release-notes runs)
+                        else the commits since the last v* tag (what make store-notes runs)
   --body-section        also take a verbatim "## Store notes" section from the body
-  --locales a,b         locales to emit (default: $NOTES_LOCALES, else
+  --locales a,b         locales to emit (default: $STORE_NOTES_LOCALES, else
                         the locale directories under fastlane/metadata/ios)
   --include-changelog   append the full changelog (also $STORE_NOTES_INCLUDE_CHANGELOG)
-  --out DIR|-           write store-notes.json + notes-store.txt into DIR, or - for stdout
+  --out DIR|-           write store-notes.json + store-notes.txt into DIR, or - for stdout
   --help                this text
 
   store-notes --from-body RELEASE_BODY.md --out dist/
@@ -458,7 +458,7 @@ export function parseArgs(argv) {
 
 /**
  * `options` with its source settled. `--preview` is the laptop preview `make
- * release-notes` runs: with no source flag it takes `$TAG`, then `$PR`, the
+ * store-notes` runs: with no source flag it takes `$TAG`, then `$PR`, the
  * variables make passes through from its command line, and otherwise the
  * commits since the last tag. Only `--preview` reads them: they are common
  * names, and a CI step that happens to carry one must not change its source.
@@ -512,19 +512,19 @@ export function fetchBody({ tag, pr }, { cwd = process.cwd(), exec = execFileSyn
  * The locales to emit notes for, most specific source first:
  *
  *   1. `--locales a,b`
- *   2. `$NOTES_LOCALES` — what the reusable `build-prepare` workflow exports for
- *      its `notes-locales` input. Reading it here is what makes that input do
+ *   2. `$STORE_NOTES_LOCALES` — what the reusable `build-prepare` workflow exports for
+ *      its `store-notes-locales` input. Reading it here is what makes that input do
  *      something; it was plumbed through and silently ignored.
  *   3. the locale directories under `cwd`'s fastlane/metadata/ios, which are
  *      the ones the lanes then look up in store-notes.json.
  *
- * A caller that sets `notes-locales` must therefore use the *metadata* locale
+ * A caller that sets `store-notes-locales` must therefore use the *metadata* locale
  * names (`en-US`, not `en`): a key the lanes do not look up sends every locale
  * back to the single-locale fallback and throws the LLM pass away.
  */
 export function resolveLocales(options, env = process.env, cwd = process.cwd()) {
   if (options.locales.length) return options.locales;
-  const fromEnv = String(env.NOTES_LOCALES ?? '')
+  const fromEnv = String(env.STORE_NOTES_LOCALES ?? '')
     .split(',')
     .map((locale) => locale.trim())
     .filter(Boolean);
@@ -583,14 +583,14 @@ async function run(argv, { cwd, env, write, error, rewrite, exec }) {
     locales,
     verbatim,
     includeChangelog: options.includeChangelog,
-    provider: env.RELEASE_NOTES_LLM_PROVIDER,
-    model: env.RELEASE_NOTES_LLM_MODEL,
+    provider: env.STORE_NOTES_LLM_PROVIDER,
+    model: env.STORE_NOTES_LLM_MODEL,
     // Parsed here, before anything is sent: a typo in either is the run's
     // failure, not a quietly shallower rewrite.
-    effort: parseEffort(env.RELEASE_NOTES_LLM_EFFORT, 'RELEASE_NOTES_LLM_EFFORT'),
+    effort: parseEffort(env.STORE_NOTES_LLM_EFFORT, 'STORE_NOTES_LLM_EFFORT'),
     extraParams: parseExtraParams(
-      env.RELEASE_NOTES_LLM_EXTRA_PARAMS,
-      'RELEASE_NOTES_LLM_EXTRA_PARAMS',
+      env.STORE_NOTES_LLM_EXTRA_PARAMS,
+      'STORE_NOTES_LLM_EXTRA_PARAMS',
     ),
     prompt: composePrompt(loadPrompt(), loadPrompt(path.resolve(cwd, APP_PROMPT_FILE))),
     rewrite,
@@ -606,7 +606,7 @@ async function run(argv, { cwd, env, write, error, rewrite, exec }) {
   const outDir = path.resolve(cwd, options.out);
   mkdirSync(outDir, { recursive: true });
   writeFileSync(path.join(outDir, 'store-notes.json'), json);
-  writeFileSync(path.join(outDir, 'notes-store.txt'), `${notes[primary].testflight}\n`);
+  writeFileSync(path.join(outDir, 'store-notes.txt'), `${notes[primary].testflight}\n`);
   error(`store notes written to ${outDir} (${locales.join(', ')})`);
 }
 

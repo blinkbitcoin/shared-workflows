@@ -30,7 +30,7 @@ on:
         description: Added to the first-parent commit count to form the build number; raise it, never lower it (stores reject a build number that goes backwards)
         type: number
         default: 1000
-      notes-locales:
+      store-notes-locales:
         description: "Locales the store notes generator (the store-notes program in @blinkbitcoin/dev-config) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
         type: string
         default: ''
@@ -39,7 +39,7 @@ on:
         type: string
         default: 'internal'
       release-body-file:
-        description: Consumer-relative file holding a release body; when set, notes are generated from it instead of from commits (`release-tag` takes precedence)
+        description: Consumer-relative file holding a release body; when set, the store notes are generated from it instead of from commits (`release-tag` takes precedence)
         type: string
         default: ''
       release-tag:
@@ -59,7 +59,7 @@ on:
         type: boolean
         default: false
       release-meta-artifact:
-        description: Artifact name carrying build-info.json, store-notes.json, notes-store.txt and notes.md to the later jobs
+        description: Artifact name carrying build-info.json, store-notes.json, store-notes.txt and release-notes.md to the later jobs
         type: string
         default: 'release-meta'
       build-env:
@@ -227,8 +227,8 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.version }}
           APP_BUILD_NUMBER: ${{ steps.version.outputs.build-number }}
         run: bash "$WORKFLOWS_DIR/scripts/release/build-info.sh"
-      # Before the notes step, and only when asked: it publishes RELEASE_BODY_FILE
-      # into $GITHUB_ENV, which the notes step below picks up in preference to
+      # Before the Store notes step, and only when asked: it publishes RELEASE_BODY_FILE
+      # into $GITHUB_ENV, which the Store notes step below picks up in preference to
       # its own release-body-file input.
       - name: Fetch release body
         if: ${{ inputs.release-tag != '' }}
@@ -237,11 +237,11 @@ jobs:
           GH_REPO: ${{ inputs.repository || github.repository }}
           RELEASE_TAG: ${{ inputs.release-tag }}
         run: bash "$WORKFLOWS_DIR/scripts/release/release-body.sh" "$RELEASE_TAG"
-      - name: Release notes
+      - name: Store notes
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
           APP_BUILD_NUMBER: ${{ steps.version.outputs.build-number }}
-          NOTES_LOCALES: ${{ inputs.notes-locales }}
+          STORE_NOTES_LOCALES: ${{ inputs.store-notes-locales }}
           # The store notes generator may draft with an LLM; the
           # provider/model live in build-env, only the keys are secrets.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -251,7 +251,7 @@ jobs:
           # the job env, so the `||` is what makes the input the fallback rather
           # than the override.
           RELEASE_BODY_FILE: ${{ env.RELEASE_BODY_FILE || inputs.release-body-file }}
-        run: bash "$WORKFLOWS_DIR/scripts/release/notes.sh"
+        run: bash "$WORKFLOWS_DIR/scripts/release/store-notes.sh"
       - name: Upload release-meta
         uses: actions/upload-artifact@v7
         with:

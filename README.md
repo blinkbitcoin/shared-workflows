@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->109<!--/count--> scripts · <!--count:tests-->1218<!--/count--> tests · one pinned tag · two tooling packages</sub>
+<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->109<!--/count--> scripts · <!--count:tests-->1220<!--/count--> tests · one pinned tag · two tooling packages</sub>
 
 </div>
 
@@ -166,7 +166,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | Workflow                 | Jobs                 | What it does                                                                                                 |
 | ------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `pr-release.yml`   | `Release`        | Keeps release-please's release PR open, starts the caller's CI on it, and starts the follow-on workflows at a cut tag |
-| `pr-release-notes.yml`   | `Draft`              | Drafts the store notes into the release PR body, once, for a human to review before the release is cut; a dry run renders them from a body file and edits nothing |
+| `pr-store-notes.yml`     | `Draft`              | Drafts the store notes into the release PR body, once, for a human to review before the release is cut; a dry run renders them from a body file and edits nothing |
 | `build-prepare.yml`       | `Prepare`            | Version, build number, native fingerprint, `build-info.json` and store notes, as one `release-meta` artifact |
 | `build-ios.yml`     | `Build`              | Prebuild, pods, `fastlane ios build` then `verify`; uploads the IPA and dSYMs                                |
 | `build-android.yml` | `Build`              | Prebuild, `fastlane android build` then `verify`; uploads the AAB, APK and mapping                           |
@@ -182,13 +182,13 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Workflow           | Jobs                              | What it does                                                                                   |
 | ------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `self-ci.yml`      | `Changes`<br>`Checks / Code`<br>`Checks / Security`<br>`Checks / Tooling`<br>`Checks / Docs`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package`<br>`Release notes / Dry run / Draft`<br>`Release notes / Validate` | The gates of `make check`, a job each so a run names the one that failed, and the release notes dry run - this repository only. `Changes` skips Code, Tooling and Package when the diff cannot affect them |
+| `self-ci.yml`      | `Changes`<br>`Checks / Code`<br>`Checks / Security`<br>`Checks / Tooling`<br>`Checks / Docs`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package`<br>`Store notes / Dry run / Draft`<br>`Store notes / Validate` | The gates of `make check`, a job each so a run names the one that failed, and the store notes dry run - this repository only. `Changes` skips Code, Tooling and Package when the diff cannot affect them |
 | `self-checks.yml`  | `Code`<br>`Security`<br>`Tooling`<br>`Docs`<br>`Commits` | shellcheck and actionlint, zizmor and gitleaks, version agreement, spell, commitlint. Called by `self-ci.yml` |
 | `self-unit.yml`    | `Tests`<br>`Package`              | The bats suite, and node:test over every package under `packages/`. Called by `self-ci.yml` |
-| `self-release-notes.yml` | `Dry run`<br>`Validate` | `pr-release-notes.yml` run for real against the template in a dry run, then its `section` output checked. Called by `self-ci.yml` and `self-release.yml` |
+| `self-store-notes.yml` | `Dry run`<br>`Validate` | `pr-store-notes.yml` run for real against the template in a dry run, then its `section` output checked. Called by `self-ci.yml` and `self-release.yml` |
 | `self-smoke.yml`   | `Checks`<br>`Unit`<br>`E2E`       | Runs the family against a real consumer repo. Weekly, and on dispatch                          |
 | `self-act-smoke.yml` | `Prepare`<br>`Build Android` | The Linux release jobs against the template, run on a laptop with act (`make smoke-local`). Dispatch-only, never run on GitHub |
-| `self-release.yml` | `Release PR`<br>`Release notes`<br>`Major tag`<br>`Publish dev-config` | release-please maintains the version PR; on release, the release notes dry run runs from the release commit, then `v0` and `v0.<minor>` move and the npm package publishes |
+| `self-release.yml` | `Release PR`<br>`Store notes`<br>`Major tag`<br>`Publish dev-config` | release-please maintains the version PR; on release, the store notes dry run runs from the release commit, then `v0` and `v0.<minor>` move and the npm package publishes |
 
 ## Repository layout
 
@@ -205,8 +205,8 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
-| `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table, the release notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->128<!--/count--> bats files, <!--count:tests-->1218<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
+| `test/`                | <!--count:bats-files-->128<!--/count--> bats files, <!--count:tests-->1220<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer and the store notes generator |
 | `packages/expo-tooling/` | `@blinkbitcoin/expo-tooling` — the Expo presets an app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |

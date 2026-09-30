@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draft the store release notes into a release PR body, once, for a human to
+# Draft the store notes into a release PR body, once, for a human to
 # review before the release is cut.
 #
 # release-please takes the GitHub release body from the text between the first
@@ -11,8 +11,8 @@
 # a stale draft never feeds the next one.
 #
 # The notes themselves are the generator's: this hands the stripped body to
-# notes.sh as RELEASE_BODY_FILE, which runs @blinkbitcoin/dev-config's
-# store-notes program in the consumer's directory and leaves notes-store.txt
+# store-notes.sh as RELEASE_BODY_FILE, which runs @blinkbitcoin/dev-config's
+# store-notes program in the consumer's directory and leaves store-notes.txt
 # in $WORKFLOWS_RELEASE_META_DIR. That file is the section.
 #
 # A dry run is the same work up to the edit, and then no edit: the would-be
@@ -20,14 +20,14 @@
 # PR and no `gh` at all, which is what lets a repository with no release PR
 # open - this one's own CI, a consumer's pull request - run the real workflow.
 #
-# Usage: pr-notes.sh [PR_NUMBER]
+# Usage: pr-store-notes.sh [PR_NUMBER]
 # Env: SECTION_TITLE (default "Store notes");
 #      PR_BODY_FILE (a release-please-shaped PR body to read instead of
 #        fetching the PR's; a relative path is read from the consumer root);
 #      DRY_RUN (`1` or `true`: never edit the PR; `0`, `false` or unset: edit);
 #      GH_TOKEN and GH_REPO, only when `gh` is called (a fetch or an edit);
-#      plus whatever notes.sh reads (NOTES_LOCALES, the LLM variables and
-#      keys).
+#      plus whatever store-notes.sh reads (STORE_NOTES_LOCALES, the LLM
+#      variables and keys).
 # Out: `section`, the rendered marker-delimited block, in $GITHUB_OUTPUT (on
 #      stdout when that is unset), in both modes; in a dry run, the would-be
 #      body appended to $GITHUB_STEP_SUMMARY when that is set.
@@ -46,7 +46,7 @@ case "${DRY_RUN:-}" in
 esac
 
 [ -n "$pr" ] || [ -n "$body_file" ] ||
-  die "usage: pr-notes.sh PR_NUMBER - no PR number given, and no PR_BODY_FILE to read a body from instead"
+  die "usage: pr-store-notes.sh PR_NUMBER - no PR number given, and no PR_BODY_FILE to read a body from instead"
 [ -n "$pr" ] || [ "$dry_run" -eq 1 ] ||
   die "no PR number given: a body from PR_BODY_FILE alone has no PR to edit, so it needs DRY_RUN=true (the dry-run input)"
 
@@ -66,10 +66,10 @@ fi
 [ "$dry_run" -eq 0 ] || log "$subject: dry run - the $title section is generated, and no PR is edited"
 
 tmp="${RUNNER_TEMP:-/tmp}"
-fetched="$tmp/pr-notes-body.md"
-stripped="$tmp/pr-notes-body-stripped.md"
-block="$tmp/pr-notes-block.md"
-updated="$tmp/pr-notes-body-updated.md"
+fetched="$tmp/pr-store-notes-body.md"
+stripped="$tmp/pr-store-notes-body-stripped.md"
+block="$tmp/pr-store-notes-block.md"
+updated="$tmp/pr-store-notes-body-updated.md"
 
 group "$subject: read the body"
 # CRLF normalised on the way in: GitHub stores what a browser or an API client
@@ -89,11 +89,11 @@ fi
 strip_section_block "$fetched" "$title" > "$stripped"
 endgroup
 
-# notes.sh generates from RELEASE_BODY_FILE when it is set (the changelog the
+# store-notes.sh generates from RELEASE_BODY_FILE when it is set (the changelog the
 # PR carries), through the store-notes program.
-RELEASE_BODY_FILE="$stripped" bash "$(dirname "$0")/notes.sh"
-notes="$WORKFLOWS_RELEASE_META_DIR/notes-store.txt"
-[ -s "$notes" ] || die "notes.sh left no notes-store.txt in $WORKFLOWS_RELEASE_META_DIR"
+RELEASE_BODY_FILE="$stripped" bash "$(dirname "$0")/store-notes.sh"
+notes="$WORKFLOWS_RELEASE_META_DIR/store-notes.txt"
+[ -s "$notes" ] || die "store-notes.sh left no store-notes.txt in $WORKFLOWS_RELEASE_META_DIR"
 
 # A line of dashes is where release-please splits the body, and a tag is
 # parsed by GitHub or by the shared workflow rather than read by a person; a

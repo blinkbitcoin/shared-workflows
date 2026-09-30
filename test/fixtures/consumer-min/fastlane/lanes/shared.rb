@@ -91,12 +91,12 @@ end
 
 STORE_NOTES_SUFFIX = ' [+more on GitHub]'
 
-# Store-ready release notes, truncated at a word boundary with a pointer to the
+# The store notes, truncated at a word boundary with a pointer to the
 # full changelog. `limit` is the store's own cap (App Store 4000, Play 500) and
 # is counted in characters, which is how both stores count. The result is never
 # nil and never longer than `limit`, whatever `limit` is.
 def store_notes(limit)
-  path = ENV.fetch('RELEASE_NOTES_STORE_FILE')
+  path = ENV.fetch('STORE_NOTES_FILE')
   text = File.read(path).strip
   return '' if limit <= 0
   return text if text.length <= limit
@@ -289,7 +289,7 @@ def executable_on_path?(name)
 end
 
 # ---------------------------------------------------------------------------
-# Release notes and metadata
+# Store notes and metadata
 # ---------------------------------------------------------------------------
 
 # Locale directories under a metadata tree. `review_information` and the
@@ -307,7 +307,7 @@ end
 
 # store-notes.json (written by the store-notes program in @blinkbitcoin/dev-config) holds per-locale text
 # for each surface: { "<locale>": { "testflight": ..., "play": ..., "appstore": ... } }.
-# Absent, the single-locale notes-store.txt is still a correct answer, so the
+# Absent, the single-locale store-notes.txt is still a correct answer, so the
 # lanes fall back rather than fail.
 def store_notes_json
   path = ENV['STORE_NOTES_JSON'].to_s.strip
@@ -323,7 +323,7 @@ def locale_store_notes(locale, kind, limit, notes_json = store_notes_json)
   if text.empty?
     # The fallback needs the single-locale file. Say so with the runbook pointer
     # every other missing input here gets, rather than a bare KeyError.
-    require_env!(%w[RELEASE_NOTES_STORE_FILE])
+    require_env!(%w[STORE_NOTES_FILE])
     return store_notes(limit)
   end
   return text if text.length <= limit
@@ -331,7 +331,7 @@ def locale_store_notes(locale, kind, limit, notes_json = store_notes_json)
   text[0, limit].rstrip
 end
 
-# Writes the release notes every store reads out of its metadata tree. deliver
+# Writes the store notes every store reads out of its metadata tree. deliver
 # takes `<locale>/release_notes.txt`; supply takes
 # `<locale>/changelogs/<versionCode>.txt`. Returns the paths written so a lane
 # can log exactly what a submission will carry.

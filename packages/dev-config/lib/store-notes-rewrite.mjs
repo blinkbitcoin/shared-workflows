@@ -107,7 +107,7 @@ export function validate(raw, locales) {
  * `effort` and `extraParams` are passed to the adapter as they are
  * (llm.mjs parses both from the environment).
  * `prompt` is the whole system prompt as a template: the package's
- * store-notes.prompt.md, then the app's release-notes.prompt.md when it has one.
+ * store-notes.prompt.md, then the app's store-notes.prompt.md when it has one.
  */
 export async function rewriteNotes({
   items,
@@ -123,12 +123,12 @@ export async function rewriteNotes({
   if (!adapter) return null;
 
   if (!process.env[KEY_ENV[provider]]) {
-    console.warn(`release notes: ${KEY_ENV[provider]} is not set, keeping the generated notes`);
+    console.warn(`store notes: ${KEY_ENV[provider]} is not set, keeping the generated notes`);
     return null;
   }
 
   if (!prompt?.trim()) {
-    console.warn('release notes: the prompt is empty, keeping the generated notes');
+    console.warn('store notes: the prompt is empty, keeping the generated notes');
     return null;
   }
   const system = renderPrompt(prompt.trim(), {
@@ -148,7 +148,7 @@ export async function rewriteNotes({
     });
   } catch (error) {
     console.warn(
-      `release notes: ${provider} rewrite failed (${error.message}), keeping the generated notes`,
+      `store notes: ${provider} rewrite failed (${error.message}), keeping the generated notes`,
     );
     return null;
   }
@@ -156,7 +156,7 @@ export async function rewriteNotes({
   const result = validate(raw, locales);
   if (result.error) {
     console.warn(
-      `release notes: ${provider} rewrite rejected (${result.error}), keeping the generated notes`,
+      `store notes: ${provider} rewrite rejected (${result.error}), keeping the generated notes`,
     );
     return null;
   }

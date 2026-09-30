@@ -205,7 +205,7 @@ jobs:
       - name: Fastlane ios build
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
-          RELEASE_NOTES_STORE_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/notes-store.txt
+          STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
           STORE_NOTES_JSON: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.json
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
@@ -225,7 +225,7 @@ jobs:
         if: ${{ inputs.verify }}
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
-          RELEASE_NOTES_STORE_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/notes-store.txt
+          STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
           STORE_NOTES_JSON: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.json
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
