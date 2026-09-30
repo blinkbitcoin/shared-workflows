@@ -57,6 +57,15 @@ copies=(
   scripts/security/review.sh:security/review.sh
   scripts/security/review-codebase.sh:security/review-codebase.sh
   scripts/security/lib/runner.sh:security/lib/runner.sh
+  scripts/e2e/ios-maestro.sh:e2e/ios-maestro.sh
+  scripts/e2e/android-maestro.sh:e2e/android-maestro.sh
+  scripts/e2e/app-launch.sh:e2e/app-launch.sh
+  scripts/e2e/ios-simulator.sh:e2e/ios-simulator.sh
+  scripts/e2e/android-emulator.sh:e2e/android-emulator.sh
+  scripts/e2e/collect-forensics.sh:e2e/collect-forensics.sh
+  scripts/e2e/maestro-bound.sh:e2e/maestro-bound.sh
+  scripts/lib/e2e-env.sh:lib/e2e-env.sh
+  scripts/lib/expo-config.sh:lib/expo-config.sh
   .github/zizmor.yml:zizmor.yml
 )
 

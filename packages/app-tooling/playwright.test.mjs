@@ -65,6 +65,10 @@ test('a missing port names the variable and how to set it', () => {
   assert.throws(() => createPlaywrightConfig({ env: { WEB_PREVIEW_PORT: '1' } }), /EXPO_PUBLIC_API_URL is not set/);
 });
 
+test('the preview server is this package\'s serve-dist unless an app names its own', () => {
+  assert.equal(createPlaywrightConfig({ env: PORTS }).webServer[1].command, 'pnpm exec serve-dist');
+});
+
 test('an app can move the suite and name its own servers', () => {
   const config = createPlaywrightConfig({
     env: PORTS,

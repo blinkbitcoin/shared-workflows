@@ -6,7 +6,8 @@ repo uses. Its top level is the developer tooling that is not React Native
 specific: the pinned tool table, the checks that enforce it, the contract
 checker, the repository guards, the security scanners `check-security.yml`
 runs ([Security scanning](#security-scanning)), the CI badge renderer and the
-store notes generator the release workflows run ([`gen-store-notes`](#gen-store-notes)). Under
+store notes generator the release workflows run ([`gen-store-notes`](#gen-store-notes)),
+and the E2E suite runners and web preview server a laptop runs ([End-to-end suites](#end-to-end-suites)). Under
 `expo/` are the presets an Expo app extends ([Expo presets](#expo-presets)).
 
 ```sh
@@ -545,6 +546,46 @@ pnpm exec doctor                                                              # 
   adds or replaces entries by name in its own `doctor.requirements.json`, and
   drops one with `"skip": true`. An entry with `when` applies only when that
   file exists (the Ruby gems only where there is a Gemfile).
+
+## End-to-end suites
+
+`e2e/` holds byte-identical copies of the scripts `test-e2e.yml` runs on the
+device, so a laptop launches the app and runs the Maestro flows the way CI
+does: the same deep link, the same retry once on a real failure, and the same
+check that the suite ran flows at all. From the app's root, with the app
+installed and Metro running:
+
+```sh
+e2e=node_modules/@blinkbitcoin/app-tooling/e2e
+bash $e2e/ios-simulator.sh pick                  # the booted iPhone simulator, remembered in WORKFLOWS_OUT
+bash $e2e/app-launch.sh ios                      # the dev client's deep link to Metro
+bash $e2e/ios-maestro.sh [maestro arguments]     # the suite, retried once, junit in WORKFLOWS_OUT
+bash $e2e/android-maestro.sh [maestro arguments] # install the debug APK, reverse the ports, launch, run, forensics
+```
+
+- **Ports and hooks:** `WORKFLOWS_METRO_PORT` (default 8081),
+  `WORKFLOWS_MOCK_API_PORT` (8082, reversed into the emulator) and
+  `WORKFLOWS_E2E_SETUP_SCRIPT` / `WORKFLOWS_E2E_TEARDOWN_SCRIPT`, scripts
+  relative to the app's root run around the suite. Nothing here derives a port:
+  an app exports its own before calling these.
+- **Metro you started yourself** writes no `metro.log`; when it answers on its
+  port, `app-launch.sh` launches without waiting for the bundle receipt.
+- **The app id and URL scheme** come from `expo config` (`pnpm`, `yq`), unless
+  `WORKFLOWS_APP_ID` is set. `ios-simulator.sh pick` needs `jq`.
+- **Every variable** is in the environment table of `scripts/e2e/README.md` in
+  shared-workflows.
+
+`serve-dist` is the web suite's preview server, and the `expo/playwright`
+preset's default `previewCommand`. It serves `dist/` in the current directory
+(or the directory it is given) the way GitHub Pages does: under
+`EXPO_PUBLIC_BASE_URL`, `/settings` from `settings.html`, and `404.html` with a
+404 for a path with no file. The port is `WEB_PREVIEW_PORT`; it fails, naming
+the variable, when that is unset, and when there is no export to serve.
+
+```sh
+pnpm exec serve-dist          # dist/ on WEB_PREVIEW_PORT
+pnpm exec serve-dist build    # another directory
+```
 
 ## Release scripts
 

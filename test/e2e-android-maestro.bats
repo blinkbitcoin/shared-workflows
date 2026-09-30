@@ -138,3 +138,10 @@ maestro_calls() { grep '^maestro ' "$CALLS"; }
   [ "$status" -ne 0 ] || fail "ran without adb: $output"
   contains "$output" "missing command: adb" || fail "output: $output"
 }
+
+@test "the caller's arguments go to maestro test last, after every flag the script sets" {
+  run bash "$REPO_ROOT/scripts/e2e/android-maestro.sh" --include-tags smoke --exclude-tags slow
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(maestro_calls)" = "maestro test .maestro --platform android -e APP_ID=com.example.app --debug-output $WORKFLOWS_OUT/maestro --flatten-debug-output --format junit --output $WORKFLOWS_OUT/maestro/junit.xml --include-tags smoke --exclude-tags slow" ] \
+    || fail "maestro: $(maestro_calls)"
+}

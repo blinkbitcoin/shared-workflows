@@ -502,6 +502,32 @@
       "guide": "no-copies-of-this-family"
     },
     {
+      "id": "no-copy.e2e-suite",
+      "kind": "no-copy",
+      "label": "no copy of the Maestro suite runners",
+      "target": ["scripts/e2e/maestro-ios.sh", "scripts/e2e/maestro-android.sh"],
+      "profile": "e2e",
+      "neededBy": "the Maestro suite runners test-e2e.yml runs (scripts/e2e/ios-maestro.sh and android-maestro.sh, with app-launch.sh and ios-simulator.sh) and @blinkbitcoin/app-tooling ships under e2e/; a local copy launches and runs the flows its own way and drifts from what CI runs",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copies. From the app's root, with the ports and hooks your app needs in WORKFLOWS_METRO_PORT, WORKFLOWS_MOCK_API_PORT and WORKFLOWS_E2E_SETUP_SCRIPT, run bash node_modules/@blinkbitcoin/app-tooling/e2e/ios-simulator.sh pick, e2e/app-launch.sh ios and e2e/ios-maestro.sh for iOS, and e2e/android-maestro.sh for Android; extra arguments reach maestro test.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.serve-dist",
+      "kind": "no-copy",
+      "label": "no copy of serve-dist",
+      "target": ["scripts/e2e/serve-dist.mjs", "scripts/e2e/serve-dist.test.mjs"],
+      "profile": "web",
+      "neededBy": "the serve-dist program @blinkbitcoin/app-tooling ships, the preview server the expo/playwright preset starts; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and start the package's program as the Playwright preview server: command: 'pnpm exec serve-dist', with WEB_PREVIEW_PORT (and EXPO_PUBLIC_BASE_URL on a deploy) exported.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
       "id": "package-dep.fingerprint",
       "kind": "package-dep",
       "target": "@expo/fingerprint",

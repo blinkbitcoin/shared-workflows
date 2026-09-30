@@ -42,6 +42,7 @@ scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
 packages/           app-tooling (tooling any repo installs; expo/ holds the Expo presets,
                     security/ the scanner copies and lib/security-*.mjs their modules,
+                    e2e/ the Maestro suite runner copies, bin/serve-dist.mjs the web preview,
                     fixtures/template/ the template's files, before and after)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
                     forensics, runners

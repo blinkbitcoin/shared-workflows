@@ -150,6 +150,7 @@ is a warning in the report, not a failure. See
 | `app.config.ts`, `app.config.js`, `app.config.cjs` or `app.json` | required | test-e2e.yml and every build workflow, through scripts/lib/expo-config.sh |
 | `.maestro` | required | test-e2e.yml (flows) |
 | `test-e2e.yml:e2e-setup-script` and `test-e2e.yml:e2e-teardown-script` | required | test-e2e.yml, through scripts/e2e/run-hook.sh |
+| no `scripts/e2e/maestro-ios.sh` or `scripts/e2e/maestro-android.sh` | required | the Maestro suite runners test-e2e.yml runs (scripts/e2e/ios-maestro.sh and android-maestro.sh, with app-launch.sh and ios-simulator.sh) and @blinkbitcoin/app-tooling ships under e2e/; a local copy launches and runs the flows its own way and drifts from what CI runs |
 
 ### If you call `build-web.yml`
 
@@ -158,6 +159,7 @@ is a warning in the report, not a failure. See
 | `build:web` | required | build-web.yml (build-script) |
 | `test:e2e:web` | required, or pass `e2e: false` | build-web.yml (e2e) |
 | `@playwright/test` | required, or pass `e2e: false` | build-web.yml, through scripts/web/playwright-version.sh |
+| no `scripts/e2e/serve-dist.mjs` or `scripts/e2e/serve-dist.test.mjs` | required | the serve-dist program @blinkbitcoin/app-tooling ships, the preview server the expo/playwright preset starts; a copy in your repository is compared with it by nothing and drifts |
 
 ### If you call `publish-badges.yml`
 

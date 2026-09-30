@@ -121,3 +121,10 @@ suite() { run bash "$REPO_ROOT/scripts/e2e/ios-maestro.sh"; }
   suite
   [ "$status" -eq 0 ] || fail "exited $status: $output"
 }
+
+@test "the caller's arguments go to maestro test last, after every flag the script sets" {
+  run bash "$REPO_ROOT/scripts/e2e/ios-maestro.sh" --include-tags smoke
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(cat "$CALLS")" = "maestro test .maestro --platform ios --udid SIM-1 -e APP_ID=com.example.app --debug-output $WORKFLOWS_OUT/maestro --flatten-debug-output --format junit --output $WORKFLOWS_OUT/maestro/junit.xml --include-tags smoke" ] \
+    || fail "calls: $(cat "$CALLS")"
+}

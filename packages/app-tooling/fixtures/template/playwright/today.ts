@@ -55,11 +55,11 @@ export default defineConfig({
     },
     {
       // Not `expo serve`: it serves at `/` only, and a deploy export's paths
-      // all carry the base path. scripts/e2e/serve-dist.mjs serves the export
-      // the way GitHub Pages does - under the base path, `/settings` from
-      // `settings.html`, and `404.html` (with a 404) for a path with no file,
-      // which is how a deep link into a dynamic route boots the router.
-      command: 'node scripts/e2e/serve-dist.mjs',
+      // all carry the base path. The shared tooling's serve-dist serves the
+      // export the way GitHub Pages does - under the base path, `/settings`
+      // from `settings.html`, and `404.html` (with a 404) for a path with no
+      // file, which is how a deep link into a dynamic route boots the router.
+      command: 'pnpm exec serve-dist',
       url: previewUrl,
       reuseExistingServer: false,
       timeout: 60_000,
