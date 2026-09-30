@@ -27,8 +27,15 @@ check-ci: ## Lint the scripts (shellcheck), the workflows and actions (actionlin
 	find scripts -name '*.sh' -exec $(MISE) shellcheck -x {} +
 	$(MISE) actionlint -color
 	$(MISE) zizmor --offline --min-severity medium --config .github/zizmor.yml .github
-test-unit: ## bats over the scripts, the workflows' shape and the docs' facts
-	$(MISE) bats test/
+# One bats job per core: the suite is about 1,200 cases that each start a
+# handful of processes, so on one core it took eight minutes and on eighteen it
+# takes two. `bats --jobs` needs GNU parallel; without it the suite still runs,
+# one case at a time. Every test therefore has to stand alone - its own temp
+# directory, no fixed wait for a background process (poll for it), no path
+# another test writes (see CONTRIBUTING.md).
+BATS_JOBS := $(shell command -v parallel >/dev/null 2>&1 && (getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4) || echo 1)
+test-unit: ## bats over the scripts, the workflows' shape and the docs' facts, one job per core
+	$(MISE) bats --jobs $(BATS_JOBS) test/
 check-version-pins: ## Fail when workflow defaults disagree with scripts/lib/versions.sh
 	$(MISE) bash scripts/self/check-version-pins.sh
 check-tool-versions: ## Fail when an installed tool is not the version the baseline pins

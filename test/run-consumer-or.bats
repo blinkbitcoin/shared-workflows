@@ -10,6 +10,7 @@
 load test_helper
 
 setup() {
+  FALLBACK_REL="test/fixtures/run-consumer-or-fallback-$BATS_SUITE_TEST_NUMBER.sh"
   # consumer_root() is GITHUB_WORKSPACE + WORKING_DIRECTORY.
   ROOT="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$ROOT"
@@ -43,8 +44,9 @@ write_package_json() {
 }
 
 # A throwaway fallback inside the repo tree, so the path check passes and the
-# call is observable. Removed by teardown.
-FALLBACK_REL="test/fixtures/run-consumer-or-fallback.sh"
+# call is observable. Removed by teardown. One per test, named after the test's
+# number: `make test-unit` runs the suite in parallel, and a shared path let one
+# test's teardown delete the fallback another test was about to run.
 write_fallback() {
   cat > "$REPO_ROOT/$FALLBACK_REL" <<'SH'
 #!/usr/bin/env bash
