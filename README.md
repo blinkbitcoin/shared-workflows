@@ -206,7 +206,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table, the release notes dry run's section check, the self-CI change classifier |
 | `test/`                | <!--count:bats-files-->127<!--/count--> bats files, <!--count:tests-->1198<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
-| `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, the contract a consumer is checked against, and the badge renderer |
+| `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, the contract a consumer is checked against, the badge renderer and the store notes generator |
 | `packages/expo-tooling/` | `@blinkbitcoin/expo-tooling` — the Expo presets an app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 

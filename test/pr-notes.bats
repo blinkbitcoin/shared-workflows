@@ -3,9 +3,11 @@
 #
 # `gh` is stubbed with a script that serves a PR body out of a file and writes
 # `pr edit --body-file` back into it, so the whole round trip - fetch, strip,
-# generate, inject, edit - runs without GitHub. The consumer's generator is a
-# two-line notes.mjs that turns the body's bullets into notes-store.txt; the
-# real one is the consumer's business (scripts/release/notes.sh).
+# generate, inject, edit - runs without GitHub. The generator notes.sh runs is
+# faked too, with a `node` on PATH that turns the body's bullets into
+# notes-store.txt, so each case sees exactly which bullets it was fed; one case
+# runs the real one (packages/dev-config/bin/store-notes.mjs, whose own test is
+# packages/dev-config/store-notes.test.mjs).
 #
 # A dry run from a body file must not touch `gh` at all, so those cases arm
 # the stub to fail and then assert that its call log stayed empty.
@@ -14,10 +16,11 @@ load test_helper
 setup() {
   STUB="$BATS_TEST_TMPDIR/bin"
   ROOT="$BATS_TEST_TMPDIR/app"
-  mkdir -p "$STUB" "$ROOT/scripts/release"
+  mkdir -p "$STUB" "$ROOT"
   export WORKFLOWS_TEST_LOG="$BATS_TEST_TMPDIR/gh.log"
   export WORKFLOWS_TEST_BODY="$BATS_TEST_TMPDIR/pr-body.md"
   export WORKFLOWS_TEST_GH_FAILS="$BATS_TEST_TMPDIR/gh-fails"
+  export WORKFLOWS_TEST_NOTES="$BATS_TEST_TMPDIR/generator-writes"
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR" WORKING_DIRECTORY=app
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   export WORKFLOWS_RELEASE_META_DIR="$BATS_TEST_TMPDIR/meta"
@@ -26,7 +29,7 @@ setup() {
   mkdir -p "$RUNNER_TEMP"
   : > "$GITHUB_ENV"
   : > "$WORKFLOWS_TEST_LOG"
-  unset NOTES_LOCALES SECTION_TITLE PR_BODY_FILE DRY_RUN
+  unset NOTES_LOCALES SECTION_TITLE PR_BODY_FILE DRY_RUN RELEASE_NOTES_LLM_PROVIDER STORE_NOTES_INCLUDE_CHANGELOG
   cat > "$STUB/gh" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
@@ -46,18 +49,29 @@ echo "unexpected gh $*" >&2; exit 1
 SH
   chmod +x "$STUB/gh"
   export PATH="$STUB:$PATH"
-  # The consumer's generator: every markdown bullet becomes a notes line, so
-  # the test can see exactly which bullets the script fed it.
-  cat > "$ROOT/scripts/release/notes.mjs" <<'JS'
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-const args = process.argv.slice(2);
-const body = readFileSync(args[args.indexOf('--from-body') + 1], 'utf8');
-const out = args[args.indexOf('--out') + 1];
-const lines = body.split('\n').filter((l) => /^\* /.test(l)).map((l) => `• ${l.slice(2)}`);
-mkdirSync(out, { recursive: true });
-writeFileSync(`${out}/notes-store.txt`, `${lines.join('\n') || 'Bug fixes and improvements.'}\n`);
-writeFileSync(`${out}/store-notes.json`, '{}\n');
-JS
+  # The generator: every markdown bullet becomes a notes line, so the test can
+  # see exactly which bullets the script fed it. With $WORKFLOWS_TEST_NOTES
+  # present it writes that file's text instead, whatever the body says.
+  cat > "$STUB/node" <<'SH'
+#!/usr/bin/env bash
+body=""
+out=""
+prev=""
+for arg in "$@"; do
+  [ "$prev" = --from-body ] && body="$arg"
+  [ "$prev" = --out ] && out="$arg"
+  prev="$arg"
+done
+mkdir -p "$out"
+if [ -f "$WORKFLOWS_TEST_NOTES" ]; then
+  cp "$WORKFLOWS_TEST_NOTES" "$out/notes-store.txt"
+else
+  lines="$(grep '^\* ' "$body" | sed 's/^\* /• /' || true)"
+  printf '%s\n' "${lines:-Bug fixes and improvements.}" > "$out/notes-store.txt"
+fi
+printf '{}\n' > "$out/store-notes.json"
+SH
+  chmod +x "$STUB/node"
   cat > "$WORKFLOWS_TEST_BODY" <<'EOF'
 :robot: I have created a release *beep* *boop*
 ---
@@ -193,17 +207,9 @@ dry_run_from_file() {
   [ "$(grep -c '^## Store notes$' "$WORKFLOWS_TEST_BODY")" -eq 1 ] || fail "no block: $(cat "$WORKFLOWS_TEST_BODY")"
 }
 
-# generator_writes TEXT - replace the consumer's generator with one that
-# writes TEXT as notes-store.txt, whatever the body says.
-generator_writes() {
-  cat > "$ROOT/scripts/release/notes.mjs" <<JS
-import { writeFileSync, mkdirSync } from 'node:fs';
-const out = process.argv[process.argv.indexOf('--out') + 1];
-mkdirSync(out, { recursive: true });
-writeFileSync(\`\${out}/notes-store.txt\`, '$1');
-writeFileSync(\`\${out}/store-notes.json\`, '{}\\n');
-JS
-}
+# generator_writes TEXT - make the generator write TEXT (printf escapes
+# expanded) as notes-store.txt, whatever the body says.
+generator_writes() { printf '%b' "$1" > "$WORKFLOWS_TEST_NOTES"; }
 
 @test "notes carrying a rule line are refused before they reach the PR" {
   generator_writes 'Fixed\n---\nMore\n'
@@ -234,16 +240,18 @@ JS
   [ "$(edits)" -eq 0 ] || fail "the PR was edited anyway: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
-@test "a consumer without a generator gets the commit-subject fallback" {
-  rm "$ROOT/scripts/release/notes.mjs"
-  git -C "$ROOT" init -q -b main
-  git -C "$ROOT" config user.email t@example.test
-  git -C "$ROOT" config user.name t
-  git -C "$ROOT" commit -q --allow-empty -m "feat: a feature"
+@test "the package's own generator drafts the section from the body's changelog" {
+  rm "$STUB/node"
+  command -v node >/dev/null || fail "no node to run the real generator with"
   pr_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "::warning::" || fail "the fallback did not warn: $output"
-  contains "$(cat "$WORKFLOWS_TEST_BODY")" "- feat: a feature" || fail "no fallback notes in: $(cat "$WORKFLOWS_TEST_BODY")"
+  not_contains "$output" "::warning::" || fail "warned: $output"
+  contains "$(cat "$WORKFLOWS_TEST_BODY")" "<!-- workflows:append:Store notes -->
+## Store notes
+
+Fixed
+• Close the alerts.
+<!-- /workflows:append:Store notes -->" || fail "the real generator's notes are not the section: $(cat "$WORKFLOWS_TEST_BODY")"
 }
 
 @test "the section title is configurable" {

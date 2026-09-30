@@ -1,0 +1,18 @@
+{
+  "id": "msg_01AbCdEfGhIjKlMnOpQrStUv",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "Sure! Here are the notes:\n\n### What's new\n- Stay signed in after a cold start (9f2c1ab)"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 612,
+    "output_tokens": 41
+  }
+}

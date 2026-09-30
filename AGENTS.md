@@ -270,7 +270,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
-| Both dev-config programs at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, and each program's flags, messages and exit codes | `packages/dev-config/*.test.mjs` | `make test-package` |
+| The dev-config programs and modules at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, the store notes generator and its LLM adapters, and each program's flags, messages and exit codes | `packages/dev-config/*.test.mjs` | `make test-package` |
 | Each expo-tooling preset against the template: the template's file as it is and the file it becomes, evaluated under the same stand-ins and compared (lefthook through the real `lefthook dump`); the guide's examples are those files | `packages/expo-tooling/*.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
@@ -284,8 +284,9 @@ Every row is a make target; nothing here is run through a package manager.
 suite reads this repository and `test/fixtures/consumer-min` only. The one CI
 job that checks a consumer out is the release notes dry run, and it tests this
 repository's `pr-release-notes.yml` against the template's `main`, not the
-template against a rule: a red dry run from a broken generator on that
-`main` is a deliberate trade, because the template is where every release here
+template against a rule: the generator it runs is this repository's own
+`store-notes`, and a red dry run from a broken setup on that `main` (its store
+metadata, its prompt addendum) is a deliberate trade, because the template is where every release here
 is first executed. A consumer is held to the contract by its own
 `Contract` job, against the version of this repository it calls, and it is the
 consumer's PR that fails when it drifts - see "The contract check" in

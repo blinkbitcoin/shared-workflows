@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-9QwErTyUiOpAsDfGhJkLzXcVb",
+  "object": "chat.completion",
+  "created": 1788307200,
+  "model": "gpt-5",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"en-US\": \"You stay signed in between sessions, the activity list refreshes with a pull, drafts are kept when the connection drops, and the app starts faster.\"}",
+        "refusal": null
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 588,
+    "completion_tokens": 61,
+    "total_tokens": 649
+  }
+}

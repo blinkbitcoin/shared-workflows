@@ -2,7 +2,8 @@
 
 The shared developer-tooling baseline. Install it as a devDependency in any
 repo on the baseline, whatever package manager or toolchain provisioner that
-repo uses.
+repo uses. It also carries the store release notes generator the release
+workflows run ([`store-notes`](#store-notes)).
 
 ```sh
 pnpm add -D @blinkbitcoin/dev-config   # or npm install --save-dev
@@ -197,6 +198,42 @@ bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh       # actionlint, ziz
 - **Switches:** `WORKFLOWS_ACTIONLINT`, `WORKFLOWS_ZIZMOR` and `WORKFLOWS_SHELLCHECK` turn one half off.
 - **zizmor policy:** a repository without its own `.github/zizmor.yml` gets this family's, which the package carries as `zizmor.yml`.
 - **Run with `bash`, not as a program:** the scripts source `lib/` beside them, and a `node_modules/.bin` link would break that.
+
+## `store-notes`
+
+```sh
+store-notes --from-commits [RANGE] --out -                   # since the last v* tag, as JSON on stdout
+store-notes --from-body RELEASE_BODY.md --body-section --out dist/
+store-notes --help
+```
+
+The store release notes for a build, for the app in the working directory:
+grouped plain-text prose (New, Improved, Fixed) from a release-please body or
+from conventional commit subjects, cut to each store's limit, written as
+`store-notes.json` and `notes-store.txt` for the lanes. `build-prepare.yml` and
+`pr-release-notes.yml` run this program from the workflows checkout, so a
+consumer ships no generator of its own (the contract's `no-copy.store-notes`
+row).
+
+- **Locales:** `--locales a,b`, else `$NOTES_LOCALES`, else the locale
+  directories under `fastlane/metadata/ios`, else `en-US`.
+- **LLM pass:** optional, with `RELEASE_NOTES_LLM_PROVIDER` (`anthropic` or
+  `openai`), `RELEASE_NOTES_LLM_MODEL`, `RELEASE_NOTES_LLM_EFFORT`,
+  `RELEASE_NOTES_LLM_EXTRA_PARAMS`, `OPENAI_BASE_URL` and the provider's API
+  key. An answer that fails validation falls back to the deterministic notes.
+- **Prompt:** `store-notes.prompt.md` in this package, which owns the locales,
+  limits and answer format the generator validates, then the app's own
+  `release-notes.prompt.md` when it keeps one, for its product and tone. The
+  app's part may use `{{locales}}` and `{{limit}}` too.
+
+The provider adapters are exported for an app's own LLM calls:
+`@blinkbitcoin/dev-config/llm` (`adapterFor`, `KEY_ENV`, `EFFORTS`,
+`parseEffort`, `parseExtraParams`) and `@blinkbitcoin/dev-config/llm-request`
+(`thinks`, `mergeRequest`, `unfence`). They use `fetch` and nothing else.
+
+The consumer guide's
+[Store notes](../../docs/consumer-guide.md#store-notes) section has the
+whole contract, with an example of what an app adds to the prompt.
 
 ## Release scripts
 

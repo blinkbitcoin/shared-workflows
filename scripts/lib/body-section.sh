@@ -6,10 +6,11 @@
 # found. Requires common.sh.
 #
 # The block is delimited by HTML-comment markers, not by "the heading down to
-# the next `## `". The notes routinely *start* with a `## ` heading - notes.sh's
-# fallback writes `## <version> (<build>)` and a release-please body starts
-# with `## [x.y.z](...)` - so a heading scan stops at the notes' own heading and
-# leaves their tail behind, stacking a little more of it on every re-run.
+# the next `## `". The notes can *start* with a `## ` heading - notes.sh's
+# old commit-subject fallback wrote `## <version> (<build>)` and a
+# release-please body starts with `## [x.y.z](...)` - so a heading scan stops
+# at the notes' own heading and leaves their tail behind, stacking a little
+# more of it on every re-run.
 # Markers bound the block regardless of its content.
 
 # section_markers TITLE - sets begin_marker and end_marker for TITLE.

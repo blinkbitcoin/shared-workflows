@@ -31,7 +31,7 @@ on:
         type: number
         default: 1000
       notes-locales:
-        description: "Locales the consumer's scripts/release/notes.mjs should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: the template's emits one per fastlane/metadata/ios locale directory, which are exactly the listings the lanes then look up"
+        description: "Locales the store notes generator (the store-notes program in @blinkbitcoin/dev-config) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
         type: string
         default: ''
       stage:
@@ -43,7 +43,7 @@ on:
         type: string
         default: ''
       release-tag:
-        description: Existing release tag whose body becomes the source of the store notes; fetched with `gh release view` and passed to the consumer's notes.mjs as `--from-body --body-section`. Empty falls back to `release-body-file`, then to the commit subjects
+        description: Existing release tag whose body becomes the source of the store notes; fetched with `gh release view` and passed to the store notes generator as `--from-body --body-section`. Empty falls back to `release-body-file`, then to the commit subjects
         type: string
         default: ''
       require-green-workflow:
@@ -71,10 +71,10 @@ on:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
         required: false
       ANTHROPIC_API_KEY:
-        description: API key for the consumer's notes.mjs when it drafts store notes with Claude; unset simply means no LLM pass
+        description: API key for the store notes generator's LLM pass with Claude; unset simply means no LLM pass
         required: false
       OPENAI_API_KEY:
-        description: API key for the consumer's notes.mjs when it drafts store notes with an OpenAI-compatible endpoint
+        description: API key for the store notes generator's LLM pass with an OpenAI-compatible endpoint
         required: false
     outputs:
       version:
@@ -242,7 +242,7 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.version }}
           APP_BUILD_NUMBER: ${{ steps.version.outputs.build-number }}
           NOTES_LOCALES: ${{ inputs.notes-locales }}
-          # The consumer's notes.mjs may draft store notes with an LLM; the
+          # The store notes generator may draft with an LLM; the
           # provider/model live in build-env, only the keys are secrets.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

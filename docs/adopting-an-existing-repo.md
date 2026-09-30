@@ -126,6 +126,8 @@ is a warning in the report, not a failure. See
 | no `scripts/release/build-info.sh`, `scripts/release/build-info.test.mjs` or `scripts/release/shared-copies.test.mjs` | required | release/build-info.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/check-i18n.sh` or `scripts/check-codegen.sh` | required | checks/i18n.sh and checks/codegen.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs; a copy in your repository is compared with them by nothing and drifts |
 | no `scripts/shellcheck.sh` | required | ci/lint-ci.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs: actionlint, zizmor and shellcheck at the pinned versions |
+| no `scripts/release/notes.mjs`, `scripts/release/notes.test.mjs`, `scripts/release/llm/index.mjs`, `scripts/release/llm/index.test.mjs`, `scripts/release/fixtures/release-body.md`, `scripts/release/fixtures/release-pr-body.md`, `scripts/release/fixtures/anthropic-response.json`, `scripts/release/fixtures/anthropic-invalid-response.json` or `scripts/release/fixtures/openai-response.json` | required | the store-notes program @blinkbitcoin/dev-config ships, which build-prepare.yml and pr-release-notes.yml run through scripts/release/notes.sh; a copy in your repository is not run, and drifts |
+| no `scripts/lib/llm/index.mjs`, `scripts/lib/llm/index.test.mjs`, `scripts/lib/llm/anthropic.mjs`, `scripts/lib/llm/anthropic.test.mjs`, `scripts/lib/llm/openai.mjs`, `scripts/lib/llm/openai.test.mjs`, `scripts/lib/llm/request.mjs` or `scripts/lib/llm/request.test.mjs` | required | the provider-portable LLM adapters @blinkbitcoin/dev-config ships (@blinkbitcoin/dev-config/llm and /llm-request), which its store-notes program uses; a copy in your repository is compared with them by nothing and drifts |
 
 ### If you call `check-unit.yml`
 
@@ -189,7 +191,6 @@ is a warning in the report, not a failure. See
 | lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_NOTES` and `APP_REVIEW_PHONE` | required | publish-store.yml, which passes exactly these as secrets |
 | `scripts/release/verify-ios.sh` | required | the ios verify lane |
 | `scripts/release/verify-android.sh` | required | the android verify lane |
-| `scripts/release/notes.mjs` | optional — a fallback runs | build-prepare.yml, through scripts/release/notes.sh |
 | `@expo/fingerprint` | required | build-prepare.yml and publish-ota.yml, through scripts/lib/release-env.sh |
 
 <!-- contract-table:end -->
