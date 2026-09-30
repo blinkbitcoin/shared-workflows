@@ -4,12 +4,12 @@ name: Badges
 # workflow-status badge takes `?branch=main`, and every other branch gets its
 # own set.
 #
-# The split follows the family's existing seam. SVG rendering needs a
-# package.json and a test harness, which the consumer has and this repo does
-# not, so the consumer owns rendering behind one named script (`render-script`,
-# reached through scripts/checks/run-script.sh exactly like typecheck and lint)
-# and this repo owns publishing (scripts/ci/publish-badges.sh). A closed PR's
-# directory is dropped by pr-closed.yml.
+# Both halves live here. Rendering is @blinkbitcoin/dev-config's render-badges
+# program, run from this repository's own checkout by
+# scripts/ci/render-badges.sh, so a consumer needs no script and no copy; a
+# consumer that draws its own badges names its package script in
+# `render-script` instead. Publishing is scripts/ci/publish-badges.sh. A closed
+# PR's directory is dropped by pr-closed.yml.
 on:
   workflow_call:
     inputs:
@@ -58,7 +58,7 @@ on:
         type: string
         default: 'E2E'
       security-verdict:
-        description: check-security.yml's verdict output, handed to the render script as BADGE_SECURITY; empty renders no security badge and leaves the published one
+        description: check-security.yml's verdict output, handed to the renderer as BADGE_SECURITY; empty renders no security badge and leaves the published one
         type: string
         default: ''
       security-label:
@@ -70,11 +70,11 @@ on:
         type: string
         default: 'coverage'
       render-script:
-        description: Consumer package.json script that renders the badges into badge-dir
+        description: Consumer package.json script that renders the badges into badge-dir instead of @blinkbitcoin/dev-config's render-badges; empty (the default) renders with render-badges from this repository's checkout
         type: string
-        default: 'badges:render'
+        default: ''
       badge-dir:
-        description: Consumer-relative directory the render script writes, and the one publish-badges.sh copies to gh-pages
+        description: Consumer-relative directory the badges are rendered into, and the one publish-badges.sh copies to gh-pages
         type: string
         default: 'coverage/badge'
     secrets:
@@ -129,7 +129,7 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
       # Only when Unit succeeded: a failed Unit may have uploaded a partial
-      # coverage/ (the upload is `if: always()`), and the render script writes
+      # coverage/ (the upload is `if: always()`), and the renderer writes
       # the red placeholder for that case without reading a summary at all.
       - name: Download coverage
         if: ${{ inputs.unit-result == 'success' }}
@@ -139,7 +139,7 @@ jobs:
           path: ${{ inputs.working-directory }}/coverage
       - name: Render badges
         env:
-          SCRIPT_NAME: ${{ inputs.render-script }}
+          RENDER_SCRIPT: ${{ inputs.render-script }}
           BADGE_OUT_DIR: ${{ inputs.badge-dir }}
           BADGE_UNIT: ${{ inputs.unit-result }}
           BADGE_E2E: ${{ inputs.e2e-result }}
@@ -147,7 +147,7 @@ jobs:
           BADGE_E2E_LABEL: ${{ inputs.e2e-label }}
           BADGE_SECURITY: ${{ inputs.security-verdict }}
           BADGE_SECURITY_LABEL: ${{ inputs.security-label }}
-        run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
+        run: bash "$WORKFLOWS_DIR/scripts/ci/render-badges.sh"
       - name: Publish to gh-pages
         env:
           # head_ref on a PR (the branch the badge is *for*), ref_name on a push.

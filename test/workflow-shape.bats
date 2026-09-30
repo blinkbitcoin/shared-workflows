@@ -868,12 +868,18 @@ lane_step_count() {
     || fail "the coverage download is gated on '$cond'"
 }
 
-@test "the badges job delegates rendering to the consumer, and only publishing is ours" {
+# Rendering moved here from the consumer: render-badges.sh runs the package's
+# render-badges unless the caller names a script of its own, so the default
+# has to stay empty and the step has to hand the input over as RENDER_SCRIPT.
+@test "the badges job renders with the package's program unless render-script names a consumer script" {
   f="$REPO_ROOT/.github/workflows/publish-badges.yml"
-  render=$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0]' "$f")
-  contains "$render" 'run-script.sh' \
-    || fail "the render step no longer goes through run-script.sh: $render"
-  [ "$(yq -r '.on.workflow_call.inputs."render-script".default' "$f")" = "badges:render" ]
+  run_line=$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0].run' "$f")
+  [ "$run_line" = 'bash "$WORKFLOWS_DIR/scripts/ci/render-badges.sh"' ] \
+    || fail "the render step no longer runs render-badges.sh: $run_line"
+  [ "$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0].env.RENDER_SCRIPT' "$f")" \
+    = '${{ inputs.render-script }}' ] || fail "the render step does not hand render-script over as RENDER_SCRIPT"
+  [ "$(yq -r '.on.workflow_call.inputs."render-script".default' "$f")" = "" ] \
+    || fail "render-script has a default, so every caller renders with a consumer script"
   n=$(yq -r '[.jobs.badges.steps[] | select((.run // "") | test("publish-badges.sh"))] | length' "$f")
   [ "$n" -eq 1 ] || fail "publish-badges.yml runs publish-badges.sh $n times"
 }

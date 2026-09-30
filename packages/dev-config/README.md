@@ -148,6 +148,35 @@ check-lockfile [--root DIR]     # every lockfile resolution is the npm registry,
   source when the calls pin no single commit.
 - `check-consumer-contract`'s `pin.one-commit` row asserts the same agreement:
   every call, and each package in `package.json` and `pnpm-lock.yaml`.
+
+## CI badges
+
+`render-badges` draws the badges `publish-badges.yml` publishes to a
+consumer's `gh-pages`: coverage (line coverage from Jest's
+`coverage/coverage-summary.json`), Unit, E2E and Security, each a shields.io
+"flat" SVG plus its endpoint JSON, with no dependency. `publish-badges.yml`
+runs it from its own checkout of this repository unless the caller names a
+script of its own in `render-script`, so a consumer needs nothing for CI. A
+laptop runs the same program from the installed package:
+
+```sh
+BADGE_UNIT=success BADGE_E2E=skipped render-badges   # every badge the environment asks for, into coverage/badge
+coverage-badge [--status failing|pending] [--out DIR] [--summary FILE]
+status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
+```
+
+- `render-badges` takes no arguments. It reads `BADGE_UNIT` and `BADGE_E2E`
+  (GitHub job results), `BADGE_UNIT_LABEL` / `BADGE_E2E_LABEL`,
+  `BADGE_COVERAGE` (`measure`, `failing`, `pending` or `skip`),
+  `BADGE_COVERAGE_SUMMARY`, `BADGE_OUT_DIR`, and `BADGE_SECURITY` /
+  `BADGE_SECURITY_LABEL` (`check-security.yml`'s verdict line).
+- Only a Unit *failure* draws the red coverage placeholder. A skipped Unit
+  draws no coverage badge, and no verdict draws no Security badge, so
+  publishing leaves the ones already published.
+- An unknown job result, verdict or colour exits 1 rather than drawing a green
+  badge.
+- `coverage-badge` and `status-badge` draw one badge each, with the same code.
+
 ## The checks CI runs, for a laptop
 
 `check-code.yml` runs four shell checks from this repository. The package

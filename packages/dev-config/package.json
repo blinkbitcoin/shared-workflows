@@ -1,7 +1,7 @@
 {
   "name": "@blinkbitcoin/dev-config",
   "version": "0.10.0",
-  "description": "The shared developer-tooling baseline: the pinned tool table and the checks that enforce it.",
+  "description": "The shared developer-tooling baseline: the pinned tool table, the checks that enforce it, and the CI badge renderer.",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -38,7 +38,10 @@
     "./check-coverage-empty": "./bin/check-coverage-empty.mjs",
     "./check-lockfile": "./bin/check-lockfile.mjs",
     "./fix-tooling-pin": "./bin/fix-tooling-pin.mjs",
-    "./check-make-recipes": "./bin/check-make-recipes.mjs"
+    "./check-make-recipes": "./bin/check-make-recipes.mjs",
+    "./render-badges": "./bin/render-badges.mjs",
+    "./coverage-badge": "./bin/coverage-badge.mjs",
+    "./status-badge": "./bin/status-badge.mjs"
   },
   "bin": {
     "check-tool-versions": "./bin/check-tool-versions.mjs",
@@ -51,7 +54,10 @@
     "check-coverage-empty": "./bin/check-coverage-empty.mjs",
     "check-lockfile": "./bin/check-lockfile.mjs",
     "fix-tooling-pin": "./bin/fix-tooling-pin.mjs",
-    "check-make-recipes": "./bin/check-make-recipes.mjs"
+    "check-make-recipes": "./bin/check-make-recipes.mjs",
+    "render-badges": "./bin/render-badges.mjs",
+    "coverage-badge": "./bin/coverage-badge.mjs",
+    "status-badge": "./bin/status-badge.mjs"
   },
   "engines": {
     "node": ">=20"

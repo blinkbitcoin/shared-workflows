@@ -47,7 +47,7 @@ teardown() {
   [ -n "${TMP:-}" ] && rm -rf "$TMP"
 }
 
-# The render script's output, stubbed: the publish that seeds gh-pages only
+# The renderer's output, stubbed: the publish that seeds gh-pages only
 # ever copies files.
 render_badges() {
   local root="$1" coverage="$2"

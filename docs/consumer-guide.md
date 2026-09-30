@@ -913,16 +913,31 @@ badge, the shields.io endpoint shape). The README embeds `main`'s through
 the way a workflow-status badge takes `?branch=main`; every other branch gets
 its own directory, and `pr-closed.yml` drops it when the PR closes.
 
-**Rendering lives in the consumer, publishing lives here.** An SVG renderer
-needs a `package.json` and a test harness; this repo has neither by design. So
-`publish-badges.yml` calls one named consumer script (`render-script`) through
-`scripts/checks/run-script.sh` — the same delegation `check-code.yml` uses for
-typecheck and lint — and owns only `scripts/ci/publish-badges.sh` and the
-gh-pages mechanics behind it (`scripts/ci/gh-pages-lib.sh`: orphan creation on
-the first publish; on a rejected push, the badge write is re-applied onto the
-fresh tip rather than replayed as a commit, because two publishes for one
-branch - or a PR-close cleanup against that branch's in-flight publish - touch
-the same paths and no merge of derived content can resolve that).
+**Rendering and publishing both live here.** The renderer is
+`@blinkbitcoin/dev-config`'s `render-badges` program, which
+`scripts/ci/render-badges.sh` runs from this repository's own checkout, in the
+consumer's root: the same commit as the workflow, so your repository needs no
+script, no copy and no installed package for it. A consumer that draws its own
+badges names its package script in `render-script`, and that script runs
+through `scripts/checks/run-script.sh` instead, with the environment below.
+Publishing is `scripts/ci/publish-badges.sh` and the gh-pages mechanics behind
+it (`scripts/ci/gh-pages-lib.sh`: orphan creation on the first publish; on a
+rejected push, the badge write is re-applied onto the fresh tip rather than
+replayed as a commit, because two publishes for one branch - or a PR-close
+cleanup against that branch's in-flight publish - touch the same paths and no
+merge of derived content can resolve that).
+
+To render the same badges on a laptop, run the program from the installed
+package with the same environment, after your coverage run:
+
+```sh
+BADGE_UNIT=success BADGE_E2E=skipped pnpm exec render-badges   # into coverage/badge
+```
+
+`coverage-badge` and `status-badge` render one badge each, for a layout that
+wants only one. A copy of the renderer in your repository (`scripts/badges/`,
+where the template kept it) is a `no-copy` row in the contract check: see
+[No copies of this family](#no-copies-of-this-family).
 
 | Input | Default | Meaning |
 | --- | --- | --- |
@@ -934,19 +949,22 @@ the same paths and no merge of derived content can resolve that).
 | `security-verdict` | `''` | `check-security.yml`'s `verdict` output, as it is. Empty renders no security badge, so the published one stays |
 | `security-label` | `Security` | Text on the left half of the security badge |
 | `coverage-artifact` | `coverage` | Artifact holding the consumer's `coverage/` directory (`check-unit.yml` uploads it under this name). Downloaded only when `unit-result` is `success` |
-| `render-script` | `badges:render` | Consumer script that renders the badges into `badge-dir` |
-| `badge-dir` | `coverage/badge` | Consumer-relative directory the render script writes and `publish-badges.sh` copies from |
+| `render-script` | `''` | Consumer script that renders the badges into `badge-dir` instead of `render-badges`. Empty renders with `render-badges`. The default used to be `badges:render`: pass that to keep a renderer of your own |
+| `badge-dir` | `coverage/badge` | Consumer-relative directory the badges are rendered into and `publish-badges.sh` copies from |
 
 No outputs. Secrets: `consumer-token` (optional). The calling job must grant
 `permissions: contents: write` — this is the only job in the family that
 writes, and the scope is declared on the job rather than at the top of the file
 for exactly that reason.
 
-**The environment the render script is handed** (so a consumer can implement its
-own): `BADGE_OUT_DIR`, `BADGE_UNIT`, `BADGE_E2E`, `BADGE_UNIT_LABEL`,
-`BADGE_E2E_LABEL`, `BADGE_SECURITY` (empty, or the verdict line to render
-`security.svg` from) and `BADGE_SECURITY_LABEL`. `run-script.sh` runs `pnpm run NAME` with no arguments, which
-is why everything variable arrives as environment.
+**The environment the renderer is handed**, `render-badges` or a
+`render-script` of your own: `BADGE_OUT_DIR`, `BADGE_UNIT`, `BADGE_E2E`,
+`BADGE_UNIT_LABEL`, `BADGE_E2E_LABEL`, `BADGE_SECURITY` (empty, or the verdict
+line to render `security.svg` from) and `BADGE_SECURITY_LABEL`. `render-badges`
+also reads `BADGE_COVERAGE` (`measure`, `failing`, `pending` or `skip`; derived
+from `BADGE_UNIT` when unset) and `BADGE_COVERAGE_SUMMARY` (default
+`coverage/coverage-summary.json`). `run-script.sh` runs `pnpm run NAME` with no
+arguments, which is why everything variable arrives as environment.
 
 **Guards.** The calling job runs under `always()`, so a *failed* Unit still
 publishes a red badge. Five cases are excluded, two by the caller and three by
@@ -967,8 +985,8 @@ exactly as it was instead of blanking it.
 
 **A skipped suite's status badge is not published either.** When one suite
 ran and the other was skipped by its class, `publish-badges.sh` drops the
-skipped suite's `unit.*` or `e2e.*` from what it copies, whatever the render
-script drew for `skipped`. A flows-only merge to `main` then updates the E2E
+skipped suite's `unit.*` or `e2e.*` from what it copies, whatever the
+renderer drew for `skipped`. A flows-only merge to `main` then updates the E2E
 badge and leaves the Unit badge showing the last run that looked.
 
 **No security verdict, no security badge.** An empty `security-verdict` (the
@@ -2294,7 +2312,7 @@ line for line, both repos read on the same date):
 | `check-prebuild` | `check-code.yml` (`prebuild-check` toggle, **off** by default) | yes — expensive, so the template does not enable the toggle |
 | `check:bundle-secrets` | `check-code.yml` (`bundle-secrets` toggle, **off** by default) | yes (`make bundle-secrets-check`) — the toggle stays off because it is minutes, not seconds |
 | `check:release` | `check-code.yml` (`release-checks` toggle, off by default) | **opt-in** — only a consumer with a release setup ships it; the toggle stays `false` otherwise |
-| `badges:render` | `publish-badges.yml` (`render-script`) | yes (`node scripts/badges/render.mjs`, driven by the `BADGE_*` environment above) |
+| `badges:render` | `publish-badges.yml` (`render-script`, empty by default) | **opt-in** — only for a consumer that draws its own badges and names the script in `render-script`; by default `publish-badges.yml` renders with the package's `render-badges`, and the template's own renderer (`scripts/badges/`) is a `no-copy` row |
 | `test:e2e:web` | `build-web.yml` (`e2e-script`) | yes (`bash scripts/e2e/web.sh`, which honors `PLAYWRIGHT_SKIP_EXPORT` — see [the Playwright / export contract](#the-playwright--export-contract)) |
 
 The template also ships `lint:fix`, `format`, `i18n:check`, `codegen:check`,

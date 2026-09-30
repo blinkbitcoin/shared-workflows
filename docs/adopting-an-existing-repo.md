@@ -155,7 +155,7 @@ is a warning in the report, not a failure. See
 
 | What | You need | Why |
 | --- | --- | --- |
-| `badges:render` | required | publish-badges.yml (render-script) |
+| no `scripts/badges/badge.mjs`, `scripts/badges/badge.test.mjs`, `scripts/badges/coverage-badge.mjs`, `scripts/badges/coverage-badge.test.mjs`, `scripts/badges/render.mjs`, `scripts/badges/render.test.mjs`, `scripts/badges/security-badge.mjs`, `scripts/badges/security-badge.test.mjs`, `scripts/badges/status-badge.mjs` or `scripts/badges/status-badge.test.mjs` | required | the render-badges program @blinkbitcoin/dev-config ships and publish-badges.yml runs; a copy in your repository is compared with it by nothing and drifts |
 
 ### If you call `check-codeql.yml`
 

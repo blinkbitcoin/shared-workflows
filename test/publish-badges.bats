@@ -43,7 +43,7 @@ teardown() {
   [ -n "${TMP:-}" ] && rm -rf "$TMP"
 }
 
-# The render script's output, stubbed: these scripts only ever copy files.
+# The renderer's output, stubbed: these scripts only ever copy files.
 render_badges() {
   local root="$1" coverage="$2"
   mkdir -p "$root/coverage/badge"
@@ -271,11 +271,11 @@ HOOK
   ! remote_has_gh_pages || fail "a rejected branch name still touched gh-pages"
 }
 
-@test "publish fails when the render script wrote nothing" {
+@test "publish fails when the render step wrote nothing" {
   rm -rf "$CONSUMER/coverage/badge"
   BRANCH=main run bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "publish succeeded with no badges: $output"
-  contains "$output" "render script" || fail "unhelpful message: $output"
+  contains "$output" "did the render step run?" || fail "unhelpful message: $output"
   mkdir -p "$CONSUMER/coverage/badge"
   BRANCH=main run bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "publish succeeded with an empty badge directory"
@@ -283,7 +283,7 @@ HOOK
 
 @test "a skipped coverage badge leaves the published one alone" {
   BRANCH=main bash "$PUBLISH"
-  # The render script writes no coverage.svg when Unit was skipped.
+  # The renderer writes no coverage.svg when Unit was skipped.
   rm "$CONSUMER/coverage/badge/coverage.svg"
   echo '<svg>unit2</svg>' > "$CONSUMER/coverage/badge/unit.svg"
   BRANCH=main run bash "$PUBLISH"
@@ -305,7 +305,7 @@ HOOK
 
 @test "a skipped suite leaves its published status badge alone" {
   BRANCH=main bash "$PUBLISH"
-  # A render script handed `skipped` draws a grey badge; it must not land.
+  # A renderer handed `skipped` draws a grey badge; it must not land.
   echo '<svg>unit skipped</svg>' > "$CONSUMER/coverage/badge/unit.svg"
   echo '<svg>e2e2</svg>' > "$CONSUMER/coverage/badge/e2e.svg"
   BRANCH=main BADGE_UNIT=skipped BADGE_E2E=success run bash "$PUBLISH"
@@ -483,7 +483,7 @@ HOOK
 @test "a run that rendered no security badge leaves the published one alone" {
   printf '<svg>security passing</svg>\n' > "$CONSUMER/coverage/badge/security.svg"
   BRANCH=main bash "$PUBLISH"
-  # The render script writes no security.svg when it was handed no verdict
+  # The renderer writes no security.svg when it was handed no verdict
   # (a docs-only change skipped Security).
   rm "$CONSUMER/coverage/badge/security.svg"
   echo '<svg>unit2</svg>' > "$CONSUMER/coverage/badge/unit.svg"
