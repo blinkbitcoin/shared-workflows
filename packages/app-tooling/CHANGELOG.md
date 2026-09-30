@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.1.0...app-tooling-v0.1.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **app-tooling:** accept pnpm's peer suffix on the pinned lockfile entry ([#151](https://github.com/blinkbitcoin/shared-workflows/issues/151)) ([a335910](https://github.com/blinkbitcoin/shared-workflows/commit/a3359108e8e279d2cb22310a54522821ee133c44))
+
 ## [0.1.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.10.0...app-tooling-v0.1.0) (2026-09-30)
 
 
