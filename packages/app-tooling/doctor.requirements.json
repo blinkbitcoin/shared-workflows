@@ -1,0 +1,76 @@
+{
+  "$comment": "The toolchain every app on the baseline needs, checked by the doctor program. `tools` are versioned (a minimum), `commands` pass or fail on their exit status, `env` must be set. An entry with `when` applies only when that file exists in the repository being checked. A repository adds or replaces entries by name in its own doctor.requirements.json, and drops one with `\"skip\": true`. The maestro minimum must not be newer than MAESTRO_VERSION in scripts/lib/versions.sh.",
+  "tools": [
+    {
+      "name": "node",
+      "command": "node --version",
+      "minimum": "24.0.0",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/toolchain.sh"
+    },
+    {
+      "name": "pnpm",
+      "command": "pnpm --version",
+      "minimum": "12.0.0",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/toolchain.sh"
+    },
+    {
+      "name": "java",
+      "command": "java -version 2>&1",
+      "minimum": "17.0.0",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/toolchain.sh (temurin-17 via mise)"
+    },
+    {
+      "name": "ruby",
+      "command": "ruby --version",
+      "minimum": "3.3.0",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/toolchain.sh"
+    },
+    {
+      "name": "watchman",
+      "command": "watchman --version",
+      "minimum": "2024.0.0",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/toolchain.sh (or: brew install watchman)"
+    },
+    {
+      "name": "xcodebuild",
+      "command": "xcodebuild -version",
+      "minimum": "26.4.0",
+      "hint": "Install Xcode 26.4+ from the App Store, then: sudo xcode-select -s /Applications/Xcode.app",
+      "platform": "darwin"
+    },
+    {
+      "name": "pod",
+      "command": "pod --version",
+      "minimum": "1.16.0",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/ios.sh",
+      "platform": "darwin"
+    },
+    {
+      "name": "adb",
+      "command": "adb --version",
+      "minimum": "1.0.41",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/android.sh, then activate mise (or add $ANDROID_HOME/platform-tools to PATH)"
+    },
+    {
+      "name": "maestro",
+      "command": "maestro --version",
+      "minimum": "2.10.0",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/ci/maestro-install.sh",
+      "optional": true
+    }
+  ],
+  "commands": [
+    {
+      "name": "ruby gems",
+      "command": "bundle check",
+      "hint": "bundle config set --local path vendor/bundle && bundle install",
+      "when": "Gemfile"
+    }
+  ],
+  "env": [
+    {
+      "name": "ANDROID_HOME",
+      "hint": "bash node_modules/@blinkbitcoin/app-tooling/setup/android.sh (records it in .env.local)"
+    }
+  ]
+}

@@ -240,13 +240,13 @@ jobs:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
         run: bash "$WORKFLOWS_DIR/scripts/release/artifact-hashes.sh"
       # ANDROID_UPLOAD_CERT_SHA256 comes from environment-variables; the lane forwards it to
-      # the consumer's verify-android.sh as --cert-sha256, which is what turns
+      # the package's verify-android.sh as --cert-sha256, which is what turns
       # "the aab is signed" into "the aab is signed by the expected key".
       - name: Fastlane android verify
         if: ${{ inputs.verify }}
         env:
           # The enriched copy, not build-info's: it carries
-          # artifacts.apkSha256, which is what the consumer's verify-android
+          # artifacts.apkSha256, which is what the verify-android your lane runs
           # compares the universal apk against.
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_OUTPUT_DIR }}/build-info.json
           STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt

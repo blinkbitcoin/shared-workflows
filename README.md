@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->119<!--/count--> scripts · <!--count:tests-->1358<!--/count--> tests · one pinned tag · one tooling package</sub>
+<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->127<!--/count--> scripts · <!--count:tests-->1612<!--/count--> tests · one pinned tag · one tooling package</sub>
 
 </div>
 
@@ -20,7 +20,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
-<!--count:shell-scripts-->117<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
+<!--count:shell-scripts-->125<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
 hang, wait for Metro, hash the native inputs so a build cache means something,
 decode signing secrets without leaving them on disk, upload a build and then
 prove that the artifact uploaded is the one that was built.
@@ -206,7 +206,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the local smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->138<!--/count--> bats files, <!--count:tests-->1358<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->146<!--/count--> bats files, <!--count:tests-->1612<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer and the store notes generator; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
