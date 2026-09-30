@@ -9,18 +9,19 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (12 files)" || fail "output: $output"
+  contains "$output" "package copies ok (15 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
 tree() {
   tree="$BATS_TEST_TMPDIR/tree"
-  mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release" "$tree/scripts/checks" "$tree/scripts/ci" "$tree/.github"
+  mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release" "$tree/scripts/checks" "$tree/scripts/ci" "$tree/scripts/hooks" "$tree/.github"
   cp "$REPO_ROOT/scripts/self/package-copies.sh" "$tree/scripts/self/"
   cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions}.sh "$tree/scripts/lib/"
   cp "$REPO_ROOT/scripts/release/resolve-version.sh" "$REPO_ROOT/scripts/release/build-info.sh" "$tree/scripts/release/"
-  cp "$REPO_ROOT"/scripts/checks/{i18n,codegen,secrets,run-script}.sh "$tree/scripts/checks/"
-  cp "$REPO_ROOT/scripts/ci/lint-ci.sh" "$tree/scripts/ci/"
+  cp "$REPO_ROOT"/scripts/checks/{i18n,codegen,secrets,run-script,expo-doctor}.sh "$tree/scripts/checks/"
+  cp "$REPO_ROOT"/scripts/ci/{lint-ci,maestro-install}.sh "$tree/scripts/ci/"
+  cp "$REPO_ROOT/scripts/hooks/install-if-lockfile-changed.sh" "$tree/scripts/hooks/"
   cp "$REPO_ROOT/.github/zizmor.yml" "$tree/.github/"
 }
 
@@ -28,9 +29,10 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 12 files into packages/dev-config" || fail "output: $output"
+  contains "$output" "copied 15 files into packages/dev-config" || fail "output: $output"
   for rel in release/resolve-version.sh release/build-info.sh checks/i18n.sh checks/codegen.sh checks/secrets.sh \
-    checks/run-script.sh ci/lint-ci.sh lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh; do
+    checks/run-script.sh checks/expo-doctor.sh ci/lint-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
+    lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh; do
     cmp -s "$tree/scripts/$rel" "$tree/packages/dev-config/$rel" || fail "packages/dev-config/$rel is not a copy"
   done
   cmp -s "$tree/.github/zizmor.yml" "$tree/packages/dev-config/zizmor.yml" || fail "packages/dev-config/zizmor.yml is not a copy"

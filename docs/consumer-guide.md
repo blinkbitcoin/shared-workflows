@@ -707,7 +707,7 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `docs-check` | `true` | Run `check:docs` with `EVENT_NAME`, `BASE_REF` and `PR_AUTHOR` in the environment — the consumer's docs gate (freshness heuristic, command table, table widths, diagram parsing). `PR_AUTHOR` is what lets the consumer exempt a bot's dependency bump from a "docs not updated" warning |
 | `i18n` | `false` | Run the consumer's `i18n:check`, or `i18n:extract` + a clean-tree assertion when it ships none |
 | `graphql-codegen` | `false` | Run the consumer's `codegen:check`, or `codegen` + a clean-tree assertion when it ships none |
-| `expo-doctor` | `true` | Run the consumer's `deps:check`, or `expo-doctor` alone when it ships none |
+| `expo-doctor` | `true` | Run the consumer's `deps:check`, or `scripts/checks/expo-doctor.sh` when it ships none: `expo install --check` as a warning, then `expo-doctor` with its version check off |
 | `audit` | `true` | Run the consumer's `deps:audit`, or `pnpm audit --prod` at `audit-level` when it ships none |
 | `audit-level` | `high` | Minimum severity that fails the audit |
 | `audit-soft-on-pr` | `true` | Make a failing audit advisory on a `pull_request` (`continue-on-error`). It stays blocking on `push`, `release` and `workflow_dispatch`. Set `false` to block PRs too |
@@ -2377,10 +2377,11 @@ ran `pnpm audit` while the template's `deps:audit` also checks lockfile
 provenance, so that half ran on developer machines and in no CI job.
 `checks/i18n.sh` catches an untracked new catalog through `assert_clean_paths`
 where the template's script, a bare `git diff`, did not. And `expo-doctor.sh`
-ran `expo-doctor` alone where the template's `deps:check` also runs
-`expo install --check` — the two overlap (expo-doctor validates installed
-versions against the SDK too), so nothing was unchecked there, but two
-implementations of one gate is still two things to keep in step.
+ran `expo-doctor` alone, and went red on an Expo patch published the same day,
+where the template's `deps:check` reported SDK drift as a warning and let
+doctor's other checks decide. The fallback now does exactly that, and
+`@blinkbitcoin/dev-config` ships it as `checks/expo-doctor.sh`, so a consumer's
+`deps:check` can be that one script.
 
 A gate you define and the gate CI runs have to be the same gate, or a green
 `make check` is a claim about coverage CI does not have.
@@ -2400,7 +2401,7 @@ line for line, both repos read on the same date):
 | `i18n:extract` | `scripts/checks/i18n.sh`, the fallback when a consumer ships no `i18n:check` | yes |
 | `codegen:check` | `check-code.yml` (`graphql-codegen` toggle, off by default) — preferred over `scripts/checks/codegen.sh` | yes |
 | `codegen` | `scripts/checks/codegen.sh`, the fallback when a consumer ships no `codegen:check` | yes |
-| `deps:check` | `check-code.yml` (`expo-doctor` toggle) — preferred over `scripts/checks/expo-doctor.sh` | yes (`expo install --check && expo-doctor`) |
+| `deps:check` | `check-code.yml` (`expo-doctor` toggle) — preferred over `scripts/checks/expo-doctor.sh` | yes (`bash scripts/check-deps.sh`: SDK drift as a warning, then expo-doctor; the package's `checks/expo-doctor.sh` once the copy is deleted) |
 | `deps:audit` | `check-code.yml` (`audit` toggle) — preferred over `scripts/checks/audit.sh` | yes (`pnpm audit --prod` + lockfile provenance) |
 | `check:ci` | `check-code.yml` (`actionlint`/`shellcheck`/`zizmor` toggles) — preferred over `scripts/ci/lint-ci.sh` | yes (`make check-ci`) |
 | `check:secrets` | `check-code.yml` (`secret-scan` toggle) — preferred over `scripts/checks/secrets.sh` | yes (`make check-secrets`) |
@@ -2906,6 +2907,14 @@ now come from the presets), `scripts/release/fingerprint.test.mjs` (the ignore
 list moves from `.fingerprintignore` to the configuration), `scripts/init.test.mjs`
 (a web-less app passes `{ web: false }` to `withSharedMetroConfig` rather than
 losing the resolver lines), and `knip.json`, which names `jest.config.ts`.
+
+The contract check reads these files as text, before anything is installed.
+`@blinkbitcoin/dev-config`'s `check-ignored-directories` goes further for a
+consumer's own `make check`: it asks Jest, Metro and ESLint themselves, through
+the consumer's configuration and node_modules, whether they skip `.workflows/`
+and `.claude/worktrees/` (Claude Code's checkouts of the repository), and holds
+Biome, tsc, knip, typos, git, Semgrep and CodeQL to the same pair. See
+[its README](../packages/dev-config/README.md#repository-guards).
 
 ## Gotchas encoded
 

@@ -28,6 +28,7 @@ scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version/notes resolution, fastlane invocation, release assets,
                     the release PR's dispatches (dispatch-release-pr-ci, dispatch-at-tag)
 scripts/web/        web export, Playwright install and run
+scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
 scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
                     package-copies, render-contract-table, check-release-notes-section,
                     changed-gates)

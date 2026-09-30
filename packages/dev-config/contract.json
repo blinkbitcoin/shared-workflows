@@ -961,6 +961,19 @@
       "guide": "no-copies-of-this-family"
     },
     {
+      "id": "no-copy.check-ignored-directories",
+      "kind": "no-copy",
+      "label": "no copy of check-ignored-directories",
+      "target": ["scripts/worktree-ignores.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-ignored-directories program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the test that reimplements it, and run pnpm exec check-ignored-directories from make check instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
       "id": "no-copy.check-docs",
       "kind": "no-copy",
       "label": "no copy of check-docs",
@@ -984,6 +997,45 @@
       "defaultOn": true,
       "severity": "required",
       "fix": "Delete the copy and its test, and point deps:licenses at check-licenses; a licence only your repository accepts goes in an --allow.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-code-scanning",
+      "kind": "no-copy",
+      "label": "no copy of check-code-scanning",
+      "target": ["scripts/codeql-local.sh", "scripts/codeql-local.test.mjs", "scripts/codeql-findings.mjs", "scripts/codeql-findings.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-code-scanning program @blinkbitcoin/dev-config ships, which reads the same configuration file check-codeql.yml does; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copies and their tests, and point make check-code-scanning at pnpm exec check-code-scanning.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.install-if-lockfile-changed",
+      "kind": "no-copy",
+      "label": "no copy of install-if-lockfile-changed.sh",
+      "target": ["scripts/hooks/install-if-lockfile-changed.sh", "scripts/hooks/install-if-lockfile-changed.test.mjs"],
+      "profile": "checks",
+      "neededBy": "hooks/install-if-lockfile-changed.sh, which @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and point the post-merge and post-checkout hooks at bash node_modules/@blinkbitcoin/dev-config/hooks/install-if-lockfile-changed.sh.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.expo-doctor",
+      "kind": "no-copy",
+      "label": "no copy of the Expo health check",
+      "target": ["scripts/check-deps.sh", "scripts/check-deps.test.mjs"],
+      "profile": "checks",
+      "neededBy": "checks/expo-doctor.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs when you have no deps:check: advisory SDK drift, then expo-doctor; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and point deps:check at bash node_modules/@blinkbitcoin/dev-config/checks/expo-doctor.sh.",
       "guide": "no-copies-of-this-family"
     }
   ]

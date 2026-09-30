@@ -332,10 +332,11 @@ jobs:
       - name: GraphQL codegen
         if: ${{ inputs.graphql-codegen }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'codegen:check' scripts/checks/codegen.sh
-      # deps:check, not expo-doctor: the template's script is
-      # `expo install --check && expo-doctor`. The two overlap - expo-doctor
-      # validates installed versions against the SDK as well - so this closes no
-      # gap on its own; it is here so one gate has one implementation.
+      # deps:check, not expo-doctor: the template's script reports SDK drift
+      # (`expo install --check`) as a warning and then runs expo-doctor with its
+      # version check off. The fallback does the same, so a same-day Expo patch
+      # the release cooldown refuses turns neither of them red; the package
+      # ships it as checks/expo-doctor.sh, so one gate has one implementation.
   docs:
     name: Docs
     needs: contract
