@@ -1,4 +1,4 @@
-name: OTA Publish
+name: Publish OTA
 on:
   workflow_call:
     inputs:

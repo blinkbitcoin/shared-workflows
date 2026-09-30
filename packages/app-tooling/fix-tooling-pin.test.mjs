@@ -27,7 +27,7 @@ function consumer({ workflows = { 'ci.yml': callAt(SHA) }, pkg = pkgAt(OLD), loc
   return root;
 }
 function callAt(sha) {
-  return `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@${sha} # v1.0.0\n`;
+  return `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@${sha} # v1.0.0\n`;
 }
 function pkgAt(sha) {
   return {
@@ -91,7 +91,7 @@ test('refuses to guess when the workflows pin no single commit, and changes noth
 });
 
 test('refuses a tag, which no package can be held to', () => {
-  const root = consumer({ workflows: { 'ci.yml': 'jobs:\n  a:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
+  const root = consumer({ workflows: { 'ci.yml': 'jobs:\n  a:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' } });
   const { out, options } = io(root);
   assert.equal(main([], options), 1);
   assert.match(out.error[0], /at v0, a tag that moves: pin a commit SHA/);

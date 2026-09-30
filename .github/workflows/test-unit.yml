@@ -1,4 +1,4 @@
-name: Unit
+name: Test unit
 on:
   workflow_call:
     inputs:
@@ -27,10 +27,10 @@ on:
         type: string
         default: 'v1'
       coverage:
-        description: Run the coverage-script instead of test-script, and upload the coverage/ artifact
+        description: Run coverage-script instead of unit-script, and upload the coverage/ artifact
         type: boolean
         default: true
-      test-script:
+      unit-script:
         description: Consumer package.json script to run when coverage is disabled
         type: string
         default: 'test'
@@ -38,7 +38,7 @@ on:
         description: Consumer package.json script to run when coverage is enabled
         type: string
         default: 'test:coverage'
-      scripts-test-script:
+      scripts-script:
         description: Consumer package.json script that tests scripts/ itself (empty skips this step)
         type: string
         default: 'test:scripts'
@@ -77,12 +77,12 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
       - name: Unit tests
         env:
-          SCRIPT_NAME: ${{ inputs.coverage && inputs.coverage-script || inputs.test-script }}
+          SCRIPT_NAME: ${{ inputs.coverage && inputs.coverage-script || inputs.unit-script }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
       - name: Scripts tests
-        if: ${{ inputs.scripts-test-script != '' }}
+        if: ${{ inputs.scripts-script != '' }}
         env:
-          SCRIPT_NAME: ${{ inputs.scripts-test-script }}
+          SCRIPT_NAME: ${{ inputs.scripts-script }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
       - name: Upload coverage
         if: always() && inputs.coverage

@@ -20,7 +20,7 @@ body:
     attributes:
       label: Area
       options:
-        - Checks (typecheck, lint, spell, audit, codegen)
+        - Checks (types, lint, spell, audit, generated files)
         - Unit tests and coverage
         - E2E (Maestro, simulators, emulators)
         - Web (export, Playwright, Pages)

@@ -4,7 +4,7 @@
 # .mise.toml, which is why each command is wrapped in `mise exec --`: the hook
 # then uses the pinned version rather than whatever happens to be on PATH.
 # commitlint is the exception; it is fetched by npx with the same doubled
-# `-p` invocation scripts/checks/commitlint.sh uses in CI, so a message that
+# `-p` invocation scripts/checks/commits.sh uses in CI, so a message that
 # passes locally passes there (test/hooks.bats keeps the two in step).
 #
 # These are fast local gates; self-ci.yml remains the authoritative check.
@@ -23,7 +23,7 @@ pre-commit:
   commands:
     shellcheck:
       glob: '*.sh'
-      # -x follows `source` lines, matching .shellcheckrc and scripts/ci/lint-ci.sh.
+      # -x follows `source` lines, matching .shellcheckrc and scripts/ci/check-ci.sh.
       run: mise exec -- shellcheck -x {staged_files}
     actionlint:
       # actionlint takes no file list — it discovers .github/workflows itself —

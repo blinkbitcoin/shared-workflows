@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the consumer's Playwright e2e script against the already-built,
-# already-downloaded web export (build-web.yml's `playwright` job downloads the
+# already-downloaded web export (build-web.yml's `e2e` job downloads the
 # `build` job's dist/ before this runs).
 #
 # Contract: this always sets PLAYWRIGHT_SKIP_EXPORT=1 in the environment

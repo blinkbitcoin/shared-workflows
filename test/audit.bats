@@ -2,7 +2,7 @@
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
 # scripts/checks/audit.sh: the dependency audit this repository runs for a
-# consumer that ships no `deps:audit` script of its own. It runs `pnpm audit`
+# consumer that ships no `check:audit` script of its own. It runs `pnpm audit`
 # over production dependencies only, in the consumer root, at AUDIT_LEVEL
 # (default high), and its exit status is pnpm's.
 #

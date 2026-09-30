@@ -97,7 +97,7 @@ reject_empty_alternative() {
 #
 # On 2 grep also prints nothing, so an unswallowed output is empty and
 # indistinguishable from "every path matches" - which is how a malformed
-# `docs-globs` once classified a pure code change as docs-only and skipped the
+# `docs-patterns` once classified a pure code change as docs-only and skipped the
 # entire matrix green. The status has to be read, not the output.
 every_path_matches() {
   local rest status

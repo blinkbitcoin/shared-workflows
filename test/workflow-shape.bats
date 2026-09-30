@@ -20,9 +20,9 @@ setup() {
 # deleted or renamed would otherwise just shrink WORKFLOWS and every other
 # assertion here would still pass.
 @test "every reusable workflow this family publishes is present" {
-  for w in check-code check-unit check-e2e build-web publish-badges pr-closed pr-title check-codeql \
+  for w in check test-unit test-e2e build-web publish-badges pr-closed pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-store-notes publish-promotion-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
       return 1
@@ -31,16 +31,16 @@ setup() {
 }
 
 # GitHub reads only the top level of .github/workflows, so the filename prefix
-# is the only grouping there is: check- (gates on every change), build-
-# (artifacts), publish- (stores, releases, OTA, badges), pr- (pull request
-# hooks) and self- (this repository's own CI). A new workflow outside them is
+# is the only grouping there is: check- (static gates on every change), test-
+# (test suites), build- (artifacts), publish- (stores, releases, OTA, badges),
+# pr- (pull request hooks) and self- (this repository's own CI). A new workflow outside them is
 # a naming decision nobody made on purpose.
 @test "every workflow file carries a stage prefix" {
   bad=()
   for f in "$REPO_ROOT"/.github/workflows/*; do
     base="$(basename "$f")"
     case "$base" in
-      check-*.yml | build-*.yml | publish-*.yml | pr-*.yml | self-*.yml) ;;
+      check.yml | check-*.yml | test-*.yml | build-*.yml | publish-*.yml | pr-*.yml | self-*.yml) ;;
       *) bad+=("$base") ;;
     esac
   done
@@ -75,11 +75,11 @@ setup() {
 # the classifier blind on a push, which is the defect this family fixed - and
 # the caller's `paths-ignore`, which used to mask it, has been removed on
 # purpose, so the regression would now be silent AND unmasked.
-@test "check-code.yml classifies pushes too: BASE_SHA names both base.sha and event.before" {
+@test "check.yml classifies pushes too: BASE_SHA names both base.sha and event.before" {
   command -v yq >/dev/null || skip "yq not installed"
   expr=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
-    "$REPO_ROOT/.github/workflows/check-code.yml")
-  [ -n "$expr" ] || fail "no BASE_SHA env on check-code.yml's classify step"
+    "$REPO_ROOT/.github/workflows/check.yml")
+  [ -n "$expr" ] || fail "no BASE_SHA env on check.yml's classify step"
   grep -qF 'github.event.pull_request.base.sha' <<<"$expr" \
     || fail "BASE_SHA must use the PR base on a pull_request: $expr"
   grep -qF 'github.event.before' <<<"$expr" \
@@ -91,51 +91,51 @@ setup() {
     || fail "BASE_SHA must branch on github.event_name: $expr"
 }
 
-# check-codeql.yml asks the same question check-code.yml does, and "the same" has to mean
+# check-code-scanning.yml asks the same question check.yml does, and "the same" has to mean
 # character-for-character: two spellings of the base sha are two rules, and the
 # second one drifts. Comparing the two expressions is cheaper than restating the
 # right answer twice.
-@test "check-codeql.yml's BASE_SHA expression is byte-identical to check-code.yml's" {
+@test "check-code-scanning.yml's BASE_SHA expression is byte-identical to check.yml's" {
   command -v yq >/dev/null || skip "yq not installed"
   read_base_sha() {
     yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
       "$REPO_ROOT/.github/workflows/$1.yml"
   }
-  checks=$(read_base_sha check-code)
-  codeql=$(read_base_sha check-codeql)
-  [ -n "$codeql" ] || fail "no BASE_SHA env on check-codeql.yml's classify step"
+  checks=$(read_base_sha check)
+  codeql=$(read_base_sha check-code-scanning)
+  [ -n "$codeql" ] || fail "no BASE_SHA env on check-code-scanning.yml's classify step"
   [ "$codeql" = "$checks" ] \
-    || fail "check-codeql.yml classifies with '$codeql' but check-code.yml uses '$checks'"
+    || fail "check-code-scanning.yml classifies with '$codeql' but check.yml uses '$checks'"
 }
 
 # The whole point of the changes job: a docs-only change analyses nothing, and
 # a scheduled run (no base at all) analyses everything.
-@test "check-codeql.yml's analyze job is gated on the classifier" {
+@test "check-code-scanning.yml's code-scanning job is gated on the classifier" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/check-codeql.yml"
-  cond=$(yq -r '.jobs.analyze.if' "$f")
+  f="$REPO_ROOT/.github/workflows/check-code-scanning.yml"
+  cond=$(yq -r '.jobs."code-scanning".if' "$f")
   [[ "$cond" == *"needs.changes.outputs.docs-only != 'true'"* ]] \
-    || fail "analyze's if does not gate on the classifier: $cond"
-  needs=$(yq -r '.jobs.analyze.needs | join(",")' "$f")
-  [ "$needs" = "changes" ] || fail "analyze needs '$needs', expected changes"
+    || fail "code-scanning's if does not gate on the classifier: $cond"
+  needs=$(yq -r '.jobs."code-scanning".needs | join(",")' "$f")
+  [ "$needs" = "changes" ] || fail "code-scanning needs '$needs', expected changes"
 }
 
 # build-web.yml runs the same classifier for the web class, and the same rule
 # holds: one spelling of the base sha.
-@test "build-web.yml's BASE_SHA expression is byte-identical to check-code.yml's" {
+@test "build-web.yml's BASE_SHA expression is byte-identical to check.yml's" {
   command -v yq >/dev/null || skip "yq not installed"
   read_base_sha() {
     yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
       "$REPO_ROOT/.github/workflows/$1.yml"
   }
-  checks=$(read_base_sha check-code)
+  checks=$(read_base_sha check)
   web=$(read_base_sha build-web)
   [ -n "$web" ] || fail "no BASE_SHA env on build-web.yml's classify step"
   [ "$web" = "$checks" ] \
-    || fail "build-web.yml classifies with '$web' but check-code.yml uses '$checks'"
+    || fail "build-web.yml classifies with '$web' but check.yml uses '$checks'"
 }
 
-# A web-irrelevant change builds nothing; `playwright` and `deploy` need `build`,
+# A web-irrelevant change builds nothing; `e2e` and `deploy` need `build`,
 # so they follow it. `!= 'false'`, so an output that never arrived builds.
 @test "build-web.yml's build job is gated on the web class, and the rest follow it" {
   command -v yq >/dev/null || skip "yq not installed"
@@ -144,30 +144,30 @@ setup() {
   cond=$(yq -r '.jobs.build.if' "$f")
   [[ "$cond" == *"needs.changes.outputs.web-changed != 'false'"* ]] \
     || fail "build's if does not gate on web-changed != 'false': $cond"
-  [ "$(yq -r '.jobs.playwright.needs' "$f")" = "build" ] || fail "playwright no longer needs build"
+  [ "$(yq -r '.jobs.e2e.needs' "$f")" = "build" ] || fail "e2e no longer needs build"
   contains "$(yq -r '.jobs.deploy.if' "$f")" "needs.build.result == 'success'" \
     || fail "deploy no longer requires a successful build"
   env=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env' "$f")
-  contains "$env" 'DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}' || fail "docs-globs is not wired: $env"
-  contains "$env" 'WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-globs }}' \
-    || fail "web-ignore-globs is not wired: $env"
+  contains "$env" 'DOCS_GLOBS_EXTRA: ${{ inputs.docs-patterns }}' || fail "docs-patterns is not wired: $env"
+  contains "$env" 'WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-patterns }}' \
+    || fail "web-ignore-patterns is not wired: $env"
   [ "$(yq -r '.on.workflow_call.outputs."web-changed".value' "$f")" = '${{ jobs.changes.outputs.web-changed }}' ] \
     || fail "the web-changed output is not wired from the changes job"
   [ "$(yq -r '.jobs.changes | has("permissions")' "$f")" = "false" ] \
     || fail "the changes job escalates permissions"
 }
 
-# Each suite class check-code.yml advertises is wired end to end: the input
+# Each suite class check.yml advertises is wired end to end: the input
 # reaches the script, the step output reaches the job output, and the job output
 # reaches the workflow output.
-@test "check-code.yml wires every suite class from input to workflow output" {
+@test "check.yml wires every suite class from input to workflow output" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/check-code.yml"
+  f="$REPO_ROOT/.github/workflows/check.yml"
   env=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env' "$f")
   for pair in "unit:UNIT" "e2e:E2E"; do
     class="${pair%%:*}" var="${pair##*:}"
-    contains "$env" "${var}_IGNORE_GLOBS_EXTRA: \${{ inputs.${class}-ignore-globs }}" \
-      || fail "${class}-ignore-globs is not wired to ${var}_IGNORE_GLOBS_EXTRA: $env"
+    contains "$env" "${var}_IGNORE_GLOBS_EXTRA: \${{ inputs.${class}-ignore-patterns }}" \
+      || fail "${class}-ignore-patterns is not wired to ${var}_IGNORE_GLOBS_EXTRA: $env"
     [ "$(yq -r ".jobs.changes.outputs.\"${class}-changed\"" "$f")" = "\${{ steps.classify.outputs.${class}-changed }}" ] \
       || fail "the changes job does not expose ${class}-changed"
     [ "$(yq -r ".on.workflow_call.outputs.\"${class}-changed\".value" "$f")" = "\${{ jobs.changes.outputs.${class}-changed }}" ] \
@@ -192,30 +192,30 @@ setup() {
   done
 }
 
-# The escalation is on the analyze job alone, and naming `permissions:` resets
+# The escalation is on the code-scanning job alone, and naming `permissions:` resets
 # the unnamed scopes to none - so dropping contents: read would break the
 # checkout rather than the upload. All three are asserted, and nothing more.
-@test "check-codeql.yml escalates permissions only on the analyze job" {
+@test "check-code-scanning.yml escalates permissions only on the code-scanning job" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/check-codeql.yml"
-  [ "$(yq -r '.jobs.analyze.permissions.contents' "$f")" = "read" ] \
-    || fail "analyze does not re-declare contents: read"
-  [ "$(yq -r '.jobs.analyze.permissions.actions' "$f")" = "read" ] \
-    || fail "analyze does not declare actions: read"
-  [ "$(yq -r '.jobs.analyze.permissions."security-events"' "$f")" = "write" ] \
-    || fail "analyze does not declare security-events: write"
-  [ "$(yq -r '.jobs.analyze.permissions | keys | length' "$f")" -eq 3 ] \
-    || fail "analyze asks for more than three scopes: $(yq -r '.jobs.analyze.permissions' "$f")"
+  f="$REPO_ROOT/.github/workflows/check-code-scanning.yml"
+  [ "$(yq -r '.jobs."code-scanning".permissions.contents' "$f")" = "read" ] \
+    || fail "code-scanning does not re-declare contents: read"
+  [ "$(yq -r '.jobs."code-scanning".permissions.actions' "$f")" = "read" ] \
+    || fail "code-scanning does not declare actions: read"
+  [ "$(yq -r '.jobs."code-scanning".permissions."security-events"' "$f")" = "write" ] \
+    || fail "code-scanning does not declare security-events: write"
+  [ "$(yq -r '.jobs."code-scanning".permissions | keys | length' "$f")" -eq 3 ] \
+    || fail "code-scanning asks for more than three scopes: $(yq -r '.jobs."code-scanning".permissions' "$f")"
   [ "$(yq -r '.jobs.changes | has("permissions")' "$f")" = "false" ] \
-    || fail "the changes job escalates permissions; only analyze may"
+    || fail "the changes job escalates permissions; only code-scanning may"
 }
 
 # The head half of the same range. changed-class.bats covers what the script
 # does when either end is absent from the consumer's checkout.
-@test "check-code.yml's classify step passes both ends of the range to the script" {
+@test "check.yml's classify step passes both ends of the range to the script" {
   command -v yq >/dev/null || skip "yq not installed"
   run yq -r '.jobs.changes.steps[] | select(.id == "classify") | .run' \
-    "$REPO_ROOT/.github/workflows/check-code.yml"
+    "$REPO_ROOT/.github/workflows/check.yml"
   [ "$status" -eq 0 ]
   grep -qF '"$BASE_SHA" "$HEAD_SHA"' <<<"$output" \
     || fail "classify must call changed-class.sh with BASE_SHA and HEAD_SHA: $output"
@@ -290,7 +290,7 @@ lane_step_count() {
 # but read out of a committed copy of the template's shared.rb, and the two sets
 # are compared in both directions.
 #
-# They are secrets rather than build-env/env-json values because a reviewer demo
+# They are secrets rather than environment-variables/env-json values because a reviewer demo
 # login is a real credential and both of those inputs are printed to the log.
 #
 # Read from the fixture consumer's lanes, which is what the guide's examples are
@@ -328,15 +328,15 @@ lane_step_count() {
   done
 }
 
-@test "every workflow that runs prebuild, a lane or the notes generator accepts build-env" {
+@test "every workflow that runs prebuild, a lane or the notes generator accepts environment-variables" {
   for w in build-prepare build-ios build-android publish-store pr-store-notes check-security; do
     f="$REPO_ROOT/.github/workflows/$w.yml"
-    have=$(yq -r '.on.workflow_call.inputs | has("build-env")' "$f")
-    [ "$have" = "true" ] || fail "$w.yml does not declare a build-env input"
-    default=$(yq -r '.on.workflow_call.inputs."build-env".default' "$f")
-    [ "$default" = "{}" ] || fail "$w.yml's build-env default is '$default', expected {}"
-    steps=$(yq -r '[.jobs[].steps[]? | select((.run? // "") | test("release/build-env.sh"))] | length' "$f")
-    [ "$steps" -ge 1 ] || fail "$w.yml declares build-env but never publishes it"
+    have=$(yq -r '.on.workflow_call.inputs | has("environment-variables")' "$f")
+    [ "$have" = "true" ] || fail "$w.yml does not declare a environment-variables input"
+    default=$(yq -r '.on.workflow_call.inputs."environment-variables".default' "$f")
+    [ "$default" = "{}" ] || fail "$w.yml's environment-variables default is '$default', expected {}"
+    steps=$(yq -r '[.jobs[].steps[]? | select((.run? // "") | test("release/(build-env|env-json).sh"))] | length' "$f")
+    [ "$steps" -ge 1 ] || fail "$w.yml declares environment-variables but never publishes it"
   done
 }
 
@@ -461,7 +461,7 @@ lane_step_count() {
   done
 }
 
-# A promotion tier builds nothing, so a store with no promote endpoint takes
+# A promotion stage builds nothing, so a store with no promote endpoint takes
 # its bundle from the release. The download has to land where the artifacts
 # land (the lane reads that one directory), come after them and after Setup
 # (it runs a $WORKFLOWS_DIR script), and happen only when asked for.
@@ -568,7 +568,7 @@ lane_step_count() {
 # keeps every existing caller unaffected; the Fastlane lane step's DRY_RUN must
 # still read `env.DRY_RUN`, not just the new input, or this ships silently
 # disarming the template's cd-store-listing.yml - it forwards its own
-# `dry_run` dispatch input (default true) through env-json's DRY_RUN key
+# `dry_run` dispatch input (default true) through environment-variables's DRY_RUN key
 # rather than through this input, and a step's own `env:` block wins over a
 # same-named value inherited from an earlier step's $GITHUB_ENV write.
 @test "publish-store declares dry-run (boolean, default false) and ORs it into the Fastlane lane step's DRY_RUN" {
@@ -651,8 +651,8 @@ lane_step_count() {
 # Deliberately absent: the Maestro suite steps (theirs comes from
 # `suite-timeout-minutes` via step-timeout.sh) and download-artifact (it
 # retries internally, and a step timeout would cut a legitimate retry short).
-@test "check-e2e.yml's hang-prone steps each carry a step-level timeout-minutes" {
-  f="$REPO_ROOT/.github/workflows/check-e2e.yml"
+@test "test-e2e.yml's hang-prone steps each carry a step-level timeout-minutes" {
+  f="$REPO_ROOT/.github/workflows/test-e2e.yml"
   for spec in \
     "Pod install:20" \
     "Build iOS app:45" \
@@ -663,7 +663,7 @@ lane_step_count() {
     name="${spec%:*}"
     want="${spec##*:}"
     found=$(yq -r "[.jobs[].steps[]? | select(.name == \"$name\")] | length" "$f")
-    [ "$found" -gt 0 ] || fail "check-e2e.yml has no step named '$name' - was it renamed?"
+    [ "$found" -gt 0 ] || fail "test-e2e.yml has no step named '$name' - was it renamed?"
     # Every occurrence: 'Install Maestro' and 'Wait for Metro' appear in both
     # the ios and the android job.
     bad=$(yq -r "[.jobs[].steps[]? | select(.name == \"$name\") | select(.\"timeout-minutes\" != $want)] | length" "$f")
@@ -684,15 +684,15 @@ lane_step_count() {
 #     `env:` at workflow or job level is therefore the exact regression to
 #     catch: it looks like tidying and it re-arms that bug for any caller that
 #     sets a smaller value upstream.
-@test "check-code.yml's audit step keeps its timeout, its soft-on-PR expression and a step-level fetch timeout" {
+@test "check.yml's audit step keeps its timeout, its soft-on-PR expression and a step-level fetch timeout" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/check-code.yml"
+  f="$REPO_ROOT/.github/workflows/check.yml"
   # Across all jobs, not one named job: the gates are grouped by who acts on a
   # failure, and which group a step sits in is allowed to change.
   step='.jobs[].steps[]? | select(.name == "Audit")'
 
   found=$(yq -r "[$step] | length" "$f")
-  [ "$found" -eq 1 ] || fail "expected exactly one 'Audit' step in check-code.yml, found $found"
+  [ "$found" -eq 1 ] || fail "expected exactly one 'Audit' step in check.yml, found $found"
 
   t=$(yq -r "$step | .\"timeout-minutes\" // \"\"" "$f")
   [ "$t" = "5" ] || fail "the Audit step must carry timeout-minutes: 5, got '$t'"
@@ -718,9 +718,9 @@ lane_step_count() {
 
     # Workflow- and job-level are where the override bug lives.
     wf=$(yq -r ".env.\"$v\" // \"\"" "$f")
-    [ -z "$wf" ] || fail "$v is set at workflow level in check-code.yml ('$wf') - it must be step-level only (esign aebdd28)"
+    [ -z "$wf" ] || fail "$v is set at workflow level in check.yml ('$wf') - it must be step-level only (esign aebdd28)"
     jobs=$(yq -r "[.jobs | to_entries[] | select(.value.env.\"$v\") | .key] | join(\", \")" "$f")
-    [ -z "$jobs" ] || fail "$v is set at job level in check-code.yml (job(s): $jobs) - it must be step-level only (esign aebdd28)"
+    [ -z "$jobs" ] || fail "$v is set at job level in check.yml (job(s): $jobs) - it must be step-level only (esign aebdd28)"
   done
 }
 
@@ -737,7 +737,7 @@ lane_step_count() {
     bad=$(yq -r "$select | map(select(.if != \"always()\")) | length" "$w")
     [ "$bad" -eq 0 ] || fail "$(basename "$w") has $bad forensics step(s) that are not 'if: always()'"
   done
-  # check-e2e.yml: collect + upload on iOS, upload on Android. build-web.yml: one upload.
+  # test-e2e.yml: collect + upload on iOS, upload on Android. build-web.yml: one upload.
   # Without this the selector could stop matching and the loop would pass by
   # examining nothing.
   [ "$total" -ge 4 ] || fail "the forensics selector matched only $total steps - has the action moved?"
@@ -871,15 +871,15 @@ lane_step_count() {
 # Rendering moved here from the consumer: gen-badges.sh runs the package's
 # gen-badges unless the caller names a script of its own, so the default
 # has to stay empty and the step has to hand the input over as RENDER_SCRIPT.
-@test "the badges job renders with the package's program unless render-script names a consumer script" {
+@test "the badges job renders with the package's program unless badges-script names a consumer script" {
   f="$REPO_ROOT/.github/workflows/publish-badges.yml"
   run_line=$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0].run' "$f")
   [ "$run_line" = 'bash "$WORKFLOWS_DIR/scripts/ci/gen-badges.sh"' ] \
     || fail "the render step no longer runs gen-badges.sh: $run_line"
   [ "$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0].env.RENDER_SCRIPT' "$f")" \
-    = '${{ inputs.render-script }}' ] || fail "the render step does not hand render-script over as RENDER_SCRIPT"
-  [ "$(yq -r '.on.workflow_call.inputs."render-script".default' "$f")" = "" ] \
-    || fail "render-script has a default, so every caller renders with a consumer script"
+    = '${{ inputs.badges-script }}' ] || fail "the render step does not hand badges-script over as RENDER_SCRIPT"
+  [ "$(yq -r '.on.workflow_call.inputs."badges-script".default' "$f")" = "" ] \
+    || fail "badges-script has a default, so every caller renders with a consumer script"
   n=$(yq -r '[.jobs.badges.steps[] | select((.run // "") | test("publish-badges.sh"))] | length' "$f")
   [ "$n" -eq 1 ] || fail "publish-badges.yml runs publish-badges.sh $n times"
 }
@@ -932,7 +932,7 @@ lane_step_count() {
   command -v yq >/dev/null || skip "yq not installed"
   # A consumer whose default branch is `master` never wrote the cache at all and
   # paid a cold Gradle on every run, including on its own default branch.
-  for w in check-e2e build-android; do
+  for w in test-e2e build-android; do
     f="$REPO_ROOT/.github/workflows/$w.yml"
     [ "$(yq -r '.on.workflow_call.inputs | has("default-branch")' "$f")" = "true" ] \
       || fail "$w.yml does not declare a default-branch input"
@@ -945,12 +945,12 @@ lane_step_count() {
   done
 }
 
-@test "the iOS and Android artifact uploads in check-e2e.yml guard on the build the same way" {
+@test "the iOS and Android artifact uploads in test-e2e.yml guard on the build the same way" {
   command -v yq >/dev/null || skip "yq not installed"
   # The Android upload ran under always() with if-no-files-found: error, so a
   # failed build produced a second red step - a missing APK - stacked on top of
   # the real error. The iOS twin already had the right condition.
-  f="$REPO_ROOT/.github/workflows/check-e2e.yml"
+  f="$REPO_ROOT/.github/workflows/test-e2e.yml"
   expected="\${{ !cancelled() && steps.build.conclusion != 'failure' }}"
   for name in "Upload iOS app" "Upload APK"; do
     cond=$(yq -r ".jobs[].steps[]? | select(.name == \"$name\") | .if // \"\"" "$f")
@@ -959,20 +959,21 @@ lane_step_count() {
   done
   # The condition is meaningless without the id it names.
   ids=$(yq -r '[.jobs[].steps[]? | select(.id == "build")] | length' "$f")
-  [ "$ids" -ge 2 ] || fail "check-e2e.yml has $ids steps with id: build, expected one per platform"
+  [ "$ids" -ge 2 ] || fail "test-e2e.yml has $ids steps with id: build, expected one per platform"
 }
 
-# Two gates in check-code.yml cost minutes rather than seconds: check-prebuild
-# prebuilds both platforms, and check:bundle-secrets runs a web export. They are
-# opt-in so a consumer decides where that wall clock is worth paying. Flipping
-# either default to true silently adds those minutes to every PR of every
-# consumer of this family, which is the kind of change nobody notices in review.
+# One gate in check.yml costs minutes rather than seconds: check:prebuild
+# prebuilds both platforms. It is opt-in so a consumer decides where that wall
+# clock is worth paying. Flipping the default to true silently adds those
+# minutes to every PR of every consumer of this family, which is the kind of
+# change nobody notices in review. (The bundle scan, the other expensive one,
+# is check-security.yml's `bundle` job, off by default there.)
 @test "the expensive checks stay opt-in" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/check-code.yml"
-  for i in prebuild-check bundle-secrets; do
+  f="$REPO_ROOT/.github/workflows/check.yml"
+  for i in prebuild; do
     [ "$(yq -r ".on.workflow_call.inputs.\"$i\" | has(\"default\")" "$f")" = "true" ] \
-      || fail "check-code.yml has no $i input"
+      || fail "check.yml has no $i input"
     [ "$(yq -r ".on.workflow_call.inputs.\"$i\".default" "$f")" = "false" ] \
       || fail "$i defaults to $(yq -r ".on.workflow_call.inputs.\"$i\".default" "$f"), which adds minutes to every consumer's PR"
   done
@@ -983,10 +984,10 @@ lane_step_count() {
 }
 
 # A gate whose step can hang without the job cap being a useful diagnosis.
-@test "the two expensive checks carry their own step timeout" {
+@test "the expensive check carries its own step timeout" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/check-code.yml"
-  for name in "Prebuild check" "Bundle secrets"; do
+  f="$REPO_ROOT/.github/workflows/check.yml"
+  for name in "Prebuild"; do
     t=$(yq -r ".jobs[].steps[]? | select(.name == \"$name\") | .\"timeout-minutes\" // \"\"" "$f")
     [ -n "$t" ] || fail "the '$name' step has no timeout-minutes"
   done
@@ -1001,7 +1002,7 @@ lane_step_count() {
 
 @test "the platform builds can run without signing credentials" {
   command -v yq >/dev/null || skip "yq not installed"
-  for pair in "build-ios|ios-signing" "build-android|android-signing"; do
+  for pair in "build-ios|ios-signing-enabled" "build-android|android-signing-enabled"; do
     w="${pair%%|*}"
     input="${pair##*|}"
     f="$REPO_ROOT/.github/workflows/$w.yml"
@@ -1020,8 +1021,8 @@ lane_step_count() {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/build-ios.yml"
   cond=$(yq -r '.jobs[].steps[] | select(.name == "Upload ios-ipa") | .if // ""' "$f")
-  contains "$cond" "inputs.ios-signing" \
-    || fail "the ios-ipa upload is not gated on ios-signing, and its if-no-files-found is error: $cond"
+  contains "$cond" "inputs.ios-signing-enabled" \
+    || fail "the ios-ipa upload is not gated on ios-signing-enabled, and its if-no-files-found is error: $cond"
 }
 
 # --- a run should read as sentences, not job ids ------------------------------
@@ -1084,37 +1085,37 @@ lane_step_count() {
     || fail "jobs declaring their own permissions in check-security.yml: $escalating - only verdict may"
 }
 
-# A job-level `if:` cannot read a file, so the consumer's security-policy.json
-# reaches the graph only through the config job's outputs. The effective setting
+# A job-level `if:` cannot read a file, so the consumer's security-settings.json
+# reaches the graph only through the settings job's outputs. The effective setting
 # is the AND of the caller's input and the consumer's policy: a caller may
 # narrow (a pull request has no binaries to scan) and may never widen.
-SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
+SECURITY_JOBS="deps code policy sbom bundle mobile binaries review review-codebase"
 
 @test "check-security.yml's scanner jobs are the AND of the caller's input and the consumer's policy" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for job in $SECURITY_JOBS; do
-    out="$(yq -r ".jobs.config.outputs.\"$job\"" "$f")"
+    out="$(yq -r ".jobs.settings.outputs.\"$job\"" "$f")"
     [ "$out" = "\${{ steps.resolve.outputs.$job }}" ] \
-      || fail "the config job does not publish the consumer's setting for $job: $out"
+      || fail "the settings job does not publish the consumer's setting for $job: $out"
     cond="$(yq -r ".jobs.\"$job\".if" "$f")"
     contains "$cond" "inputs.$job" || fail "the $job job ignores its own input: $cond"
-    contains "$cond" "needs.config.outputs.$job == 'true'" \
+    contains "$cond" "needs.settings.outputs.$job == 'true'" \
       || fail "the $job job ignores the consumer's policy: $cond"
-    contains "$cond" "needs.config.outputs.enabled == 'true'" \
+    contains "$cond" "needs.settings.outputs.enabled == 'true'" \
       || fail "the $job job ignores the master switch: $cond"
     needs="$(yq -r ".jobs.\"$job\".needs" "$f")"
-    [ "$needs" = "config" ] || fail "the $job job needs '$needs', expected config"
+    [ "$needs" = "settings" ] || fail "the $job job needs '$needs', expected settings"
   done
   # !cancelled(), not success(): a scanner that was switched off, or one that
   # crashed, must still reach the verdict. A crash keeps the run red on its own
   # job; the verdict's business is to say what was and was not scanned.
   vcond="$(yq -r '.jobs.verdict.if' "$f")"
   contains "$vcond" '!cancelled()' || fail "the verdict never runs after a skipped or failed scanner: $vcond"
-  contains "$vcond" "needs.config.outputs.enabled == 'true'" \
+  contains "$vcond" "needs.settings.outputs.enabled == 'true'" \
     || fail "the verdict ignores the master switch: $vcond"
   vneeds="$(yq -r '.jobs.verdict.needs | join(",")' "$f")"
-  [ "$vneeds" = "config,$(tr ' ' ',' <<<"$SECURITY_JOBS")" ] || fail "verdict needs '$vneeds'"
+  [ "$vneeds" = "settings,$(tr ' ' ',' <<<"$SECURITY_JOBS")" ] || fail "verdict needs '$vneeds'"
   # The download is guarded on any scanner having succeeded: download-artifact
   # fails when its pattern matches nothing. A job missing from the guard would
   # leave a run where only that job reported with nothing downloaded.
@@ -1165,7 +1166,7 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
     || fail "labelling must come after the verdict has read the files and before the upload: $order"
   notes="$(yq -r '[.jobs.verdict.steps[] | select((.run // "") | test("sarif-upload-skipped.sh"))] | length' "$f")"
   [ "$notes" -eq 2 ] \
-    || fail "expected two steps explaining a missing upload (another branch, and sarif-upload: false), found $notes"
+    || fail "expected two steps explaining a missing upload (another branch, and sarif-upload-enabled: false), found $notes"
   branch="$(yq -r '.jobs.verdict.steps[] | select(.name == "Note the branch upload") | .run' "$f")"
   contains "$branch" '--summary-only' \
     || fail "a by-design skip on every pull request would put a warning on every change: $branch"
@@ -1193,10 +1194,10 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
     || fail "the verdict job does not expose the step's output"
   value="$(yq -r '.on.workflow_call.outputs.verdict.value' "$f")"
   contains "$value" 'jobs.verdict.outputs.verdict' || fail "the workflow output does not read the verdict job: $value"
-  contains "$value" "jobs.config.outputs.enabled == 'false' && '{\"verdict\":\"disabled\"}'" \
-    || fail "a gate switched off in security-policy.json does not read as disabled: $value"
-  contains "$value" "jobs.config.outputs.enabled == '' && '{\"verdict\":\"fail\"}'" \
-    || fail "a failed configuration job (a broken security-policy.json) does not read as fail: $value"
+  contains "$value" "jobs.settings.outputs.enabled == 'false' && '{\"verdict\":\"disabled\"}'" \
+    || fail "a gate switched off in security-settings.json does not read as disabled: $value"
+  contains "$value" "jobs.settings.outputs.enabled == '' && '{\"verdict\":\"fail\"}'" \
+    || fail "a failed settings job (a broken security-settings.json) does not read as fail: $value"
 }
 
 # label-sarif.sh carries the job names as a map, because a step cannot read its
@@ -1270,7 +1271,7 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
   for key in OPENAI_API_KEY ANTHROPIC_API_KEY; do
     [ "$(yq -r ".on.workflow_call.secrets.$key.required" "$f")" = "false" ] || fail "$key is not an optional secret"
     where="$(yq -r "[.jobs | to_entries[] | .key as \$job | .value.steps[]? | select(.env.$key) | \$job + \":\" + (.id // .name)] | join(\",\")" "$f")"
-    [ "$where" = "review:scan,openant:scan" ] || fail "$key reaches '$where', expected review:scan,openant:scan"
+    [ "$where" = "review:scan,review-codebase:scan" ] || fail "$key reaches '$where', expected review:scan,review-codebase:scan"
     jobwide="$(yq -r "[.jobs[] | select(.env.$key)] | length" "$f")"
     [ "$jobwide" -eq 0 ] || fail "$key is set on a whole job's env"
   done
@@ -1307,31 +1308,31 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review openant"
   [ "$full" = '${{ inputs.review-full-range }}' ] || fail "SECURITY_REVIEW_FULL_RANGE is '$full'"
 }
 
-# A SECURITY_* twin passed through build-env changes what config.mjs resolves,
+# A SECURITY_* twin passed through environment-variables changes what settings.mjs resolves,
 # what a runner does and what the verdict applies - so every job publishes it,
 # and before the setup action and any consumer script run.
-@test "every check-security.yml job publishes build-env before its Setup step" {
+@test "every check-security.yml job publishes environment-variables before its Setup step" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
-  for job in config $SECURITY_JOBS verdict; do
+  for job in settings $SECURITY_JOBS verdict; do
     names="$(yq -r ".jobs.\"$job\".steps[].name" "$f")"
-    publish_at="$(grep -n '^Publish build-env$' <<<"$names" | cut -d: -f1)"
+    publish_at="$(grep -n '^Publish environment-variables$' <<<"$names" | cut -d: -f1)"
     setup_at="$(grep -n '^Setup$' <<<"$names" | cut -d: -f1)"
-    [ -n "$publish_at" ] || fail "the $job job never publishes build-env"
-    [ "$publish_at" -lt "$setup_at" ] || fail "the $job job publishes build-env after Setup"
+    [ -n "$publish_at" ] || fail "the $job job never publishes environment-variables"
+    [ "$publish_at" -lt "$setup_at" ] || fail "the $job job publishes environment-variables after Setup"
   done
 }
 
-# Each scanner input is off unless a tier turns it on - except the three that
-# existed before the release tier did, whose default stays what callers have
+# Each scanner input is off unless a stage turns it on - except the three that
+# existed before the release stage did, whose default stays what callers have
 # relied on since.
-@test "check-security.yml's release-tier inputs default to off" {
+@test "check-security.yml's release-stage inputs default to off" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for input in deps code policy; do
     [ "$(yq -r ".on.workflow_call.inputs.$input.default" "$f")" = "true" ] || fail "$input no longer defaults to true"
   done
-  for input in sbom bundle mobile binaries review openant review-full-range; do
+  for input in sbom bundle mobile binaries review review-codebase review-full-range; do
     [ "$(yq -r ".on.workflow_call.inputs.\"$input\".default" "$f")" = "false" ] || fail "$input does not default to false"
     [ "$(yq -r ".on.workflow_call.inputs.\"$input\".type" "$f")" = "boolean" ] || fail "$input is not a boolean switch"
   done

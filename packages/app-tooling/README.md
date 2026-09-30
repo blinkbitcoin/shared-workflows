@@ -64,14 +64,14 @@ satisfy the contract learns it serially — a screen of parallel reds, then the
 next missing piece one push later. This collapses that into one report, with a
 fix per finding.
 
-`check-code.yml` runs it as its first job. Running it here gets the same answer
+`check.yml` runs it as its first job. Running it here gets the same answer
 before you push.
 
 It reports **blocked** for a gate you asked for that cannot run, and
 **degraded** for one where shared-workflows has a fallback — the gate still
 runs, just not the one this repository defined. It reads your own
 `.github/workflows/` to decide what applies: a repository that never calls
-`check-e2e.yml` is not told it is missing Maestro flows.
+`test-e2e.yml` is not told it is missing Maestro flows.
 
 `contract.json` is the table it reads — what wants each thing, which workflow
 input switches it off, whether a fallback exists, and the fix. The consumer
@@ -112,7 +112,7 @@ check-make-recipes [--allow T=REASON]       # a make recipe with logic in it, no
 check-test-siblings [--source GLOB=SUFFIX]  # a source file without a test file of its own
 check-ignored-directories                   # a tool that walks into .workflows/ or .claude/worktrees/
 check-docs [--architecture PREFIX]          # docs freshness, the command table, then three of the above
-check-licenses [--allow SPDX]               # a production dependency under a licence outside the allowlist
+check-licenses [--allow SPDX]               # a production dependency under a license outside the allowlist
 check-code-scanning [--config FILE]         # CodeQL on this machine, with the configuration CI reads
 ```
 
@@ -205,7 +205,7 @@ check-code-scanning [--config FILE]         # CodeQL on this machine, with the c
   `CC0-1.0`, `Unlicense`, `MPL-2.0`, `CC-BY-4.0`, `Python-2.0`,
   `BlueOak-1.0.0`) plus each `--allow` the repository adds.
 - `check-code-scanning` runs CodeQL on this machine with the language, query
-  suite, packs and `paths-ignore` of the configuration `check-codeql.yml` reads
+  suite, packs and `paths-ignore` of the configuration `check-code-scanning.yml` reads
   (`--config`, default `.github/codeql/codeql-config.yml`), so an inline
   `// codeql[rule-id]` marker shows as suppressing its finding or not before a
   push. It needs `codeql` on PATH or the `gh codeql` extension, writes to
@@ -267,9 +267,10 @@ becomes one line:
 | `check-docs` | `pnpm exec check-docs` |
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
 | `check-ignored-directories` | `pnpm exec check-ignored-directories` |
-| `deps:licenses` | `check-licenses` |
+| `check:licenses` | `check-licenses` |
+| `check:generated` | `bash node_modules/@blinkbitcoin/app-tooling/checks/generated.sh` |
 | `check-code-scanning` | `pnpm exec check-code-scanning` |
-| `deps:check` | `bash node_modules/@blinkbitcoin/app-tooling/checks/expo-doctor.sh` |
+| `check:expo-health` | `bash node_modules/@blinkbitcoin/app-tooling/checks/expo-health.sh` |
 | lefthook `post-merge` | `bash node_modules/@blinkbitcoin/app-tooling/hooks/install-if-lockfile-changed.sh post-merge {1}` |
 | lefthook `post-checkout` | `bash node_modules/@blinkbitcoin/app-tooling/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}` |
 | `setup-maestro` | `MAESTRO_DIR=... bash node_modules/@blinkbitcoin/app-tooling/ci/maestro-install.sh` |
@@ -363,7 +364,7 @@ consumer's `gh-pages`: coverage (line coverage from Jest's
 `coverage/coverage-summary.json`), Unit, E2E and Security, each a shields.io
 "flat" SVG plus its endpoint JSON, with no dependency. `publish-badges.yml`
 runs it from its own checkout of this repository unless the caller names a
-script of its own in `render-script`, so a consumer needs nothing for CI. A
+script of its own in `badges-script`, so a consumer needs nothing for CI. A
 laptop runs the same program from the installed package:
 
 ```sh
@@ -386,25 +387,23 @@ gen-status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
 
 ## The checks CI runs, for a laptop
 
-`check-code.yml` runs five shell checks from this repository. The package
+`check.yml` runs four shell checks from this repository. The package
 carries byte-identical copies, so a consumer's `make check` runs exactly what
 CI runs, at the same commit:
 
 ```sh
-bash node_modules/@blinkbitcoin/app-tooling/checks/i18n.sh         # runs your i18n:extract, fails on a diff under I18N_PATHS
-bash node_modules/@blinkbitcoin/app-tooling/checks/codegen.sh      # runs your codegen, fails on a diff under CODEGEN_PATHS
+bash node_modules/@blinkbitcoin/app-tooling/checks/generated.sh    # runs your gen:i18n and gen:graphql, fails on a diff under their paths
 bash node_modules/@blinkbitcoin/app-tooling/checks/secrets.sh      # gitleaks over the whole history, at the pinned version
-bash node_modules/@blinkbitcoin/app-tooling/checks/expo-doctor.sh  # Expo SDK drift as a warning, then expo-doctor
-bash node_modules/@blinkbitcoin/app-tooling/ci/lint-ci.sh          # actionlint, zizmor and shellcheck at the pinned versions
+bash node_modules/@blinkbitcoin/app-tooling/checks/expo-health.sh  # Expo SDK drift as a warning, then expo-doctor
+bash node_modules/@blinkbitcoin/app-tooling/ci/check-ci.sh         # actionlint, zizmor and shellcheck at the pinned versions
 ```
 
 - **Paths:**
   - `I18N_PATHS` defaults to `src/i18n/locales`.
-  - `CODEGEN_PATHS` defaults to `src/graphql/generated`.
+  - `GRAPHQL_PATHS` defaults to `src/graphql/generated`.
   - `WORKFLOWS_SHELLCHECK_PATHS` names the directories shellcheck lints (default `scripts`).
-- **Switches:** `WORKFLOWS_ACTIONLINT`, `WORKFLOWS_ZIZMOR` and `WORKFLOWS_SHELLCHECK` turn one half off.
 - **zizmor policy:** a repository without its own `.github/zizmor.yml` gets this family's, which the package carries as `zizmor.yml`.
-- **Expo doctor:** `expo install --check` is advisory. Drift is printed, counted in a warning (an annotation under Actions) and never fails: Expo publishes patches most weeks, and a release cooldown refuses each for a day. Doctor then runs with its own version check off, and its status is the gate's. It is your pinned `expo-doctor` devDependency, or the latest through `pnpm dlx`; with no `expo` dependency the drift half is skipped.
+- **The Expo health check:** `expo install --check` is advisory. Drift is printed, counted in a warning (an annotation under Actions) and never fails: Expo publishes patches most weeks, and a release cooldown refuses each for a day. Doctor then runs with its own version check off, and its status is the gate's. It is your pinned `expo-doctor` devDependency, or the latest through `pnpm dlx`; with no `expo` dependency the drift half is skipped.
 - **Run with `bash`, not as a program:** the scripts source `lib/` beside them, and a `node_modules/.bin` link would break that.
 
 ## `gen-store-notes`

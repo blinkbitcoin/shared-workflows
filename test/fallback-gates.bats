@@ -5,14 +5,14 @@
 # libraries and the app-tooling binary that nothing ran.
 #
 # Those scripts had been the softest corner of the coverage map: a test named
-# each of them, but only to assert that check-code.yml still routes through the
+# each of them, but only to assert that check.yml still routes through the
 # seam - it read their source and never ran them. That reads as coverage in a
 # listing while asserting nothing about what they do, which is the distinction
 # test/script-coverage.bats draws.
 #
 # Each gate and library now has a test file of its own, named after it, that
 # covers every exit path: test/audit.bats, test/codegen.bats, test/i18n.bats,
-# test/expo-doctor.bats, test/pnpm-install.bats, test/release-env.bats and
+# test/expo-health.bats, test/pnpm-install.bats, test/release-env.bats and
 # test/env-validate.test.mjs. The cases that started here moved there unchanged
 # (env-validate's as a node:test case). The binary's case stays below.
 

@@ -1,4 +1,4 @@
-name: Security
+name: Check security
 # The consumer's security scanners, one job each so a red run names the scanner,
 # and one verdict that merges their SARIF and applies the threshold.
 #
@@ -9,11 +9,11 @@ name: Security
 # to code scanning and the step summary. It carries no fallback runner - a job
 # that is switched on but whose runner is missing fails loudly, by name.
 #
-# A scanner runs where what it reads exists, so a caller turns on the tier it
+# A scanner runs where what it reads exists, so a caller turns on the stage it
 # is: a pull request allows deps, code, policy and review; the release pull
-# request adds bundle, openant and review-full-range; the production dispatch
+# request adds bundle, review-codebase and review-full-range; the production dispatch
 # allows binaries, mobile, bundle and sbom with release-tag set. The consumer's
-# security-policy.json still decides which of those actually run.
+# security-settings.json still decides which of those actually run.
 on:
   workflow_call:
     inputs:
@@ -45,22 +45,22 @@ on:
         description: >-
           Allow the dependency scanner (the consumer's `check-security-deps`).
           A switch, not a setting: whether it actually runs is this AND the
-          consumer's security-policy.json, so a caller may narrow and never widen.
+          consumer's security-settings.json, so a caller may narrow and never widen.
         type: boolean
         default: true
       code:
-        description: Allow the source scanner (the consumer's `check-security-code`); the effective setting is this and security-policy.json together
+        description: Allow the source scanner (the consumer's `check-security-code`); the effective setting is this and security-settings.json together
         type: boolean
         default: true
       policy:
-        description: Allow the install-policy scanner (the consumer's `check-security-policy`); the effective setting is this and security-policy.json together
+        description: Allow the install-policy scanner (the consumer's `check-security-policy`); the effective setting is this and security-settings.json together
         type: boolean
         default: true
       sbom:
         description: >-
           Allow the bill of materials (the consumer's `check-security-sbom`, a
           CycloneDX SBOM from the lockfile, kept as the security-sbom artifact).
-          Off by default: it belongs to the production tier.
+          Off by default: it belongs to the production stage.
         type: boolean
         default: false
       bundle:
@@ -73,7 +73,7 @@ on:
       mobile:
         description: >-
           Allow the native project scanner (the consumer's `check-security-mobile`:
-          mobsfscan over a fresh prebuild). Off by default: production tier.
+          mobsfscan over a fresh prebuild). Off by default: production stage.
         type: boolean
         default: false
       binaries:
@@ -86,15 +86,15 @@ on:
       review:
         description: >-
           Allow the LLM security review of the change (the consumer's
-          `check-security-review`). The consumer's policy keeps it off until a
+          `check-security-review`). The consumer's settings keep it off until a
           provider and a key are configured; with no key it reports skipped.
         type: boolean
         default: false
-      openant:
+      review-codebase:
         description: >-
-          Allow the OpenAnt LLM scan of the codebase (the consumer's
+          Allow the LLM security review of the whole codebase, with OpenAnt (the consumer's
           `check-security-review-codebase`). Minutes and tokens, so the release pull
-          request is the tier that turns it on.
+          request is the stage that turns it on.
         type: boolean
         default: false
       review-full-range:
@@ -110,15 +110,15 @@ on:
           (e.g. v1.2.3). Required when binaries is on; ignored otherwise.
         type: string
         default: ''
-      build-env:
+      environment-variables:
         description: >-
           Non-secret environment for every job, as a flat JSON object:
           SECURITY_LLM_PROVIDER, SECURITY_LLM_MODEL, SECURITY_LLM_EFFORT,
           SECURITY_LLM_EXTRA_PARAMS, OPENAI_BASE_URL, and any SECURITY_* twin of a
-          security-policy.json setting. Keys only are logged.
+          security-settings.json setting. Keys only are logged.
         type: string
         default: '{}'
-      sarif-upload:
+      sarif-upload-enabled:
         description: >-
           Upload the SARIF to code scanning, from the default branch only (a
           pull request is judged by the Verdict job and its annotations). Off
@@ -131,32 +131,32 @@ on:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
         required: false
       OPENAI_API_KEY:
-        description: Key for an OpenAI or OpenAI-compatible provider (OPENAI_BASE_URL). Reaches the review and openant scan steps only
+        description: Key for an OpenAI or OpenAI-compatible provider (OPENAI_BASE_URL). Reaches the review and review-codebase scan steps only
         required: false
       ANTHROPIC_API_KEY:
-        description: Key for Anthropic. Reaches the review and openant scan steps only
+        description: Key for Anthropic. Reaches the review and review-codebase scan steps only
         required: false
     outputs:
       verdict:
         description: >-
           The security verdict as one line of JSON, {"verdict","highest","canBlock"}, for a badge.
-          {"verdict":"disabled"} when security-policy.json switches the gate off, {"verdict":"fail"} when a
-          scanner crashed, the Verdict job failed before its verdict, or the configuration job failed (it
+          {"verdict":"disabled"} when security-settings.json switches the gate off, {"verdict":"fail"} when a
+          scanner crashed, the Verdict job failed before its verdict, or the settings job failed (it
           writes every output or none, so an empty enabled means it failed)
         value: >-
           ${{ jobs.verdict.outputs.verdict
-          || (jobs.config.outputs.enabled == 'false' && '{"verdict":"disabled"}')
-          || (jobs.config.outputs.enabled == '' && '{"verdict":"fail"}')
+          || (jobs.settings.outputs.enabled == 'false' && '{"verdict":"disabled"}')
+          || (jobs.settings.outputs.enabled == '' && '{"verdict":"fail"}')
           || '' }}
 permissions:
   contents: read
 jobs:
-  # A job-level `if:` cannot read a file, and security-policy.json is a file in
-  # the consumer. So the policy is resolved once, here, by the consumer's own
-  # config.mjs - not by a second implementation of the same resolution order -
+  # A job-level `if:` cannot read a file, and security-settings.json is a file in
+  # the consumer. So the settings are resolved once, here, by the consumer's own
+  # settings.mjs - not by a second implementation of the same resolution order -
   # and published as outputs the other jobs' `if:` expressions can read.
-  config:
-    name: Config
+  settings:
+    name: Settings
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 10
     outputs:
@@ -169,7 +169,7 @@ jobs:
       mobile: ${{ steps.resolve.outputs.mobile }}
       binaries: ${{ steps.resolve.outputs.binaries }}
       review: ${{ steps.resolve.outputs.review }}
-      openant: ${{ steps.resolve.outputs.openant }}
+      review-codebase: ${{ steps.resolve.outputs.review-codebase }}
       severity: ${{ steps.resolve.outputs.severity }}
       fail-on: ${{ steps.resolve.outputs.fail-on }}
     steps:
@@ -187,14 +187,14 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in build-env changes what config.mjs resolves, what a runner does
+      # twin in environment-variables changes what settings.mjs resolves, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
-      # Setup here, unlike check-code.yml's contract job, which deliberately runs
-      # on the runner image's own node. config.mjs guards its command-line entry
+      # Setup here, unlike check.yml's contract job, which deliberately runs
+      # on the runner image's own node. settings.mjs guards its command-line entry
       # with `import.meta.main`, which is undefined before Node 24: an older node
       # would run the file, print nothing and exit 0, and empty output read as
       # "nothing enabled" would switch the whole gate off in silence. The
@@ -209,16 +209,16 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           install: 'false'
-      - name: Resolve the security policy
+      - name: Resolve the security settings
         id: resolve
         run: bash "$WORKFLOWS_DIR/scripts/security/settings.sh"
   deps:
     name: Dependencies
-    needs: config
-    # The AND of the caller's tier and the consumer's policy. A skipped job is
+    needs: settings
+    # The AND of the caller's stage and the consumer's settings. A skipped job is
     # green, so a repository that has turned the gate off never holds up a
     # required check.
-    if: ${{ inputs.deps && needs.config.outputs.enabled == 'true' && needs.config.outputs.deps == 'true' }}
+    if: ${{ inputs.deps && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.deps == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -236,11 +236,11 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in build-env changes what config.mjs resolves, what a runner does
+      # twin in environment-variables changes what settings.mjs resolves, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -252,7 +252,7 @@ jobs:
         env:
           SECURITY_JOB: deps
         run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
-      # Same guard as check-e2e.yml's platform uploads: a failed scan has no
+      # Same guard as test-e2e.yml's platform uploads: a failed scan has no
       # SARIF, and if-no-files-found: error would stack a second red step on top
       # of the real one. if-no-files-found stays `error` because a *successful*
       # scan with no SARIF is the silence run-job.sh already refuses.
@@ -266,8 +266,8 @@ jobs:
           retention-days: 7
   code:
     name: Code
-    needs: config
-    if: ${{ inputs.code && needs.config.outputs.enabled == 'true' && needs.config.outputs.code == 'true' }}
+    needs: settings
+    if: ${{ inputs.code && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.code == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 25
     steps:
@@ -285,11 +285,11 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in build-env changes what config.mjs resolves, what a runner does
+      # twin in environment-variables changes what settings.mjs resolves, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -316,8 +316,8 @@ jobs:
           retention-days: 7
   policy:
     name: Policy
-    needs: config
-    if: ${{ inputs.policy && needs.config.outputs.enabled == 'true' && needs.config.outputs.policy == 'true' }}
+    needs: settings
+    if: ${{ inputs.policy && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.policy == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -335,11 +335,11 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in build-env changes what config.mjs resolves, what a runner does
+      # twin in environment-variables changes what settings.mjs resolves, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -363,8 +363,8 @@ jobs:
   # answer "did we ship the vulnerable version?" when an advisory lands later.
   sbom:
     name: Bill of Materials
-    needs: config
-    if: ${{ inputs.sbom && needs.config.outputs.enabled == 'true' && needs.config.outputs.sbom == 'true' }}
+    needs: settings
+    if: ${{ inputs.sbom && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.sbom == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -381,9 +381,9 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -416,8 +416,8 @@ jobs:
   # node_modules. Every other job reads files and skips the install.
   bundle:
     name: Bundle
-    needs: config
-    if: ${{ inputs.bundle && needs.config.outputs.enabled == 'true' && needs.config.outputs.bundle == 'true' }}
+    needs: settings
+    if: ${{ inputs.bundle && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.bundle == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 30
     steps:
@@ -434,9 +434,9 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -459,8 +459,8 @@ jobs:
           retention-days: 7
   mobile:
     name: Mobile
-    needs: config
-    if: ${{ inputs.mobile && needs.config.outputs.enabled == 'true' && needs.config.outputs.mobile == 'true' }}
+    needs: settings
+    if: ${{ inputs.mobile && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.mobile == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 40
     steps:
@@ -477,9 +477,9 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -505,8 +505,8 @@ jobs:
   # the consumer's runner through SECURITY_BINARIES_DIR.
   binaries:
     name: Binaries
-    needs: config
-    if: ${{ inputs.binaries && needs.config.outputs.enabled == 'true' && needs.config.outputs.binaries == 'true' }}
+    needs: settings
+    if: ${{ inputs.binaries && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.binaries == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -523,9 +523,9 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -557,8 +557,8 @@ jobs:
   # request's base, or against the last release tag on the release pull request.
   review:
     name: Review
-    needs: config
-    if: ${{ inputs.review && needs.config.outputs.enabled == 'true' && needs.config.outputs.review == 'true' }}
+    needs: settings
+    if: ${{ inputs.review && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.review == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 25
     steps:
@@ -576,9 +576,9 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -607,12 +607,12 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/review.sarif
           if-no-files-found: error
           retention-days: 7
-  # OpenAnt is built from the commit the consumer's openant.sh pins, into a
+  # OpenAnt is built from the commit the consumer's review-codebase.sh pins, into a
   # cache keyed on that file, so moving the pin is what rebuilds it.
-  openant:
-    name: OpenAnt
-    needs: config
-    if: ${{ inputs.openant && needs.config.outputs.enabled == 'true' && needs.config.outputs.openant == 'true' }}
+  review-codebase:
+    name: Review codebase
+    needs: settings
+    if: ${{ inputs.review-codebase && needs.settings.outputs.enabled == 'true' && needs.settings.outputs.review-codebase == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 60
     steps:
@@ -629,9 +629,9 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -644,12 +644,12 @@ jobs:
           path: |
             ~/.cache/openant
             ~/.openant/venv
-          key: openant-${{ runner.os }}-${{ hashFiles(format('{0}/scripts/security/openant.sh', inputs.working-directory)) }}
+          key: openant-${{ runner.os }}-${{ hashFiles(format('{0}/scripts/security/review-codebase.sh', inputs.working-directory)) }}
       - name: Scan with OpenAnt
         id: scan
         timeout-minutes: 50
         env:
-          SECURITY_JOB: openant
+          SECURITY_JOB: review-codebase
           # The keys reach this one step and nothing else in the job: a
           # consumer script is the only reader, and a fork's run has neither.
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -659,18 +659,18 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-openant
-          path: ${{ inputs.working-directory }}/.security/openant.sarif
+          name: security-sarif-review-codebase
+          path: ${{ inputs.working-directory }}/.security/review-codebase.sarif
           if-no-files-found: error
           retention-days: 7
   verdict:
     name: Verdict
-    needs: [config, deps, code, policy, sbom, bundle, mobile, binaries, review, openant]
+    needs: [settings, deps, code, policy, sbom, bundle, mobile, binaries, review, review-codebase]
     # !cancelled(), not success(): a scanner that was switched off is skipped and
     # a scanner that crashed is failed, and both still have to reach the verdict -
     # "one scanner died" and "nothing was found" must never read the same. A
     # crashed scanner keeps the run red on its own job; this one adds the summary.
-    if: ${{ !cancelled() && needs.config.result == 'success' && needs.config.outputs.enabled == 'true' }}
+    if: ${{ !cancelled() && needs.settings.result == 'success' && needs.settings.outputs.enabled == 'true' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     # The only escalation in this workflow, and the reason a caller has to grant
@@ -697,11 +697,11 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in build-env changes what config.mjs resolves, what a runner does
+      # twin in environment-variables changes what settings.mjs resolves, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Setup
         uses: ./.workflows/.github/actions/setup
@@ -722,7 +722,7 @@ jobs:
           || needs.policy.result == 'success' || needs.sbom.result == 'success'
           || needs.bundle.result == 'success' || needs.mobile.result == 'success'
           || needs.binaries.result == 'success' || needs.review.result == 'success'
-          || needs.openant.result == 'success' }}
+          || needs.review-codebase.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
           # security-sarif-*, not security-*: the bill of materials is an
@@ -748,14 +748,14 @@ jobs:
       # repository in its payload, hence the fallback to main.
       - name: Label the SARIF by job
         if: >-
-          ${{ !cancelled() && inputs.sarif-upload
+          ${{ !cancelled() && inputs.sarif-upload-enabled
           && github.event_name != 'pull_request'
           && github.ref_name == (github.event.repository.default_branch || 'main')
           && hashFiles(format('{0}/.security/*.sarif', inputs.working-directory)) != '' }}
         run: bash "$WORKFLOWS_DIR/scripts/security/label-sarif.sh"
       - name: Upload to code scanning
         if: >-
-          ${{ !cancelled() && inputs.sarif-upload
+          ${{ !cancelled() && inputs.sarif-upload-enabled
           && github.event_name != 'pull_request'
           && github.ref_name == (github.event.repository.default_branch || 'main')
           && hashFiles(format('{0}/.security/*.sarif', inputs.working-directory)) != '' }}
@@ -768,16 +768,16 @@ jobs:
       # summary says where the findings went instead.
       - name: Note the branch upload
         if: >-
-          ${{ !cancelled() && inputs.sarif-upload
+          ${{ !cancelled() && inputs.sarif-upload-enabled
           && (github.event_name == 'pull_request'
               || github.ref_name != (github.event.repository.default_branch || 'main')) }}
         env:
           REASON: code scanning takes findings from the default branch only
         run: bash "$WORKFLOWS_DIR/scripts/security/sarif-upload-skipped.sh" --summary-only "$REASON"
       - name: Report the disabled upload
-        if: ${{ !cancelled() && !inputs.sarif-upload }}
+        if: ${{ !cancelled() && !inputs.sarif-upload-enabled }}
         env:
-          REASON: the caller passed sarif-upload false
+          REASON: the caller passed sarif-upload-enabled false
         run: bash "$WORKFLOWS_DIR/scripts/security/sarif-upload-skipped.sh" "$REASON"
       # The badge's input. Its own step, so the output exists even when the
       # Verdict step failed on findings - that run is exactly the one the badge

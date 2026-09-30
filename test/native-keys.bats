@@ -45,7 +45,7 @@ load test_helper
 # The iOS .app embeds EXPO_PUBLIC_* at bundle time. Without this the E2E job
 # restores an .app built against a different API URL and the change that set it
 # looks like it did nothing.
-@test "build-env folds into the ios key and leaves the other keys alone" {
+@test "environment-variables folds into the ios key and leaves the other keys alone" {
   unset GITHUB_OUTPUT
   RUNNER_OS=macOS RUNNER_ARCH=ARM64 NATIVE_CACHE_VERSION=v1 XCODE='' \
     BUILD_ENV='{"EXPO_PUBLIC_API_URL":"http://localhost:8082/graphql"}' \
@@ -57,7 +57,7 @@ load test_helper
   [[ "$output" == *"pods-key=pods-macOS-$hash"* ]] || fail "assertion failed; output: $output"
 }
 
-@test "a different build-env value produces a different ios key" {
+@test "a different environment-variables value produces a different ios key" {
   unset GITHUB_OUTPUT
   key_for() {
     RUNNER_OS=macOS RUNNER_ARCH=ARM64 XCODE='' BUILD_ENV="$1" \
@@ -69,8 +69,8 @@ load test_helper
   [ "$a" != "$b" ] || fail "both values produced $a"
 }
 
-# Consumers that never pass build-env must keep the keys they already have.
-@test "an empty or {} build-env leaves the ios key byte-identical" {
+# Consumers that never pass environment-variables must keep the keys they already have.
+@test "an empty or {} environment-variables leaves the ios key byte-identical" {
   unset GITHUB_OUTPUT
   key_for() {
     RUNNER_OS=macOS RUNNER_ARCH=ARM64 XCODE='' BUILD_ENV="$1" \
@@ -79,6 +79,6 @@ load test_helper
   }
   base=$(RUNNER_OS=macOS RUNNER_ARCH=ARM64 XCODE='' \
     bash "$REPO_ROOT/scripts/ci/native-keys.sh" "$FIXTURES/consumer" | grep '^ios-key=')
-  [ "$(key_for '')" = "$base" ] || fail "empty build-env changed the key"
-  [ "$(key_for '{}')" = "$base" ] || fail "{} build-env changed the key"
+  [ "$(key_for '')" = "$base" ] || fail "empty environment-variables changed the key"
+  [ "$(key_for '{}')" = "$base" ] || fail "{} environment-variables changed the key"
 }

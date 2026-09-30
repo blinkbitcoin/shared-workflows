@@ -3,12 +3,12 @@
 # workflows run.
 #
 # build-prepare.yml runs scripts/release/resolve-version.sh and build-info.sh,
-# and check-code.yml runs scripts/checks/{i18n,codegen,secrets}.sh and
-# scripts/ci/lint-ci.sh. A consumer runs the same ones on a laptop (`make
+# and check.yml runs scripts/checks/{generated,secrets}.sh and
+# scripts/ci/check-ci.sh. A consumer runs the same ones on a laptop (`make
 # version`, `make check`), where it has the package and not this repository.
 # The package therefore carries them, with the libraries they source, at the
 # same relative paths (release/, checks/ and ci/ beside lib/, as under
-# scripts/), so each copy runs unchanged. lint-ci.sh's default zizmor policy,
+# scripts/), so each copy runs unchanged. check-ci.sh's default zizmor policy,
 # .github/zizmor.yml here, rides along as zizmor.yml at the package root. Copies inside one repository,
 # held identical on every commit by test/package-copies.bats, cannot drift the
 # way a consumer's own copy did: that one was compared only in the consumer's
@@ -25,13 +25,12 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 copies=(
   scripts/release/resolve-version.sh:release/resolve-version.sh
   scripts/release/build-info.sh:release/build-info.sh
-  scripts/checks/i18n.sh:checks/i18n.sh
-  scripts/checks/codegen.sh:checks/codegen.sh
+  scripts/checks/generated.sh:checks/generated.sh
   scripts/checks/secrets.sh:checks/secrets.sh
   scripts/checks/run-script.sh:checks/run-script.sh
-  scripts/ci/lint-ci.sh:ci/lint-ci.sh
+  scripts/ci/check-ci.sh:ci/check-ci.sh
   scripts/ci/maestro-install.sh:ci/maestro-install.sh
-  scripts/checks/expo-doctor.sh:checks/expo-doctor.sh
+  scripts/checks/expo-health.sh:checks/expo-health.sh
   scripts/hooks/install-if-lockfile-changed.sh:hooks/install-if-lockfile-changed.sh
   scripts/lib/common.sh:lib/common.sh
   scripts/lib/release-env.sh:lib/release-env.sh

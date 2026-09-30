@@ -55,10 +55,10 @@ commit-msg:
       run: pnpm exec commitlint --edit {1}
 pre-push:
   commands:
-    typecheck:
-      run: pnpm typecheck
-    knip:
-      run: pnpm knip
+    types:
+      run: pnpm check:types
+    unused:
+      run: pnpm check:unused
     unit:
       # No `--` before the flags: jest's parser stops at it and reads what
       # follows as filename patterns, so `--passWithNoTests` became a pattern

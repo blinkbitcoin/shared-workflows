@@ -32,11 +32,11 @@ gates_for() {
   cd "$repo" && run bash "$REPO_ROOT/scripts/self/changed-gates.sh" "$base" "$head"
 }
 
-# expect CODE TOOLING PACKAGE
+# expect CI VERSIONS PACKAGE
 expect() {
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  has_line "code=$1" || fail "expected code=$1, got: $output"
-  has_line "tooling=$2" || fail "expected tooling=$2, got: $output"
+  has_line "ci=$1" || fail "expected ci=$1, got: $output"
+  has_line "versions=$2" || fail "expected versions=$2, got: $output"
   has_line "package=$3" || fail "expected package=$3, got: $output"
 }
 
@@ -51,58 +51,58 @@ expect() {
   expect false false false
 }
 
-@test "a script change runs code" {
+@test "a script change runs ci" {
   gates_for "scripts/ci/foo.sh"
   expect true false false
 }
 
-@test "a non-shell file under scripts/ does not run code" {
+@test "a non-shell file under scripts/ does not run ci" {
   gates_for "scripts/lib/env-validate.mjs"
   expect false false false
 }
 
-@test "a reusable workflow change runs code" {
-  gates_for ".github/workflows/check-unit.yml"
+@test "a reusable workflow change runs ci" {
+  gates_for ".github/workflows/test-unit.yml"
   expect true false false
 }
 
-@test "the shellcheck, actionlint and zizmor configuration run code" {
+@test "the shellcheck, actionlint and zizmor configuration run ci" {
   gates_for ".shellcheckrc" ".github/actionlint.yaml" ".github/zizmor.yml"
   expect true false false
 }
 
-@test "a composite action change runs code, which lints and audits it" {
+@test "a composite action change runs ci, which lints and audits it" {
   gates_for ".github/actions/setup/action.yml"
   expect true false false
 }
 
-@test "the maestro action runs code and tooling" {
+@test "the maestro action runs ci and versions" {
   gates_for ".github/actions/maestro/action.yml"
   expect true true false
 }
 
-@test "the workflows check-version-pins reads run code and tooling" {
-  gates_for ".github/workflows/check-e2e.yml"
+@test "the workflows check-version-pins reads run ci and versions" {
+  gates_for ".github/workflows/test-e2e.yml"
   expect true true false
   gates_for ".github/workflows/build-android.yml"
   expect true true false
 }
 
-@test "the pinned versions run tooling (and code, for the shell file)" {
+@test "the pinned versions run versions (and ci, for the shell file)" {
   gates_for "scripts/lib/versions.sh"
   expect true true false
   gates_for "scripts/self/check-version-pins.sh"
   expect true true false
 }
 
-@test "the baseline's versions run tooling and package" {
+@test "the baseline's versions run versions and package" {
   gates_for "packages/app-tooling/versions.json"
   expect false true true
   gates_for "packages/app-tooling/bin/check-tool-versions.mjs"
   expect false true true
 }
 
-@test "any other app-tooling change runs package alone" {
+@test "any other app-versions change runs package alone" {
   gates_for "packages/app-tooling/contract.json"
   expect false false true
 }
@@ -124,8 +124,8 @@ expect() {
     scripts/lib/changed-files.sh; do
     gates_for "$path"
     [ "$status" -eq 0 ] || fail "$path: exited $status: $output"
-    has_line "code=true" || fail "$path did not run code: $output"
-    has_line "tooling=true" || fail "$path did not run tooling: $output"
+    has_line "ci=true" || fail "$path did not run ci: $output"
+    has_line "versions=true" || fail "$path did not run versions: $output"
     has_line "package=true" || fail "$path did not run package: $output"
   done
 }
@@ -161,7 +161,7 @@ expect() {
   head=$(git -C "$repo" rev-parse HEAD)
   cd "$repo" && run bash "$REPO_ROOT/scripts/self/changed-gates.sh" "$base" "$head"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  has_line "code=false" || fail "expected code=false: $output"
-  has_line "tooling=false" || fail "expected tooling=false: $output"
+  has_line "ci=false" || fail "expected ci=false: $output"
+  has_line "versions=false" || fail "expected versions=false: $output"
   has_line "package=true" || fail "expected package=true: $output"
 }

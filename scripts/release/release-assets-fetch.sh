@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Download a release's assets into the directory a store lane reads.
 #
-# For a lane whose binary is not in this run. A promotion tier builds nothing,
+# For a lane whose binary is not in this run. A promotion stage builds nothing,
 # so a store without a promote endpoint - Huawei AppGallery - gets a fresh
 # upload of the bundle the release already carries, and download-artifact
 # cannot reach it: it only sees the current run's artifacts. The release

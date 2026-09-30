@@ -30,7 +30,7 @@ backported fixes — a consumer is expected to move its pin forward.
   a PR title, a branch name, a commit message, a changed path — is treated as
   data: it is read from the environment and piped to the tool that parses it,
   never interpolated into a shell string or a `run:` block. See the header of
-  `scripts/checks/commitlint.sh` for the worked example.
+  `scripts/checks/commits.sh` for the worked example.
 - **`pull_request_target` is not used**, and no workflow here checks out a
   fork's head with a privileged token.
 - **Permissions start at `contents: read`.** A job that needs more declares the
@@ -60,7 +60,7 @@ backported fixes — a consumer is expected to move its pin forward.
 - If a secret is exposed, treat it as compromised: rotate first, then clean up
   history.
 
-Dependency exposure on the consumer side is watched by `check-code.yml`'s audit
+Dependency exposure on the consumer side is watched by `check.yml`'s audit
 step; this repository's own dependencies are the pinned tools in `.mise.toml`
 and the actions pinned in `.github/workflows/`, both watched by Dependabot
 (`.github/dependabot.yml`).

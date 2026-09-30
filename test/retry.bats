@@ -31,14 +31,14 @@ EOF
 }
 
 @test "a blocked run for the commit gets only its failed jobs re-run" {
-  FAKE_RUN_ID=4242 run bash "$REPO_ROOT/scripts/release/rerun-blocked.sh"
+  FAKE_RUN_ID=4242 run bash "$REPO_ROOT/scripts/release/retry.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   grep -qx 'run rerun 4242 --failed' "$GH_LOG" || fail "no 'gh run rerun 4242 --failed': $(cat "$GH_LOG")"
   contains "$output" "re-running the failed jobs of cd-beta.yml run 4242 (deadbeef)" || fail "output: $output"
 }
 
 @test "the listing asks for this workflow's runs at exactly this commit, and picks concluded, unsuccessful ones" {
-  FAKE_RUN_ID=4242 run bash "$REPO_ROOT/scripts/release/rerun-blocked.sh"
+  FAKE_RUN_ID=4242 run bash "$REPO_ROOT/scripts/release/retry.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   list="$(grep '^run list ' "$GH_LOG")"
   contains "$list" "--workflow cd-beta.yml --commit deadbeef" || fail "the listing was not scoped: $list"
@@ -47,14 +47,14 @@ EOF
 }
 
 @test "no blocked run for the commit is not an error, and nothing is re-run" {
-  FAKE_RUN_ID= run bash "$REPO_ROOT/scripts/release/rerun-blocked.sh"
+  FAKE_RUN_ID= run bash "$REPO_ROOT/scripts/release/retry.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "no concluded, unsuccessful cd-beta.yml run for deadbeef - nothing to retry" || fail "output: $output"
   ! grep -q '^run rerun' "$GH_LOG" || fail "something was re-run: $(cat "$GH_LOG")"
 }
 
 @test "a listing that fails fails the step, naming the repository and the likely cause" {
-  FAKE_LIST_FAILS=1 run bash "$REPO_ROOT/scripts/release/rerun-blocked.sh"
+  FAKE_LIST_FAILS=1 run bash "$REPO_ROOT/scripts/release/retry.sh"
   [ "$status" -ne 0 ] || fail "a failed listing passed: $output"
   contains "$output" "could not list cd-beta.yml runs for deadbeef in org/app (does the job grant actions: write?)" \
     || fail "output: $output"
@@ -63,14 +63,14 @@ EOF
 }
 
 @test "a re-run GitHub refuses fails the step" {
-  FAKE_RUN_ID=4242 FAKE_RERUN_FAILS=1 run bash "$REPO_ROOT/scripts/release/rerun-blocked.sh"
+  FAKE_RUN_ID=4242 FAKE_RERUN_FAILS=1 run bash "$REPO_ROOT/scripts/release/retry.sh"
   [ "$status" -ne 0 ] || fail "a refused re-run passed: $output"
   contains "$output" "could not re-run the failed jobs of cd-beta.yml run 4242" || fail "output: $output"
 }
 
 @test "each required variable is named when it is missing" {
   for var in GH_TOKEN GH_REPO WORKFLOW HEAD_SHA; do
-    run env -u "$var" bash "$REPO_ROOT/scripts/release/rerun-blocked.sh"
+    run env -u "$var" bash "$REPO_ROOT/scripts/release/retry.sh"
     [ "$status" -ne 0 ] || fail "ran without $var: $output"
     contains "$output" "$var not set" || fail "the missing $var was not named: $output"
   done

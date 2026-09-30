@@ -1,4 +1,4 @@
-name: Release PR
+name: PR release
 # Keep release-please's release PR(s) open, start the caller's CI on each, and
 # once a release is cut, start the caller's follow-on workflows at its tag.
 #
@@ -36,7 +36,7 @@ on:
         description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
         type: string
         default: 'v1'
-      config-file:
+      configuration-file:
         description: release-please's configuration file in the caller's repository (manifest mode)
         type: string
         default: 'release-please-config.json'
@@ -66,9 +66,9 @@ on:
       release-created:
         description: "'true' when this push cut a release of the root package"
         value: ${{ jobs.release.outputs.release-created }}
-      tag-name:
+      release-tag:
         description: The root package's new tag, when release-created
-        value: ${{ jobs.release.outputs.tag-name }}
+        value: ${{ jobs.release.outputs.release-tag }}
       paths-released:
         description: JSON array of the package paths this push released, for a multi-package repository
         value: ${{ jobs.release.outputs.paths-released }}
@@ -96,7 +96,7 @@ jobs:
       HAVE_RELEASE_TAGGER_APP: ${{ secrets.RELEASE_TAGGER_APP_ID != '' && secrets.RELEASE_TAGGER_APP_PRIVATE_KEY != '' }}
     outputs:
       release-created: ${{ steps.release.outputs.release_created }}
-      tag-name: ${{ steps.release.outputs.tag_name }}
+      release-tag: ${{ steps.release.outputs.tag_name }}
       paths-released: ${{ steps.release.outputs.paths_released }}
       pr-number: ${{ steps.pr.outputs.number }}
       pr-branch: ${{ steps.pr.outputs.branch }}
@@ -129,7 +129,7 @@ jobs:
         id: release
         uses: googleapis/release-please-action@v5
         with:
-          config-file: ${{ inputs.config-file }}
+          config-file: ${{ inputs.configuration-file }}
           manifest-file: ${{ inputs.manifest-file }}
           # App token when the App is configured, else the explicit token, else
           # GITHUB_TOKEN. GitHub's `||` yields the first non-empty operand.

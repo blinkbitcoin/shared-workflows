@@ -1,4 +1,4 @@
-name: Smoke (local, act)
+name: Self smoke local
 # The Linux half of a consumer's internal release, runnable on a laptop with
 # nektos/act: `make test-smoke-local` (Prepare) or `make test-smoke-local-android`
 # (Prepare, then the Android build). It exists so a change to build-prepare or
@@ -50,7 +50,7 @@ jobs:
       # No green gate: nothing has run for this commit anywhere.
       require-green-workflow: ''
       build-number-offset: 1000
-      build-env: >-
+      environment-variables: >-
         {"APP_VARIANT":"production",
         "EXPO_PUBLIC_API_URL":"https://api.example.com/graphql",
         "EXPO_PUBLIC_APP_NAME":"RN Mobile Template",
@@ -71,8 +71,8 @@ jobs:
       android-package: com.example.rnmt
       ios-bundle-id: com.example.rnmt
       ios-scheme: RNMobileTemplate
-      android-signing: false
-      build-env: >-
+      android-signing-enabled: false
+      environment-variables: >-
         {"APP_VARIANT":"production",
         "EXPO_PUBLIC_API_URL":"https://api.example.com/graphql",
         "EXPO_PUBLIC_APP_NAME":"RN Mobile Template",

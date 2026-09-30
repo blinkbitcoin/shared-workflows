@@ -2,16 +2,17 @@
 # Run the consumer's own NAME package script when it ships one; otherwise run
 # this repo's FALLBACK implementation of the same gate.
 #
-# Why this exists. Most checks in check-code.yml already delegate to the consumer
-# through run-script.sh: typecheck, lint, format, knip, spell, check:docs,
-# check:release. Five did not - i18n, codegen, expo-doctor, audit and the CI
-# linters were implemented here and *only* here - and those five are exactly the
-# ones that drifted from the consumer's own `make check`:
+# Why this exists. Most checks in check.yml already delegate to the consumer
+# through run-script.sh: check:types, check:lint, check:format, check:unused,
+# check:spell, check:docs, check:release. Five did not - the generated-file
+# check, the Expo health check, audit, CI and secrets were implemented here and
+# *only* here - and those are exactly the ones that drifted from the consumer's
+# own `make check`:
 #
-#   - this repo's expo-doctor.sh runs `expo-doctor`, while the template's
-#     `deps:check` runs `expo install --check && expo-doctor`, so SDK version
+#   - this repo's Expo health check ran `expo-doctor` alone, while the template's
+#     `check:expo-health` runs `expo install --check && expo-doctor`, so SDK version
 #     drift was checked on a laptop and nowhere in CI;
-#   - this repo's audit.sh runs `pnpm audit`, while the template's `deps:audit`
+#   - this repo's audit.sh runs `pnpm audit`, while the template's `check:audit`
 #     also runs its lockfile provenance check, so that ran nowhere in CI either.
 #
 # A consumer that ships a script for a gate has said what that gate means for
@@ -24,7 +25,7 @@
 # log that cannot answer it is how the drift above went unnoticed.
 #
 # Usage: run-consumer-or.sh NAME FALLBACK
-#   NAME      a consumer package.json script name (e.g. deps:audit)
+#   NAME      a consumer package.json script name (e.g. check:audit)
 #   FALLBACK  path to a script in this repo, relative to the repo root
 #             (e.g. scripts/checks/audit.sh)
 set -euo pipefail

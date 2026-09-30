@@ -5,7 +5,7 @@ import { isCommit, pinProblems, pinsIn, sharedDeps, specFor, tarballFor, workflo
 const SHA = 'a'.repeat(40);
 const OTHER = 'b'.repeat(40);
 const call = (sha = SHA, comment = ' # v1.2.3') =>
-  `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@${sha}${comment}\n`;
+  `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@${sha}${comment}\n`;
 const callers = (...texts) => texts.map((text, i) => ({ name: `ci-${i}.yml`, text }));
 const pkgAt = (sha, dir = '/packages/app-tooling') => ({
   devDependencies: { '@blinkbitcoin/app-tooling': specFor(sha, dir), typescript: '^6.0.0' },
@@ -13,10 +13,10 @@ const pkgAt = (sha, dir = '/packages/app-tooling') => ({
 const lockAt = (sha, dir = '/packages/app-tooling') => `    version: ${tarballFor(sha, dir)}\n`;
 
 test('pinsIn reads each shared call with its line, workflow, ref and comment', () => {
-  const text = `name: CI\n${call()}    other:\n    uses: actions/checkout@v7\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@${OTHER}\n`;
+  const text = `name: CI\n${call()}    other:\n    uses: actions/checkout@v7\n    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@${OTHER}\n`;
   assert.deepEqual(pinsIn(text), [
-    { line: 4, workflow: 'check-code.yml', ref: SHA, comment: 'v1.2.3' },
-    { line: 7, workflow: 'check-unit.yml', ref: OTHER, comment: '' },
+    { line: 4, workflow: 'check.yml', ref: SHA, comment: 'v1.2.3' },
+    { line: 7, workflow: 'test-unit.yml', ref: OTHER, comment: '' },
   ]);
 });
 

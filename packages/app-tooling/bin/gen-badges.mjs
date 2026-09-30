@@ -2,7 +2,7 @@
 // Renders every CI badge a branch publishes: coverage, Unit, E2E and Security.
 // `publish-badges.yml` runs it from its own checkout of shared-workflows
 // (scripts/ci/gen-badges.sh), in the consumer's root, unless the caller names
-// a script of its own in `render-script`; a consumer runs the same program on a
+// a script of its own in `badges-script`; a consumer runs the same program on a
 // laptop as `pnpm exec gen-badges`. It takes no arguments - the workflow and
 // a consumer's `make` target both hand it everything as environment:
 //

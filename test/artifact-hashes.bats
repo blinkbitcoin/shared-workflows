@@ -30,11 +30,11 @@ field() { node -e 'const i=require(process.argv[1]);const p=process.argv[2].spli
   [ "$(field version)" = "1.2.3" ] || fail "the source build-info was not carried over"
   [ "$(field sha)" = "abc" ] || fail "the source build-info was not carried over"
   # The original stays untouched: both platform jobs download the same
-  # release-meta artifact and must not race to rewrite it.
+  # build-info artifact and must not race to rewrite it.
   ! grep -q apkSha256 "$WORKFLOWS_RELEASE_META_DIR/build-info.json" \
-    || fail "the release-meta copy was edited in place"
+    || fail "the build-info copy was edited in place"
   # The uploaded name is platform-specific, so it cannot collide with
-  # release-meta's build-info.json inside a merge-multiple download.
+  # build-info's build-info.json inside a merge-multiple download.
   [ -f "$WORKFLOWS_OUTPUT_DIR/build-info.android.json" ] || fail "no per-platform copy was written"
   [ "$(cat "$WORKFLOWS_OUTPUT_DIR/build-info.android.json")" = "$(cat "$WORKFLOWS_OUTPUT_DIR/build-info.json")" ] \
     || fail "the per-platform copy differs from the one verify reads"

@@ -30,7 +30,7 @@ fi
 # No SARIF at all means every scanner skipped or died. A clean verdict derived
 # from nothing is the one outcome this gate must never produce, so it is a
 # failure with a message that points at the jobs above rather than at this one.
-[ "$count" -gt 0 ] || die "no SARIF files in $out: every scanner job was switched off or failed. Read the scanner jobs above; do not read this run as clean. To turn the gate off, set \"enabled\": false in security-policy.json"
+[ "$count" -gt 0 ] || die "no SARIF files in $out: every scanner job was switched off or failed. Read the scanner jobs above; do not read this run as clean. To turn the gate off, set \"enabled\": false in security-settings.json"
 
 code=0
 report="$(node "$merger" "$out" 2>&1)" || code=$?

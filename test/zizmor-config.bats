@@ -7,8 +7,8 @@
 # (Claude Code puts them in `.claude/worktrees/<name>/`) zizmor settles on the
 # outer checkout and reads that checkout's policy. When the outer branch has
 # none, `unpinned-uses: disable: true` is lost and every tag-pinned `uses:`
-# fails the gate on workflow files identical to main. lint-ci.sh's own cases
-# are in lint-ci.bats; this holds the commands the repository runs on itself.
+# fails the gate on workflow files identical to main. check-ci.sh's own cases
+# are in check-ci.bats; this holds the commands the repository runs on itself.
 load test_helper
 
 # The zizmor command lines in the Makefile and lefthook.yml.

@@ -90,7 +90,7 @@ test('--min-files fails a directory holding fewer workflows than it names, and p
 });
 
 test('a group without a display name requires only the prefix', () => {
-  assert.deepEqual(problems([wf('check-code.yml', 'Checks'), wf('check.yml', null)], [{ prefix: 'check', display: null }]), []);
+  assert.deepEqual(problems([wf('check.yml', 'Checks'), wf('check.yml', null)], [{ prefix: 'check', display: null }]), []);
 });
 
 const capture = () => {

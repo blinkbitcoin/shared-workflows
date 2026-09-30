@@ -1,4 +1,4 @@
-name: Store notes
+name: PR store notes
 # Draft the store notes into a release-please PR body, once, for a human to
 # review with the version bump before the release is cut.
 #
@@ -23,7 +23,7 @@ name: Store notes
 # output. That is what lets a pull request execute this
 # workflow: this repository's own CI does it against the template on every
 # pull request and before `v0` moves (self-store-notes.yml), and a consumer
-# can do the same on its own pull requests. Not part of self-act-smoke.yml, which
+# can do the same on its own pull requests. Not part of self-smoke-local.yml, which
 # runs only the jobs act can: this one runs on GitHub, for real.
 on:
   workflow_call:
@@ -72,7 +72,7 @@ on:
         description: "Locales the store notes generator (the gen-store-notes program in @blinkbitcoin/app-tooling) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
         type: string
         default: ''
-      build-env:
+      environment-variables:
         description: Flat JSON object of non-secret environment variables published before the store notes generator runs (the LLM provider and model, STORE_NOTES_INCLUDE_CHANGELOG)
         type: string
         default: '{}'
@@ -127,9 +127,9 @@ jobs:
           persist-credentials: false
       - name: Publish WORKFLOWS_DIR environment
         run: bash ".workflows/scripts/release/env-publish.sh"
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       # No pnpm install: the store notes generator runs from the
       # .workflows checkout and has no dependencies, and the job only needs
@@ -150,7 +150,7 @@ jobs:
           SECTION_TITLE: ${{ inputs.section-title }}
           STORE_NOTES_LOCALES: ${{ inputs.store-notes-locales }}
           # The store notes generator may draft with an LLM; the
-          # provider/model live in build-env, only the keys are secrets.
+          # provider/model live in environment-variables, only the keys are secrets.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: bash "$WORKFLOWS_DIR/scripts/release/pr-store-notes.sh" "$PR_NUMBER"

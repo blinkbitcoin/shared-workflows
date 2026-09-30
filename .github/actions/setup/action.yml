@@ -7,7 +7,7 @@ inputs:
   install:
     description: Run `pnpm install --frozen-lockfile` in the consumer directory
     default: 'true'
-  ruby:
+  ruby-enabled:
     description: Install Ruby via ruby/setup-ruby (needed for fastlane/CocoaPods lanes)
     default: 'false'
 runs:
@@ -29,13 +29,13 @@ runs:
         cache: true
     - name: Read pinned Ruby version
       id: rb
-      if: inputs.ruby == 'true'
+      if: inputs.ruby-enabled == 'true'
       shell: bash
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: bash "${{ github.action_path }}/../../../scripts/ci/ruby-version.sh"
     - name: Install Ruby
-      if: inputs.ruby == 'true'
+      if: inputs.ruby-enabled == 'true'
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ steps.rb.outputs.version }}

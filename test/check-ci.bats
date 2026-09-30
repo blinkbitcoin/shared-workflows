@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# lint-ci.sh's two halves (actionlint over .github/workflows, shellcheck over
+# check-ci.sh's two halves (actionlint over .github/workflows, shellcheck over
 # scripts/) must be independently reachable: a consumer with workflows but no
 # scripts/ directory is a perfectly normal Expo app and must still get
 # actionlint. `mise` is stubbed so these assert the branching, not the linters.
@@ -35,49 +35,32 @@ scripts() {
 
 @test "runs actionlint even when the consumer has no scripts/ directory" {
   workflows
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   grep -q actionlint "$MISE_LOG"
-  ! grep -q shellcheck "$MISE_LOG" || fail "shellcheck ran for a docs-only change: $(cat "$MISE_LOG")"
+  ! grep -q shellcheck "$MISE_LOG" || fail "shellcheck ran with no scripts/ directory: $(cat "$MISE_LOG")"
 }
 
 @test "runs shellcheck even when the consumer has no .github/workflows directory" {
   scripts
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   grep -q shellcheck "$MISE_LOG"
-  ! grep -q actionlint "$MISE_LOG" || fail "actionlint ran with WORKFLOWS_ACTIONLINT off: $(cat "$MISE_LOG")"
+  ! grep -q zizmor "$MISE_LOG" || fail "zizmor ran with no .github/workflows: $(cat "$MISE_LOG")"
+  ! grep -q actionlint "$MISE_LOG" || fail "actionlint ran with no .github/workflows: $(cat "$MISE_LOG")"
 }
 
 @test "runs both halves when the consumer has both" {
   workflows
   scripts
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   grep -q actionlint "$MISE_LOG"
   grep -q shellcheck "$MISE_LOG"
-}
-
-@test "WORKFLOWS_ACTIONLINT=false disables only the actionlint half" {
-  workflows
-  scripts
-  WORKFLOWS_ACTIONLINT=false run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
-  [ "$status" -eq 0 ]
-  ! grep -q actionlint "$MISE_LOG" || fail "actionlint ran with no .github/workflows: $(cat "$MISE_LOG")"
-  grep -q shellcheck "$MISE_LOG"
-}
-
-@test "WORKFLOWS_SHELLCHECK=false disables only the shellcheck half" {
-  workflows
-  scripts
-  WORKFLOWS_SHELLCHECK=false run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
-  [ "$status" -eq 0 ]
-  grep -q actionlint "$MISE_LOG"
-  ! grep -q shellcheck "$MISE_LOG" || fail "shellcheck ran with no scripts dir: $(cat "$MISE_LOG")"
 }
 
 @test "exits 0 with nothing to lint when the consumer has neither directory" {
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"nothing to lint"* ]] || fail "assertion failed; output: $output"
   [ ! -s "$MISE_LOG" ]
@@ -85,24 +68,16 @@ scripts() {
 
 @test "runs zizmor offline at medium severity when the consumer has workflows" {
   workflows
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   line="$(grep zizmor "$MISE_LOG")" || fail "zizmor did not run: $(cat "$MISE_LOG")"
   [[ "$line" == *"--offline"* && "$line" == *"--min-severity medium"* ]] \
     || fail "zizmor ran without the deterministic flags: $line"
 }
 
-@test "WORKFLOWS_ZIZMOR=false disables only the zizmor half" {
-  workflows
-  WORKFLOWS_ZIZMOR=false run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
-  [ "$status" -eq 0 ]
-  grep -q actionlint "$MISE_LOG"
-  ! grep -q zizmor "$MISE_LOG" || fail "zizmor ran with WORKFLOWS_ZIZMOR off: $(cat "$MISE_LOG")"
-}
-
 @test "a consumer without a zizmor config gets this family's policy" {
   workflows
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   grep zizmor "$MISE_LOG" | grep -qF -- "--config $REPO_ROOT/.github/zizmor.yml" \
     || fail "fallback policy not passed: $(grep zizmor "$MISE_LOG")"
@@ -111,7 +86,7 @@ scripts() {
 @test "a consumer's own .github/zizmor.yml wins over the family's, passed explicitly" {
   workflows
   printf 'rules: {}\n' > "$GITHUB_WORKSPACE/.github/zizmor.yml"
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   grep zizmor "$MISE_LOG" | grep -qF -- "--config .github/zizmor.yml .github" \
     || fail "the consumer's own .github/zizmor.yml was not passed: $(grep zizmor "$MISE_LOG")"
@@ -120,7 +95,7 @@ scripts() {
 @test "a consumer's root zizmor.yml is passed explicitly when .github/ has none" {
   workflows
   printf 'rules: {}\n' > "$GITHUB_WORKSPACE/zizmor.yml"
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   grep zizmor "$MISE_LOG" | grep -qF -- "--config zizmor.yml .github" \
     || fail "the consumer's root zizmor.yml was not passed: $(grep zizmor "$MISE_LOG")"
@@ -130,7 +105,7 @@ scripts() {
   workflows
   printf 'rules: {}\n' > "$GITHUB_WORKSPACE/zizmor.yml"
   printf 'rules: {}\n' > "$GITHUB_WORKSPACE/.github/zizmor.yml"
-  run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ]
   grep zizmor "$MISE_LOG" | grep -qF -- "--config .github/zizmor.yml .github" \
     || fail "picked the root zizmor.yml over .github/zizmor.yml: $(grep zizmor "$MISE_LOG")"
@@ -140,7 +115,7 @@ scripts() {
   scripts
   mkdir -p "$GITHUB_WORKSPACE/.claude/skills/a"
   printf '#!/usr/bin/env bash\ntrue\n' > "$GITHUB_WORKSPACE/.claude/skills/a/y.sh"
-  WORKFLOWS_SHELLCHECK_PATHS="scripts .claude/skills missing" run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  WORKFLOWS_SHELLCHECK_PATHS="scripts .claude/skills missing" run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   line="$(grep shellcheck "$MISE_LOG")" || fail "shellcheck did not run: $(cat "$MISE_LOG")"
   [[ "$line" == *"scripts/x.sh"* && "$line" == *".claude/skills/a/y.sh"* ]] || fail "not every directory was linted: $line"
@@ -149,21 +124,21 @@ scripts() {
 @test "a named directory alone, with no scripts/ and no workflows, is still linted" {
   mkdir -p "$GITHUB_WORKSPACE/tools"
   printf '#!/usr/bin/env bash\ntrue\n' > "$GITHUB_WORKSPACE/tools/z.sh"
-  WORKFLOWS_SHELLCHECK_PATHS=tools run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  WORKFLOWS_SHELLCHECK_PATHS=tools run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   grep shellcheck "$MISE_LOG" | grep -qF "tools/z.sh" || fail "tools/ was not linted: $(cat "$MISE_LOG")"
   [[ "$output" != *"nothing to lint"* ]] || fail "gave up with a directory to lint: $output"
 }
 
 @test "names the directories it looked for when there is nothing to lint" {
-  WORKFLOWS_SHELLCHECK_PATHS="tools more" run bash "$REPO_ROOT/scripts/ci/lint-ci.sh"
+  WORKFLOWS_SHELLCHECK_PATHS="tools more" run bash "$REPO_ROOT/scripts/ci/check-ci.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   [[ "$output" == *"no tools more and no .github/workflows/"* ]] || fail "output: $output"
 }
 
 @test "run from the app-tooling package, a consumer without a zizmor config gets the package's copy of the policy" {
   workflows
-  run bash "$REPO_ROOT/packages/app-tooling/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/packages/app-tooling/ci/check-ci.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   grep zizmor "$MISE_LOG" | grep -qF -- "--config $REPO_ROOT/packages/app-tooling/zizmor.yml" \
     || fail "the package's policy was not passed: $(grep zizmor "$MISE_LOG")"

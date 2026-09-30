@@ -146,36 +146,36 @@ baseline_file() {
 
 @test "with no runtime version, the baseline's iOS fingerprint is sent" {
   stub_curl
-  baseline_file '{"fingerprint":{"ios":"fp-ios","android":"fp-android"}}'
+  baseline_file '{"fingerprint":{"ios":"fingerprint-ios","android":"fingerprint-android"}}'
   OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$(grep '^curl ' "$WORKFLOWS_TEST_LOG")" "expo-runtime-version: fp-ios" || fail "the baseline fingerprint was not sent"
-  contains "$output" "runtime version: the baseline's ios fingerprint, fp-ios" || fail "the source was not logged: $output"
+  contains "$(grep '^curl ' "$WORKFLOWS_TEST_LOG")" "expo-runtime-version: fingerprint-ios" || fail "the baseline fingerprint was not sent"
+  contains "$output" "runtime version: the baseline's ios fingerprint, fingerprint-ios" || fail "the source was not logged: $output"
 }
 
 @test "the baseline fingerprint follows OTA_SMOKE_PLATFORM" {
   stub_curl
-  baseline_file '{"fingerprint":{"ios":"fp-ios","android":"fp-android"}}'
+  baseline_file '{"fingerprint":{"ios":"fingerprint-ios","android":"fingerprint-android"}}'
   OTA_SMOKE_PLATFORM=android OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   argv="$(grep '^curl ' "$WORKFLOWS_TEST_LOG")"
-  contains "$argv" "expo-runtime-version: fp-android" || fail "the android fingerprint was not sent: $argv"
-  not_contains "$argv" "fp-ios" || fail "the iOS fingerprint was sent for android: $argv"
+  contains "$argv" "expo-runtime-version: fingerprint-android" || fail "the android fingerprint was not sent: $argv"
+  not_contains "$argv" "fingerprint-ios" || fail "the iOS fingerprint was sent for android: $argv"
 }
 
 @test "an explicit runtime version wins over the baseline" {
   stub_curl
-  baseline_file '{"fingerprint":{"ios":"fp-ios"}}'
+  baseline_file '{"fingerprint":{"ios":"fingerprint-ios"}}'
   OTA_RUNTIME_VERSION=1.0.0 OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   argv="$(grep '^curl ' "$WORKFLOWS_TEST_LOG")"
   contains "$argv" "expo-runtime-version: 1.0.0" || fail "the explicit version was not sent: $argv"
-  not_contains "$argv" "fp-ios" || fail "the baseline overrode the explicit version: $argv"
+  not_contains "$argv" "fingerprint-ios" || fail "the baseline overrode the explicit version: $argv"
 }
 
 @test "a baseline with no fingerprint for the platform, or no baseline file, sends no runtime header" {
   stub_curl
-  baseline_file '{"fingerprint":{"android":"fp-android"}}'
+  baseline_file '{"fingerprint":{"android":"fingerprint-android"}}'
   OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   not_contains "$(grep '^curl ' "$WORKFLOWS_TEST_LOG")" "expo-runtime-version" || fail "sent a header from a missing fingerprint"

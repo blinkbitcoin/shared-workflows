@@ -13,11 +13,11 @@ export default {
       [
         'actions', // .github/actions/**  composite actions
         'app-tooling', // packages/app-tooling/** the published npm package: tooling, checks and the Expo presets
-        'checks', // scripts/checks/**   + check-code.yml
+        'checks', // scripts/checks/**   + check.yml
         'ci', // scripts/ci/**       + self-ci.yml
         'deps', // dependabot and pinned tool bumps
         'docs', // docs/** and README
-        'e2e', // scripts/e2e/**      + check-e2e.yml
+        'e2e', // scripts/e2e/**      + test-e2e.yml
         'lib', // scripts/lib/**      shared bash helpers
         'native', // scripts/native/**   prebuild, pods, platform builds
         'ota', // scripts/ota/**      + publish-ota.yml

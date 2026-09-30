@@ -69,17 +69,16 @@ test('every requirement declares the fields the report depends on', () => {
   const kinds = new Set([
     'package-script',
     'package-dep',
-    'script-or-dep',
     'file',
     'dir-nonempty',
-    'mise-tool',
+    'pinned-tool',
     'ignores-workflows',
     'ignores-workflows-or-narrow',
     'caller-path',
-    'fastlane-lane',
+    'lane',
     'make-ci-reaches-ci',
     'ci-runs-make-ci',
-    'fastlane-env-subset',
+    'lane-environment',
     'no-copy',
     'one-pin',
   ]);
@@ -107,16 +106,16 @@ on: [push]
 jobs:
   checks:
     name: Checks
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0
     with:
-      docs-check: false
-      release-checks: true
+      docs: false
+      release: true
   unit:
     name: Unit
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0
   e2e:
     name: E2E
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-e2e.yml@v0
     with:
       ios: \${{ vars.E2E_IOS == 'true' }}
       e2e-setup-script: scripts/e2e/up.sh
@@ -124,16 +123,16 @@ jobs:
 
 test('the caller parser finds which reusable workflows a repository calls', () => {
   const uses = callersUse([{ name: 'ci.yml', text: CALLER }]);
-  assert.deepEqual([...uses].sort(), ['check-code.yml', 'check-e2e.yml', 'check-unit.yml']);
+  assert.deepEqual([...uses].sort(), ['check.yml', 'test-e2e.yml', 'test-unit.yml']);
 });
 
 test('the caller parser attributes each with: key to its own workflow', () => {
   const inputs = callerInputs([{ name: 'ci.yml', text: CALLER }]);
-  assert.equal(inputs.get('check-code.yml:docs-check'), 'false');
-  assert.equal(inputs.get('check-code.yml:release-checks'), 'true');
-  assert.equal(inputs.get('check-e2e.yml:e2e-setup-script'), 'scripts/e2e/up.sh');
-  // check-unit.yml has no with: block, so nothing may leak into it from its neighbours
-  assert.equal(inputs.get('check-unit.yml:docs-check'), undefined);
+  assert.equal(inputs.get('check.yml:docs'), 'false');
+  assert.equal(inputs.get('check.yml:release'), 'true');
+  assert.equal(inputs.get('test-e2e.yml:e2e-setup-script'), 'scripts/e2e/up.sh');
+  // test-unit.yml has no with: block, so nothing may leak into it from its neighbours
+  assert.equal(inputs.get('test-unit.yml:docs'), undefined);
 });
 
 test('a top-level key after a caller job ends that job, with or without a with: block', () => {
@@ -142,13 +141,13 @@ test('a top-level key after a caller job ends that job, with or without a with: 
       name: 'ci.yml',
       text: `jobs:
   plain:
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0
 env:
   coverage: false
 ---
 jobs:
   checks:
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0
     with:
       lint: false
 concurrency:
@@ -156,7 +155,7 @@ concurrency:
 `,
     },
   ]);
-  assert.deepEqual([...inputs], [['check-code.yml:lint', 'false']]);
+  assert.deepEqual([...inputs], [['check.yml:lint', 'false']]);
 });
 
 test('a profile is active only when the repository calls that workflow', () => {
@@ -172,45 +171,45 @@ test('a repository with no caller yet is checked against what every consumer nee
 });
 
 test('an explicit --profile overrides what the callers say', () => {
-  assert.deepEqual([...activeProfiles(new Set(['check-code.yml']), ['release'])], ['release']);
+  assert.deepEqual([...activeProfiles(new Set(['check.yml']), ['release'])], ['release']);
 });
 
 // --- toggles -----------------------------------------------------------------
 
 test('a gate the caller switched off is not a finding', () => {
   const inputs = callerInputs([{ name: 'ci.yml', text: CALLER }]);
-  assert.equal(toggleOn(req('script.check-docs'), inputs), false);
+  assert.equal(toggleOn(req('package-script.check-docs'), inputs), false);
 });
 
 test('a gate the caller switched on is checked even when it defaults off', () => {
   const inputs = callerInputs([{ name: 'ci.yml', text: CALLER }]);
-  assert.equal(req('script.check-release').defaultOn, false);
-  assert.equal(toggleOn(req('script.check-release'), inputs), true);
+  assert.equal(req('package-script.check-release').defaultOn, false);
+  assert.equal(toggleOn(req('package-script.check-release'), inputs), true);
 });
 
 test('an input the caller leaves alone falls back to the workflow default', () => {
-  assert.equal(toggleOn(req('script.typecheck'), new Map()), true);
-  assert.equal(toggleOn(req('script.check-prebuild'), new Map()), false);
+  assert.equal(toggleOn(req('package-script.check-types'), new Map()), true);
+  assert.equal(toggleOn(req('package-script.check-prebuild'), new Map()), false);
 });
 
 test('a toggle wired to an expression is neither on nor off', () => {
-  const inputs = new Map([['check-code.yml:typecheck', '${{ vars.TYPECHECK }}']]);
-  assert.equal(toggleOn(req('script.typecheck'), inputs), 'unknown');
+  const inputs = new Map([['check.yml:types', '${{ vars.TYPES }}']]);
+  assert.equal(toggleOn(req('package-script.check-types'), inputs), 'unknown');
 });
 
 test('a requirement behind an expression is reported but never blocks', () => {
-  // This job gates every other job in check-code.yml. Blocking ten of them because
+  // This job gates every other job in check.yml. Blocking ten of them because
   // a `${{ vars.X }}` could not be read here would be a false failure - and
   // staying silent would hide a real one. So: warn, and say why.
   const caller = [
     'jobs:',
     '  checks:',
-    '    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0',
+    '    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0',
     '    with:',
-    '      typecheck: ${{ vars.TYPECHECK }}',
+    '      types: ${{ vars.TYPES }}',
   ].join('\n');
   const c = consumer({ callers: { 'ci.yml': caller } });
-  const result = check(readContract(), c).find((r) => r.req.id === 'script.typecheck');
+  const result = check(readContract(), c).find((r) => r.req.id === 'package-script.check-types');
   assert.equal(result.level, 'warn');
   assert.match(result.reason, /cannot evaluate/);
 });
@@ -218,21 +217,24 @@ test('a requirement behind an expression is reported but never blocks', () => {
 // --- individual checks -------------------------------------------------------
 
 test('a package script is found by name', () => {
-  const c = consumer({ pkg: { scripts: { typecheck: 'tsc --noEmit' } } });
-  assert.equal(checkRequirement(req('script.typecheck'), c).status, 'ok');
-  assert.equal(checkRequirement(req('script.lint'), c).status, 'missing');
+  const c = consumer({ pkg: { scripts: { 'check:types': 'tsc --noEmit' } } });
+  assert.equal(checkRequirement(req('package-script.check-types'), c).status, 'ok');
+  assert.equal(checkRequirement(req('package-script.check-lint'), c).status, 'missing');
 });
 
-test('knip passes as a dependency and is never asked for as a script', () => {
+test('the unused-code gate is a package script like every other gate', () => {
+  // Not the knip binary: a script named for the stem, which a package.json
+  // may hold without tripping expo-doctor's check on a script named `knip`.
+  const asScript = consumer({ pkg: { scripts: { 'check:unused': 'knip' } } });
+  assert.equal(checkRequirement(req('package-script.check-unused'), asScript).status, 'ok');
   const asDep = consumer({ pkg: { devDependencies: { knip: '^6' } } });
-  assert.equal(checkRequirement(req('script.knip'), asDep).status, 'ok');
-  assert.equal(checkRequirement(req('script.knip'), consumer()).status, 'missing');
+  assert.equal(checkRequirement(req('package-script.check-unused'), asDep).status, 'missing');
 });
 
 test('the mise check names the tool that is missing, not just the file', () => {
   const c = consumer();
   c.miseTools = { file: '.mise.toml', tools: new Set(['node']) };
-  const result = checkRequirement(req('toolchain.mise'), c);
+  const result = checkRequirement(req('pinned-tool.node-pnpm'), c);
   assert.equal(result.status, 'missing');
   assert.match(result.reason, /pins no pnpm/);
 });
@@ -240,7 +242,7 @@ test('the mise check names the tool that is missing, not just the file', () => {
 test('no mise config at all is reported as the missing file', () => {
   const c = consumer();
   c.miseTools = { file: null, tools: new Set() };
-  assert.match(checkRequirement(req('toolchain.mise'), c).reason, /no mise config/);
+  assert.match(checkRequirement(req('pinned-tool.node-pnpm'), c).reason, /no mise config/);
 });
 
 test('the mise reader takes only the [tools] table', () => {
@@ -257,33 +259,33 @@ EXPO_NO_TELEMETRY = "1"
 });
 
 test('a file requirement is satisfied by any one of its alternatives', () => {
-  assert.equal(checkRequirement(req('file.expo-config'), consumer({ files: { 'app.json': '{}' } })).status, 'ok');
-  assert.equal(checkRequirement(req('file.expo-config'), consumer()).status, 'missing');
+  assert.equal(checkRequirement(req('file.expo-configuration'), consumer({ files: { 'app.json': '{}' } })).status, 'ok');
+  assert.equal(checkRequirement(req('file.expo-configuration'), consumer()).status, 'missing');
 });
 
 test('an e2e hook input naming a file that does not exist is a finding', () => {
   const c = consumer({ callers: { 'ci.yml': CALLER } });
-  const result = checkRequirement(req('caller.e2e-hooks'), c);
+  const result = checkRequirement(req('caller-path.e2e-hooks'), c);
   assert.equal(result.status, 'missing');
   assert.match(result.reason, /scripts\/e2e\/up\.sh, which does not exist/);
 });
 
 test('an e2e hook input left empty is not a finding', () => {
   const c = consumer({ callers: { 'ci.yml': CALLER.replace('e2e-setup-script: scripts/e2e/up.sh', "e2e-setup-script: ''") } });
-  assert.equal(checkRequirement(req('caller.e2e-hooks'), c).status, 'ok');
+  assert.equal(checkRequirement(req('caller-path.e2e-hooks'), c).status, 'ok');
 });
 
 test('a config this repository does not have is skipped, not failed', () => {
   // A consumer with no biome.json does not use biome, so nothing of ours is in
   // its reach and there is nothing for it to exclude.
-  assert.equal(checkRequirement(req('ignores.biome'), consumer()).status, 'skip');
+  assert.equal(checkRequirement(req('ignores-workflows.biome-json'), consumer()).status, 'skip');
 });
 
 test('a config that globs the whole tree must exclude the .workflows checkout', () => {
   const blind = consumer({ files: { 'biome.json': '{"files":{"includes":["**/*.ts"]}}' } });
-  assert.equal(checkRequirement(req('ignores.biome'), blind).status, 'missing');
+  assert.equal(checkRequirement(req('ignores-workflows.biome-json'), blind).status, 'missing');
   const excluded = consumer({ files: { 'biome.json': '{"files":{"includes":["**/*.ts","!**/.workflows"]}}' } });
-  assert.equal(checkRequirement(req('ignores.biome'), excluded).status, 'ok');
+  assert.equal(checkRequirement(req('ignores-workflows.biome-json'), excluded).status, 'ok');
 });
 
 test('knip is satisfied by globs that never reach into .workflows', () => {
@@ -291,19 +293,19 @@ test('knip is satisfied by globs that never reach into .workflows', () => {
   // one. Demanding the ignore entry would report a finding the consumer would be
   // right to ignore.
   const narrow = consumer({ files: { 'knip.json': '{"project":["src/**/*.ts","scripts/**/*.mjs"]}' } });
-  assert.equal(checkRequirement(req('ignores.knip'), narrow).status, 'ok');
+  assert.equal(checkRequirement(req('ignores-workflows-or-narrow.knip-json'), narrow).status, 'ok');
   const treeWide = consumer({ files: { 'knip.json': '{"project":["**/*.ts"]}' } });
-  assert.equal(checkRequirement(req('ignores.knip'), treeWide).status, 'missing');
+  assert.equal(checkRequirement(req('ignores-workflows-or-narrow.knip-json'), treeWide).status, 'missing');
 });
 
 test('a missing fastlane lane is named, and no fastlane at all is skipped', () => {
   const noFastlane = consumer();
-  assert.equal(checkRequirement(req('lane.ios-build'), noFastlane).status, 'skip');
+  assert.equal(checkRequirement(req('lane.build-verify'), noFastlane).status, 'skip');
   const partial = consumer({
     dirs: ['fastlane'],
     files: { 'fastlane/Fastfile': 'platform :ios do\n  lane :build do\n  end\nend\n' },
   });
-  const result = checkRequirement(req('lane.ios-build'), partial);
+  const result = checkRequirement(req('lane.build-verify'), partial);
   assert.equal(result.status, 'missing');
   assert.match(result.reason, /verify/);
 });
@@ -311,15 +313,15 @@ test('a missing fastlane lane is named, and no fastlane at all is skipped', () =
 // --- severity ----------------------------------------------------------------
 
 test('a missing required item blocks and a missing fallback item only degrades', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' } });
   const results = check(readContract(), c);
   const byId = new Map(results.map((r) => [r.req.id, r]));
-  assert.equal(byId.get('script.typecheck').level, 'fail');
-  assert.equal(byId.get('script.deps-audit').level, 'warn');
+  assert.equal(byId.get('package-script.check-types').level, 'fail');
+  assert.equal(byId.get('package-script.check-audit').level, 'warn');
 });
 
 test('a workflow this repository does not call produces no findings at all', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' } });
   const results = check(readContract(), c);
   for (const result of results.filter((r) => r.req.profile === 'release')) {
     assert.equal(result.level, 'skip', `${result.req.id} should be skipped`);
@@ -329,7 +331,7 @@ test('a workflow this repository does not call produces no findings at all', () 
 // --- reporting ---------------------------------------------------------------
 
 test('every finding carries its fix, and a pass carries none', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' } });
   for (const result of check(readContract(), c)) {
     const line = formatResult(result);
     if (result.level === 'fail' || result.level === 'warn') {
@@ -340,17 +342,20 @@ test('every finding carries its fix, and a pass carries none', () => {
   }
 });
 
-test('the skeleton never suggests a package script named knip', () => {
-  // The fix text two lines above it says not to: a script of that name fails
-  // expo-doctor, which check-code.yml also runs.
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
+test('the skeleton names each missing gate script by its family-stem name', () => {
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' } });
   const text = skeleton(check(readContract(), c));
+  assert.match(text, /"check:unused":/);
   assert.doesNotMatch(text, /"knip":/);
-  assert.match(text, /devDependencies: .*knip/);
+});
+
+test('the skeleton lists a missing required dependency as a devDependency', () => {
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/build-web.yml@v0\n' } });
+  assert.match(skeleton(check(readContract(), c)), /devDependencies: @playwright\/test/);
 });
 
 test('the job summary distinguishes a blocked row from a degraded one', () => {
-  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' } });
+  const c = consumer({ callers: { 'ci.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' } });
   const table = summaryTable(check(readContract(), c));
   assert.match(table, /\*\*blocked\*\*/);
   assert.match(table, /degraded/);
@@ -358,7 +363,7 @@ test('the job summary distinguishes a blocked row from a degraded one', () => {
 });
 
 test('a clean consumer gets a summary that says so rather than an empty table', () => {
-  const table = summaryTable([{ req: req('script.lint'), level: 'ok' }]);
+  const table = summaryTable([{ req: req('package-script.check-lint'), level: 'ok' }]);
   assert.doesNotMatch(table, /\| --- \|/);
   assert.match(table, /satisfied/);
 });
@@ -372,30 +377,30 @@ test('a clean consumer gets a summary that says so rather than an empty table', 
 const GATE_CALLER = {
   'ci.yml': `jobs:
   checks:
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0
     with:
-      docs-check: false
+      docs: false
       spell: false
-      knip: false
+      unused: false
       licenses: false
-      expo-doctor: false
+      expo-health: false
       audit: false
-      actionlint: false
-      secret-scan: false
+      ci: false
+      secrets: false
   unit:
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0
 `,
 };
 
-// With the caller above, CI runs typecheck, lint, format:check, test:coverage
-// and test:scripts - and nothing else.
-const ALIGNED_MAKEFILE = `check: typecheck lint format-check ## gates
-typecheck: ## types
-\tpnpm typecheck
-lint:
-\tpnpm lint
-format-check:
-\tpnpm format:check
+// With the caller above, CI runs check:types, check:lint, check:format,
+// test:coverage and test:scripts - and nothing else.
+const ALIGNED_MAKEFILE = `check: check-types check-lint check-format ## gates
+check-types: ## types
+\tpnpm check:types
+check-lint:
+\tpnpm check:lint
+check-format:
+\tpnpm check:format
 coverage:
 \tpnpm test:coverage
 test-scripts:
@@ -406,7 +411,7 @@ ci: check coverage test-scripts ## everything
 const gateResults = (makefile, callers = GATE_CALLER) => {
   const c = consumer({ files: makefile === null ? {} : { Makefile: makefile }, callers });
   const byId = new Map(check(readContract(), c).map((r) => [r.req.id, r]));
-  return { reaches: byId.get('gate.make-ci-reaches-ci'), runs: byId.get('gate.ci-runs-make-ci') };
+  return { reaches: byId.get('make-ci-reaches-ci.ci'), runs: byId.get('ci-runs-make-ci.ci') };
 };
 
 test('an aligned Makefile passes both gate-set rules', () => {
@@ -437,14 +442,14 @@ test('a gate the caller switched off is neither required locally nor an orphan w
   // spell is off in GATE_CALLER: `make ci` need not reach it...
   assert.equal(gateResults(ALIGNED_MAKEFILE).reaches.level, 'ok');
   // ...but a make ci target running it is a local-only gate, which is the drift.
-  const { runs } = gateResults(`${ALIGNED_MAKEFILE}spell:\n\tpnpm spell\nci: check coverage test-scripts spell\n`);
+  const { runs } = gateResults(`${ALIGNED_MAKEFILE}check-spell:\n\tpnpm check:spell\nci: check coverage test-scripts check-spell\n`);
   assert.equal(runs.level, 'fail');
   assert.match(runs.reason, /spell/);
 });
 
 test('a toggle wired to an expression never fails the gate-set rules', () => {
   const callers = { 'ci.yml': GATE_CALLER['ci.yml'].replace('spell: false', 'spell: ${{ vars.SPELL }}') };
-  const withSpell = `${ALIGNED_MAKEFILE}spell:\n\tpnpm spell\nci: check coverage test-scripts spell\n`;
+  const withSpell = `${ALIGNED_MAKEFILE}check-spell:\n\tpnpm check:spell\nci: check coverage test-scripts check-spell\n`;
   assert.equal(gateResults(withSpell, callers).runs.level, 'ok');
   assert.equal(gateResults(ALIGNED_MAKEFILE, callers).reaches.level, 'ok');
 });
@@ -458,7 +463,7 @@ test('no Makefile skips both gate-set rules rather than failing', () => {
 test('the Makefile reader follows prerequisites and keeps recipes per target', () => {
   const c = consumer({ files: { Makefile: ALIGNED_MAKEFILE } });
   const make = readMakefile('', c.io);
-  assert.deepEqual([...make.reachable('ci')].sort(), ['check', 'ci', 'coverage', 'format-check', 'lint', 'test-scripts', 'typecheck']);
+  assert.deepEqual([...make.reachable('ci')].sort(), ['check', 'check-format', 'check-lint', 'check-types', 'ci', 'coverage', 'test-scripts']);
   assert.equal(make.rules.get('check').recipe, '');
   assert.match(make.rules.get('coverage').recipe, /pnpm test:coverage/);
 });
@@ -471,7 +476,7 @@ const laneResult = (ruby) => {
     dirs: ['fastlane'],
     callers: { 'r.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/publish-store.yml@v0\n' },
   });
-  return check(readContract(), c).find((r) => r.req.id === 'lane.app-review-env');
+  return check(readContract(), c).find((r) => r.req.id === 'lane-environment.app-review');
 };
 
 test('lanes reading only passed App Review names pass', () => {
@@ -528,7 +533,7 @@ function runMain(argv, { env = {}, io, cwd = '/' } = {}) {
   return { code, stdout: stdout.text, stderr: stderr.text };
 }
 
-const CHECKS_CALLER = 'uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n';
+const CHECKS_CALLER = 'uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n';
 
 test('the default io reads a file, and answers null for one that is not there', () => {
   const root = tree({ 'a.txt': 'hello' });
@@ -573,7 +578,7 @@ test('a consumer is read from disk: scripts, both dependency tables, mise and ca
       devDependencies: { knip: '5.0.0' },
     }),
     '.mise.toml': '[tools]\nnode = "24"\n',
-    '.github/workflows/ci.yml': `jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n    with:\n      lint: false\n`,
+    '.github/workflows/ci.yml': `jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n    with:\n      lint: false\n`,
   });
   const read = readConsumer(root);
   assert.equal(read.root, root);
@@ -583,8 +588,8 @@ test('a consumer is read from disk: scripts, both dependency tables, mise and ca
   assert.equal(read.miseTools.file, '.mise.toml');
   assert.deepEqual([...read.miseTools.tools], ['node']);
   assert.deepEqual(read.callers.map((c) => c.name), ['ci.yml']);
-  assert.deepEqual([...read.uses], ['check-code.yml']);
-  assert.equal(read.inputs.get('check-code.yml:lint'), 'false');
+  assert.deepEqual([...read.uses], ['check.yml']);
+  assert.equal(read.inputs.get('check.yml:lint'), 'false');
 });
 
 test('a consumer with no package.json has no scripts and no dependencies', () => {
@@ -647,13 +652,13 @@ test('a caller file that cannot be read counts as an empty caller', () => {
 
 test('a directory requirement wants the directory to hold something', () => {
   const withFlows = consumer({ dirs: ['.maestro'] });
-  assert.deepEqual(checkRequirement(req('dir.maestro'), withFlows), { status: 'ok', detail: undefined });
-  assert.deepEqual(checkRequirement(req('dir.maestro'), consumer()), { status: 'missing', reason: '.maestro/ is missing or empty' });
+  assert.deepEqual(checkRequirement(req('dir-nonempty.maestro'), withFlows), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(req('dir-nonempty.maestro'), consumer()), { status: 'missing', reason: '.maestro/ is missing or empty' });
 });
 
 const PIN = '1'.repeat(40);
 const pinnedCaller = (sha = PIN) => ({
-  'ci.yml': `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@${sha} # v1.0.0\n`,
+  'ci.yml': `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@${sha} # v1.0.0\n`,
 });
 const pinnedPkg = (sha = PIN) => ({
   devDependencies: { '@blinkbitcoin/app-tooling': `github:blinkbitcoin/shared-workflows#${sha}&path:/packages/app-tooling` },
@@ -664,13 +669,13 @@ const pinnedLock = (sha = PIN) => ({
 
 test('the one-pin requirement passes when calls, package.json and the lockfile share one commit', () => {
   const c = consumer({ callers: pinnedCaller(), pkg: pinnedPkg(), files: pinnedLock() });
-  assert.deepEqual(checkRequirement(req('pin.one-commit'), c), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(req('one-pin.one-commit'), c), { status: 'ok', detail: undefined });
 });
 
 test('the one-pin requirement names a package left behind by a pin bump', () => {
   const old = '2'.repeat(40);
   const c = consumer({ callers: pinnedCaller(), pkg: pinnedPkg(old), files: pinnedLock(old) });
-  assert.deepEqual(checkRequirement(req('pin.one-commit'), c), {
+  assert.deepEqual(checkRequirement(req('one-pin.one-commit'), c), {
     status: 'missing',
     reason: `package.json takes @blinkbitcoin/app-tooling at ${old}, but the workflows pin ${PIN}: run \`pnpm exec fix-tooling-pin\``,
   });
@@ -678,7 +683,7 @@ test('the one-pin requirement names a package left behind by a pin bump', () => 
 
 test('the one-pin requirement joins every problem into one reason', () => {
   const c = consumer({ callers: { ...pinnedCaller(), 'cd.yml': pinnedCaller('v0')['ci.yml'] } });
-  const result = checkRequirement(req('pin.one-commit'), c);
+  const result = checkRequirement(req('one-pin.one-commit'), c);
   assert.equal(result.status, 'missing');
   assert.match(result.reason, /the calls pin 2 refs/);
 });
@@ -703,7 +708,7 @@ test('a no-copy requirement names every copy the consumer still holds', () => {
   });
 });
 
-test('a copy blocks the contract check wherever check-code.yml is called, named by what it copies', () => {
+test('a copy blocks the contract check wherever check.yml is called, named by what it copies', () => {
   const c = consumer({
     files: { 'scripts/release/resolve-version.sh': '' },
     callers: { 'ci.yml': CALLER },
@@ -746,7 +751,7 @@ test('an unindented line that is not a rule ends the recipe before it', () => {
 test('fastlane lanes are read from subdirectories, two levels deep and no deeper', () => {
   const lanes = (files) =>
     checkRequirement(
-      req('lane.ios-build'),
+      req('lane.build-verify'),
       consumer({ files, dirs: Object.keys(files).flatMap((f) => f.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))) }),
     );
   const all = 'lane :build do\nend\nlane :verify do\nend\n';
@@ -758,14 +763,14 @@ test('fastlane lanes are read from subdirectories, two levels deep and no deeper
 test('a lane file that cannot be read counts as empty', () => {
   const io = { list: (dir) => (dir === 'fastlane' ? ['Fastfile'] : []), read: () => null, isNonEmptyDir: () => false };
   const c = { ...consumer(), io };
-  assert.equal(checkRequirement(req('lane.ios-build'), c).status, 'missing');
+  assert.equal(checkRequirement(req('lane.build-verify'), c).status, 'missing');
 });
 
 test('each reusable workflow a repository calls switches on its own profile', () => {
   const profileOf = (workflow) => [...activeProfiles(new Set([workflow]))];
   assert.deepEqual(profileOf('build-web.yml'), ['web']);
   assert.deepEqual(profileOf('publish-badges.yml'), ['badges']);
-  assert.deepEqual(profileOf('check-codeql.yml'), ['codeql']);
+  assert.deepEqual(profileOf('check-code-scanning.yml'), ['code-scanning']);
   for (const workflow of ['build-prepare.yml', 'build-ios.yml', 'build-android.yml', 'publish-store.yml', 'publish-ota.yml']) {
     assert.deepEqual(profileOf(workflow), ['release'], workflow);
   }
@@ -841,7 +846,7 @@ test('a consumer meeting every requirement exits 0 and says so', () => {
   const root = tree({ 'package.json': JSON.stringify({ scripts: {} }) });
   assert.deepEqual(runMain(['--root', root, '--profile', 'badges']), {
     code: 0,
-    stdout: 'ok    no copy of the badge renderer\n\nEvery requirement of the workflows this repository calls is satisfied.\n',
+    stdout: 'ok    no copy of gen-badges\n\nEvery requirement of the workflows this repository calls is satisfied.\n',
     stderr: '',
   });
 });
@@ -851,25 +856,25 @@ test('the root defaults to the working directory the program was given', () => {
   const root = tree({ 'package.json': '{}', 'scripts/badges/render.mjs': '' });
   const { code, stdout } = runMain(['--profile', 'badges'], { cwd: root });
   assert.equal(code, 1);
-  assert.match(stdout, /^FAIL {2}no copy of the badge renderer: scripts\/badges\/render\.mjs is a copy of what this family ships\./);
+  assert.match(stdout, /^FAIL {2}no copy of gen-badges: scripts\/badges\/render\.mjs is a copy of what this family ships\./);
 });
 
 // publish-badges.yml renders with the package's gen-badges now, so calling
 // it asks nothing of the consumer's package.json; the copy it replaced blocks.
-test('calling publish-badges.yml needs no badges:render script, and a copy of the renderer blocks', () => {
+test('calling publish-badges.yml needs no gen:badges script, and a copy of the renderer blocks', () => {
   const badges = (files) =>
     check(readContract(), readConsumer(tree(files)), { profiles: ['badges'] }).filter((r) => r.req.profile === 'badges');
-  assert.deepEqual(badges({ 'package.json': '{}' }).map((r) => [r.req.id, r.level]), [['no-copy.badges', 'ok']]);
+  assert.deepEqual(badges({ 'package.json': '{}' }).map((r) => [r.req.id, r.level]), [['no-copy.gen-badges', 'ok']]);
   const copied = badges({ 'package.json': '{}', 'scripts/badges/badge.mjs': '', 'scripts/badges/status-badge.test.mjs': '' });
-  assert.deepEqual(copied.map((r) => [r.req.id, r.level]), [['no-copy.badges', 'fail']]);
+  assert.deepEqual(copied.map((r) => [r.req.id, r.level]), [['no-copy.gen-badges', 'fail']]);
   assert.match(copied[0].reason, /scripts\/badges\/badge\.mjs, scripts\/badges\/status-badge\.test\.mjs are copies/);
 });
 
 test('a degraded-only consumer exits 0 and counts what degraded', () => {
-  const { code, stdout, stderr } = runMain(['--root', tree(), '--profile', 'codeql']);
+  const { code, stdout, stderr } = runMain(['--root', tree(), '--profile', 'code-scanning']);
   assert.equal(code, 0);
   assert.equal(stderr, '');
-  const codeql = check(readContract(), readConsumer(tree()), { profiles: ['codeql'] }).find((r) => r.req.id === 'file.codeql-config');
+  const codeql = check(readContract(), readConsumer(tree()), { profiles: ['code-scanning'] }).find((r) => r.req.id === 'file.code-scanning-configuration');
   assert.equal(codeql.level, 'warn');
   assert.equal(stdout, `${formatResult(codeql)}\n\n1 degraded. See ${GUIDE}\n`);
 });
@@ -894,8 +899,8 @@ test('--skeleton adds what would clear the failures', () => {
 });
 
 test('--skeleton prints nothing extra when nothing fails', () => {
-  const plain = runMain(['--root', tree(), '--profile', 'codeql']);
-  const withSkeleton = runMain(['--root', tree(), '--profile', 'codeql', '--skeleton']);
+  const plain = runMain(['--root', tree(), '--profile', 'code-scanning']);
+  const withSkeleton = runMain(['--root', tree(), '--profile', 'code-scanning', '--skeleton']);
   assert.equal(withSkeleton.stdout, plain.stdout);
 });
 
@@ -915,7 +920,7 @@ test('--json prints every result by id and no text summary, keeping the exit cod
 });
 
 test('--json exits 0 when nothing fails', () => {
-  const { code, stderr } = runMain(['--root', tree(), '--profile', 'codeql', '--json']);
+  const { code, stderr } = runMain(['--root', tree(), '--profile', 'code-scanning', '--json']);
   assert.equal(code, 0);
   assert.equal(stderr, '');
 });
@@ -930,14 +935,14 @@ test('the job summary is appended to GITHUB_STEP_SUMMARY when it is set', () => 
 test('no job summary is written without GITHUB_STEP_SUMMARY', () => {
   const appended = [];
   const io = { ...defaultIo, append: (file, text) => appended.push([file, text]) };
-  runMain(['--root', tree(), '--profile', 'codeql'], { io });
+  runMain(['--root', tree(), '--profile', 'code-scanning'], { io });
   assert.deepEqual(appended, []);
 });
 
 test('an io that cannot append skips the job summary rather than failing the run', () => {
   const { append, ...readOnly } = defaultIo;
   assert.equal(typeof append, 'function');
-  const { code } = runMain(['--root', tree(), '--profile', 'codeql'], { io: readOnly, env: { GITHUB_STEP_SUMMARY: '/nonexistent/summary.md' } });
+  const { code } = runMain(['--root', tree(), '--profile', 'code-scanning'], { io: readOnly, env: { GITHUB_STEP_SUMMARY: '/nonexistent/summary.md' } });
   assert.equal(code, 0);
 });
 
@@ -963,7 +968,7 @@ test('run as a program, it prints the report and exits with the report\'s code',
   assert.equal(failing.status, 1);
   assert.match(failing.stdout, /^FAIL  /m);
   assert.match(failing.stderr, /^::error::consumer contract: /);
-  const passing = spawnSync(process.execPath, [BIN, '--root', tree(), '--profile', 'codeql'], { encoding: 'utf8', env: CHILD_ENV });
+  const passing = spawnSync(process.execPath, [BIN, '--root', tree(), '--profile', 'code-scanning'], { encoding: 'utf8', env: CHILD_ENV });
   assert.equal(passing.status, 0);
   assert.match(passing.stdout, /1 degraded/);
 });
@@ -979,7 +984,7 @@ jobs:
     with: # what to prepare
       stage: internal
       reserve-tag: true
-      build-env: >-
+      environment-variables: >-
         {"A": "b",
         stage: not-a-key}
       nested:
@@ -1020,7 +1025,7 @@ const call = (job) => calls().find((c) => c.job === job);
 test('the interfaces ship in the package, keyed by workflow file', () => {
   const { workflows } = readInterfaces();
   assert.equal(workflows['publish-store.yml'].inputs.version.required, true);
-  assert.equal(workflows['check-code.yml'].outputs.includes('docs-only'), true);
+  assert.equal(workflows['check.yml'].outputs.includes('docs-only'), true);
 });
 
 test('each job that calls a shared workflow is found, with its inputs, secrets and the outputs read from it', () => {
@@ -1031,7 +1036,7 @@ test('each job that calls a shared workflow is found, with its inputs, secrets a
   const prepare = call('prepare');
   assert.equal(prepare.file, 'cd.yml');
   assert.equal(prepare.workflow, 'build-prepare.yml');
-  assert.deepEqual([...prepare.with.keys()], ['stage', 'reserve-tag', 'build-env', 'nested']);
+  assert.deepEqual([...prepare.with.keys()], ['stage', 'reserve-tag', 'environment-variables', 'nested']);
   assert.equal(prepare.with.get('reserve-tag'), 'true');
   assert.deepEqual([...prepare.secrets], ['ANTHROPIC_API_KEY']);
   assert.deepEqual([...prepare.reads].sort(), ['version', 'version-code']);

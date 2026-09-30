@@ -1,19 +1,19 @@
 {
-  "$comment": "The consumer contract, as data. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-contract.mjs, docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
+  "$comment": "The consumer contract, as data. Every id is <kind>.<the program, target or file it is about>. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-contract.mjs, docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
 
   "$schema-notes": {
-    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. script-or-dep: either (knip, which is deliberately a binary and not a script). file: any one of target exists. dir-nonempty: target is a directory with at least one entry. mise-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. one-pin: every shared-workflows call pins one full commit SHA with its # vX.Y.Z, and each of this family's packages in package.json and pnpm-lock.yaml is at that commit (target unused). no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted.",
+    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. file: any one of target exists. dir-nonempty: target is a directory with at least one entry. pinned-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. one-pin: every shared-workflows call pins one full commit SHA with its # vX.Y.Z, and each of this family's packages in package.json and pnpm-lock.yaml is at that commit (target unused). lane: the Fastfile (fastlane/**.rb) defines each lane in target, as platform:lane. lane-environment: the lanes read no environment variable with the row's prefix that is not in target. make-ci-reaches-ci and ci-runs-make-ci: `make <target>` and CI run the same gates, one direction each. no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted.",
     "toggle": "The workflow_call input that decides whether this is needed at all, as `workflow.yml:input`. The contract check reads the caller's own `with:` block first and falls back to defaultOn.",
     "severity": "required: the gate cannot run without it and the job dies. degrades: shared-workflows has a fallback, so the gate still runs but not as the consumer defined it. optional: nothing happens unless the consumer opts in.",
     "guide": "Anchor in docs/consumer-guide.md."
   },
 
-  "profiles": ["checks", "unit", "e2e", "web", "badges", "codeql", "security", "release"],
+  "profiles": ["checks", "unit", "e2e", "web", "badges", "code-scanning", "security", "release"],
 
   "requirements": [
     {
-      "id": "toolchain.mise",
-      "kind": "mise-tool",
+      "id": "pinned-tool.node-pnpm",
+      "kind": "pinned-tool",
       "target": ["node", "pnpm"],
       "profile": "checks",
       "neededBy": "the setup action, in every job of every workflow",
@@ -24,19 +24,19 @@
       "guide": "60-second-start"
     },
     {
-      "id": "toolchain.mise-ruby",
-      "kind": "mise-tool",
+      "id": "pinned-tool.ruby",
+      "kind": "pinned-tool",
       "target": ["ruby"],
       "profile": "checks",
-      "neededBy": "check-code.yml (release-checks), and every fastlane lane workflow",
-      "toggle": "check-code.yml:release-checks",
+      "neededBy": "check.yml (release), and every fastlane lane workflow",
+      "toggle": "check.yml:release",
       "defaultOn": false,
       "severity": "required",
       "fix": "Add ruby to your .mise.toml [tools] table. scripts/ci/ruby-version.sh reads the pin from there and hands it to ruby/setup-ruby.",
-      "guide": "check-codeyml"
+      "guide": "checkyml"
     },
     {
-      "id": "toolchain.package-json",
+      "id": "file.package-json",
       "kind": "file",
       "target": ["package.json"],
       "profile": "checks",
@@ -48,7 +48,7 @@
       "guide": "script-contract"
     },
     {
-      "id": "toolchain.pnpm-lock",
+      "id": "file.pnpm-lock",
       "kind": "file",
       "target": ["pnpm-lock.yaml"],
       "profile": "checks",
@@ -61,207 +61,183 @@
     },
 
     {
-      "id": "script.typecheck",
+      "id": "package-script.check-types",
       "kind": "package-script",
-      "target": "typecheck",
+      "target": "check:types",
       "profile": "checks",
-      "neededBy": "check-code.yml (typecheck)",
-      "toggle": "check-code.yml:typecheck",
+      "neededBy": "check.yml (types)",
+      "toggle": "check.yml:types",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"typecheck\" script, or pass typecheck: false in your caller.",
+      "fix": "Add a \"check:types\" script, or pass types: false in your caller.",
       "guide": "script-contract"
     },
     {
-      "id": "script.lint",
+      "id": "package-script.check-lint",
       "kind": "package-script",
-      "target": "lint",
+      "target": "check:lint",
       "profile": "checks",
-      "neededBy": "check-code.yml (lint)",
-      "toggle": "check-code.yml:lint",
+      "neededBy": "check.yml (lint)",
+      "toggle": "check.yml:lint",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"lint\" script, or pass lint: false in your caller.",
+      "fix": "Add a \"check:lint\" script, or pass lint: false in your caller.",
       "guide": "script-contract"
     },
     {
-      "id": "script.format-check",
+      "id": "package-script.check-format",
       "kind": "package-script",
-      "target": "format:check",
+      "target": "check:format",
       "profile": "checks",
-      "neededBy": "check-code.yml (format)",
-      "toggle": "check-code.yml:format",
+      "neededBy": "check.yml (format)",
+      "toggle": "check.yml:format",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"format:check\" script, or pass format: false in your caller.",
+      "fix": "Add a \"check:format\" script, or pass format: false in your caller.",
       "guide": "script-contract"
     },
     {
-      "id": "script.knip",
-      "kind": "script-or-dep",
-      "target": "knip",
-      "profile": "checks",
-      "neededBy": "check-code.yml (knip)",
-      "toggle": "check-code.yml:knip",
-      "defaultOn": true,
-      "severity": "required",
-      "fix": "Add knip as a devDependency - run-script.sh falls through to the binary. Do NOT add a package.json script literally named \"knip\": that fails expo-doctor's package.json check, which check-code.yml also runs. Or pass knip: false in your caller.",
-      "guide": "script-contract"
-    },
-    {
-      "id": "script.spell",
+      "id": "package-script.check-unused",
       "kind": "package-script",
-      "target": "spell",
+      "target": "check:unused",
       "profile": "checks",
-      "neededBy": "check-code.yml (spell)",
-      "toggle": "check-code.yml:spell",
+      "neededBy": "check.yml (unused)",
+      "toggle": "check.yml:unused",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"spell\" script, or pass spell: false in your caller.",
+      "fix": "Add a \"check:unused\" script (the template runs knip there), or pass unused: false in your caller.",
       "guide": "script-contract"
     },
     {
-      "id": "script.check-docs",
+      "id": "package-script.check-spell",
+      "kind": "package-script",
+      "target": "check:spell",
+      "profile": "checks",
+      "neededBy": "check.yml (spell)",
+      "toggle": "check.yml:spell",
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Add a \"check:spell\" script, or pass spell: false in your caller.",
+      "guide": "script-contract"
+    },
+    {
+      "id": "package-script.check-docs",
       "kind": "package-script",
       "target": "check:docs",
       "profile": "checks",
-      "neededBy": "check-code.yml (docs-check)",
-      "toggle": "check-code.yml:docs-check",
+      "neededBy": "check.yml (docs)",
+      "toggle": "check.yml:docs",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"check:docs\" script deciding what 'docs are in order' means for your repository, or pass docs-check: false in your caller. This is a house-invented name rather than a convention, so it is the most common first red on adoption.",
-      "guide": "moving-to-a-version-that-added-docs-check"
+      "fix": "Add a \"check:docs\" script deciding what 'docs are in order' means for your repository, or pass docs: false in your caller. This is a house-invented name rather than a convention, so it is the most common first red on adoption.",
+      "guide": "moving-to-a-version-that-added-the-docs-gate"
     },
     {
-      "id": "script.deps-licenses",
+      "id": "package-script.check-licenses",
       "kind": "package-script",
-      "target": "deps:licenses",
+      "target": "check:licenses",
       "profile": "checks",
-      "neededBy": "check-code.yml (licenses)",
-      "toggle": "check-code.yml:licenses",
+      "neededBy": "check.yml (licenses)",
+      "toggle": "check.yml:licenses",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"deps:licenses\" script enforcing your dependency licence policy, or pass licenses: false in your caller. Another house-invented name with no fallback.",
+      "fix": "Add a \"check:licenses\" script enforcing your dependency license policy, or pass licenses: false in your caller. Another house-invented name with no fallback.",
       "guide": "script-contract"
     },
     {
-      "id": "script.deps-check",
+      "id": "package-script.check-expo-health",
       "kind": "package-script",
-      "target": "deps:check",
+      "target": "check:expo-health",
       "profile": "checks",
-      "neededBy": "check-code.yml (expo-doctor)",
-      "toggle": "check-code.yml:expo-doctor",
+      "neededBy": "check.yml (expo-health)",
+      "toggle": "check.yml:expo-health",
       "defaultOn": true,
       "severity": "degrades",
-      "fix": "Without a \"deps:check\" script, shared-workflows runs its own scripts/checks/expo-doctor.sh instead. That runs expo-doctor alone, where a consumer script usually also runs `expo install --check`. The gate you define and the gate CI runs should be the same gate.",
+      "fix": "Without a \"check:expo-health\" script, shared-workflows runs its own scripts/checks/expo-health.sh instead: `expo install --check` as a warning, then expo-doctor with its version check off. The gate you define and the gate CI runs should be the same gate, so point the script at that file (bash node_modules/@blinkbitcoin/app-tooling/checks/expo-health.sh).",
       "guide": "script-contract"
     },
     {
-      "id": "script.deps-audit",
+      "id": "package-script.check-audit",
       "kind": "package-script",
-      "target": "deps:audit",
+      "target": "check:audit",
       "profile": "checks",
-      "neededBy": "check-code.yml (audit)",
-      "toggle": "check-code.yml:audit",
+      "neededBy": "check.yml (audit)",
+      "toggle": "check.yml:audit",
       "defaultOn": true,
       "severity": "degrades",
-      "fix": "Without a \"deps:audit\" script, shared-workflows runs its own scripts/checks/audit.sh, which is `pnpm audit` alone - no lockfile provenance check.",
+      "fix": "Without a \"check:audit\" script, shared-workflows runs its own scripts/checks/audit.sh, which is `pnpm audit` alone - no lockfile provenance check.",
       "guide": "script-contract"
     },
     {
-      "id": "script.check-ci",
+      "id": "package-script.check-ci",
       "kind": "package-script",
       "target": "check:ci",
       "profile": "checks",
-      "neededBy": "check-code.yml (actionlint, shellcheck)",
-      "toggle": "check-code.yml:actionlint",
+      "neededBy": "check.yml (ci)",
+      "toggle": "check.yml:ci",
       "defaultOn": true,
       "severity": "degrades",
-      "fix": "Without a \"check:ci\" script, shared-workflows runs its own scripts/ci/lint-ci.sh. That one already skips cleanly when you have neither scripts/ nor .github/workflows/, so this is the gentlest of the fallbacks.",
+      "fix": "Without a \"check:ci\" script, shared-workflows runs its own scripts/ci/check-ci.sh. That one already skips cleanly when you have neither scripts/ nor .github/workflows/, so this is the gentlest of the fallbacks.",
       "guide": "script-contract"
     },
     {
-      "id": "script.check-secrets",
+      "id": "package-script.check-secrets",
       "kind": "package-script",
       "target": "check:secrets",
       "profile": "checks",
-      "neededBy": "check-code.yml (secret-scan)",
-      "toggle": "check-code.yml:secret-scan",
+      "neededBy": "check.yml (secrets)",
+      "toggle": "check.yml:secrets",
       "defaultOn": true,
       "severity": "degrades",
-      "fix": "Without a \"check:secrets\" script, shared-workflows runs its own scripts/checks/secrets.sh: gitleaks over your whole git history with its default rules and any .gitleaks.toml at your root. Ship the script when you want the same scan as a make target, or pass secret-scan: false.",
+      "fix": "Without a \"check:secrets\" script, shared-workflows runs its own scripts/checks/secrets.sh: gitleaks over your whole git history with its default rules and any .gitleaks.toml at your root. Ship the script when you want the same scan as a make target, or pass secrets: false.",
       "guide": "script-contract"
     },
     {
-      "id": "script.i18n-check",
+      "id": "package-script.check-generated",
       "kind": "package-script",
-      "target": "i18n:check",
+      "target": "check:generated",
       "profile": "checks",
-      "neededBy": "check-code.yml (i18n)",
-      "toggle": "check-code.yml:i18n",
+      "neededBy": "check.yml (generated)",
+      "toggle": "check.yml:generated",
       "defaultOn": false,
       "severity": "degrades",
-      "fix": "Without an \"i18n:check\" script, shared-workflows runs its own scripts/checks/i18n.sh, which calls your \"i18n:extract\" and asserts no diff.",
+      "fix": "Without a \"check:generated\" script, shared-workflows runs its own scripts/checks/generated.sh, which calls your \"gen:i18n\" and \"gen:graphql\" (whichever you have) and asserts no diff.",
       "guide": "script-contract"
     },
     {
-      "id": "script.codegen-check",
+      "id": "package-script.check-prebuild",
       "kind": "package-script",
-      "target": "codegen:check",
+      "target": "check:prebuild",
       "profile": "checks",
-      "neededBy": "check-code.yml (graphql-codegen)",
-      "toggle": "check-code.yml:graphql-codegen",
-      "defaultOn": false,
-      "severity": "degrades",
-      "fix": "Without a \"codegen:check\" script, shared-workflows runs its own scripts/checks/codegen.sh, which calls your \"codegen\" and asserts no diff.",
-      "guide": "script-contract"
-    },
-    {
-      "id": "script.check-prebuild",
-      "kind": "package-script",
-      "target": "check-prebuild",
-      "profile": "checks",
-      "neededBy": "check-code.yml (prebuild-check)",
-      "toggle": "check-code.yml:prebuild-check",
+      "neededBy": "check.yml (prebuild)",
+      "toggle": "check.yml:prebuild",
       "defaultOn": false,
       "severity": "required",
-      "fix": "Add a \"check-prebuild\" script, or leave prebuild-check off. It is minutes rather than seconds, which is why it is off by default.",
+      "fix": "Add a \"check:prebuild\" script, or leave prebuild off. It is minutes rather than seconds, which is why it is off by default.",
       "guide": "script-contract"
     },
     {
-      "id": "script.check-bundle-secrets",
-      "kind": "package-script",
-      "target": "check:bundle-secrets",
-      "profile": "checks",
-      "neededBy": "check-code.yml (bundle-secrets)",
-      "toggle": "check-code.yml:bundle-secrets",
-      "defaultOn": false,
-      "severity": "required",
-      "fix": "Add a \"check:bundle-secrets\" script, or leave bundle-secrets off.",
-      "guide": "script-contract"
-    },
-    {
-      "id": "script.check-release",
+      "id": "package-script.check-release",
       "kind": "package-script",
       "target": "check:release",
       "profile": "checks",
-      "neededBy": "check-code.yml (release-checks)",
-      "toggle": "check-code.yml:release-checks",
+      "neededBy": "check.yml (release)",
+      "toggle": "check.yml:release",
       "defaultOn": false,
       "severity": "required",
-      "fix": "Add a \"check:release\" script, or leave release-checks off. Only a consumer with a fastlane release setup ships one.",
+      "fix": "Add a \"check:release\" script, or leave release off. Only a consumer with a fastlane release setup ships one.",
       "guide": "script-contract"
     },
     {
-      "id": "dep.commitlint",
+      "id": "package-dep.commits",
       "kind": "package-dep",
       "target": "@commitlint/cli",
       "profile": "checks",
-      "neededBy": "check-code.yml (commitlint), pr-title.yml",
-      "toggle": "check-code.yml:commitlint",
+      "neededBy": "check.yml (commits), pr-title.yml",
+      "toggle": "check.yml:commits",
       "defaultOn": true,
       "severity": "degrades",
-      "fix": "Without @commitlint/cli as a devDependency, scripts/checks/commitlint.sh falls back to npx with a pinned default config - a network fetch, and your own commitlint.config is not what runs.",
+      "fix": "Without @commitlint/cli as a devDependency, scripts/checks/commits.sh falls back to npx with a pinned default config - a network fetch, and your own commitlint.config is not what runs.",
       "guide": "script-contract"
     },
     {
@@ -269,58 +245,58 @@
       "kind": "file",
       "target": ["Gemfile"],
       "profile": "checks",
-      "neededBy": "check-code.yml (release-checks) via bundler-cache, and scripts/release/fastlane.sh",
-      "toggle": "check-code.yml:release-checks",
+      "neededBy": "check.yml (release) via bundler-cache, and scripts/release/fastlane.sh",
+      "toggle": "check.yml:release",
       "defaultOn": false,
       "severity": "required",
-      "fix": "release-checks sets up Ruby with bundler-cache, which needs a Gemfile and a committed Gemfile.lock.",
-      "guide": "check-codeyml"
+      "fix": "release sets up Ruby with bundler-cache, which needs a Gemfile and a committed Gemfile.lock.",
+      "guide": "checkyml"
     },
 
     {
-      "id": "script.test-coverage",
+      "id": "package-script.test-coverage",
       "kind": "package-script",
       "target": "test:coverage",
       "profile": "unit",
-      "neededBy": "check-unit.yml (coverage-script)",
-      "toggle": "check-unit.yml:coverage",
+      "neededBy": "test-unit.yml (coverage-script)",
+      "toggle": "test-unit.yml:coverage",
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"test:coverage\" script, or call check-unit.yml with coverage: false so it runs \"test\" instead.",
-      "guide": "check-unityml"
+      "fix": "Add a \"test:coverage\" script, or call test-unit.yml with coverage: false so it runs \"test\" instead.",
+      "guide": "test-unityml"
     },
     {
-      "id": "script.test-scripts",
+      "id": "package-script.test-scripts",
       "kind": "package-script",
       "target": "test:scripts",
       "profile": "unit",
-      "neededBy": "check-unit.yml (scripts-test-script)",
+      "neededBy": "test-unit.yml (scripts-script)",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"test:scripts\" script that tests your own scripts/ directory, or pass scripts-test-script: '' in your caller - an empty value skips the step entirely.",
-      "guide": "check-unityml"
+      "fix": "Add a \"test:scripts\" script that tests your own scripts/ directory, or pass scripts-script: '' in your caller - an empty value skips the step entirely.",
+      "guide": "test-unityml"
     },
     {
-      "id": "gate.make-ci-reaches-ci",
+      "id": "make-ci-reaches-ci.ci",
       "label": "make ci reaches every CI gate",
       "kind": "make-ci-reaches-ci",
       "target": "ci",
       "profile": "checks",
-      "neededBy": "check-code.yml and check-unit.yml, against your Makefile",
+      "neededBy": "check.yml and test-unit.yml, against your Makefile",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Every package script the check-code and check-unit workflows run for your caller must be reachable from `make ci`, by name or through a target of the dashed name (check:docs is make check-docs). Add the gate to a target `make ci` reaches, or switch it off in your caller. No Makefile, or no ci target, and this is skipped.",
+      "fix": "Every package script the check and test-unit workflows run for your caller must be reachable from `make ci`, by name or through a target of the dashed name (check:docs is make check-docs). Add the gate to a target `make ci` reaches, or switch it off in your caller. No Makefile, or no ci target, and this is skipped.",
       "guide": "the-contract-check"
     },
     {
-      "id": "gate.ci-runs-make-ci",
+      "id": "ci-runs-make-ci.ci",
       "label": "CI runs every make ci gate",
       "kind": "ci-runs-make-ci",
       "target": "ci",
       "profile": "checks",
-      "neededBy": "your Makefile, against check-code.yml and check-unit.yml",
+      "neededBy": "your Makefile, against check.yml and test-unit.yml",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
@@ -329,35 +305,35 @@
     },
 
     {
-      "id": "file.expo-config",
+      "id": "file.expo-configuration",
       "kind": "file",
       "target": ["app.config.ts", "app.config.js", "app.config.cjs", "app.json"],
       "profile": "e2e",
-      "neededBy": "check-e2e.yml and every build workflow, through scripts/lib/expo-config.sh",
+      "neededBy": "test-e2e.yml and every build workflow, through scripts/lib/expo-config.sh",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
       "fix": "These workflows are Expo-specific. The app name, scheme, iOS bundle identifier and Android package are read with `expo config --json`, so an Expo config has to resolve.",
-      "guide": "check-e2eyml"
+      "guide": "test-e2eyml"
     },
     {
-      "id": "dir.maestro",
+      "id": "dir-nonempty.maestro",
       "kind": "dir-nonempty",
       "target": ".maestro",
       "profile": "e2e",
-      "neededBy": "check-e2e.yml (maestro-flows)",
+      "neededBy": "test-e2e.yml (flows)",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add at least one Maestro flow under .maestro/, or point maestro-flows at the directory you use. An empty selection is not a pass: the suite asserts it actually ran flows.",
-      "guide": "check-e2eyml"
+      "fix": "Add at least one Maestro flow under .maestro/, or point flows at the directory you use. An empty selection is not a pass: the suite asserts it actually ran flows.",
+      "guide": "test-e2eyml"
     },
     {
-      "id": "caller.e2e-hooks",
+      "id": "caller-path.e2e-hooks",
       "kind": "caller-path",
-      "target": ["check-e2e.yml:e2e-setup-script", "check-e2e.yml:e2e-teardown-script"],
+      "target": ["test-e2e.yml:e2e-setup-script", "test-e2e.yml:e2e-teardown-script"],
       "profile": "e2e",
-      "neededBy": "check-e2e.yml, through scripts/e2e/run-hook.sh",
+      "neededBy": "test-e2e.yml, through scripts/e2e/run-hook.sh",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
@@ -366,36 +342,36 @@
     },
 
     {
-      "id": "script.build-web",
+      "id": "package-script.build-web",
       "kind": "package-script",
       "target": "build:web",
       "profile": "web",
-      "neededBy": "build-web.yml (export-script)",
+      "neededBy": "build-web.yml (build-script)",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"build:web\" script that writes dist/index.html, or pass a different export-script.",
+      "fix": "Add a \"build:web\" script that writes dist/index.html, or pass a different build-script.",
       "guide": "build-webyml"
     },
     {
-      "id": "script.test-e2e-web",
+      "id": "package-script.test-e2e-web",
       "kind": "package-script",
       "target": "test:e2e:web",
       "profile": "web",
-      "neededBy": "build-web.yml (e2e-script)",
-      "toggle": "build-web.yml:playwright",
+      "neededBy": "build-web.yml (e2e)",
+      "toggle": "build-web.yml:e2e",
       "defaultOn": true,
       "severity": "required",
       "fix": "Add a \"test:e2e:web\" script that honours PLAYWRIGHT_SKIP_EXPORT=1 and tests the existing dist/ export rather than making its own, or pass playwright: false.",
-      "guide": "the-playwright--export-contract"
+      "guide": "the-web-build--e2e-contract"
     },
     {
-      "id": "dep.playwright",
+      "id": "package-dep.test-e2e-web",
       "kind": "package-dep",
       "target": "@playwright/test",
       "profile": "web",
       "neededBy": "build-web.yml, through scripts/web/playwright-version.sh",
-      "toggle": "build-web.yml:playwright",
+      "toggle": "build-web.yml:e2e",
       "defaultOn": true,
       "severity": "required",
       "fix": "Add @playwright/test as a devDependency. The browser download is keyed on the version resolved from your lockfile, so it is read there before any install.",
@@ -403,9 +379,9 @@
     },
 
     {
-      "id": "no-copy.badges",
+      "id": "no-copy.gen-badges",
       "kind": "no-copy",
-      "label": "no copy of the badge renderer",
+      "label": "no copy of gen-badges",
       "target": [
         "scripts/badges/badge.mjs", "scripts/badges/badge.test.mjs",
         "scripts/badges/coverage-badge.mjs", "scripts/badges/coverage-badge.test.mjs",
@@ -418,37 +394,37 @@
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copy and its tests, and point any script that ran it at the package's program (\"badges:render\": \"gen-badges\"). publish-badges.yml already renders with gen-badges unless your caller names a script in render-script.",
+      "fix": "Delete the copy and its tests, and point any script that ran it at the package's program (\"gen:badges\": \"gen-badges\"). publish-badges.yml already renders with gen-badges unless your caller names a script in badges-script.",
       "guide": "no-copies-of-this-family"
     },
 
     {
-      "id": "file.codeql-config",
+      "id": "file.code-scanning-configuration",
       "kind": "file",
       "target": [".github/codeql/codeql-config.yml"],
-      "profile": "codeql",
-      "neededBy": "check-codeql.yml (config-file)",
+      "profile": "code-scanning",
+      "neededBy": "check-code-scanning.yml (configuration-file)",
       "toggle": null,
       "defaultOn": true,
       "severity": "degrades",
-      "fix": "Add .github/codeql/codeql-config.yml, or pass config-file: '' in your caller. Without it the analysis still runs, on CodeQL's own defaults - so your path exclusions and the alert-suppression pack that makes an inline // codeql[rule-id] marker count are not applied.",
-      "guide": "check-codeqlyml"
+      "fix": "Add .github/codeql/codeql-config.yml, or pass configuration-file: '' in your caller. Without it the analysis still runs, on CodeQL's own defaults - so your path exclusions and the alert-suppression pack that makes an inline // codeql[rule-id] marker count are not applied.",
+      "guide": "check-code-scanningyml"
     },
 
     {
-      "id": "script.security-config",
+      "id": "file.security-settings-script",
       "kind": "file",
-      "target": ["scripts/security/config.mjs"],
+      "target": ["scripts/security/settings.mjs"],
       "profile": "security",
-      "neededBy": "check-security.yml (the Config job), through scripts/security/settings.sh",
+      "neededBy": "check-security.yml (the Settings job), through scripts/security/settings.sh",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add scripts/security/config.mjs, or stop calling check-security.yml. It resolves security-policy.json (and its environment twins) into the settings the Config job publishes as outputs for every other job.",
+      "fix": "Add scripts/security/settings.mjs, or stop calling check-security.yml. It resolves security-settings.json (and its environment twins) into the settings the Settings job publishes as outputs for every other job.",
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-deps",
+      "id": "file.security-deps",
       "kind": "file",
       "target": ["scripts/security/deps.sh"],
       "profile": "security",
@@ -460,7 +436,7 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-code",
+      "id": "file.security-code",
       "kind": "file",
       "target": ["scripts/security/code.sh"],
       "profile": "security",
@@ -472,7 +448,7 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-policy-scanner",
+      "id": "file.security-policy",
       "kind": "file",
       "target": ["scripts/security/policy.sh"],
       "profile": "security",
@@ -484,7 +460,7 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-sbom",
+      "id": "file.security-sbom",
       "kind": "file",
       "target": ["scripts/security/sbom.sh"],
       "profile": "security",
@@ -496,7 +472,7 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-bundle",
+      "id": "file.security-bundle",
       "kind": "file",
       "target": ["scripts/security/bundle.sh"],
       "profile": "security",
@@ -508,7 +484,7 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-mobile",
+      "id": "file.security-mobile",
       "kind": "file",
       "target": ["scripts/security/mobile.sh"],
       "profile": "security",
@@ -520,7 +496,7 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-binaries",
+      "id": "file.security-binaries",
       "kind": "file",
       "target": ["scripts/security/binaries.sh"],
       "profile": "security",
@@ -532,7 +508,7 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-review",
+      "id": "file.security-review",
       "kind": "file",
       "target": ["scripts/security/review.sh"],
       "profile": "security",
@@ -544,19 +520,19 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-openant",
+      "id": "file.security-review-codebase",
       "kind": "file",
-      "target": ["scripts/security/openant.sh"],
+      "target": ["scripts/security/review-codebase.sh"],
       "profile": "security",
-      "neededBy": "check-security.yml (openant), through scripts/security/run-job.sh",
-      "toggle": "check-security.yml:openant",
+      "neededBy": "check-security.yml (review-codebase), through scripts/security/run-job.sh",
+      "toggle": "check-security.yml:review-codebase",
       "defaultOn": false,
       "severity": "required",
-      "fix": "Add scripts/security/openant.sh (the OpenAnt scan; it must write a skipped SARIF, never fail, when no provider or key is configured), or leave openant off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
+      "fix": "Add scripts/security/review-codebase.sh (the OpenAnt scan of the whole codebase; it must write a skipped SARIF, never fail, when no provider or key is configured), or leave review-codebase off in your caller. Shared ships no fallback runner - a job that is switched on but whose script is missing fails, by name, rather than skipping quietly.",
       "guide": "check-securityyml"
     },
     {
-      "id": "script.security-verdict",
+      "id": "file.security-verdict",
       "kind": "file",
       "target": ["scripts/security/verdict.mjs"],
       "profile": "security",
@@ -568,20 +544,20 @@
       "guide": "check-securityyml"
     },
     {
-      "id": "file.security-policy",
+      "id": "file.security-settings",
       "kind": "file",
-      "target": ["security-policy.json"],
+      "target": ["security-settings.json"],
       "profile": "security",
-      "neededBy": "scripts/security/config.mjs, the settings resolver the Config job runs",
+      "neededBy": "scripts/security/settings.mjs, the settings resolver the Settings job runs",
       "toggle": null,
       "defaultOn": true,
       "severity": "degrades",
-      "fix": "Add security-policy.json to set severity, failOn and per-job enabled flags. Without it the built-in defaults apply.",
+      "fix": "Add security-settings.json to set severity, failOn and per-job enabled flags. Without it the built-in defaults apply.",
       "guide": "check-securityyml"
     },
 
     {
-      "id": "dir.fastlane",
+      "id": "file.fastfile",
       "kind": "file",
       "target": ["fastlane/Fastfile"],
       "profile": "release",
@@ -593,8 +569,8 @@
       "guide": "the-five-fastfile-contract-variables"
     },
     {
-      "id": "lane.ios-build",
-      "kind": "fastlane-lane",
+      "id": "lane.build-verify",
+      "kind": "lane",
       "target": ["ios:build", "ios:verify", "android:build", "android:verify"],
       "profile": "release",
       "neededBy": "build-ios.yml, build-android.yml",
@@ -605,9 +581,9 @@
       "guide": "build-iosyml"
     },
     {
-      "id": "lane.app-review-env",
+      "id": "lane-environment.app-review",
       "label": "APP_REVIEW_* names the lanes read",
-      "kind": "fastlane-env-subset",
+      "kind": "lane-environment",
       "target": ["APP_REVIEW_DEMO_PASSWORD", "APP_REVIEW_DEMO_USER", "APP_REVIEW_EMAIL", "APP_REVIEW_FIRST_NAME", "APP_REVIEW_LAST_NAME", "APP_REVIEW_NOTES", "APP_REVIEW_PHONE"],
       "prefix": "APP_REVIEW_",
       "profile": "release",
@@ -619,7 +595,7 @@
       "guide": "the-contract-check"
     },
     {
-      "id": "script.verify-ios",
+      "id": "file.verify-ios",
       "kind": "file",
       "target": ["scripts/release/verify-ios.sh"],
       "profile": "release",
@@ -631,7 +607,7 @@
       "guide": "consumer-side-release-scripts"
     },
     {
-      "id": "script.verify-android",
+      "id": "file.verify-android",
       "kind": "file",
       "target": ["scripts/release/verify-android.sh"],
       "profile": "release",
@@ -643,7 +619,7 @@
       "guide": "consumer-side-release-scripts"
     },
     {
-      "id": "dep.fingerprint",
+      "id": "package-dep.fingerprint",
       "kind": "package-dep",
       "target": "@expo/fingerprint",
       "profile": "release",
@@ -656,71 +632,71 @@
     },
 
     {
-      "id": "ignores.biome",
+      "id": "ignores-workflows.biome-json",
       "kind": "ignores-workflows",
       "target": "biome.json",
       "profile": "checks",
       "neededBy": "your own lint gate, which walks the whole tree",
-      "toggle": "check-code.yml:lint",
+      "toggle": "check.yml:lint",
       "defaultOn": true,
       "severity": "degrades",
       "fix": "Add \"!**/.workflows\" to files.includes in biome.json. Every job checks this repository out into .workflows/, and a tool that globs the whole tree will lint files you do not own.",
       "guide": "workflows-ignore-list-for-consumers"
     },
     {
-      "id": "ignores.eslint",
+      "id": "ignores-workflows.eslint-configuration",
       "kind": "ignores-workflows",
       "target": "eslint.config.mjs",
       "profile": "checks",
       "neededBy": "your own lint gate, which walks the whole tree",
-      "toggle": "check-code.yml:lint",
+      "toggle": "check.yml:lint",
       "defaultOn": true,
       "severity": "degrades",
       "fix": "Add '.workflows/**' to the flat-config ignores array in eslint.config.mjs.",
       "guide": "workflows-ignore-list-for-consumers"
     },
     {
-      "id": "ignores.tsconfig",
+      "id": "ignores-workflows.tsconfig-json",
       "kind": "ignores-workflows",
       "target": "tsconfig.json",
       "profile": "checks",
-      "neededBy": "your own typecheck gate",
-      "toggle": "check-code.yml:typecheck",
+      "neededBy": "your own type check gate",
+      "toggle": "check.yml:types",
       "defaultOn": true,
       "severity": "degrades",
       "fix": "Add \".workflows\" to exclude in tsconfig.json.",
       "guide": "workflows-ignore-list-for-consumers"
     },
     {
-      "id": "ignores.knip",
+      "id": "ignores-workflows-or-narrow.knip-json",
       "kind": "ignores-workflows-or-narrow",
       "target": "knip.json",
       "profile": "checks",
-      "neededBy": "your own knip gate",
-      "toggle": "check-code.yml:knip",
+      "neededBy": "your own unused-code gate",
+      "toggle": "check.yml:unused",
       "defaultOn": true,
       "severity": "degrades",
       "fix": "Add \".workflows/**\" to ignore in knip.json, or keep every project/entry glob rooted so none of them reaches into it. The second is what the template does, and it is why this row is satisfied there without an ignore entry.",
       "guide": "workflows-ignore-list-for-consumers"
     },
     {
-      "id": "ignores.typos",
+      "id": "ignores-workflows.typos-toml",
       "kind": "ignores-workflows",
       "target": "typos.toml",
       "profile": "checks",
       "neededBy": "your own spell gate",
-      "toggle": "check-code.yml:spell",
+      "toggle": "check.yml:spell",
       "defaultOn": true,
       "severity": "degrades",
       "fix": "Add \".workflows/\" to [files] extend-exclude in typos.toml.",
       "guide": "workflows-ignore-list-for-consumers"
     },
     {
-      "id": "ignores.jest",
+      "id": "ignores-workflows.jest-configuration",
       "kind": "ignores-workflows",
       "target": "jest.config.ts",
       "profile": "unit",
-      "neededBy": "check-unit.yml, which runs your test script over the whole tree",
+      "neededBy": "test-unit.yml, which runs your test script over the whole tree",
       "toggle": null,
       "defaultOn": true,
       "severity": "degrades",
@@ -728,7 +704,7 @@
       "guide": "workflows-ignore-list-for-consumers"
     },
     {
-      "id": "ignores.git",
+      "id": "ignores-workflows.gitignore",
       "kind": "ignores-workflows",
       "target": ".gitignore",
       "profile": "checks",
@@ -831,7 +807,7 @@
       "guide": "no-copies-of-this-family"
     },
     {
-      "id": "pin.one-commit",
+      "id": "one-pin.one-commit",
       "kind": "one-pin",
       "label": "one shared-workflows commit everywhere",
       "target": null,
@@ -844,9 +820,9 @@
       "guide": "one-commit-everywhere"
     },
     {
-      "id": "no-copy.tooling-pin",
+      "id": "no-copy.fix-tooling-pin",
       "kind": "no-copy",
-      "label": "no copy of tooling-pin.mjs",
+      "label": "no copy of fix-tooling-pin",
       "target": ["scripts/tooling-pin.mjs", "scripts/tooling-pin.test.mjs"],
       "profile": "checks",
       "neededBy": "the fix-tooling-pin program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts",
@@ -857,9 +833,9 @@
       "guide": "no-copies-of-this-family"
     },
     {
-      "id": "no-copy.workflow-contract",
+      "id": "no-copy.check-contract",
       "kind": "no-copy",
-      "label": "no copy of the workflow call contract",
+      "label": "no copy of check-contract",
       "target": ["scripts/lib/workflow-calls.mjs", "scripts/lib/workflow-calls.test.mjs", "scripts/workflow-contract.test.mjs"],
       "profile": "checks",
       "neededBy": "check-contract, which @blinkbitcoin/app-tooling ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface",
@@ -896,35 +872,35 @@
       "guide": "no-copies-of-this-family"
     },
     {
-      "id": "no-copy.generated-drift",
+      "id": "no-copy.check-generated",
       "kind": "no-copy",
-      "label": "no copy of the generated-file drift checks",
+      "label": "no copy of the generated-file check",
       "target": ["scripts/check-i18n.sh", "scripts/check-codegen.sh"],
       "profile": "checks",
-      "neededBy": "checks/i18n.sh and checks/codegen.sh, which @blinkbitcoin/app-tooling ships and check-code.yml runs; a copy in your repository is compared with them by nothing and drifts",
+      "neededBy": "checks/generated.sh, which @blinkbitcoin/app-tooling ships and check.yml runs; a copy in your repository is compared with it by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copies, and point i18n:check and codegen:check at bash node_modules/@blinkbitcoin/app-tooling/checks/i18n.sh and checks/codegen.sh; each runs your i18n:extract or codegen script and fails on a diff.",
+      "fix": "Delete the copies, and point check:generated at bash node_modules/@blinkbitcoin/app-tooling/checks/generated.sh; it runs your gen:i18n and gen:graphql scripts, whichever you have, and fails on a diff.",
       "guide": "no-copies-of-this-family"
     },
     {
-      "id": "no-copy.lint-ci",
+      "id": "no-copy.check-ci",
       "kind": "no-copy",
-      "label": "no copy of the CI lint",
+      "label": "no copy of the CI check",
       "target": ["scripts/shellcheck.sh"],
       "profile": "checks",
-      "neededBy": "ci/lint-ci.sh, which @blinkbitcoin/app-tooling ships and check-code.yml runs: actionlint, zizmor and shellcheck at the pinned versions",
+      "neededBy": "ci/check-ci.sh, which @blinkbitcoin/app-tooling ships and check.yml runs: actionlint, zizmor and shellcheck at the pinned versions",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copy, and run bash node_modules/@blinkbitcoin/app-tooling/ci/lint-ci.sh; WORKFLOWS_SHELLCHECK_PATHS names the directories to lint when scripts/ is not all of them.",
+      "fix": "Delete the copy, and run bash node_modules/@blinkbitcoin/app-tooling/ci/check-ci.sh; WORKFLOWS_SHELLCHECK_PATHS names the directories to lint when scripts/ is not all of them.",
       "guide": "no-copies-of-this-family"
     },
     {
       "id": "no-copy.gen-store-notes",
       "kind": "no-copy",
-      "label": "no copy of the store notes generator",
+      "label": "no copy of gen-store-notes",
       "target": ["scripts/release/notes.mjs", "scripts/release/notes.test.mjs", "scripts/release/llm/index.mjs", "scripts/release/llm/index.test.mjs", "scripts/release/fixtures/release-body.md", "scripts/release/fixtures/release-pr-body.md", "scripts/release/fixtures/anthropic-response.json", "scripts/release/fixtures/anthropic-invalid-response.json", "scripts/release/fixtures/openai-response.json"],
       "profile": "checks",
       "neededBy": "the gen-store-notes program @blinkbitcoin/app-tooling ships, which build-prepare.yml and pr-store-notes.yml run through scripts/release/gen-store-notes.sh; a copy in your repository is not run, and drifts",
@@ -992,11 +968,11 @@
       "label": "no copy of check-licenses",
       "target": ["scripts/check-licenses.mjs", "scripts/check-licenses.test.mjs"],
       "profile": "checks",
-      "neededBy": "the check-licenses program @blinkbitcoin/app-tooling ships, with the organisation's licence allowlist; a copy in your repository is compared with it by nothing and drifts",
+      "neededBy": "the check-licenses program @blinkbitcoin/app-tooling ships, with the organisation's license allowlist; a copy in your repository is compared with it by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copy and its test, and point deps:licenses at check-licenses; a licence only your repository accepts goes in an --allow.",
+      "fix": "Delete the copy and its test, and point check:licenses at check-licenses; a license only your repository accepts goes in an --allow.",
       "guide": "no-copies-of-this-family"
     },
     {
@@ -1005,7 +981,7 @@
       "label": "no copy of check-code-scanning",
       "target": ["scripts/codeql-local.sh", "scripts/codeql-local.test.mjs", "scripts/codeql-findings.mjs", "scripts/codeql-findings.test.mjs"],
       "profile": "checks",
-      "neededBy": "the check-code-scanning program @blinkbitcoin/app-tooling ships, which reads the same configuration file check-codeql.yml does; a copy in your repository is compared with it by nothing and drifts",
+      "neededBy": "the check-code-scanning program @blinkbitcoin/app-tooling ships, which reads the same configuration file check-code-scanning.yml does; a copy in your repository is compared with it by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
@@ -1026,16 +1002,16 @@
       "guide": "no-copies-of-this-family"
     },
     {
-      "id": "no-copy.expo-doctor",
+      "id": "no-copy.check-expo-health",
       "kind": "no-copy",
       "label": "no copy of the Expo health check",
       "target": ["scripts/check-deps.sh", "scripts/check-deps.test.mjs"],
       "profile": "checks",
-      "neededBy": "checks/expo-doctor.sh, which @blinkbitcoin/app-tooling ships and check-code.yml runs when you have no deps:check: advisory SDK drift, then expo-doctor; a copy in your repository is compared with it by nothing and drifts",
+      "neededBy": "checks/expo-health.sh, which @blinkbitcoin/app-tooling ships and check.yml runs when you have no check:expo-health: advisory SDK drift, then expo-doctor; a copy in your repository is compared with it by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copy and its test, and point deps:check at bash node_modules/@blinkbitcoin/app-tooling/checks/expo-doctor.sh.",
+      "fix": "Delete the copy and its test, and point check:expo-health at bash node_modules/@blinkbitcoin/app-tooling/checks/expo-health.sh.",
       "guide": "no-copies-of-this-family"
     }
   ]

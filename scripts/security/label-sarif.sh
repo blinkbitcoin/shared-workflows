@@ -26,7 +26,7 @@ name_of() {
     mobile) printf 'Mobile' ;;
     binaries) printf 'Binaries' ;;
     review) printf 'Review' ;;
-    openant) printf 'OpenAnt' ;;
+    review-codebase) printf 'Review codebase' ;;
     *) return 1 ;;
   esac
 }

@@ -8,7 +8,7 @@
 #   $WORKFLOWS_OUTPUT_DIR/build-info.android.json = the same bytes, under the name
 #     that is uploaded with the binaries (see the note above the cp below)
 #
-# Why a copy rather than an edit in place: the release-meta artifact is produced
+# Why a copy rather than an edit in place: the build-info artifact is produced
 # by build-prepare, once, and is downloaded by both platform jobs at the same
 # time. Editing it there would make two jobs write the same file, and the
 # `artifacts` of an iOS build and an Android build are different things anyway.
@@ -18,7 +18,7 @@
 # about to hand a human (or a store) against the digest recorded here, so a
 # universal apk that was rebuilt, re-signed or swapped between the build step
 # and the upload is caught rather than shipped. Downstream, publish-github-release.yml
-# stages this copy over the release-meta one, so the release's build-info.json
+# stages this copy over the build-info one, so the release's build-info.json
 # is the one that names the bytes actually attached to it.
 #
 # Env: WORKFLOWS_OUTPUT_DIR (where the lane dropped the .apk/.aab), BUILD_INFO_FILE

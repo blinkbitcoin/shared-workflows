@@ -25,7 +25,7 @@ function consumer(lockLines, sha = SHA) {
   mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
   writeFileSync(
     path.join(root, '.github', 'workflows', 'ci.yml'),
-    `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@${sha} # v1.0.0\n`,
+    `jobs:\n  code:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@${sha} # v1.0.0\n`,
   );
   if (lockLines !== null) writeFileSync(path.join(root, 'pnpm-lock.yaml'), `lockfileVersion: '9.0'\n${lockLines.join('\n')}\n`);
   return root;

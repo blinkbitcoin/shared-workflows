@@ -83,7 +83,7 @@ bare_path() {
   local root="$RUNNER_TEMP/workflows"
   [ "$output" = "$root
 $root
-$root/release-meta
+$root/build-info
 $root/ota
 $root/assets" ] || fail "unexpected directories: $output"
   [ -d "$root" ] || fail "the root was not created"
@@ -102,7 +102,7 @@ $root/assets" ] || fail "unexpected directories: $output"
   WORKFLOWS_OUT="$root" run release_env 'printf "%s\n" "$WORKFLOWS_OUTPUT_DIR" "$WORKFLOWS_RELEASE_META_DIR" "$WORKFLOWS_OTA_DIR" "$WORKFLOWS_ASSETS_DIR"'
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   [ "$output" = "$root
-$root/release-meta
+$root/build-info
 $root/ota
 $root/assets" ] || fail "the directories did not follow WORKFLOWS_OUT: $output"
   [ -d "$root" ] || fail "the configured root was not created"

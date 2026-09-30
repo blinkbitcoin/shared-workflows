@@ -24,13 +24,13 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 }
 
 # The dispatch needs `actions: write`, and release-please needs contents and
-# pull-requests. All three are granted on the release-please job, not at the
+# pull-requests. All three are granted on the release-pr job, not at the
 # top: a job-level block replaces the top-level one, so a write grant at the top
 # would reach every job added later (zizmor's excessive-permissions).
-@test "self-release.yml grants the release-please job its writes, and nothing at the top" {
+@test "self-release.yml grants the release-pr job its writes, and nothing at the top" {
   for scope in contents pull-requests actions; do
-    got="$(yq -r ".jobs.\"release-please\".permissions.\"$scope\"" "$RELEASE")"
-    [ "$got" = "write" ] || fail "release-please job permissions.$scope is '$got', not write"
+    got="$(yq -r ".jobs.\"release-pr\".permissions.\"$scope\"" "$RELEASE")"
+    [ "$got" = "write" ] || fail "release-pr job permissions.$scope is '$got', not write"
   done
   top="$(yq -r '[.permissions // {} | to_entries[] | select(.value == "write") | .key] | join(",")' "$RELEASE")"
   [ -z "$top" ] || fail "self-release.yml grants '$top' at the top level; grant writes per job"
@@ -41,12 +41,12 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 # PR. How that workflow gates and wires the dispatch is held in
 # workflow-shape.bats; here, that this repository uses it that way.
 @test "self-release.yml runs the local pr-release.yml, starting self-ci on each release PR" {
-  [ "$(yq -r '.jobs."release-please".uses' "$RELEASE")" = "./.github/workflows/pr-release.yml" ] \
-    || fail "self-release.yml does not call the local pr-release.yml: $(yq -r '.jobs."release-please".uses' "$RELEASE")"
-  [ "$(yq -r '.jobs."release-please".with."ci-workflow"' "$RELEASE")" = "self-ci.yml" ] \
+  [ "$(yq -r '.jobs."release-pr".uses' "$RELEASE")" = "./.github/workflows/pr-release.yml" ] \
+    || fail "self-release.yml does not call the local pr-release.yml: $(yq -r '.jobs."release-pr".uses' "$RELEASE")"
+  [ "$(yq -r '.jobs."release-pr".with."ci-workflow"' "$RELEASE")" = "self-ci.yml" ] \
     || fail "self-release.yml does not start self-ci.yml on the release PR"
   for secret in RELEASE_TAGGER_APP_ID RELEASE_TAGGER_APP_PRIVATE_KEY RELEASE_PLEASE_TOKEN; do
-    [ "$(yq -r ".jobs.\"release-please\".secrets.$secret" "$RELEASE")" = "\${{ secrets.$secret }}" ] \
+    [ "$(yq -r ".jobs.\"release-pr\".secrets.$secret" "$RELEASE")" = "\${{ secrets.$secret }}" ] \
       || fail "self-release.yml does not pass $secret"
   done
 }
@@ -55,7 +55,7 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 # the release PR dispatching a name that no longer exists, failing only on a real
 # release - so the name is held to the file here.
 @test "the CI workflow self-release.yml starts on the release PR exists" {
-  ci="$(yq -r '.jobs."release-please".with."ci-workflow"' "$RELEASE")"
+  ci="$(yq -r '.jobs."release-pr".with."ci-workflow"' "$RELEASE")"
   [ -f "$REPO_ROOT/.github/workflows/$ci" ] || fail "self-release.yml starts $ci, which does not exist"
 }
 
@@ -63,7 +63,7 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 # and a path spelled wrong there would skip the publish rather than fail it.
 @test "self-release.yml publishes app-tooling only when that package released" {
   cond="$(yq -r '.jobs."publish-app-tooling".if' "$RELEASE")"
-  [ "$cond" = "\${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/app-tooling') }}" ] \
+  [ "$cond" = "\${{ contains(fromJSON(needs.release-pr.outputs.paths-released || '[]'), 'packages/app-tooling') }}" ] \
     || fail "publish-app-tooling is not gated on packages/app-tooling being released: $cond"
   [ -f "$REPO_ROOT/packages/app-tooling/package.json" ] || fail "packages/app-tooling moved; the gate names a path that is gone"
 }
@@ -140,13 +140,13 @@ SELF_STORE_NOTES="$REPO_ROOT/.github/workflows/self-store-notes.yml"
   [ "$(yq -r '.jobs."store-notes".uses' "$RELEASE")" = "./.github/workflows/self-store-notes.yml" ] \
     || fail "self-release.yml does not run the dry run"
   cond="$(yq -r '.jobs."store-notes".if' "$RELEASE")"
-  [[ "$cond" == *"needs.release-please.outputs.release-created == 'true'"* ]] \
+  [[ "$cond" == *"needs.release-pr.outputs.release-created == 'true'"* ]] \
     || fail "the dry run is not gated on a release: $cond"
   [ "$(yq -r '.jobs."store-notes".permissions."pull-requests"' "$RELEASE")" = "write" ] \
     || fail "the release dry run does not grant pull-requests: write"
   needs="$(yq -r '.jobs."major-tag".needs | (select(type == "!!seq") | join(",")) // .' "$RELEASE")"
   [[ ",$needs," == *",store-notes,"* ]] || fail "major-tag does not need the dry run: $needs"
-  [[ ",$needs," == *",release-please,"* ]] || fail "major-tag lost its release-please need: $needs"
+  [[ ",$needs," == *",release-pr,"* ]] || fail "major-tag lost its release-pr need: $needs"
   [ "$(yq -r '.jobs."major-tag".if' "$RELEASE")" != "null" ] || fail "major-tag lost its if"
   # `always()` or `!cancelled()` would run it past a failed dry run.
   not_contains "$(yq -r '.jobs."major-tag".if' "$RELEASE")" "always()" || fail "major-tag runs past a failed dry run"
@@ -244,7 +244,7 @@ UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
 
 @test "self-ci.yml hands each class to its gate, reading an empty output as run" {
   command -v yq >/dev/null || skip "yq not installed"
-  for pair in checks:code checks:tooling unit:package; do
+  for pair in checks:ci checks:versions unit:package; do
     job="${pair%%:*}" class="${pair##*:}"
     [ "$(yq -r ".jobs.$job.needs" "$CI")" = "changes" ] || fail "$job does not need changes"
     [ "$(yq -r ".jobs.$job.with.$class" "$CI")" = "\${{ needs.changes.outputs.$class != 'false' }}" ] \
@@ -256,7 +256,7 @@ UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
 
 @test "each narrow gate runs on its input, which defaults to true" {
   command -v yq >/dev/null || skip "yq not installed"
-  for spec in "$CHECKS:code:code" "$CHECKS:tooling:tooling" "$UNIT:package:package"; do
+  for spec in "$CHECKS:ci:ci" "$CHECKS:versions:versions" "$UNIT:package:package"; do
     file="${spec%%:*}" rest="${spec#*:}"
     job="${rest%%:*}" input="${rest##*:}"
     [ "$(yq -r ".jobs.$job.if" "$file")" = "\${{ inputs.$input }}" ] \

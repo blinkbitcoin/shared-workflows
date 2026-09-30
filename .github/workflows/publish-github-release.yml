@@ -1,4 +1,4 @@
-name: GitHub Release
+name: Publish GitHub release
 on:
   workflow_call:
     inputs:
@@ -30,7 +30,7 @@ on:
         description: 'create-prerelease | promote | latest | append'
         type: string
         required: true
-      tag:
+      release-tag:
         description: Release tag to create or move
         type: string
         required: true
@@ -45,7 +45,7 @@ on:
       release-notes-artifact:
         description: Artifact carrying release-notes.md (used as the release body, or as the appended section in `append` mode); empty falls back to GitHub's generated release notes
         type: string
-        default: 'release-meta'
+        default: 'build-info'
       release-notes-file:
         description: File inside the release notes artifact to use as the release body
         type: string
@@ -171,7 +171,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ inputs.repository || github.repository }}
           MODE: ${{ inputs.mode }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ inputs.release-tag }}
           TARGET_SHA: ${{ inputs.sha }}
           TITLE: ${{ inputs.title }}
           APPEND_TITLE: ${{ inputs.append-title }}

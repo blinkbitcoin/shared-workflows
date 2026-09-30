@@ -81,14 +81,14 @@ test('a requirement with a fallback reads as optional', () => {
 
 test('a default-on toggle reads as required, with the input that turns it off', () => {
   assert.equal(
-    need({ severity: 'required', toggle: 'check-code.yml:typecheck', defaultOn: true }),
-    'required, or pass `typecheck: false`',
+    need({ severity: 'required', toggle: 'check.yml:types', defaultOn: true }),
+    'required, or pass `types: false`',
   );
 });
 
 test('a default-off toggle reads as needed only once it is turned on', () => {
   assert.equal(
-    need({ severity: 'required', toggle: 'check-unit.yml:coverage', defaultOn: false }),
+    need({ severity: 'required', toggle: 'test-unit.yml:coverage', defaultOn: false }),
     'only if you set `coverage: true`',
   );
 });
@@ -98,8 +98,8 @@ test('a requirement with no toggle and no fallback reads as required', () => {
 });
 
 test('one target reads as itself, whether or not it came as a list', () => {
-  assert.equal(targetOf({ kind: 'package-script', target: 'typecheck' }), '`typecheck`');
-  assert.equal(targetOf({ kind: 'package-script', target: ['typecheck'] }), '`typecheck`');
+  assert.equal(targetOf({ kind: 'package-script', target: 'check:types' }), '`check:types`');
+  assert.equal(targetOf({ kind: 'package-script', target: ['check:types'] }), '`check:types`');
 });
 
 test('two files are alternatives, joined with or', () => {
@@ -114,12 +114,12 @@ test('three files are a comma list ending in or', () => {
 });
 
 test('the tools a mise configuration pins are all needed, joined with and', () => {
-  assert.equal(targetOf({ kind: 'mise-tool', target: ['node', 'pnpm'] }), '`node` and `pnpm` in your mise config');
+  assert.equal(targetOf({ kind: 'pinned-tool', target: ['node', 'pnpm'] }), '`node` and `pnpm` in your mise config');
 });
 
 test('fastlane lanes read as lanes, three of them in a comma list ending in and', () => {
   assert.equal(
-    targetOf({ kind: 'fastlane-lane', target: ['build_ios', 'build_android', 'publish'] }),
+    targetOf({ kind: 'lane', target: ['build_ios', 'build_android', 'publish'] }),
     'the `build_ios`, `build_android` and `publish` lanes',
   );
 });
@@ -134,7 +134,7 @@ test('the two make ci rules read as sentences, not as their targets', () => {
 
 test('an environment subset names its prefix and the names the lanes may read', () => {
   assert.equal(
-    targetOf({ kind: 'fastlane-env-subset', prefix: 'APP_REVIEW_', target: ['APP_REVIEW_EMAIL', 'APP_REVIEW_NOTES'] }),
+    targetOf({ kind: 'lane-environment', prefix: 'APP_REVIEW_', target: ['APP_REVIEW_EMAIL', 'APP_REVIEW_NOTES'] }),
     'lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_EMAIL` and `APP_REVIEW_NOTES`',
   );
 });

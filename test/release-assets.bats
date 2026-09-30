@@ -187,7 +187,7 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
 # N1: the download used to land in $WORKFLOWS_ASSETS_DIR with --clobber, so the source
 # pre-release's build-info.json and notes (an *earlier* stage's) replaced this
 # run's - on the release record and in the OTA gate's baseline.
-@test "this run's release-meta wins over the source pre-release's copy" {
+@test "this run's build-info wins over the source pre-release's copy" {
   : > "$WORKFLOWS_TEST_EXISTS"
   source_release
   printf 'this-run\n' > "$ASSETS/build-info.json"

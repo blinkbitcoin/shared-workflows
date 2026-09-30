@@ -20,12 +20,12 @@ export const START = '<!-- contract-table:start -->';
 export const END = '<!-- contract-table:end -->';
 
 export const PROFILE_TITLE = {
-  checks: '`check-code.yml`',
-  unit: '`check-unit.yml`',
-  e2e: '`check-e2e.yml`',
+  checks: '`check.yml`',
+  unit: '`test-unit.yml`',
+  e2e: '`test-e2e.yml`',
   web: '`build-web.yml`',
   badges: '`publish-badges.yml`',
-  codeql: '`check-codeql.yml`',
+  'code-scanning': '`check-code-scanning.yml`',
   security: '`check-security.yml`',
   release: 'the release workflows',
 };
@@ -55,11 +55,11 @@ export function targetOf(req) {
     quoted.length <= 2
       ? quoted.join(` ${conjunction} `)
       : `${quoted.slice(0, -1).join(', ')} ${conjunction} ${quoted.at(-1)}`;
-  if (req.kind === 'mise-tool') return `${joined} in your mise config`;
-  if (req.kind === 'fastlane-lane') return `the ${joined} lanes`;
+  if (req.kind === 'pinned-tool') return `${joined} in your mise config`;
+  if (req.kind === 'lane') return `the ${joined} lanes`;
   if (req.kind === 'make-ci-reaches-ci') return 'every gate CI runs, reachable from `make ci`';
   if (req.kind === 'ci-runs-make-ci') return 'every gate `make ci` runs, run by CI';
-  if (req.kind === 'fastlane-env-subset') return `lanes that read only these \`${req.prefix}*\` names: ${joined}`;
+  if (req.kind === 'lane-environment') return `lanes that read only these \`${req.prefix}*\` names: ${joined}`;
   if (req.kind === 'no-copy') return `no ${joined}`;
   return joined;
 }

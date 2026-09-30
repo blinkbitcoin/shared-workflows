@@ -72,6 +72,6 @@ done
 [ -f "$WORKFLOWS_RELEASE_META_DIR/release-notes.md" ] || cp "$WORKFLOWS_RELEASE_META_DIR/store-notes.txt" "$WORKFLOWS_RELEASE_META_DIR/release-notes.md"
 
 gh_env STORE_NOTES_FILE "$WORKFLOWS_RELEASE_META_DIR/store-notes.txt"
-log "release-meta contents:"
+log "build-info contents:"
 ls -l "$WORKFLOWS_RELEASE_META_DIR" >&2
 endgroup

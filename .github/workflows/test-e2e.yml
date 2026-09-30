@@ -1,4 +1,4 @@
-name: E2E
+name: Test E2E
 on:
   workflow_call:
     inputs:
@@ -45,7 +45,7 @@ on:
         description: Run the Android build and emulator suite
         type: boolean
         default: true
-      xcode:
+      xcode-version:
         description: Xcode version to select before building (empty uses the runner default); also folded into the iOS cache key
         type: string
         default: ''
@@ -61,15 +61,15 @@ on:
         description: SHA-256 of maestro-version's release archive; empty for the pinned version, required for any other (the install refuses unverified bytes)
         type: string
         default: ''
-      maestro-flows:
+      flows:
         description: Flows directory, consumer-relative
         type: string
         default: '.maestro'
-      maestro-include-tags:
+      include-tags:
         description: Passed to maestro as --include-tags when non-empty
         type: string
         default: ''
-      maestro-exclude-tags:
+      exclude-tags:
         description: Passed to maestro as --exclude-tags when non-empty
         type: string
         default: ''
@@ -91,7 +91,7 @@ on:
           the iOS jobs whatever `dev-client` says; Android is unaffected.
         type: string
         default: Debug
-      build-env:
+      environment-variables:
         description: >-
           Flat JSON object of non-secret build environment variables published
           before the iOS prebuild, so the bundle embeds them. A Release build
@@ -110,11 +110,11 @@ on:
         description: Consumer-relative script run after the suite, pass or fail (empty skips it)
         type: string
         default: ''
-      ios-artifact-name:
+      ios-artifact:
         description: Artifact name carrying the packed iOS .app tar between build-ios and ios
         type: string
         default: 'ios-app'
-      android-artifact-name:
+      android-artifact:
         description: Artifact name carrying the debug APK between build-android and android
         type: string
         default: 'android-apk'
@@ -139,7 +139,7 @@ jobs:
     timeout-minutes: 60
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
-      WORKFLOWS_XCODE: ${{ inputs.xcode }}
+      WORKFLOWS_XCODE: ${{ inputs.xcode-version }}
       WORKFLOWS_IOS_CONFIGURATION: ${{ inputs.ios-configuration }}
     steps:
       - name: Checkout consumer
@@ -172,8 +172,8 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           native-cache-version: ${{ inputs.native-cache-version }}
           native-extra-globs: ${{ inputs.native-extra-globs }}
-          xcode: ${{ inputs.xcode }}
-          build-env: ${{ inputs.build-env }}
+          xcode-version: ${{ inputs.xcode-version }}
+          environment-variables: ${{ inputs.environment-variables }}
       # The built .app plus the generated workspace: ios-pack.sh resolves the
       # scheme from ios/*.xcworkspace, and on a cache hit no prebuild has run.
       - name: Restore iOS app cache
@@ -196,15 +196,15 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          ruby: 'true'
+          ruby-enabled: 'true'
       # Before the prebuild, because EXPO_PUBLIC_* is inlined when the bundle is
       # written - anything published later never reaches the .app. Miss only:
       # on a hit there is no bundle to write, and the variables are already
       # baked into the .app being restored (which is why they are in its key).
-      - name: Publish build-env
+      - name: Publish environment-variables
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash "$WORKFLOWS_DIR/scripts/release/build-env.sh"
       - name: Prebuild (ios)
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
@@ -247,7 +247,7 @@ jobs:
         if: ${{ !cancelled() && steps.build.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.ios-artifact-name }}
+          name: ${{ inputs.ios-artifact }}
           path: ${{ env.WORKFLOWS_OUT }}/*.app.tar
           retention-days: 1
           overwrite: true
@@ -266,9 +266,9 @@ jobs:
       # `&&` slot: GitHub's `&&` yields the first falsy operand, so putting the
       # inherited value there would return it on both branches.
       WORKFLOWS_DEV_CLIENT: ${{ inputs.ios-configuration == 'Release' && 'false' || inputs.dev-client }}
-      WORKFLOWS_MAESTRO_FLOWS: ${{ inputs.maestro-flows }}
-      WORKFLOWS_MAESTRO_INCLUDE_TAGS: ${{ inputs.maestro-include-tags }}
-      WORKFLOWS_MAESTRO_EXCLUDE_TAGS: ${{ inputs.maestro-exclude-tags }}
+      WORKFLOWS_MAESTRO_FLOWS: ${{ inputs.flows }}
+      WORKFLOWS_MAESTRO_INCLUDE_TAGS: ${{ inputs.include-tags }}
+      WORKFLOWS_MAESTRO_EXCLUDE_TAGS: ${{ inputs.exclude-tags }}
       WORKFLOWS_SUITE_TIMEOUT_MINUTES: ${{ inputs.suite-timeout-minutes }}
     steps:
       - name: Checkout consumer
@@ -321,7 +321,7 @@ jobs:
       - name: Download iOS app
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.ios-artifact-name }}
+          name: ${{ inputs.ios-artifact }}
           path: ${{ env.WORKFLOWS_OUT }}
       - name: Install app
         run: bash "$WORKFLOWS_DIR/scripts/e2e/ios-simulator.sh" install "$WORKFLOWS_OUT"/*.app.tar
@@ -428,7 +428,7 @@ jobs:
         if: ${{ !cancelled() && steps.build.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.android-artifact-name }}
+          name: ${{ inputs.android-artifact }}
           path: ${{ inputs.working-directory }}/android/app/build/outputs/apk/debug/app-debug.apk
           compression-level: 0
           retention-days: 1
@@ -443,9 +443,9 @@ jobs:
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
       WORKFLOWS_DEV_CLIENT: ${{ inputs.dev-client }}
-      WORKFLOWS_MAESTRO_FLOWS: ${{ inputs.maestro-flows }}
-      WORKFLOWS_MAESTRO_INCLUDE_TAGS: ${{ inputs.maestro-include-tags }}
-      WORKFLOWS_MAESTRO_EXCLUDE_TAGS: ${{ inputs.maestro-exclude-tags }}
+      WORKFLOWS_MAESTRO_FLOWS: ${{ inputs.flows }}
+      WORKFLOWS_MAESTRO_INCLUDE_TAGS: ${{ inputs.include-tags }}
+      WORKFLOWS_MAESTRO_EXCLUDE_TAGS: ${{ inputs.exclude-tags }}
       WORKFLOWS_SUITE_TIMEOUT_MINUTES: ${{ inputs.suite-timeout-minutes }}
     steps:
       # free-disk is a local composite action, so the .workflows checkout has to come
@@ -494,7 +494,7 @@ jobs:
       - name: Download APK
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.android-artifact-name }}
+          name: ${{ inputs.android-artifact }}
           path: ${{ inputs.working-directory }}/android/app/build/outputs/apk/debug
       # android-emulator-runner installs the `emulator` package itself and has
       # no retry, so a download that lands corrupt kills the job before Maestro

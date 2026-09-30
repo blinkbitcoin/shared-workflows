@@ -1,10 +1,10 @@
-# zizmor policy for this repository, and the fallback policy scripts/ci/lint-ci.sh
+# zizmor policy for this repository, and the fallback policy scripts/ci/check-ci.sh
 # hands to a consumer that ships no zizmor config of its own. `make check-ci` and
 # the lefthook hook pass this file with --config rather than relying on zizmor's
 # discovery, which from a worktree nested in another checkout finds that
 # checkout's policy instead (see the Makefile).
 #
-# The gate runs at --min-severity medium (Makefile, lint-ci.sh). Low findings
+# The gate runs at --min-severity medium (Makefile, check-ci.sh). Low findings
 # (artipacked, self-repository) are real hardening but not yet a merge blocker.
 rules:
   # Tags, not commit SHAs, across the family: consumers call these workflows at

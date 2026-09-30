@@ -1,4 +1,4 @@
-name: PR Title
+name: PR title
 on:
   workflow_call:
     inputs:
@@ -56,7 +56,7 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           install: true
-      - name: Commitlint
+      - name: Commits
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-        run: bash "$WORKFLOWS_DIR/scripts/checks/commitlint.sh"
+        run: bash "$WORKFLOWS_DIR/scripts/checks/commits.sh"

@@ -112,13 +112,13 @@ export BOUNDARY
   [ "$status" -eq 0 ] || fail "$output"
 }
 
-@test "check-codeql.yml passes a config file only when the consumer has one" {
+@test "check-code-scanning.yml passes a config file only when the consumer has one" {
   # codeql-action/init fails outright on a path it cannot read, and this
   # workflow is informational by design - a caller must not make it required.
   run node -e '
-    const text = require("fs").readFileSync(`${process.env.REPO_ROOT}/.github/workflows/check-codeql.yml`, "utf8");
-    if (!/config-file: \$\{\{ hashFiles\(inputs\.config-file\) != .. && inputs\.config-file \|\| .. \}\}/.test(text)) {
-      throw new Error("check-codeql.yml passes config-file unconditionally again");
+    const text = require("fs").readFileSync(`${process.env.REPO_ROOT}/.github/workflows/check-code-scanning.yml`, "utf8");
+    if (!/config-file: \$\{\{ hashFiles\(inputs\.configuration-file\) != .. && inputs\.configuration-file \|\| .. \}\}/.test(text)) {
+      throw new Error("check-code-scanning.yml passes its configuration file unconditionally again");
     }
   '
   [ "$status" -eq 0 ] || fail "$output"

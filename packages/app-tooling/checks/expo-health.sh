@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The Expo project health check: SDK drift is advisory, expo-doctor blocks.
 #
-# check-code.yml runs it for a consumer that ships no `deps:check` script of
-# its own, and @blinkbitcoin/app-tooling ships it as checks/expo-doctor.sh, so a
+# check.yml runs it for a consumer that ships no `check:expo-health` script of
+# its own, and @blinkbitcoin/app-tooling ships it as checks/expo-health.sh, so a
 # consumer's `make check-deps` runs exactly this on a laptop.
 #
 # `expo install --check` and expo-doctor's version check both demand whatever

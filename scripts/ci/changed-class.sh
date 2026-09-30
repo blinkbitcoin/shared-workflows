@@ -18,12 +18,12 @@ base="${1:-}"
 head="${2:?usage: changed-class.sh BASE_SHA HEAD_SHA}"
 # DOCS_GLOBS *replaces* the default pattern (the escape hatch for a consumer
 # whose docs live nowhere near docs/); DOCS_GLOBS_EXTRA *adds* alternatives to
-# whichever pattern is in force. check-code.yml's `docs-globs` input is wired to
+# whichever pattern is in force. check.yml's `docs-patterns` input is wired to
 # DOCS_GLOBS_EXTRA, because "extra alternatives" is what it promises - passing
 # it as a replacement would silently stop treating docs/ and **.md as docs and
 # run the full suite on every docs-only PR.
 #
-# `(^|/)LICENSE$`, not `^LICENSE$`: a monorepo keeps a copy of the licence next
+# `(^|/)LICENSE$`, not `^LICENSE$`: a monorepo keeps a copy of the license next
 # to every package, and the anchored form matched only the root one - so a
 # five-line copyright bump ran the whole native matrix.
 default_docs_globs='^docs/|\.md$|(^|/)LICENSE$|^\.github/ISSUE_TEMPLATE/|^\.github/PULL_REQUEST_TEMPLATE'

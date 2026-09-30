@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/ci/contract-check.sh: the Contract job's step in check-code.yml. It
+# scripts/ci/check-contract.sh: the Contract job's step in check.yml. It
 # finds the app-tooling checker beside itself, warns loudly on a contract-only
 # run, and hands over to the checker with the consumer root and --skeleton, so
 # the checker's exit code is the step's. Covered: a consumer that meets the
@@ -14,21 +14,21 @@
 
 load test_helper
 
-SCRIPT="$REPO_ROOT/scripts/ci/contract-check.sh"
+SCRIPT="$REPO_ROOT/scripts/ci/check-contract.sh"
 
-# A consumer that calls only check-code.yml and meets every requirement it has.
-# The fallback-only gaps (deps:check, deps:audit, check:ci) degrade, never block.
+# A consumer that calls only check.yml and meets every requirement it has.
+# The fallback-only gaps (check:expo-health, check:audit, check:ci) degrade, never block.
 write_passing_consumer() { # <directory>
   local dir="$1"
   mkdir -p "$dir/.github/workflows"
-  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' \
+  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' \
     > "$dir/.github/workflows/ci.yml"
   cat > "$dir/package.json" <<'JSON'
 {
   "name": "app",
   "scripts": {
-    "typecheck": "tsc", "lint": "eslint .", "format:check": "biome check",
-    "spell": "typos", "check:docs": "true", "deps:licenses": "true"
+    "check:types": "tsc", "check:lint": "eslint .", "check:format": "biome check",
+    "check:unused": "knip", "check:spell": "typos", "check:docs": "true", "check:licenses": "true"
   },
   "devDependencies": { "knip": "^6", "@commitlint/cli": "^19" }
 }
@@ -37,12 +37,12 @@ JSON
   : > "$dir/pnpm-lock.yaml"
 }
 
-# A consumer that calls check-code.yml and has nothing it needs.
+# A consumer that calls check.yml and has nothing it needs.
 write_failing_consumer() { # <directory>
   local dir="$1"
   mkdir -p "$dir/.github/workflows"
   printf '{"name":"app"}\n' > "$dir/package.json"
-  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' \
+  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' \
     > "$dir/.github/workflows/ci.yml"
 }
 
@@ -56,12 +56,12 @@ write_failing_consumer() { # <directory>
   local ws="$BATS_TEST_TMPDIR/ws"
   mkdir -p "$ws/.github/workflows"
   printf '{"name":"app"}\n' > "$ws/package.json"
-  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0\n' \
+  printf 'jobs:\n  checks:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0\n' \
     > "$ws/.github/workflows/ci.yml"
   ln -s "$REPO_ROOT" "$ws/.workflows"
 
   cd "$ws"
-  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash ".workflows/scripts/ci/contract-check.sh"
+  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash ".workflows/scripts/ci/check-contract.sh"
   [ "$status" -eq 1 ] || fail "expected the unmet contract to fail, got $status: $output"
   contains "$output" "FAIL" || fail "the checker produced no findings through a symlink: $output"
 }
@@ -78,7 +78,7 @@ write_failing_consumer() { # <directory>
 
   cd "$ws"
   GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." WORKFLOWS_CONTRACT_ONLY=true \
-    GITHUB_STEP_SUMMARY="$summary" run bash ".workflows/scripts/ci/contract-check.sh"
+    GITHUB_STEP_SUMMARY="$summary" run bash ".workflows/scripts/ci/check-contract.sh"
   contains "$output" "::warning::contract-only run" || fail "no warning: $output"
   contains "$output" "NO gate ran" || fail "$output"
   run cat "$summary"
@@ -90,7 +90,7 @@ write_failing_consumer() { # <directory>
   write_passing_consumer "$ws"
   GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "a consumer meeting the contract failed: $output"
-  contains "$output" "ok    typecheck" || fail "the checker's findings are missing: $output"
+  contains "$output" "ok    check:types" || fail "the checker's findings are missing: $output"
   not_contains "$output" "FAIL" || fail "a passing consumer has a blocked finding: $output"
   not_contains "$output" "contract-only" || fail "a normal run warned about contract-only: $output"
 }
@@ -159,11 +159,11 @@ write_failing_consumer() { # <directory>
   # script in a tree with no packages/app-tooling is a checkout that lost it.
   local tree="$BATS_TEST_TMPDIR/tree" ws="$BATS_TEST_TMPDIR/ws"
   mkdir -p "$tree/scripts/ci" "$tree/scripts/lib"
-  cp "$SCRIPT" "$tree/scripts/ci/contract-check.sh"
+  cp "$SCRIPT" "$tree/scripts/ci/check-contract.sh"
   cp "$REPO_ROOT/scripts/lib/common.sh" "$tree/scripts/lib/common.sh"
   write_passing_consumer "$ws"
-  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash "$tree/scripts/ci/contract-check.sh"
+  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash "$tree/scripts/ci/check-contract.sh"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::contract-check.sh: no checker at $tree/packages/app-tooling/bin/check-contract.mjs" ||
+  contains "$output" "::error::check-contract.sh: no checker at $tree/packages/app-tooling/bin/check-contract.mjs" ||
     fail "does not name where it looked: $output"
 }

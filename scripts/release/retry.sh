@@ -18,7 +18,7 @@
 # release, and the operator can re-run it by hand. `cancelled` and `timed_out`
 # count as blocked too, so a run evicted from a concurrency group is retried.
 #
-# Usage: rerun-blocked.sh   Env: GH_TOKEN, GH_REPO (owner/name), WORKFLOW
+# Usage: retry.sh   Env: GH_TOKEN, GH_REPO (owner/name), WORKFLOW
 # (the promotion's workflow file, e.g. cd-beta.yml), HEAD_SHA.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
