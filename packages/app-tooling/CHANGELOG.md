@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.2.0...app-tooling-v0.3.0) (2026-09-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **workflows:** a consumer's scripts/release/verify-*.sh, scripts/release/lib/verify-common.sh, scripts/setup/ and scripts/doctor.mjs now fail the contract check (no-copy.release-verify, no-copy.setup). Point the verify lanes at node_modules/@blinkbitcoin/app-tooling/release/ and run them from the repository root. Run setup from node_modules/@blinkbitcoin/app-tooling/setup/ and use `pnpm exec doctor`.
+
+### Features
+
+* **workflows:** ship the release verifiers, the machine setup and the doctor ([#158](https://github.com/blinkbitcoin/shared-workflows/issues/158)) ([334aa10](https://github.com/blinkbitcoin/shared-workflows/commit/334aa10ed60ae8f03348f671da5d8ac4ee42e0f1))
+
 ## [0.2.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.1.1...app-tooling-v0.2.0) (2026-09-30)
 
 
