@@ -2,7 +2,7 @@
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
 # What is left of the suite that first ran the five fallback gates, the two
-# libraries and the dev-config binary that nothing ran.
+# libraries and the app-tooling binary that nothing ran.
 #
 # Those scripts had been the softest corner of the coverage map: a test named
 # each of them, but only to assert that check-code.yml still routes through the
@@ -22,10 +22,10 @@ load test_helper
   # Twelve unit tests exercise its exported functions; nothing ran the binary,
   # which is how the advertised `pnpm exec check-tool-versions` could have been
   # broken without a test noticing.
-  run mise exec -- node "$REPO_ROOT/packages/dev-config/bin/check-tool-versions.mjs" node
+  run mise exec -- node "$REPO_ROOT/packages/app-tooling/bin/check-tool-versions.mjs" node
   [ "$status" -eq 0 ] || fail "the pinned node must satisfy its own baseline: $output"
   contains "$output" "node" || fail "it printed nothing about node: $output"
 
-  run mise exec -- node "$REPO_ROOT/packages/dev-config/bin/check-tool-versions.mjs" not-a-tool
+  run mise exec -- node "$REPO_ROOT/packages/app-tooling/bin/check-tool-versions.mjs" not-a-tool
   contains "$output" "not in versions.json" || fail "an unknown tool must be reported: $output"
 }

@@ -209,6 +209,6 @@ $MAESTRO_PIN"
 
 @test "the package's copy installs from where a consumer has it, with its libraries beside it" {
   plant_maestro "$MAESTRO_PIN"
-  run bash "$REPO_ROOT/packages/dev-config/ci/maestro-install.sh"
+  run bash "$REPO_ROOT/packages/app-tooling/ci/maestro-install.sh"
   [ "$status" -eq 0 ] || fail "the packaged copy did not run: $output"
 }

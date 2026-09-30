@@ -5,7 +5,7 @@ this repo.
 
 ## 60-second start
 
-0. Run `npx --package=@blinkbitcoin/dev-config check-consumer-contract` in your
+0. Run `npx --package=@blinkbitcoin/app-tooling check-consumer-contract` in your
    repo to see what this family will need from it — see [The contract
    check](#the-contract-check). `check-code.yml` runs the same thing on every push.
    If your app was **not** generated from the template, start at
@@ -117,7 +117,7 @@ Two levels, and the difference matters:
 
 The same run also holds **every call your workflows make to this family** to
 the interface the called workflow declares at the pinned version
-(`packages/dev-config/interfaces.json`, rendered from the workflows by
+(`packages/app-tooling/interfaces.json`, rendered from the workflows by
 `scripts/self/render-interfaces.sh`): an input it does not declare, a required
 input left out, a literal of the wrong type, an undeclared secret, or an output
 it does not produce. Each is a blocked finding named by file and job, such as
@@ -188,11 +188,11 @@ but the runner's own node — no pnpm, no installed dependencies.
 
 ### Running it yourself
 
-It ships in [`@blinkbitcoin/dev-config`](../packages/dev-config), so you can get
+It ships in [`@blinkbitcoin/app-tooling`](../packages/app-tooling), so you can get
 the same report before you push:
 
 ```sh
-pnpm add -D @blinkbitcoin/dev-config
+pnpm add -D @blinkbitcoin/app-tooling
 pnpm exec check-consumer-contract              # this repository
 pnpm exec check-consumer-contract --skeleton   # ...and the package.json and
                                                #    caller changes that clear it
@@ -221,7 +221,7 @@ and the Android E2E). A private target needs a `SMOKE_TOKEN` secret; see
 ### The contract is data
 
 Every requirement lives in
-[`packages/dev-config/contract.json`](../packages/dev-config/contract.json) —
+[`packages/app-tooling/contract.json`](../packages/app-tooling/contract.json) —
 what wants it, which input switches it off, whether a fallback exists, and the
 fix. The tables in this document and the checker read the same file, so a
 requirement cannot be true in one and absent from the other.
@@ -230,7 +230,7 @@ requirement cannot be true in one and absent from the other.
 
 Most requirements say what your repository must have. The `no-copy` ones say
 what it must not: a file this family already ships, whether as a program in
-`@blinkbitcoin/dev-config` or as a script the workflows run. Nothing compares
+`@blinkbitcoin/app-tooling` or as a script the workflows run. Nothing compares
 a copy with its original, so a copy drifts, and the next fix lands upstream
 and never reaches it. A copy blocks the contract check, and the fix names the
 program to call instead.
@@ -245,11 +245,11 @@ jobs run, in what order, behind which gates, and what they are called.
 ### One commit everywhere
 
 Every call pins shared-workflows to the same full commit SHA, with its
-`# vX.Y.Z` beside it. `@blinkbitcoin/dev-config` and any other package of this
+`# vX.Y.Z` beside it. `@blinkbitcoin/app-tooling` and any other package of this
 family come in as git dependencies at that same commit:
 
 ```json
-"@blinkbitcoin/dev-config": "github:blinkbitcoin/shared-workflows#<sha>&path:/packages/dev-config"
+"@blinkbitcoin/app-tooling": "github:blinkbitcoin/shared-workflows#<sha>&path:/packages/app-tooling"
 ```
 
 One commit covers both, so a laptop runs the same contract, tool table and
@@ -914,7 +914,7 @@ the way a workflow-status badge takes `?branch=main`; every other branch gets
 its own directory, and `pr-closed.yml` drops it when the PR closes.
 
 **Rendering and publishing both live here.** The renderer is
-`@blinkbitcoin/dev-config`'s `render-badges` program, which
+`@blinkbitcoin/app-tooling`'s `render-badges` program, which
 `scripts/ci/render-badges.sh` runs from this repository's own checkout, in the
 consumer's root: the same commit as the workflow, so your repository needs no
 script, no copy and no installed package for it. A consumer that draws its own
@@ -1840,7 +1840,7 @@ from the `.workflows` checkout at your pin:
       pull-requests: write
     with:
       dry-run: true
-      body-file: .workflows/packages/dev-config/fixtures/store-notes/release-body.md
+      body-file: .workflows/packages/app-tooling/fixtures/store-notes/release-body.md
 ```
 
 A job that `needs: store-notes-dry-run` can then hold
@@ -2175,7 +2175,7 @@ is a breaking change for the OTA gate and the store lanes alike. `expoSdk` and
 `reactNative` are the installed versions, read from each package's own
 `package.json`, not the ranges your `package.json` declares; a package that is
 not installed is `null`. On a laptop, `build-info.sh --standalone` from
-`@blinkbitcoin/dev-config` writes the same record, resolving the version and
+`@blinkbitcoin/app-tooling` writes the same record, resolving the version and
 computing the fingerprints itself. `stage` falls back to `development` when
 `WORKFLOWS_STAGE` is unset; `build-prepare.yml`'s `stage` input defaults to
 `internal` because a prepare run is by definition producing a build for at least
@@ -2206,7 +2206,7 @@ and must not be able to put a stale `sha` or `stage` back on the release.
 ### Store notes
 
 The store notes come from `store-notes`, a program in
-`@blinkbitcoin/dev-config`. `build-prepare.yml` and `pr-store-notes.yml` run
+`@blinkbitcoin/app-tooling`. `build-prepare.yml` and `pr-store-notes.yml` run
 it through `scripts/release/store-notes.sh`, from the `.workflows` checkout at your
 pin, in your `working-directory`. You ship no generator of your own: a
 `scripts/release/notes.mjs` is not run (the run warns), and the
@@ -2295,10 +2295,10 @@ at once, a pull request that is not a number, a missing `gh`, a tag or pull
 request that does not exist and an empty body each fail with the reason.
 
 The provider adapters it uses are exported for an app's own LLM calls:
-`@blinkbitcoin/dev-config/llm` (`adapterFor`, `KEY_ENV`, `EFFORTS`,
-`parseEffort`, `parseExtraParams`) and `@blinkbitcoin/dev-config/llm-request`
+`@blinkbitcoin/app-tooling/llm` (`adapterFor`, `KEY_ENV`, `EFFORTS`,
+`parseEffort`, `parseExtraParams`) and `@blinkbitcoin/app-tooling/llm-request`
 (`thinks`, `mergeRequest`, `unfence`). The release bodies and model answers its
-tests use are in `packages/dev-config/fixtures/store-notes/`, at
+tests use are in `packages/app-tooling/fixtures/store-notes/`, at
 `$WORKFLOWS_DIR` in CI.
 
 ### Consumer-side release scripts
@@ -2382,7 +2382,7 @@ where the template's script, a bare `git diff`, did not. And `expo-doctor.sh`
 ran `expo-doctor` alone, and went red on an Expo patch published the same day,
 where the template's `deps:check` reported SDK drift as a warning and let
 doctor's other checks decide. The fallback now does exactly that, and
-`@blinkbitcoin/dev-config` ships it as `checks/expo-doctor.sh`, so a consumer's
+`@blinkbitcoin/app-tooling` ships it as `checks/expo-doctor.sh`, so a consumer's
 `deps:check` can be that one script.
 
 A gate you define and the gate CI runs have to be the same gate, or a green
@@ -2547,20 +2547,18 @@ Jest joined the list the day this repo grew its first test files. The lesson
 generalises: anything this repo adds under a path a consumer's tooling globs is
 a change to the consumer contract, even though no input or output moved.
 
-## expo-tooling presets
+## Expo presets
 
-[`@blinkbitcoin/expo-tooling`](../packages/expo-tooling) holds the
+[`@blinkbitcoin/app-tooling`](../packages/app-tooling) holds, under `expo/`, the
 configuration every Expo app of this family runs, so an app's own files keep
-only what is genuinely its own. It is installed like dev-config, a git
-dependency at the workflows pin, and `fix-tooling-pin` moves it with the rest:
-
-```json
-"@blinkbitcoin/expo-tooling": "github:blinkbitcoin/shared-workflows#<sha>&path:/packages/expo-tooling"
-```
+only what is genuinely its own. They come with the rest of the package, the one
+git dependency at the workflows pin that `fix-tooling-pin` moves (see
+[One commit everywhere](#one-commit-everywhere)); each is imported as
+`@blinkbitcoin/app-tooling/expo/<preset>`.
 
 Every tool a preset names is an optional peer dependency the app already has;
 nothing is bundled. Below is what each of the template's configuration files
-becomes. Each file shown is `packages/expo-tooling/fixtures/template/<tool>/future.*`,
+becomes. Each file shown is `packages/app-tooling/fixtures/template/<tool>/future.*`,
 and that preset's test evaluates it next to a byte-for-byte copy of the
 template's file as it was (`today.*`) and compares what the two produce, so the
 switch is behaviour-neutral by test, not by reading. `package.test.mjs` fails
@@ -2590,7 +2588,7 @@ Node file and the mock server, `commitlint --print-config` the same rules,
 ### Jest
 
 ```ts
-import { createJestConfig } from '@blinkbitcoin/expo-tooling/jest';
+import { createJestConfig } from '@blinkbitcoin/app-tooling/expo/jest';
 
 // Everything generic - the two projects, the worktree ignores, the transforms,
 // the console guard, the Expo stand-ins and the 100% thresholds - is the
@@ -2621,8 +2619,8 @@ guard's setup file to both projects, after the app's own, so its `afterEach`
 still runs last; the app's `src/test/setup.ts` stops calling
 `installConsoleGuard`, and `src/test/setup.plugins.ts`, which did nothing else,
 is deleted. A test that allows a line imports `allowConsole` from
-`@blinkbitcoin/expo-tooling/jest/console`; one that reads a stand-in's store
-imports it from `@blinkbitcoin/expo-tooling/jest/mocks/<name>` (typed, and the
+`@blinkbitcoin/app-tooling/expo/jest/console`; one that reads a stand-in's store
+imports it from `@blinkbitcoin/app-tooling/expo/jest/mocks/<name>` (typed, and the
 same module instance Jest maps the native module to). `consoleGuard: false`
 leaves the guard out, for an adopting repository whose suites are not silent
 yet; `transformPackages` and `testPathIgnorePatterns` extend the generic lists,
@@ -2633,7 +2631,7 @@ and `collectCoverageFrom` replaces the generic one.
 ```js
 // ESLint owns only React and Expo semantic rules; Biome owns the rest. The
 // preset holds the split (see docs/quality.md); this file holds this app's paths.
-import { createEslintConfig } from '@blinkbitcoin/expo-tooling/eslint';
+import { createEslintConfig } from '@blinkbitcoin/app-tooling/expo/eslint';
 
 export default createEslintConfig({
   ignores: ['src/graphql/generated/**', 'src/i18n/locales/**/messages.ts'],
@@ -2650,7 +2648,7 @@ negated), and the blocks carry names for `eslint --inspect-config`.
 ```json
 {
   "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
-  "extends": ["@blinkbitcoin/expo-tooling/biome"],
+  "extends": ["@blinkbitcoin/app-tooling/expo/biome"],
   "files": {
     "includes": ["!src/graphql/generated", "!src/i18n/locales/**/messages.ts", "!**/*.po"]
   },
@@ -2762,7 +2760,7 @@ names a tooling path. The base pins no `$schema`; the app's file does.
 ```js
 // Expo's default Metro config, plus the shared worktree block and web fixes.
 const { getDefaultConfig } = require('expo/metro-config');
-const { withSharedMetroConfig } = require('@blinkbitcoin/expo-tooling/metro');
+const { withSharedMetroConfig } = require('@blinkbitcoin/app-tooling/expo/metro');
 
 module.exports = withSharedMetroConfig(getDefaultConfig(__dirname));
 ```
@@ -2779,7 +2777,7 @@ deleting lines.
 // WEB ONLY
 // The web suite against the exported site and the mock API. Ports and base
 // path come from the environment `make test-e2e-web` exports.
-import { createPlaywrightConfig } from '@blinkbitcoin/expo-tooling/playwright';
+import { createPlaywrightConfig } from '@blinkbitcoin/app-tooling/expo/playwright';
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig(createPlaywrightConfig());
@@ -2794,9 +2792,9 @@ the variable that is missing, as before. `testDir`, `mockApiCommand` and
 
 ```yaml
 # Git hooks. Installed by `pnpm install` (prepare script). The shared hooks
-# come from @blinkbitcoin/expo-tooling; this file adds this app's own.
+# come from @blinkbitcoin/app-tooling/expo; this file adds this app's own.
 extends:
-  - node_modules/@blinkbitcoin/expo-tooling/lefthook.yml
+  - node_modules/@blinkbitcoin/app-tooling/expo/lefthook.yml
 
 # Both hooks pass git's own arguments straight through: the script works out
 # which two revisions to compare (lefthook's `{1}` templating expanded inside
@@ -2823,7 +2821,7 @@ app has installed its dependencies, which is also when `prepare` installs them.
 // Fingerprint (runtimeVersion policy "fingerprint") inputs: the shared source
 // skips and ignore paths. Replaces .fingerprintignore as well. Guarded by
 // scripts/release/fingerprint.test.mjs.
-const { createFingerprintConfig } = require('@blinkbitcoin/expo-tooling/fingerprint');
+const { createFingerprintConfig } = require('@blinkbitcoin/app-tooling/expo/fingerprint');
 
 module.exports = createFingerprintConfig();
 ```
@@ -2839,7 +2837,7 @@ for real stays.
 
 ```json
 {
-  "extends": ["expo/tsconfig.base", "@blinkbitcoin/expo-tooling/tsconfig.base.json"],
+  "extends": ["expo/tsconfig.base", "@blinkbitcoin/app-tooling/expo/tsconfig.base.json"],
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
@@ -2859,7 +2857,7 @@ for real stays.
 
 A path in a `tsconfig.json` resolves against the file that declares it. Were
 `include`, `exclude`, `baseUrl` or `paths` in the base, they would point into
-`node_modules/@blinkbitcoin/expo-tooling/`, so they stay in the app, and so
+`node_modules/@blinkbitcoin/app-tooling/expo/`, so they stay in the app, and so
 does `ignoreDeprecations`, whose value depends on the app's TypeScript. The
 `extends` array (TypeScript 5.0 and later) is applied in order, then the app's
 own options.
@@ -2870,7 +2868,7 @@ own options.
 // Conventional Commits with a closed scope list. PR titles are linted with
 // the same config in CI because squash merges take the title as the message.
 export default {
-  extends: ['@blinkbitcoin/expo-tooling/commitlint'],
+  extends: ['@blinkbitcoin/app-tooling/expo/commitlint'],
   rules: {
     'scope-enum': [
       2,
@@ -2911,12 +2909,12 @@ list moves from `.fingerprintignore` to the configuration), `scripts/init.test.m
 losing the resolver lines), and `knip.json`, which names `jest.config.ts`.
 
 The contract check reads these files as text, before anything is installed.
-`@blinkbitcoin/dev-config`'s `check-ignored-directories` goes further for a
+`@blinkbitcoin/app-tooling`'s `check-ignored-directories` goes further for a
 consumer's own `make check`: it asks Jest, Metro and ESLint themselves, through
 the consumer's configuration and node_modules, whether they skip `.workflows/`
 and `.claude/worktrees/` (Claude Code's checkouts of the repository), and holds
 Biome, tsc, knip, typos, git, Semgrep and CodeQL to the same pair. See
-[its README](../packages/dev-config/README.md#repository-guards).
+[its README](../packages/app-tooling/README.md#repository-guards).
 
 ## Gotchas encoded
 

@@ -1,6 +1,6 @@
 // scripts/self/render-contract-table.mjs: the program that generates the
 // requirement table in docs/adopting-an-existing-repo.md from
-// packages/dev-config/contract.json.
+// packages/app-tooling/contract.json.
 //
 // Covered here: how each requirement's "You need" and "What" cells read (every
 // severity and toggle shape, every target kind, one, two and three targets),
@@ -35,7 +35,7 @@ import {
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = path.join(ROOT, 'scripts/self/render-contract-table.mjs');
 const DOC = path.join(ROOT, 'docs/adopting-an-existing-repo.md');
-const CONTRACT = JSON.parse(readFileSync(path.join(ROOT, 'packages/dev-config/contract.json'), 'utf8'));
+const CONTRACT = JSON.parse(readFileSync(path.join(ROOT, 'packages/app-tooling/contract.json'), 'utf8'));
 
 const scratch = mkdtempSync(path.join(tmpdir(), 'render-contract-table-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));

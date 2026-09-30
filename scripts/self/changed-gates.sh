@@ -24,7 +24,7 @@ every_gate='^Makefile$|^\.mise\.toml$|^\.github/workflows/self-(ci|checks|unit)\
 # `make actionlint` reads the workflows and its own configuration.
 code_globs="$every_gate"'|^scripts/.*\.sh$|^\.shellcheckrc$|^\.github/workflows/|^\.github/actionlint\.yaml$'
 # The files scripts/self/check-versions.sh compares, and the tool-versions check.
-tooling_globs="$every_gate"'|^scripts/lib/versions\.sh$|^scripts/self/check-versions\.sh$|^packages/dev-config/versions\.json$|^packages/dev-config/bin/check-tool-versions\.mjs$|^\.github/workflows/(check-e2e|build-android)\.yml$|^\.github/actions/maestro/'
+tooling_globs="$every_gate"'|^scripts/lib/versions\.sh$|^scripts/self/check-versions\.sh$|^packages/app-tooling/versions\.json$|^packages/app-tooling/bin/check-tool-versions\.mjs$|^\.github/workflows/(check-e2e|build-android)\.yml$|^\.github/actions/maestro/'
 package_globs="$every_gate"'|^packages/'
 
 run_every_gate() {

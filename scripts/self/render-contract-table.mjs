@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Render packages/dev-config/contract.json as the requirement table in
+// Render packages/app-tooling/contract.json as the requirement table in
 // docs/adopting-an-existing-repo.md.
 //
 // Generated rather than written, because this is the third place the same facts
@@ -89,7 +89,7 @@ export function splice(text, table) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const contract = JSON.parse(readFileSync(path.join(ROOT, 'packages/dev-config/contract.json'), 'utf8'));
+  const contract = JSON.parse(readFileSync(path.join(ROOT, 'packages/app-tooling/contract.json'), 'utf8'));
   const doc = path.join(ROOT, 'docs/adopting-an-existing-repo.md');
   const text = readFileSync(doc, 'utf8');
   const next = splice(text, renderTable(contract));

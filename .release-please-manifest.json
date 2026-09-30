@@ -1,5 +1,4 @@
 {
   ".": "0.18.0",
-  "packages/dev-config": "0.10.0",
-  "packages/expo-tooling": "0.1.0"
+  "packages/app-tooling": "0.10.0"
 }

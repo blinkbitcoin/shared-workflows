@@ -3,7 +3,7 @@
 #
 # scripts/self/check-versions.sh (`make check-versions`): every pinned tool
 # version agrees across scripts/lib/versions.sh, the workflow and action input
-# defaults, .mise.toml and packages/dev-config/versions.json. Its only real
+# defaults, .mise.toml and packages/app-tooling/versions.json. Its only real
 # behaviour is failing when they disagree, so each comparison it makes is
 # broken here on its own, in a copy of the files it reads, and must fail the
 # gate with exit 1 and name what drifted. Also covered: the unmodified pins
@@ -20,7 +20,7 @@ scripts/lib/versions.sh
 .github/workflows/build-android.yml
 .github/actions/maestro/action.yml
 .mise.toml
-packages/dev-config/versions.json"
+packages/app-tooling/versions.json"
 
 setup() {
   source "$REPO_ROOT/scripts/lib/versions.sh"
@@ -123,7 +123,7 @@ errors() { grep -c '::error::' <<< "$output" || true; }
   local tool want
   for tool in shellcheck actionlint yq typos lefthook zizmor gitleaks; do
     copy_tree
-    want="$(yq -r ".tools.\"$tool\".version" "$REPO_ROOT/packages/dev-config/versions.json")"
+    want="$(yq -r ".tools.\"$tool\".version" "$REPO_ROOT/packages/app-tooling/versions.json")"
     drift .mise.toml "s/^$tool = \".*\"/$tool = \"0.0.1\"/"
     run bash "$GATE"
     [ "$status" -eq 1 ] || fail "$tool: expected exit 1, got $status: $output"
@@ -144,11 +144,11 @@ errors() { grep -c '::error::' <<< "$output" || true; }
   local tool want
   for tool in actionlint shellcheck yq typos lefthook zizmor gitleaks; do
     copy_tree
-    want="$(yq -r ".tools.\"$tool\".version" "$REPO_ROOT/packages/dev-config/versions.json")"
-    drift packages/dev-config/versions.json "s/\"$tool\": { \"version\": \"[^\"]*\"/\"$tool\": { \"version\": \"0.0.1\"/"
+    want="$(yq -r ".tools.\"$tool\".version" "$REPO_ROOT/packages/app-tooling/versions.json")"
+    drift packages/app-tooling/versions.json "s/\"$tool\": { \"version\": \"[^\"]*\"/\"$tool\": { \"version\": \"0.0.1\"/"
     run bash "$GATE"
     [ "$status" -eq 1 ] || fail "$tool: expected exit 1, got $status: $output"
-    contains "$output" "::error::packages/dev-config/versions.json $tool (0.0.1) != versions.sh ($want)" || fail "$tool: $output"
+    contains "$output" "::error::packages/app-tooling/versions.json $tool (0.0.1) != versions.sh ($want)" || fail "$tool: $output"
     [ "$(errors)" -eq 1 ] || fail "$tool: one drift must be one error: $output"
   done
 }
@@ -157,10 +157,10 @@ errors() { grep -c '::error::' <<< "$output" || true; }
   local tool
   for tool in bats node pnpm; do
     copy_tree
-    drift packages/dev-config/versions.json "s/\"$tool\": { \"version\": \"[^\"]*\"/\"$tool\": { \"version\": \"99\"/"
+    drift packages/app-tooling/versions.json "s/\"$tool\": { \"version\": \"[^\"]*\"/\"$tool\": { \"version\": \"99\"/"
     run bash "$GATE"
     [ "$status" -eq 1 ] || fail "$tool: expected exit 1, got $status: $output"
-    contains "$output" "::error::packages/dev-config/versions.json $tool (99) is not what .mise.toml pins" || fail "$tool: $output"
+    contains "$output" "::error::packages/app-tooling/versions.json $tool (99) is not what .mise.toml pins" || fail "$tool: $output"
     [ "$(errors)" -eq 1 ] || fail "$tool: one drift must be one error: $output"
   done
 }
@@ -168,7 +168,7 @@ errors() { grep -c '::error::' <<< "$output" || true; }
 @test "every disagreement is reported in one run, not only the first" {
   copy_tree
   drift .github/workflows/check-e2e.yml "/android-api-level:/,/default:/ s/default: .*/default: 12/"
-  drift packages/dev-config/versions.json 's/"node": { "version": "[^"]*"/"node": { "version": "99"/'
+  drift packages/app-tooling/versions.json 's/"node": { "version": "[^"]*"/"node": { "version": "99"/'
   run bash "$GATE"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
   contains "$output" "android-api-level default (12)" || fail "the first drift is missing: $output"

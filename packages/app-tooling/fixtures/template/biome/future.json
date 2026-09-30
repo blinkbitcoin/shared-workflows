@@ -1,0 +1,89 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
+  "extends": ["@blinkbitcoin/app-tooling/expo/biome"],
+  "files": {
+    "includes": ["!src/graphql/generated", "!src/i18n/locales/**/messages.ts", "!**/*.po"]
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "expo-secure-store": "Use the typed wrapper in src/lib/secure-store.ts",
+              "expo-sqlite/kv-store": "Use src/lib/storage.ts"
+            }
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/lib/logger.ts"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      "includes": ["src/lib/secure-store.ts", "src/lib/storage.ts"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["src/app/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "expo-secure-store": "Use the typed wrapper in src/lib/secure-store.ts",
+                  "expo-sqlite/kv-store": "Use src/lib/storage.ts"
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@apollo/client",
+                      "@apollo/client/**",
+                      "@/graphql/**",
+                      "@/services/**",
+                      "@/lib/**",
+                      "../graphql/**",
+                      "../services/**",
+                      "../lib/**",
+                      "../../graphql/**",
+                      "../../services/**",
+                      "../../lib/**",
+                      "../../../graphql/**",
+                      "../../../services/**",
+                      "../../../lib/**"
+                    ],
+                    "message": "Route files only compose screens from src/features and src/components; data access, services and lib wrappers belong behind a feature or component. (src/app/_layout.tsx and src/app/+native-intent.tsx are exempt.)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/app/_layout.tsx", "src/app/+native-intent.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "expo-secure-store": "Use the typed wrapper in src/lib/secure-store.ts",
+                  "expo-sqlite/kv-store": "Use src/lib/storage.ts"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

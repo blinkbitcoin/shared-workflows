@@ -68,14 +68,14 @@ has_line() { grep -qxF "$1" <<<"$output"; }
   git -C "$repo" checkout -q --orphan unrelated
   git -C "$repo" rm -rq --cached .
   rm -f "$repo/a.txt"
-  commit_file "packages/dev-config/x.json"
+  commit_file "packages/app-tooling/x.json"
   head=$(git -C "$repo" rev-parse HEAD)
   cd "$repo"
   run changed_files "$base" "$head"
   [ "$status" -eq 0 ] || fail "the fallback failed: $output"
   contains "$output" "falling back to two-dot diff" || fail "no warning: $output"
   has_line "a.txt" || fail "the two-dot diff lost the deleted file: $output"
-  has_line "packages/dev-config/x.json" || fail "the two-dot diff lost the added file: $output"
+  has_line "packages/app-tooling/x.json" || fail "the two-dot diff lost the added file: $output"
 }
 
 @test "changed_files returns 1 with a notice for each range it cannot read" {

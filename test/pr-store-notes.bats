@@ -6,8 +6,8 @@
 # generate, inject, edit - runs without GitHub. The generator store-notes.sh runs is
 # faked too, with a `node` on PATH that turns the body's bullets into
 # store-notes.txt, so each case sees exactly which bullets it was fed; one case
-# runs the real one (packages/dev-config/bin/store-notes.mjs, whose own test is
-# packages/dev-config/store-notes.test.mjs).
+# runs the real one (packages/app-tooling/bin/store-notes.mjs, whose own test is
+# packages/app-tooling/store-notes.test.mjs).
 #
 # A dry run from a body file must not touch `gh` at all, so those cases arm
 # the stub to fail and then assert that its call log stayed empty.

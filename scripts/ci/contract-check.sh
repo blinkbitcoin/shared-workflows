@@ -5,7 +5,7 @@
 # A thin wrapper, like every other step's script: check-code.yml wires the inputs and
 # this resolves the consumer root and calls the checker.
 #
-# The checker lives in packages/dev-config rather than here because a consumer
+# The checker lives in packages/app-tooling rather than here because a consumer
 # should be able to run the same check on a laptop before pushing, and that
 # package is how this repo ships anything installable. It is plain node with no
 # dependencies on purpose: this step runs BEFORE the setup action, so the
@@ -14,7 +14,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd node
 
-checker="$(cd "$(dirname "$0")/../.." && pwd)/packages/dev-config/bin/check-consumer-contract.mjs"
+checker="$(cd "$(dirname "$0")/../.." && pwd)/packages/app-tooling/bin/check-consumer-contract.mjs"
 [ -f "$checker" ] || die "contract-check.sh: no checker at $checker"
 
 # Two steps, not `cd "$(consumer_root)"`: a command substitution used as an

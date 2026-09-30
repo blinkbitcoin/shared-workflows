@@ -65,18 +65,18 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag-name }}
         run: bash scripts/self/tag-major.sh
 
-  publish-dev-config:
-    name: Publish dev-config
+  publish-app-tooling:
+    name: Publish app-tooling
     needs: release-please
     # paths-released names every package this push released; the root package
     # is `.`, the npm package its directory. The workflow also prints it to the
     # job summary, so a path spelled wrong here shows up there.
-    if: ${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/dev-config') }}
+    if: ${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/app-tooling') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
-      packages: write # publish @blinkbitcoin/dev-config to GitHub Packages
+      packages: write # publish @blinkbitcoin/app-tooling to GitHub Packages
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -91,8 +91,8 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: '@blinkbitcoin'
 
-      - name: Publish @blinkbitcoin/dev-config
-        working-directory: packages/dev-config
+      - name: Publish @blinkbitcoin/app-tooling
+        working-directory: packages/app-tooling
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

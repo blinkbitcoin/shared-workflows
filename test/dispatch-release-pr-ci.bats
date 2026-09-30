@@ -25,14 +25,14 @@ setup() {
 }
 
 @test "dispatches the CI workflow on every PR in a multi-package release" {
-  PRS_JSON='[{"headBranchName":"release-please--branches--main--components--shared-workflows","number":40},{"headBranchName":"release-please--branches--main--components--dev-config","number":41}]' \
+  PRS_JSON='[{"headBranchName":"release-please--branches--main--components--shared-workflows","number":40},{"headBranchName":"release-please--branches--main--components--app-tooling","number":41}]' \
     run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
   args="$(tr '\n' ' ' < "$BATS_TEST_TMPDIR/gh.args")"
   count="$(grep -c '^workflow$' "$BATS_TEST_TMPDIR/gh.args" || true)"
   [ "$count" -eq 2 ] || fail "expected 2 gh invocations, got $count: args: $args"
   contains "$args" "--ref release-please--branches--main--components--shared-workflows" || fail "args: $args"
-  contains "$args" "--ref release-please--branches--main--components--dev-config" || fail "args: $args"
+  contains "$args" "--ref release-please--branches--main--components--app-tooling" || fail "args: $args"
 }
 
 @test "an empty PRS_JSON is an error, not a silent skip" {
@@ -98,7 +98,7 @@ exit 0
 EOF
   chmod +x "$bin/gh"
 
-  PRS_JSON='[{"headBranchName":"release-please--branches--main--components--shared-workflows","number":40},{"headBranchName":"release-please--branches--main--components--dev-config","number":41}]' \
+  PRS_JSON='[{"headBranchName":"release-please--branches--main--components--shared-workflows","number":40},{"headBranchName":"release-please--branches--main--components--app-tooling","number":41}]' \
     run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "exited 0 despite a failed dispatch"
   contains "$output" "::error::" || fail "output: $output"
@@ -106,7 +106,7 @@ EOF
     || fail "output: $output"
   args="$(tr '\n' ' ' < "$BATS_TEST_TMPDIR/gh.args")"
   contains "$args" "--ref release-please--branches--main--components--shared-workflows" || fail "args: $args"
-  contains "$args" "--ref release-please--branches--main--components--dev-config" || fail "args: $args"
+  contains "$args" "--ref release-please--branches--main--components--app-tooling" || fail "args: $args"
 }
 
 @test "fails without GH_REPO" {

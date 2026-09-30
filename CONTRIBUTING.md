@@ -53,7 +53,7 @@ Conventional Commits with a closed scope list, enforced by `commitlint` in the
 <type>(<scope>): <subject>
 ```
 
-Scopes: `actions checks ci deps dev-config docs e2e lib native ota release self test
+Scopes: `actions app-tooling checks ci deps docs e2e lib native ota release self test
 tooling web workflows` (`commitlint.config.mjs` is the source of truth).
 
 Pull requests are **squash-merged**, so GitHub uses the **PR title** as the
@@ -85,10 +85,11 @@ each of its exit paths:
 | `scripts/ci/lint-ci.sh` | `test/lint-ci.bats` |
 | `scripts/ota/export.sh` | `test/ota-export.bats` (`scripts/web/export.sh` already has `test/export.bats`) |
 | `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-script-modules`, 100% gate) |
-| `packages/dev-config/bin/check-tool-versions.mjs` | `packages/dev-config/check-tool-versions.test.mjs` |
-| `packages/dev-config/lib/pin.mjs` | `packages/dev-config/pin.test.mjs` |
-| `packages/expo-tooling/jest/mocks/expo-updates.cjs` | `packages/expo-tooling/expo-updates.test.mjs` |
-| `packages/dev-config/checks/i18n.sh` (a copy) | the original's `test/i18n.bats`, plus `test/package-copies.bats` |
+| `packages/app-tooling/bin/check-tool-versions.mjs` | `packages/app-tooling/check-tool-versions.test.mjs` |
+| `packages/app-tooling/lib/pin.mjs` | `packages/app-tooling/pin.test.mjs` |
+| `packages/app-tooling/expo/eslint.mjs` (an Expo preset) | `packages/app-tooling/eslint.test.mjs` |
+| `packages/app-tooling/expo/jest/mocks/expo-updates.cjs` | `packages/app-tooling/expo-updates.test.mjs` |
+| `packages/app-tooling/checks/i18n.sh` (a copy) | the original's `test/i18n.bats`, plus `test/package-copies.bats` |
 
 A case in a shared suite such as `plumbing.bats` or `fallback-gates.bats` is
 fine on top, but it is never the script's own test: when the suite changes,
@@ -154,7 +155,7 @@ This repository never checks out a consumer to check it against a rule, in
 CI or in a test. (The store notes dry run in `self-store-notes.yml` checks the
 template out to execute this repository's `pr-store-notes.yml`, not to judge
 the template.) The direction is the other way round: each consumer's `check-code.yml` run starts with a
-`Contract` job, which reads [`packages/dev-config/contract.json`](packages/dev-config/contract.json)
+`Contract` job, which reads [`packages/app-tooling/contract.json`](packages/app-tooling/contract.json)
 from the exact version of this repository that consumer calls and checks the
 consumer against it. A consumer that has drifted fails **its own** PR, and a
 change here is never red because of the state of some consumer's `main`.
@@ -164,7 +165,7 @@ has the diagram.
 That puts a rule that spans repositories in one of two places:
 
 - **A requirement in `contract.json`**, checked by
-  `packages/dev-config/bin/check-consumer-contract.mjs`. That covers package scripts,
+  `packages/app-tooling/bin/check-consumer-contract.mjs`. That covers package scripts,
   files, lanes, the rule that `make ci` and CI run the same gates in both
   directions, and the rule that the lanes read only the `APP_REVIEW_*` names
   `publish-store.yml` passes. Its tests use in-memory fixture consumers,
@@ -242,9 +243,9 @@ job" log on GitHub before merging.
 - **A tool version bump** moves `scripts/lib/versions.sh` *and* the mirrors in
   `.mise.toml` and the workflow defaults; `make check-versions` is what fails
   otherwise.
-- **A change to an expo-tooling preset** keeps its test green: the test
+- **A change to an Expo preset** (`packages/app-tooling/expo/`) keeps its test green: the test
   evaluates the template's file as it was and the file it becomes
-  (`packages/expo-tooling/fixtures/template/<tool>/`), and the change has to
+  (`packages/app-tooling/fixtures/template/<tool>/`), and the change has to
   keep producing the template's configuration, or say in the PR what the
   template has to change with it. The consumer guide shows each `future.*`
   file, and `package.test.mjs` fails until both move together.
@@ -261,8 +262,8 @@ here and every consumer's CI.
 Releases are automated: release-please keeps a release PR open on `main`, and
 squash-merging it cuts the version and re-points the moving `v0`/`v0.<minor>` tags.
 Never move a tag or edit a version by hand. There is one release PR per
-component (the workflows, `@blinkbitcoin/dev-config` and
-`@blinkbitcoin/expo-tooling`), and every push to `main` rebuilds each open one
-on that `main` (`always-update` in `release-please-config.json`), so merging
-one never leaves the others conflicting. Each rebuild dismisses an approval: approve a release PR right
+component (the workflows and `@blinkbitcoin/app-tooling`), and every push to
+`main` rebuilds each open one on that `main` (`always-update` in
+`release-please-config.json`), so merging one never leaves the other
+conflicting. Each rebuild dismisses an approval: approve a release PR right
 before merging it.

@@ -40,7 +40,7 @@ jobs:
       repository: blinkbitcoin/react-native-mobile-template
       ref: main
       dry-run: true
-      body-file: .workflows/packages/dev-config/fixtures/store-notes/release-body.md
+      body-file: .workflows/packages/app-tooling/fixtures/store-notes/release-body.md
   validate:
     name: Validate
     needs: dry-run

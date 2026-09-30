@@ -29,7 +29,7 @@ grep -q "gitleaks = \"$GITLEAKS_VERSION\"" .mise.toml || { echo "::error::.mise.
 # The package ships versions.json to consumers, who have neither this file nor
 # .mise.toml. Bind the two tables here so a tool version still lives in exactly
 # one place - the bug this whole check exists to prevent, one level up.
-table=packages/dev-config/versions.json
+table=packages/app-tooling/versions.json
 for pair in "actionlint:$ACTIONLINT_VERSION" "shellcheck:$SHELLCHECK_VERSION" "yq:$YQ_VERSION" "typos:$TYPOS_VERSION" "lefthook:$LEFTHOOK_VERSION" "zizmor:$ZIZMOR_VERSION" "gitleaks:$GITLEAKS_VERSION"; do
   tool=${pair%%:*}
   want=${pair#*:}

@@ -17,8 +17,8 @@ rest explain the parts of it that surprise people.
 
 | Doc | Contents |
 | --- | --- |
-| [adopting-an-existing-repo.md](adopting-an-existing-repo.md) | What an existing app has to provide, per workflow it calls, and the two ways to satisfy each gate. The table is generated from `packages/dev-config/contract.json` |
-| [consumer-guide.md](consumer-guide.md) | Every workflow's inputs, outputs and secrets; the full caller examples; versioning and the `@v0` pin; the `.workflows/` self-checkout; what each app configuration file becomes on the expo-tooling presets |
+| [adopting-an-existing-repo.md](adopting-an-existing-repo.md) | What an existing app has to provide, per workflow it calls, and the two ways to satisfy each gate. The table is generated from `packages/app-tooling/contract.json` |
+| [consumer-guide.md](consumer-guide.md) | Every workflow's inputs, outputs and secrets; the full caller examples; versioning and the `@v0` pin; the `.workflows/` self-checkout; what each app configuration file becomes on the Expo presets |
 | [cache-keys.md](cache-keys.md) | Each cache's key shape, what invalidates it, and the restore/save split |
 | [forensics.md](forensics.md) | The artifacts an E2E job uploads on iOS and Android, what is in each, and retention |
 | [runners.md](runners.md) | Runner labels, macOS billing at 10x, self-hosted notes, KVM and disk pressure |
@@ -31,7 +31,6 @@ rest explain the parts of it that surprise people.
 | `CONTRIBUTING.md` | Setup, worktrees, commit conventions, and what a change has to carry |
 | `SECURITY.md` | Private reporting, the threat model and the secrets policy |
 | `README.md` | What this repo is, the caller to copy, the workflow table, pinning, and what it needs from you |
-| `packages/dev-config/README.md` | `@blinkbitcoin/dev-config` — the pinned tool table, `check-tool-versions`, and `check-consumer-contract` |
-| `packages/expo-tooling/README.md` | `@blinkbitcoin/expo-tooling` — the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets, and their peer dependencies |
+| `packages/app-tooling/README.md` | `@blinkbitcoin/app-tooling` — the pinned tool table, `check-tool-versions`, `check-consumer-contract`, the repository guards, `store-notes`, and under `expo/` the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets with their peer dependencies |
 | `scripts/e2e/README.md` | How the E2E scripts fit together on a runner |
 | `docs/superpowers/` | The specs and plans this repo was built from. History, not a guide |

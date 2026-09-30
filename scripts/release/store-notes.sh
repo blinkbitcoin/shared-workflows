@@ -5,8 +5,8 @@
 #   store-notes.txt   the plain-text notes handed to the store lanes
 #   release-notes.md  the human-readable release body (a copy of store-notes.txt)
 #
-# The generator is @blinkbitcoin/dev-config's store-notes program, run from
-# this checkout of shared-workflows (packages/dev-config/bin/store-notes.mjs)
+# The generator is @blinkbitcoin/app-tooling's store-notes program, run from
+# this checkout of shared-workflows (packages/app-tooling/bin/store-notes.mjs)
 # in the consumer's directory, so it reads the consumer's commits, its
 # fastlane/metadata/ios locales and its optional store-notes.prompt.md. A
 # consumer ships no generator of its own: one left at scripts/release/notes.mjs
@@ -24,7 +24,7 @@ source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/release-env.sh"
 
 # Absolute before the cd below, which would break a relative $0.
-generator="$(cd "$(dirname "$0")/../../packages/dev-config/bin" && pwd)/store-notes.mjs"
+generator="$(cd "$(dirname "$0")/../../packages/app-tooling/bin" && pwd)/store-notes.mjs"
 root="$(consumer_root)"
 mkdir -p "$WORKFLOWS_RELEASE_META_DIR"
 cd "$root"
@@ -44,7 +44,7 @@ locale_args=()
 group "store notes"
 require_cmd node
 [ ! -f "scripts/release/notes.mjs" ] ||
-  printf '::warning::scripts/release/notes.mjs is not run: the store notes come from the store-notes program in @blinkbitcoin/dev-config. Delete it and its test, and keep what the app adds to the prompt in store-notes.prompt.md\n' >&2
+  printf '::warning::scripts/release/notes.mjs is not run: the store notes come from the store-notes program in @blinkbitcoin/app-tooling. Delete it and its test, and keep what the app adds to the prompt in store-notes.prompt.md\n' >&2
 # The addendum's old name. Not read, so an app that kept it would lose its own
 # product, audience and tone from every LLM draft without a word.
 [ ! -f "release-notes.prompt.md" ] || [ -f "store-notes.prompt.md" ] ||

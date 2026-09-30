@@ -2,12 +2,12 @@
 
 The shared engineering baseline, in two halves. Reusable GitHub Actions
 workflows, composite actions and bash scripts for building, testing and
-releasing React Native (Expo) apps; and the packages a repo installs:
-`packages/dev-config`, published as `@blinkbitcoin/dev-config`, the developer
-tooling that is not React Native specific, and `packages/expo-tooling`
-(`@blinkbitcoin/expo-tooling`), the Jest, ESLint, Biome, Metro, Playwright,
-lefthook, fingerprint, TypeScript and commitlint presets an Expo app extends. Consumers pin `@v0` and call the workflows;
-nothing here is copied into their repos. The published
+releasing React Native (Expo) apps; and the one package a repo installs,
+`packages/app-tooling`, published as `@blinkbitcoin/app-tooling`: the
+developer tooling that is not React Native specific at its top level, and
+under `expo/` the Jest, ESLint, Biome, Metro, Playwright, lefthook,
+fingerprint, TypeScript and commitlint presets an Expo app extends. Consumers
+pin `@v0` and call the workflows; nothing here is copied into their repos. The published
 contract is [`docs/consumer-guide.md`](docs/consumer-guide.md) — a change to an
 input, output, secret or env var is a change to every app that pins this repo.
 
@@ -35,8 +35,8 @@ scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
-packages/           dev-config (tooling any repo installs), expo-tooling (the Expo
-                    presets; fixtures/template/ holds the template's files, before and after)
+packages/           app-tooling (tooling any repo installs; expo/ holds the Expo presets,
+                    fixtures/template/ the template's files, before and after)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
                     forensics, runners
 ```
@@ -56,7 +56,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make test-package` | `node:test` over every package under `packages/`, 100% lines, branches and functions |
 | `make test-script-modules` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
 | `make check-versions` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
-| `make tool-versions` | Fail when an installed tool is not the version `packages/dev-config/versions.json` pins |
+| `make tool-versions` | Fail when an installed tool is not the version `packages/app-tooling/versions.json` pins |
 | `make spell` | typos over the whole repo |
 | `make secrets` | Scan the whole git history for committed secrets (gitleaks) |
 | `make smoke-local` | Prepare against the template with nektos/act — Docker and a pushed branch required; not part of `check` (CONTRIBUTING.md, "Running the release pipeline locally") |
@@ -92,7 +92,7 @@ Every row is a make target; nothing here is run through a package manager.
   trigger, one `uses:` at the pin, its variables and secrets. If a change
   here needs a consumer to rename, reorder or rewrite jobs, the change is in
   the wrong place. When a consumer's copy of something is deleted, add a
-  `no-copy` row to `packages/dev-config/contract.json`, so the copy cannot
+  `no-copy` row to `packages/app-tooling/contract.json`, so the copy cannot
   come back.
 - **Every PR tests everything it adds or changes, in the same PR.** That means
   the happy path, every error path and every branch a reviewer could ask
@@ -131,7 +131,7 @@ Every row is a make target; nothing here is run through a package manager.
   - **The file:**
     - `scripts/ci/x.sh` has `test/x.bats` (`test/ci-x.bats` when another script is also called `x`).
     - A Node script `scripts/lib/x.mjs` has `test/x.test.mjs`, under `make test-script-modules`' 100% gate.
-    - A package's program or module, `packages/<package>/bin/x.mjs` or `lib/x.mjs`, has `packages/<package>/x.test.mjs`; so does a Jest runtime file, `packages/<package>/jest/**/x.cjs`.
+    - A package's program, module or Expo preset, `packages/<package>/bin/x.mjs`, `lib/x.mjs` or `expo/x.mjs`, has `packages/<package>/x.test.mjs`; so does a Jest runtime file, `packages/<package>/expo/jest/**/x.cjs`.
     - A package's byte-identical copy of a script is tested by its original's own test plus `test/package-copies.bats`.
   - **What counts:**
     - A case in a shared suite (`plumbing.bats`, `fallback-gates.bats`) is welcome on top, but it is never the script's own test.
@@ -172,7 +172,7 @@ Every row is a make target; nothing here is run through a package manager.
   branch and read the job's "Set up job" log before merging
   (CONTRIBUTING.md, "Running the release pipeline locally").
 - **Conventional commits with a closed scope enum**
-  (`commitlint.config.mjs`): `actions checks ci deps dev-config docs e2e lib native ota
+  (`commitlint.config.mjs`): `actions app-tooling checks ci deps docs e2e lib native ota
   release self test tooling web workflows`. Squash merges take the PR title as
   the commit message, so `pr-title.yml` lints the title too.
 - **Releases are release-please's job.** `self-release.yml` cuts the version
@@ -186,11 +186,11 @@ Every row is a make target; nothing here is run through a package manager.
   commit. The green one is the signal. The red one goes away only when the PR
   is opened by the RELEASE_TAGGER App (the guarded step in `pr-release.yml`;
   needs the App's two secrets on this repo).
-  There are three release PRs, one per component - the workflows,
-  `dev-config` and `expo-tooling` (`separate-pull-requests`) - and each bumps
+  There are two release PRs, one per component - the workflows and
+  `app-tooling` (`separate-pull-requests`) - and each bumps
   `.release-please-manifest.json`. `always-update` in
   `release-please-config.json` rebuilds every open one on each push to
-  `main`, so merging one never leaves the others conflicting. Each rebuild is a
+  `main`, so merging one never leaves the other conflicting. Each rebuild is a
   force push, which dismisses an approval: approve a release PR right
   before merging it.
 
@@ -215,8 +215,8 @@ Every row is a make target; nothing here is run through a package manager.
     rel->>tags: release-created, tag vX.Y.Z and its release
     rel->>rel: store-notes job runs pr-store-notes.yml against the template, dry run, from that commit
     rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after that dry run passed
-    rel->>tags: publish-dev-config job publishes the npm package, when paths-released names it
-    rel->>pr: the other components' open release PRs are rebuilt on the new main, manifest included
+    rel->>tags: publish-app-tooling job publishes the npm package, when paths-released names it
+    rel->>pr: the other component's open release PR is rebuilt on the new main, manifest included
   ```
 
 - **No vague abbreviations, anywhere a human reads.** Write the word:
@@ -271,8 +271,8 @@ Every row is a make target; nothing here is run through a package manager.
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
-| The dev-config programs and modules at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, the store notes generator and its LLM adapters, and each program's flags, messages and exit codes | `packages/dev-config/*.test.mjs` | `make test-package` |
-| Each expo-tooling preset against the template: the template's file as it is and the file it becomes, evaluated under the same stand-ins and compared (lefthook through the real `lefthook dump`); the guide's examples are those files | `packages/expo-tooling/*.test.mjs` | `make test-package` |
+| The app-tooling programs and modules at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, the store notes generator and its LLM adapters, and each program's flags, messages and exit codes | `packages/app-tooling/*.test.mjs` | `make test-package` |
+| Each Expo preset (`expo/`) against the template: the template's file as it is and the file it becomes, evaluated under the same stand-ins and compared (lefthook through the real `lefthook dump`); the guide's examples are those files | `packages/app-tooling/*.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |

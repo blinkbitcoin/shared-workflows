@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Render every reusable workflow's `on.workflow_call` interface - its inputs
 # (type, required), secrets (required) and outputs - as
-# packages/dev-config/interfaces.json.
+# packages/app-tooling/interfaces.json.
 #
 # check-consumer-contract compares each caller's `with:`, `secrets:` and the
 # outputs it reads against this file. It ships in the package rather than being
@@ -14,13 +14,13 @@
 # self-* workflows are left out: they are this repository's own CI, never
 # called by a consumer.
 #
-# Usage: render-interfaces.sh [OUT]   (default: packages/dev-config/interfaces.json)
+# Usage: render-interfaces.sh [OUT]   (default: packages/app-tooling/interfaces.json)
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd yq
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-out="${1:-$root/packages/dev-config/interfaces.json}"
+out="${1:-$root/packages/app-tooling/interfaces.json}"
 
 files=()
 for file in "$root"/.github/workflows/*.yml; do

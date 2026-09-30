@@ -4,7 +4,7 @@ name: Badges
 # workflow-status badge takes `?branch=main`, and every other branch gets its
 # own set.
 #
-# Both halves live here. Rendering is @blinkbitcoin/dev-config's render-badges
+# Both halves live here. Rendering is @blinkbitcoin/app-tooling's render-badges
 # program, run from this repository's own checkout by
 # scripts/ci/render-badges.sh, so a consumer needs no script and no copy; a
 # consumer that draws its own badges names its package script in
@@ -70,7 +70,7 @@ on:
         type: string
         default: 'coverage'
       render-script:
-        description: Consumer package.json script that renders the badges into badge-dir instead of @blinkbitcoin/dev-config's render-badges; empty (the default) renders with render-badges from this repository's checkout
+        description: Consumer package.json script that renders the badges into badge-dir instead of @blinkbitcoin/app-tooling's render-badges; empty (the default) renders with render-badges from this repository's checkout
         type: string
         default: ''
       badge-dir:
