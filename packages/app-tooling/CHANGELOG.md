@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.10.0...app-tooling-v0.1.0) (2026-09-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **workflows:** check-security.yml's `deps` input is `dependencies`, and the consumer's security settings program must print `dependencies=` instead of `deps=` (its `jobs.deps` key becomes `jobs.dependencies`).
+* **workflows:** every caller renames its uses: paths, with: keys and the outputs it reads, and the consumer renames its package scripts and security files. check-code.yml, check-unit.yml, check-e2e.yml, check-codeql.yml and publish-promotion-retry.yml are check.yml, test-unit.yml, test-e2e.yml, check-code-scanning.yml and publish-retry.yml. Inputs: build-env and env-json -> environment-variables; xcode -> xcode-version; ios-signing and android-signing -> *-signing-enabled; release-meta-artifact -> build-info-artifact (default build-info); publish-store runner -> macos-enabled, ruby -> ruby-enabled, lane-args -> lane-arguments; publish-github-release tag -> release-tag; build-web playwright -> e2e, export-script -> build-script, export-args -> build-arguments, output-dir -> output-directory, playwright-browsers -> e2e-browsers; test-e2e maestro-flows, maestro-include-tags, maestro-exclude-tags -> flows, include-tags, exclude-tags, *-artifact-name -> *-artifact; test-unit test-script -> unit-script, scripts-test-script -> scripts-script; check-security openant -> review-codebase, sarif-upload -> sarif-upload-enabled; publish-badges render-script -> badges-script, badge-dir -> badge-directory; config-file -> configuration-file. Outputs: fp-ios/fp-android -> fingerprint-ios/ fingerprint-android, pr-release tag-name -> release-tag. The security settings file is security-settings.json, resolved by scripts/security/settings.mjs; the codebase review runner is scripts/security/review-codebase.sh. No alias is kept.
+* **app-tooling:** the package's programs and exports are renamed: render-badges -> gen-badges, coverage-badge -> gen-coverage-badge, status-badge -> gen-status-badge, store-notes -> gen-store-notes, make-help -> help, check-consumer-contract -> check-contract. A consumer that runs any of them (pnpm exec, npx, a package.json script or a make recipe) calls the new name. No alias is kept.
+* **app-tooling:** @blinkbitcoin/dev-config and @blinkbitcoin/expo-tooling are replaced by @blinkbitcoin/app-tooling. A consumer depends on github:blinkbitcoin/shared-workflows#<sha>&path:/packages/app-tooling, calls node_modules/@blinkbitcoin/app-tooling/... where it called node_modules/@blinkbitcoin/dev-config/..., imports @blinkbitcoin/app-tooling/expo/<preset> where it imported @blinkbitcoin/expo-tooling/<preset>, and renames dev-config.json to app-tooling.json.
+
+### Miscellaneous
+
+* **release:** pin the first published version to 0.1.0 ([bc44e7a](https://github.com/blinkbitcoin/shared-workflows/commit/bc44e7a600678bdaf20bc6c517ce7d2ec71ac395))
+
+
+### Refactoring
+
+* **app-tooling:** name every program and make target family-stem ([#143](https://github.com/blinkbitcoin/shared-workflows/issues/143)) ([a4bbdc0](https://github.com/blinkbitcoin/shared-workflows/commit/a4bbdc0c7d4d9f30ff08a02607ffbcadb05c4596))
+* **app-tooling:** one package, @blinkbitcoin/app-tooling, replaces dev-config and expo-tooling ([#141](https://github.com/blinkbitcoin/shared-workflows/issues/141)) ([7e96f2e](https://github.com/blinkbitcoin/shared-workflows/commit/7e96f2ee6984ec34c355101f4a3e72b2383c27cc))
+* **workflows:** dependencies, not deps, in every interface ([#145](https://github.com/blinkbitcoin/shared-workflows/issues/145)) ([b4bc2ee](https://github.com/blinkbitcoin/shared-workflows/commit/b4bc2ee0be478af0dc8ac1d6eedbe0015c8de656))
+* **workflows:** one family-stem name per workflow, input, job and gate ([#144](https://github.com/blinkbitcoin/shared-workflows/issues/144)) ([bb1c403](https://github.com/blinkbitcoin/shared-workflows/commit/bb1c403a2c8ef96af9fb8d320233ff2cfa69fb69))
+
 ## [0.10.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.9.0...dev-config-v0.10.0) (2026-09-30)
 
 
