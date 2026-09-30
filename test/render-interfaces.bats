@@ -2,7 +2,7 @@
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
 # scripts/self/render-interfaces.sh: the workflow_call interfaces
-# check-consumer-contract holds a consumer's calls to, rendered into
+# check-contract holds a consumer's calls to, rendered into
 # packages/app-tooling/interfaces.json. The committed file must be what the
 # script renders today: an input added to a workflow without a re-render would
 # otherwise read to every consumer as an input that does not exist.

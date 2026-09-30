@@ -2,7 +2,7 @@ name: maestro
 description: Install and cache the Maestro CLI
 inputs:
   version:
-    description: Maestro CLI version to install (kept equal to scripts/lib/versions.sh MAESTRO_VERSION; enforced by scripts/self/check-versions.sh)
+    description: Maestro CLI version to install (kept equal to scripts/lib/versions.sh MAESTRO_VERSION; enforced by scripts/self/check-version-pins.sh)
     default: '2.10.0'
   sha256:
     description: SHA-256 of that version's release archive (empty for the pinned version, whose checksum scripts/lib/versions.sh holds; required for any other)

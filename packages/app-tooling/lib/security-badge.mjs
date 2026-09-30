@@ -1,5 +1,5 @@
 // Writes the Security badge from check-security.yml's verdict output, the one
-// line of JSON publish-badges.yml hands render-badges as BADGE_SECURITY.
+// line of JSON publish-badges.yml hands gen-badges as BADGE_SECURITY.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { BADGE_DIR, renderBadgeJson, renderBadgeSvg, securityBadgeFor } from './badge.mjs';

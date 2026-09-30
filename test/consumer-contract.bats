@@ -10,7 +10,7 @@
 #      Contract job reads to hold that consumer's `make ci` to CI.
 # Everything here reads this repository and test/fixtures/consumer-min only. A
 # real consumer is never checked out: it is held to the contract by its own
-# Contract job (packages/app-tooling/bin/check-consumer-contract.mjs), against the
+# Contract job (packages/app-tooling/bin/check-contract.mjs), against the
 # version of this repository it calls, and fails its own PR when it drifts.
 load test_helper
 

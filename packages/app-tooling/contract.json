@@ -1,9 +1,9 @@
 {
-  "$comment": "The consumer contract, as data. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-consumer-contract.mjs (the doctor), docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
+  "$comment": "The consumer contract, as data. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-contract.mjs, docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
 
   "$schema-notes": {
     "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. script-or-dep: either (knip, which is deliberately a binary and not a script). file: any one of target exists. dir-nonempty: target is a directory with at least one entry. mise-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. one-pin: every shared-workflows call pins one full commit SHA with its # vX.Y.Z, and each of this family's packages in package.json and pnpm-lock.yaml is at that commit (target unused). no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted.",
-    "toggle": "The workflow_call input that decides whether this is needed at all, as `workflow.yml:input`. The doctor reads the caller's own `with:` block first and falls back to defaultOn.",
+    "toggle": "The workflow_call input that decides whether this is needed at all, as `workflow.yml:input`. The contract check reads the caller's own `with:` block first and falls back to defaultOn.",
     "severity": "required: the gate cannot run without it and the job dies. degrades: shared-workflows has a fallback, so the gate still runs but not as the consumer defined it. optional: nothing happens unless the consumer opts in.",
     "guide": "Anchor in docs/consumer-guide.md."
   },
@@ -414,11 +414,11 @@
         "scripts/badges/status-badge.mjs", "scripts/badges/status-badge.test.mjs"
       ],
       "profile": "badges",
-      "neededBy": "the render-badges program @blinkbitcoin/app-tooling ships and publish-badges.yml runs; a copy in your repository is compared with it by nothing and drifts",
+      "neededBy": "the gen-badges program @blinkbitcoin/app-tooling ships and publish-badges.yml runs; a copy in your repository is compared with it by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copy and its tests, and point any script that ran it at the package's program (\"badges:render\": \"render-badges\"). publish-badges.yml already renders with render-badges unless your caller names a script in render-script.",
+      "fix": "Delete the copy and its tests, and point any script that ran it at the package's program (\"badges:render\": \"gen-badges\"). publish-badges.yml already renders with gen-badges unless your caller names a script in render-script.",
       "guide": "no-copies-of-this-family"
     },
 
@@ -862,11 +862,11 @@
       "label": "no copy of the workflow call contract",
       "target": ["scripts/lib/workflow-calls.mjs", "scripts/lib/workflow-calls.test.mjs", "scripts/workflow-contract.test.mjs"],
       "profile": "checks",
-      "neededBy": "check-consumer-contract, which @blinkbitcoin/app-tooling ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface",
+      "neededBy": "check-contract, which @blinkbitcoin/app-tooling ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copies, and run pnpm exec check-consumer-contract (make check-contract) instead.",
+      "fix": "Delete the copies, and run pnpm exec check-contract (make check-contract) instead.",
       "guide": "no-copies-of-this-family"
     },
     {
@@ -922,16 +922,16 @@
       "guide": "no-copies-of-this-family"
     },
     {
-      "id": "no-copy.store-notes",
+      "id": "no-copy.gen-store-notes",
       "kind": "no-copy",
       "label": "no copy of the store notes generator",
       "target": ["scripts/release/notes.mjs", "scripts/release/notes.test.mjs", "scripts/release/llm/index.mjs", "scripts/release/llm/index.test.mjs", "scripts/release/fixtures/release-body.md", "scripts/release/fixtures/release-pr-body.md", "scripts/release/fixtures/anthropic-response.json", "scripts/release/fixtures/anthropic-invalid-response.json", "scripts/release/fixtures/openai-response.json"],
       "profile": "checks",
-      "neededBy": "the store-notes program @blinkbitcoin/app-tooling ships, which build-prepare.yml and pr-store-notes.yml run through scripts/release/store-notes.sh; a copy in your repository is not run, and drifts",
+      "neededBy": "the gen-store-notes program @blinkbitcoin/app-tooling ships, which build-prepare.yml and pr-store-notes.yml run through scripts/release/gen-store-notes.sh; a copy in your repository is not run, and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copy, its tests and its fixtures. The workflows run the package's store-notes, and a laptop runs pnpm exec store-notes --from-commits --out -. Keep only what your app adds to the prompt (its product, audience and tone) in store-notes.prompt.md; a test that needs a release body reads $WORKFLOWS_DIR/packages/app-tooling/fixtures/store-notes/.",
+      "fix": "Delete the copy, its tests and its fixtures. The workflows run the package's store-notes, and a laptop runs pnpm exec gen-store-notes --from-commits --out -. Keep only what your app adds to the prompt (its product, audience and tone) in store-notes.prompt.md; a test that needs a release body reads $WORKFLOWS_DIR/packages/app-tooling/fixtures/store-notes/.",
       "guide": "no-copies-of-this-family"
     },
     {
@@ -940,7 +940,7 @@
       "label": "no copy of the LLM adapters",
       "target": ["scripts/lib/llm/index.mjs", "scripts/lib/llm/index.test.mjs", "scripts/lib/llm/anthropic.mjs", "scripts/lib/llm/anthropic.test.mjs", "scripts/lib/llm/openai.mjs", "scripts/lib/llm/openai.test.mjs", "scripts/lib/llm/request.mjs", "scripts/lib/llm/request.test.mjs"],
       "profile": "checks",
-      "neededBy": "the provider-portable LLM adapters @blinkbitcoin/app-tooling ships (@blinkbitcoin/app-tooling/llm and /llm-request), which its store-notes program uses; a copy in your repository is compared with them by nothing and drifts",
+      "neededBy": "the provider-portable LLM adapters @blinkbitcoin/app-tooling ships (@blinkbitcoin/app-tooling/llm and /llm-request), which its gen-store-notes program uses; a copy in your repository is compared with them by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",

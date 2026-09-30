@@ -1,7 +1,7 @@
 // A Makefile as make reads it: its own text with each `include` and
 // `-include` line replaced by the text of the files it names, recursively. A
 // shared `.mk` fragment is then seen by every program that reads targets
-// (make-help, check-make-target-names, check-docs, the contract's Makefile
+// (help, check-make-target-names, check-docs, the contract's Makefile
 // reader) exactly as `make` sees it.
 //
 // Only files that exist are followed. `-include` says a missing file is fine,

@@ -6,7 +6,7 @@
 # found. Requires common.sh.
 #
 # The block is delimited by HTML-comment markers, not by "the heading down to
-# the next `## `". The notes can *start* with a `## ` heading - store-notes.sh's
+# the next `## `". The notes can *start* with a `## ` heading - gen-store-notes.sh's
 # old commit-subject fallback wrote `## <version> (<build>)` and a
 # release-please body starts with `## [x.y.z](...)` - so a heading scan stops
 # at the notes' own heading and leaves their tail behind, stacking a little

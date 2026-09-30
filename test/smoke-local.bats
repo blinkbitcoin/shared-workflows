@@ -6,7 +6,7 @@ load test_helper
 # into the release workflows and must never reach GitHub or create anything.
 
 WF="$REPO_ROOT/.github/workflows/self-act-smoke.yml"
-SCRIPT="$REPO_ROOT/scripts/self/act-smoke.sh"
+SCRIPT="$REPO_ROOT/scripts/self/smoke-local.sh"
 
 @test "the smoke workflow is workflow_dispatch only, so GitHub never runs it" {
   [ "$(yq -r '.on | keys | join(",")' "$WF")" = "workflow_dispatch" ] \

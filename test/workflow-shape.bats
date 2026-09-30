@@ -868,14 +868,14 @@ lane_step_count() {
     || fail "the coverage download is gated on '$cond'"
 }
 
-# Rendering moved here from the consumer: render-badges.sh runs the package's
-# render-badges unless the caller names a script of its own, so the default
+# Rendering moved here from the consumer: gen-badges.sh runs the package's
+# gen-badges unless the caller names a script of its own, so the default
 # has to stay empty and the step has to hand the input over as RENDER_SCRIPT.
 @test "the badges job renders with the package's program unless render-script names a consumer script" {
   f="$REPO_ROOT/.github/workflows/publish-badges.yml"
   run_line=$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0].run' "$f")
-  [ "$run_line" = 'bash "$WORKFLOWS_DIR/scripts/ci/render-badges.sh"' ] \
-    || fail "the render step no longer runs render-badges.sh: $run_line"
+  [ "$run_line" = 'bash "$WORKFLOWS_DIR/scripts/ci/gen-badges.sh"' ] \
+    || fail "the render step no longer runs gen-badges.sh: $run_line"
   [ "$(yq -r '[.jobs.badges.steps[] | select(.name == "Render badges")][0].env.RENDER_SCRIPT' "$f")" \
     = '${{ inputs.render-script }}' ] || fail "the render step does not hand render-script over as RENDER_SCRIPT"
   [ "$(yq -r '.on.workflow_call.inputs."render-script".default' "$f")" = "" ] \

@@ -2,7 +2,7 @@
 // `make help`: every `##`-documented target of the Makefile, sorted, with its
 // description, as one line each.
 //
-//   make-help [--root DIR]
+//   help [--root DIR]
 //
 // The one-liner every Makefile used to carry - `grep ... $(MAKEFILE_LIST) |
 // sort | awk ...` - is logic in a recipe that no test reaches, and it only sees

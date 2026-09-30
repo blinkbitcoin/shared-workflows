@@ -111,7 +111,7 @@ $named"
 @test "the tool-name check reads .mise.toml and catches a target named after a tool" {
   mise_tools | grep -qxF zizmor || fail "zizmor is pinned in .mise.toml but was not read: $(mise_tools | tr '\n' ' ')"
   local named
-  named="$(printf '%s\n' zizmor check-shellcheck workflow-security | targets_named_after_tools)"
+  named="$(printf '%s\n' zizmor check-shellcheck check-ci | targets_named_after_tools)"
   [ "$named" = "zizmor (zizmor)
 check-shellcheck (shellcheck)" ] || fail "expected zizmor and check-shellcheck, got: $named"
 }

@@ -3,7 +3,7 @@
 #
 # Cases that hold several small scripts to each other. A case about one script
 # belongs in that script's own test file (step-timeout.bats, run-hook.bats,
-# e2e-env-publish.bats, release-env-publish.bats, check-versions.bats), not
+# e2e-env-publish.bats, release-env-publish.bats, check-version-pins.bats), not
 # here.
 
 load test_helper

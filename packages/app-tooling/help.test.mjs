@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { helpLines, main, parseArgs } from './bin/make-help.mjs';
+import { helpLines, main, parseArgs } from './bin/help.mjs';
 
-const BIN = fileURLToPath(new URL('./bin/make-help.mjs', import.meta.url));
+const BIN = fileURLToPath(new URL('./bin/help.mjs', import.meta.url));
 const tree = (files) => (file) => files[file] ?? null;
 function run(files, { argv = [], env = {}, isTTY = false } = {}) {
   const out = { log: [], error: [] };
@@ -66,14 +66,14 @@ after(() => {
 });
 
 test('runs as a program against a real directory, plain when piped', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'make-help-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'help-'));
   dirs.push(root);
   writeFileSync(path.join(root, 'Makefile'), 'include extra.mk\nb: ## Bee\n');
   writeFileSync(path.join(root, 'extra.mk'), 'a: ## Ay\n');
   const result = spawnSync(process.execPath, [BIN, '--root', root], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, 'a  Ay\nb  Bee\n');
-  const empty = mkdtempSync(path.join(tmpdir(), 'make-help-empty-'));
+  const empty = mkdtempSync(path.join(tmpdir(), 'help-empty-'));
   dirs.push(empty);
   const missing = spawnSync(process.execPath, [BIN], { cwd: empty, encoding: 'utf8' });
   assert.equal(missing.status, 1);

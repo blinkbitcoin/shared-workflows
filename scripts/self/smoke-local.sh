@@ -4,7 +4,7 @@
 # the Android build) against the workflows in this checkout. See the comment
 # at the top of that workflow for what act can and cannot show.
 #
-# Usage: act-smoke.sh [--android]
+# Usage: smoke-local.sh [--android]
 # Env:   WORKFLOWS_SMOKE_REPOSITORY / WORKFLOWS_SMOKE_REF - the consumer
 #        (default: the template at main)
 #        WORKFLOWS_ACT_IMAGE - runner image for ubuntu-latest
@@ -20,7 +20,7 @@ android=false
 for arg in "$@"; do
   case "$arg" in
     --android) android=true ;;
-    *) die "unknown argument: $arg (usage: act-smoke.sh [--android])" ;;
+    *) die "unknown argument: $arg (usage: smoke-local.sh [--android])" ;;
   esac
 done
 
@@ -49,7 +49,7 @@ case "$(uname -m)" in
 esac
 
 image="${WORKFLOWS_ACT_IMAGE:-catthehacker/ubuntu:act-latest}"
-artifacts="$(mktemp -d "${TMPDIR:-/tmp}/act-smoke-artifacts.XXXXXX")"
+artifacts="$(mktemp -d "${TMPDIR:-/tmp}/smoke-local-artifacts.XXXXXX")"
 trap 'rm -rf "$artifacts"' EXIT
 
 # act's artifact server speaks the v4 artifact protocol and rejects the
@@ -57,7 +57,7 @@ trap 'rm -rf "$artifacts"' EXIT
 # release carries a fix). The workflows keep v7/v8 - that is what runs on
 # GitHub - and act is told to run the last v4 of each in their place, from a
 # pinned checkout made on first use.
-cache="${WORKFLOWS_ACT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/act-smoke}"
+cache="${WORKFLOWS_ACT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/smoke-local}"
 substitute() {
   local action="$1" tag="$2" dir
   dir="$cache/$action-$tag"

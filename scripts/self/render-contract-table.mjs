@@ -7,7 +7,7 @@
 // describes the same requirements in prose, and an adoption checklist is
 // exactly the kind of list that is right on the day it is written and wrong six
 // months later. The prose around the table is written by hand; only the table
-// between the markers comes from here, and test/contract-doctor.bats fails when
+// between the markers comes from here, and test/contract-program.bats fails when
 // the committed file and this output disagree.
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

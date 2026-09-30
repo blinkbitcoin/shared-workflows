@@ -30,7 +30,7 @@ import {
   skeleton,
   summaryTable,
   toggleOn,
-} from './bin/check-consumer-contract.mjs';
+} from './bin/check-contract.mjs';
 
 // A consumer, as the checks see one. No temp directories: `io` is the only way
 // any check reaches a disk, so a fixture is an object literal.
@@ -491,7 +491,7 @@ test('a lane reading an App Review name the workflow does not pass fails, naming
 // hold the real `defaultIo`, and the program around it, to the same contract
 // against a temporary directory.
 
-const BIN = fileURLToPath(new URL('./bin/check-consumer-contract.mjs', import.meta.url));
+const BIN = fileURLToPath(new URL('./bin/check-contract.mjs', import.meta.url));
 const GUIDE = 'https://github.com/blinkbitcoin/shared-workflows/blob/v0/docs/consumer-guide.md';
 const temporaryDirectories = [];
 after(() => {
@@ -854,7 +854,7 @@ test('the root defaults to the working directory the program was given', () => {
   assert.match(stdout, /^FAIL {2}no copy of the badge renderer: scripts\/badges\/render\.mjs is a copy of what this family ships\./);
 });
 
-// publish-badges.yml renders with the package's render-badges now, so calling
+// publish-badges.yml renders with the package's gen-badges now, so calling
 // it asks nothing of the consumer's package.json; the copy it replaced blocks.
 test('calling publish-badges.yml needs no badges:render script, and a copy of the renderer blocks', () => {
   const badges = (files) =>
@@ -948,8 +948,8 @@ test('an io that cannot append skips the job summary rather than failing the run
 const { GITHUB_STEP_SUMMARY: _summary, WORKFLOWS_CONTRACT_VERBOSE: _verbose, ...CHILD_ENV } = process.env;
 
 test('the file counts as a program only when node was started on it, through any symlink', () => {
-  const url = new URL('./bin/check-consumer-contract.mjs', import.meta.url).href;
-  const link = path.join(tree(), 'check-consumer-contract');
+  const url = new URL('./bin/check-contract.mjs', import.meta.url).href;
+  const link = path.join(tree(), 'check-contract');
   symlinkSync(BIN, link);
   assert.equal(isProgram(url, BIN), true);
   assert.equal(isProgram(url, link), true);

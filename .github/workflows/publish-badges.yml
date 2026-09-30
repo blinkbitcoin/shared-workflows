@@ -4,9 +4,9 @@ name: Badges
 # workflow-status badge takes `?branch=main`, and every other branch gets its
 # own set.
 #
-# Both halves live here. Rendering is @blinkbitcoin/app-tooling's render-badges
+# Both halves live here. Rendering is @blinkbitcoin/app-tooling's gen-badges
 # program, run from this repository's own checkout by
-# scripts/ci/render-badges.sh, so a consumer needs no script and no copy; a
+# scripts/ci/gen-badges.sh, so a consumer needs no script and no copy; a
 # consumer that draws its own badges names its package script in
 # `render-script` instead. Publishing is scripts/ci/publish-badges.sh. A closed
 # PR's directory is dropped by pr-closed.yml.
@@ -70,7 +70,7 @@ on:
         type: string
         default: 'coverage'
       render-script:
-        description: Consumer package.json script that renders the badges into badge-dir instead of @blinkbitcoin/app-tooling's render-badges; empty (the default) renders with render-badges from this repository's checkout
+        description: Consumer package.json script that renders the badges into badge-dir instead of @blinkbitcoin/app-tooling's gen-badges; empty (the default) renders with gen-badges from this repository's checkout
         type: string
         default: ''
       badge-dir:
@@ -147,7 +147,7 @@ jobs:
           BADGE_E2E_LABEL: ${{ inputs.e2e-label }}
           BADGE_SECURITY: ${{ inputs.security-verdict }}
           BADGE_SECURITY_LABEL: ${{ inputs.security-label }}
-        run: bash "$WORKFLOWS_DIR/scripts/ci/render-badges.sh"
+        run: bash "$WORKFLOWS_DIR/scripts/ci/gen-badges.sh"
       - name: Publish to gh-pages
         env:
           # head_ref on a PR (the branch the badge is *for*), ref_name on a push.

@@ -12,7 +12,7 @@ name: Self store notes
 # release-please-shaped fixture, read from the `.workflows` checkout of the
 # ref under review, so the template needs no copy of it.
 #
-# The generator is the store-notes program from that same checkout, so what
+# The generator is the gen-store-notes program from that same checkout, so what
 # the dry run executes is this ref's code. The template contributes its
 # checkout, its store metadata locales and its store-notes.prompt.md; the
 # trade, taken on purpose, is that a broken setup on its main turns this

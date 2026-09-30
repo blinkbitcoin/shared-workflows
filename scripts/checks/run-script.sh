@@ -23,6 +23,6 @@ elif [ -x "node_modules/.bin/$name" ]; then
 else
   die_fix \
     "consumer package.json has no \"$name\" script, and no $name binary in node_modules/.bin" \
-    "add a \"$name\" script, or switch the gate that calls it off in your caller - run check-consumer-contract for which input that is, and for everything else this repository is missing" \
+    "add a \"$name\" script, or switch the gate that calls it off in your caller - run check-contract for which input that is, and for everything else this repository is missing" \
     "script-contract"
 fi

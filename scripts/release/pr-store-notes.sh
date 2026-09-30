@@ -5,14 +5,14 @@
 # release-please takes the GitHub release body from the text between the first
 # and the last `---` line of the merged PR body, so a `## <title>` block
 # placed before the closing rule reaches the release verbatim - and the
-# release lanes already read that section back (`store-notes --body-section`).
+# release lanes already read that section back (`gen-store-notes --body-section`).
 # release-please rewrites the whole PR body on every push to main, so this
 # runs on every push too, and strips its own previous block before generating:
 # a stale draft never feeds the next one.
 #
 # The notes themselves are the generator's: this hands the stripped body to
-# store-notes.sh as RELEASE_BODY_FILE, which runs @blinkbitcoin/app-tooling's
-# store-notes program in the consumer's directory and leaves store-notes.txt
+# gen-store-notes.sh as RELEASE_BODY_FILE, which runs @blinkbitcoin/app-tooling's
+# gen-store-notes program in the consumer's directory and leaves store-notes.txt
 # in $WORKFLOWS_RELEASE_META_DIR. That file is the section.
 #
 # A dry run is the same work up to the edit, and then no edit: the would-be
@@ -26,7 +26,7 @@
 #        fetching the PR's; a relative path is read from the consumer root);
 #      DRY_RUN (`1` or `true`: never edit the PR; `0`, `false` or unset: edit);
 #      GH_TOKEN and GH_REPO, only when `gh` is called (a fetch or an edit);
-#      plus whatever store-notes.sh reads (STORE_NOTES_LOCALES, the LLM
+#      plus whatever gen-store-notes.sh reads (STORE_NOTES_LOCALES, the LLM
 #      variables and keys).
 # Out: `section`, the rendered marker-delimited block, in $GITHUB_OUTPUT (on
 #      stdout when that is unset), in both modes; in a dry run, the would-be
@@ -89,11 +89,11 @@ fi
 strip_section_block "$fetched" "$title" > "$stripped"
 endgroup
 
-# store-notes.sh generates from RELEASE_BODY_FILE when it is set (the changelog the
-# PR carries), through the store-notes program.
-RELEASE_BODY_FILE="$stripped" bash "$(dirname "$0")/store-notes.sh"
+# gen-store-notes.sh generates from RELEASE_BODY_FILE when it is set (the changelog the
+# PR carries), through the gen-store-notes program.
+RELEASE_BODY_FILE="$stripped" bash "$(dirname "$0")/gen-store-notes.sh"
 notes="$WORKFLOWS_RELEASE_META_DIR/store-notes.txt"
-[ -s "$notes" ] || die "store-notes.sh left no store-notes.txt in $WORKFLOWS_RELEASE_META_DIR"
+[ -s "$notes" ] || die "gen-store-notes.sh left no store-notes.txt in $WORKFLOWS_RELEASE_META_DIR"
 
 # A line of dashes is where release-please splits the body, and a tag is
 # parsed by GitHub or by the shared workflow rather than read by a person; a

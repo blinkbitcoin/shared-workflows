@@ -1,5 +1,5 @@
 # zizmor policy for this repository, and the fallback policy scripts/ci/lint-ci.sh
-# hands to a consumer that ships no zizmor config of its own. `make workflow-security` and
+# hands to a consumer that ships no zizmor config of its own. `make check-ci` and
 # the lefthook hook pass this file with --config rather than relying on zizmor's
 # discovery, which from a worktree nested in another checkout finds that
 # checkout's policy instead (see the Makefile).

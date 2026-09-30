@@ -157,7 +157,7 @@ test('as a command it reads the files of --root', () => {
   const run = spawnSync(process.execPath, [SCRIPT, '--root', root], { encoding: 'utf8', env: process.env });
   assert.equal(run.status, 1);
   assert.match(run.stderr, /^check-shellcheck \(shellcheck\) is named after a tool/m);
-  writeFileSync(path.join(root, 'Makefile'), 'lint-scripts: ## Lint\n\ttrue\n');
+  writeFileSync(path.join(root, 'Makefile'), 'check-scripts: ## Lint\n\ttrue\n');
   const ok = spawnSync(process.execPath, [SCRIPT, '--root', root], { encoding: 'utf8', env: process.env });
   assert.equal(ok.status, 0, ok.stderr);
   assert.equal(ok.stdout, 'make target names ok (1 targets, 1 tools)\n');

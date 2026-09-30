@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 source scripts/lib/versions.sh
-command -v yq >/dev/null 2>&1 || { echo "::error::check-versions.sh needs yq on PATH (run it through 'mise exec --')"; exit 1; }
+command -v yq >/dev/null 2>&1 || { echo "::error::check-version-pins.sh needs yq on PATH (run it through 'mise exec --')"; exit 1; }
 fail=0
 # Anchored to the input, not to "some input in this file defaults to 34":
 # yq reads the declared default rather than any line that happens to match.

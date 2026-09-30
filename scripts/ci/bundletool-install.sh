@@ -11,7 +11,7 @@
 #
 # Env: BUNDLETOOL_VERSION (required; pinned in scripts/lib/versions.sh and in
 #      build-android.yml's `bundletool-version` input, kept equal by
-#      scripts/self/check-versions.sh), BUNDLETOOL_SHA256 (optional).
+#      scripts/self/check-version-pins.sh), BUNDLETOOL_SHA256 (optional).
 # Usage: bundletool-install.sh
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"

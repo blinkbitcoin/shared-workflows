@@ -14,7 +14,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd node
 
-checker="$(cd "$(dirname "$0")/../.." && pwd)/packages/app-tooling/bin/check-consumer-contract.mjs"
+checker="$(cd "$(dirname "$0")/../.." && pwd)/packages/app-tooling/bin/check-contract.mjs"
 [ -f "$checker" ] || die "contract-check.sh: no checker at $checker"
 
 # Two steps, not `cd "$(consumer_root)"`: a command substitution used as an

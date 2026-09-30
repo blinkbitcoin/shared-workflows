@@ -26,7 +26,7 @@ done
 
 [ -n "$mise_config" ] || die_fix \
   "no mise config in $root - the setup action installs node and pnpm from one, and with none it installs nothing" \
-  "add a .mise.toml with a [tools] table declaring at least node and pnpm, or run check-consumer-contract for the full list" \
+  "add a .mise.toml with a [tools] table declaring at least node and pnpm, or run check-contract for the full list" \
   "the-contract-check"
 
 [ -f "$root/package.json" ] || die_fix \

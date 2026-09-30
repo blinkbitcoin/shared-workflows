@@ -14,7 +14,7 @@
 // write elsewhere. The --write cases therefore preload a module that sends the
 // program's reads and writes of that one path to a temporary copy, so the real
 // file is never written. Whether the real doc is up to date is
-// test/contract-doctor.bats' question, not this file's.
+// test/contract-program.bats' question, not this file's.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

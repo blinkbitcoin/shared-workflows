@@ -30,11 +30,11 @@ import {
   TRUNCATION_SUFFIX,
   toStoreNotes,
   USAGE,
-} from './bin/store-notes.mjs';
+} from './bin/gen-store-notes.mjs';
 import { maxTokensFor, renderPrompt, TESTFLIGHT_LIMIT } from './lib/store-notes-rewrite.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const script = path.join(here, 'bin', 'store-notes.mjs');
+const script = path.join(here, 'bin', 'gen-store-notes.mjs');
 const fixtures = path.join(here, 'fixtures', 'store-notes');
 const fixture = (name) => readFileSync(path.join(fixtures, name), 'utf8');
 const body = fixture('release-body.md');
@@ -495,7 +495,7 @@ test('STORE_NOTES_LOCALES is honoured, below --locales and above discovery', () 
 
 test('--help prints the usage and exits 0 without rendering anything', () => {
   const stdout = execFileSync('node', [script, '--help'], { encoding: 'utf8' });
-  assert.match(stdout, /^usage: store-notes /);
+  assert.match(stdout, /^usage: gen-store-notes /);
   assert.match(stdout, /--from-commits/);
   assert.match(stdout, /--locales/);
 });
@@ -740,8 +740,8 @@ test('locale discovery falls back to en-US when the metadata has no locale direc
 
 test('the package publishes the program and the prompt it reads', () => {
   const pkg = JSON.parse(readFileSync(path.join(here, 'package.json'), 'utf8'));
-  assert.equal(pkg.bin['store-notes'], './bin/store-notes.mjs');
-  assert.equal(pkg.exports['./store-notes'], './bin/store-notes.mjs');
+  assert.equal(pkg.bin['gen-store-notes'], './bin/gen-store-notes.mjs');
+  assert.equal(pkg.exports['./gen-store-notes'], './bin/gen-store-notes.mjs');
   assert.ok(pkg.files.includes(path.basename(DEFAULT_PROMPT_FILE)), 'the default prompt is not published');
   assert.equal(path.dirname(DEFAULT_PROMPT_FILE), here);
 });

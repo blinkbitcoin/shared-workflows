@@ -31,6 +31,6 @@ rest explain the parts of it that surprise people.
 | `CONTRIBUTING.md` | Setup, worktrees, commit conventions, and what a change has to carry |
 | `SECURITY.md` | Private reporting, the threat model and the secrets policy |
 | `README.md` | What this repo is, the caller to copy, the workflow table, pinning, and what it needs from you |
-| `packages/app-tooling/README.md` | `@blinkbitcoin/app-tooling` — the pinned tool table, `check-tool-versions`, `check-consumer-contract`, the repository guards, `store-notes`, and under `expo/` the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets with their peer dependencies |
+| `packages/app-tooling/README.md` | `@blinkbitcoin/app-tooling` — the pinned tool table, `check-tool-versions`, `check-contract`, the repository guards, `gen-store-notes`, and under `expo/` the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets with their peer dependencies |
 | `scripts/e2e/README.md` | How the E2E scripts fit together on a runner |
 | `docs/superpowers/` | The specs and plans this repo was built from. History, not a guide |

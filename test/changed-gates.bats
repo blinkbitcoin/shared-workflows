@@ -66,22 +66,22 @@ expect() {
   expect true false false
 }
 
-@test "the shellcheck and actionlint configuration run code" {
-  gates_for ".shellcheckrc" ".github/actionlint.yaml"
+@test "the shellcheck, actionlint and zizmor configuration run code" {
+  gates_for ".shellcheckrc" ".github/actionlint.yaml" ".github/zizmor.yml"
   expect true false false
 }
 
-@test "a composite action change runs no narrow gate unless check-versions reads it" {
+@test "a composite action change runs code, which lints and audits it" {
   gates_for ".github/actions/setup/action.yml"
-  expect false false false
+  expect true false false
 }
 
-@test "the maestro action runs tooling" {
+@test "the maestro action runs code and tooling" {
   gates_for ".github/actions/maestro/action.yml"
-  expect false true false
+  expect true true false
 }
 
-@test "the workflows check-versions reads run code and tooling" {
+@test "the workflows check-version-pins reads run code and tooling" {
   gates_for ".github/workflows/check-e2e.yml"
   expect true true false
   gates_for ".github/workflows/build-android.yml"
@@ -91,7 +91,7 @@ expect() {
 @test "the pinned versions run tooling (and code, for the shell file)" {
   gates_for "scripts/lib/versions.sh"
   expect true true false
-  gates_for "scripts/self/check-versions.sh"
+  gates_for "scripts/self/check-version-pins.sh"
   expect true true false
 }
 

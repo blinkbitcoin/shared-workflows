@@ -1,5 +1,5 @@
 {
-  "$comment": "The one pinned tool table for every repo on the baseline. scripts/self/check-versions.sh asserts scripts/lib/versions.sh and .mise.toml agree with this file, so a version lives in exactly one place. match: 'exact' means the whole version must agree; 'major' means only the major, for runtimes pinned loosely on purpose.",
+  "$comment": "The one pinned tool table for every repo on the baseline. scripts/self/check-version-pins.sh asserts scripts/lib/versions.sh and .mise.toml agree with this file, so a version lives in exactly one place. match: 'exact' means the whole version must agree; 'major' means only the major, for runtimes pinned loosely on purpose.",
   "tools": {
     "actionlint": { "version": "1.7.12", "args": ["-version"], "match": "exact" },
     "shellcheck": { "version": "0.11.0", "args": ["--version"], "match": "exact" },
