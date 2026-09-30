@@ -9,16 +9,16 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (33 files)" || fail "output: $output"
+  contains "$output" "package copies ok (42 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
 tree() {
   tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release" "$tree/scripts/checks" "$tree/scripts/ci" "$tree/scripts/hooks" \
-    "$tree/scripts/security/lib" "$tree/scripts/setup" "$tree/.github"
+    "$tree/scripts/security/lib" "$tree/scripts/setup" "$tree/scripts/e2e" "$tree/.github"
   cp "$REPO_ROOT/scripts/self/package-copies.sh" "$tree/scripts/self/"
-  cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions}.sh "$tree/scripts/lib/"
+  cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions,e2e-env,expo-config}.sh "$tree/scripts/lib/"
   cp "$REPO_ROOT"/scripts/release/{resolve-version,build-info,verify-ios,verify-android}.sh "$tree/scripts/release/"
   cp "$REPO_ROOT/scripts/lib/verify-common.sh" "$tree/scripts/lib/"
   cp "$REPO_ROOT"/scripts/setup/{all,toolchain,android,ios,lib}.sh "$tree/scripts/setup/"
@@ -27,6 +27,7 @@ tree() {
   cp "$REPO_ROOT/scripts/hooks/install-if-lockfile-changed.sh" "$tree/scripts/hooks/"
   cp "$REPO_ROOT"/scripts/security/{scan,dependencies,code,policy,sbom,bundle,mobile,binaries,review,review-codebase}.sh "$tree/scripts/security/"
   cp "$REPO_ROOT/scripts/security/lib/runner.sh" "$tree/scripts/security/lib/"
+  cp "$REPO_ROOT"/scripts/e2e/{ios-maestro,android-maestro,app-launch,ios-simulator,android-emulator,collect-forensics,maestro-bound}.sh "$tree/scripts/e2e/"
   cp "$REPO_ROOT/.github/zizmor.yml" "$tree/.github/"
 }
 
@@ -34,12 +35,14 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 33 files into packages/app-tooling" || fail "output: $output"
+  contains "$output" "copied 42 files into packages/app-tooling" || fail "output: $output"
   for rel in release/resolve-version.sh release/build-info.sh checks/generated.sh checks/secrets.sh \
     checks/run-script.sh checks/expo-health.sh ci/check-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh security/scan.sh security/code.sh \
     security/review-codebase.sh security/lib/runner.sh release/verify-ios.sh release/verify-android.sh \
-    lib/verify-common.sh setup/all.sh setup/lib.sh; do
+    lib/verify-common.sh setup/all.sh setup/lib.sh e2e/ios-maestro.sh e2e/android-maestro.sh e2e/app-launch.sh \
+    e2e/ios-simulator.sh e2e/android-emulator.sh e2e/collect-forensics.sh e2e/maestro-bound.sh lib/e2e-env.sh \
+    lib/expo-config.sh; do
     cmp -s "$tree/scripts/$rel" "$tree/packages/app-tooling/$rel" || fail "packages/app-tooling/$rel is not a copy"
   done
   cmp -s "$tree/.github/zizmor.yml" "$tree/packages/app-tooling/zizmor.yml" || fail "packages/app-tooling/zizmor.yml is not a copy"
@@ -104,4 +107,57 @@ packaged_consumer() {
   run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/generated.sh"
   [ "$status" -ne 0 ] || fail "stale catalogs passed: $output"
   contains "$output" "run \"pnpm run gen:i18n\" and commit the result" || fail "output: $output"
+}
+
+# The E2E copies source their libraries and call their siblings relative to
+# themselves, so they must run from the package with nothing of this repository
+# around them: a developer's `pnpm test:e2e:*` starts them there.
+packaged_e2e_consumer() {
+  consumer="$BATS_TEST_TMPDIR/app"
+  mkdir -p "$consumer/.maestro" "$consumer/android/app/build/outputs/apk/debug" "$BATS_TEST_TMPDIR/bin"
+  printf 'apk\n' > "$consumer/android/app/build/outputs/apk/debug/app-debug.apk"
+  export CALLS="$BATS_TEST_TMPDIR/calls" WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" HOME="$BATS_TEST_TMPDIR/home"
+  export EXPO_CONFIG_JSON="$BATS_TEST_TMPDIR/expo.json"
+  printf '{"scheme":"exampleapp","ios":{"bundleIdentifier":"com.example.app"},"android":{"package":"com.example.app"}}\n' > "$EXPO_CONFIG_JSON"
+  : > "$CALLS"
+  for tool in adb xcrun; do
+    printf '#!/usr/bin/env bash\nprintf "%s %%s\\n" "$*" >> "$CALLS"\ncase "$*" in *screenrecord*) exit 1 ;; esac\n' "$tool" > "$BATS_TEST_TMPDIR/bin/$tool"
+  done
+  printf '#!/usr/bin/env bash\nprintf packager-status:running\n' > "$BATS_TEST_TMPDIR/bin/curl"
+  cat > "$BATS_TEST_TMPDIR/bin/maestro" <<'STUB'
+#!/usr/bin/env bash
+printf 'maestro %s\n' "$*" >> "$CALLS"
+set -- "$@" ""
+while [ "$#" -gt 1 ]; do [ "$1" = --output ] && printf '<testsuites tests="1"/>\n' > "$2"; shift; done
+exit 0
+STUB
+  chmod +x "$BATS_TEST_TMPDIR"/bin/*
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+  unset GITHUB_WORKSPACE WORKING_DIRECTORY
+}
+
+@test "the packaged Android suite runs from the package against a consumer, Metro started elsewhere" {
+  packaged_e2e_consumer
+  cd "$consumer"
+  run bash "$REPO_ROOT/packages/app-tooling/e2e/android-maestro.sh" --include-tags smoke
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  calls="$(cat "$CALLS")"
+  contains "$calls" "adb install -r $(pwd -P)/android/app/build/outputs/apk/debug/app-debug.apk" || fail "calls: $calls"
+  contains "$calls" "exampleapp://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081" || fail "calls: $calls"
+  contains "$calls" "-e APP_ID=com.example.app" || fail "calls: $calls"
+  contains "$calls" "--include-tags smoke" || fail "calls: $calls"
+  contains "$output" "Android: Maestro ran 1 flow(s)" || fail "output: $output"
+}
+
+@test "the packaged iOS steps pick, launch and run the suite from the package against a consumer" {
+  packaged_e2e_consumer
+  export WORKFLOWS_SIM_UDID=SIM-1
+  cd "$consumer"
+  run bash "$REPO_ROOT/packages/app-tooling/e2e/app-launch.sh" ios
+  [ "$status" -eq 0 ] || fail "launch exited $status: $output"
+  run bash "$REPO_ROOT/packages/app-tooling/e2e/ios-maestro.sh"
+  [ "$status" -eq 0 ] || fail "suite exited $status: $output"
+  calls="$(cat "$CALLS")"
+  contains "$calls" "xcrun simctl openurl SIM-1 exampleapp://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081" || fail "calls: $calls"
+  contains "$calls" "maestro test .maestro --platform ios --udid SIM-1 -e APP_ID=com.example.app" || fail "calls: $calls"
 }

@@ -83,6 +83,24 @@ metro-start.sh → metro-wait.sh android
   → android-maestro.sh   # prepare, record, launch, suite, forensics
 ```
 
+## Local runs
+
+`@blinkbitcoin/app-tooling` ships copies of `ios-maestro.sh`,
+`android-maestro.sh`, `app-launch.sh`, `ios-simulator.sh`,
+`android-emulator.sh`, `collect-forensics.sh` and `maestro-bound.sh` under
+`e2e/` (with `lib/e2e-env.sh` and `lib/expo-config.sh`), so an app runs the
+suite on a laptop with the scripts CI runs, from its own root:
+`ios-simulator.sh pick`, `app-launch.sh ios`, `ios-maestro.sh` on iOS, and
+`android-maestro.sh` on Android. Two things differ from CI and are handled
+here rather than in each app:
+
+- Metro started by the developer (`pnpm start`) writes no `metro.log`. When
+  Metro answers `/status` on `WORKFLOWS_METRO_PORT`, `app-launch.sh` opens the
+  deep link without waiting for the bundle receipt; with nothing answering it
+  still fails.
+- Arguments to `ios-maestro.sh` and `android-maestro.sh` are appended to
+  `maestro test`, so one run can be narrowed (`--include-tags smoke`).
+
 ## Notes
 
 - `maestro-bound.sh` is sourced, not executed: `bounded_maestro SECONDS CMD...`

@@ -16,6 +16,7 @@
     "bin",
     "checks",
     "ci",
+    "e2e",
     "lib",
     "hooks",
     "release",
@@ -59,6 +60,7 @@
     "./check-code-scanning": "./bin/check-code-scanning.mjs",
     "./check-security": "./bin/check-security.mjs",
     "./doctor": "./bin/doctor.mjs",
+    "./serve-dist": "./bin/serve-dist.mjs",
     "./doctor.requirements.json": "./doctor.requirements.json",
     "./security-settings.json": "./security-settings.json",
     "./help": "./bin/help.mjs",
@@ -131,6 +133,7 @@
     "check-code-scanning": "./bin/check-code-scanning.mjs",
     "check-security": "./bin/check-security.mjs",
     "doctor": "./bin/doctor.mjs",
+    "serve-dist": "./bin/serve-dist.mjs",
     "help": "./bin/help.mjs"
   },
   "peerDependencies": {

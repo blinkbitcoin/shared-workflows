@@ -2442,7 +2442,8 @@ these names:
 The bundle scan is not a `check.yml` gate: `check-security.yml`'s `bundle` job
 owns it. The template's other scripts (`fix:lint`, `fix:format`,
 `test:e2e:ios`, `test:e2e:android`, ...) are local conveniences no workflow
-here calls.
+here calls; the two E2E ones run the package's copies of the suite runners
+([Running the suite on a laptop](#running-the-suite-on-a-laptop)).
 
 ## The web build / E2E contract
 
@@ -2478,6 +2479,15 @@ where `dist/` may be stale — rather than trying to be clever about freshness:
 `build-web.yml` guarantees the artifact it downloads is the one its own `build` job
 just produced.
 
+The suite's preview server is the package's `serve-dist` program, which serves
+the export the way GitHub Pages does: under `EXPO_PUBLIC_BASE_URL`, `/settings`
+from `settings.html`, and `404.html` with a 404 for a path with no file. It
+listens on `WEB_PREVIEW_PORT` and serves `dist/` in the current directory (or
+the directory it is given). The `expo/playwright` preset starts it; a
+configuration of your own names it as its web server's `command:
+'pnpm exec serve-dist'`. A copy of it in your repository is a
+`no-copy.serve-dist` failure in the [contract check](#no-copies-of-this-family).
+
 ## The E2E hooks contract
 
 `e2e-setup-script` / `e2e-teardown-script` are **consumer-relative file
@@ -2503,6 +2513,44 @@ paths**, not package.json script names, run via `bash` by
   suite and stopped after) and its own `ci.yml` passes the same two paths.
   A consumer that does not ship them must leave both inputs empty, or
   `test-e2e.yml` fails at the setup step (a non-empty but missing path is fatal).
+
+### Running the suite on a laptop
+
+`@blinkbitcoin/app-tooling` ships byte-identical copies of the scripts
+`test-e2e.yml` runs on the device (`e2e/ios-maestro.sh`, `android-maestro.sh`,
+`app-launch.sh`, `ios-simulator.sh`, `android-emulator.sh`,
+`collect-forensics.sh`, `maestro-bound.sh`, with `lib/e2e-env.sh` and
+`lib/expo-config.sh`), so a local run launches the app and runs the flows the
+way CI does: the same deep link, the same retry, the same check that flows ran.
+From the app's root, with the app built and installed and Metro running:
+
+```bash
+e2e=node_modules/@blinkbitcoin/app-tooling/e2e
+bash $e2e/ios-simulator.sh pick && bash $e2e/app-launch.sh ios && bash $e2e/ios-maestro.sh [maestro arguments]
+bash $e2e/android-maestro.sh [maestro arguments]   # installs the debug APK, reverses the ports, launches, runs
+```
+
+- **Ports and hooks** come from the environment (the table in
+  `scripts/e2e/README.md`): `WORKFLOWS_METRO_PORT`, `WORKFLOWS_MOCK_API_PORT`,
+  and `WORKFLOWS_E2E_SETUP_SCRIPT` / `WORKFLOWS_E2E_TEARDOWN_SCRIPT` for what
+  your app needs around the suite (the template waits for its mock API). An app
+  that derives its ports exports them first; the template's
+  `scripts/e2e/maestro.sh` does exactly that and nothing else.
+- **Metro you started yourself** writes no `metro.log`. When Metro answers on
+  `WORKFLOWS_METRO_PORT`, `app-launch.sh` opens the deep link and leaves the
+  proof that the app is up to the suite's first flow; with nothing answering it
+  fails as it does in CI.
+- **Extra arguments** go to `maestro test` last (`--include-tags smoke`).
+- **Output** lands in `WORKFLOWS_OUT` (`${RUNNER_TEMP:-/tmp}/workflows`):
+  the junit report, Maestro's debug output and, on Android, the recording and
+  forensics. `android-maestro.sh` also quiets the emulator (animations off),
+  as CI does.
+- **Tools:** `maestro`, `jq` (`ios-simulator.sh pick`) and `yq` with `pnpm`
+  (the app id and scheme come from `expo config`, unless `WORKFLOWS_APP_ID`
+  is set).
+
+A copy of the runners in your repository is a `no-copy.e2e-suite` failure in
+the [contract check](#no-copies-of-this-family).
 
 ## iOS opt-in
 
@@ -2978,7 +3026,7 @@ each one lives so a future edit doesn't quietly regress it.
 | No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-version-pins.sh`) |
 | A Release E2E build resolves `.env.production` at bundle time, so `EXPO_PUBLIC_*` from a dotenv file never reaches it; an exported variable beats the dotenv file, `NODE_ENV` does not (`@expo/env` assigns it from `--dev`) | `test-e2e.yml`'s `environment-variables` input, published before `Prebuild (ios)`; the template passes its mock API URL there |
 | A `.app` built against one `environment-variables` must not be restored for another, or the fix looks like it did nothing | `scripts/ci/native-keys.sh` folds a digest of `BUILD_ENV` into `ios-key` (`-env{8hex}`; empty leaves the key byte-identical); `test/native-keys.bats` |
-| A Release iOS app never asks Metro for a bundle, so starting Metro for it is pure wall clock — and a launch script must not demand `metro.log` on that path | `test-e2e.yml` `ios` job gates `Start Metro`/`Wait for Metro` on `ios-configuration != 'Release'`; `scripts/e2e/app-launch.sh` requires `metro.log` only when it will read it; `test/app-launch.bats` |
+| A Release iOS app never asks Metro for a bundle, so starting Metro for it is pure wall clock — and a launch script must not demand `metro.log` on that path | `test-e2e.yml` `ios` job gates `Start Metro`/`Wait for Metro` on `ios-configuration != 'Release'`; `scripts/e2e/app-launch.sh` requires `metro.log` only when it will read it, and a local Metro started outside `metro-start.sh` counts when it answers on its port; `test/app-launch.bats` |
 | On an iOS cache hit the job must not install a dependency tree to produce a warning: the warm build was 1m57s against 13s for the same job in esign | `scripts/lib/e2e-env.sh` `workflows_ios_scheme` returns the workspace filename and cross-checks the Expo config only when it is already at hand; `test-e2e.yml` `build-ios` skips `Setup` and `Publish environment-variables` on a hit; `test/e2e-env.bats` |
 | Skipping `Setup` skips the only step that published `$WORKFLOWS_DIR`, and every later `run:` is `bash "$WORKFLOWS_DIR/…"` — exit 127 on the first warm run | `test-e2e.yml` `build-ios` runs `scripts/ci/workflows-env.sh` as its own unconditional first step |
 | The first `simctl openurl` of a simulator session puts up "Open in <app>?", and on a loaded runner the app acted on that first link ~40 s late — during the *next* flow; iOS remembers the choice, so every later open is alert-free and immediate | Consumer side: the template's `00-launch.yaml` opens a Home no-op link first (ADR 0010 there). Here: `ios-simulator.sh record start` streams the unified log so the alert and the `UIOpenURLAction` hand-off are in `forensics-ios` as `ios-unified.log` |

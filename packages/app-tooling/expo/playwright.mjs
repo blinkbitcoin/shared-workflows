@@ -23,13 +23,13 @@ function required(name, value) {
  * @param {Record<string, string | undefined>} [options.env] where the ports and base path are read from
  * @param {string} [options.testDir]
  * @param {string} [options.mockApiCommand] starts the mock API at EXPO_PUBLIC_API_URL
- * @param {string} [options.previewCommand] serves the export at WEB_PREVIEW_PORT
+ * @param {string} [options.previewCommand] serves the export at WEB_PREVIEW_PORT (this package's serve-dist)
  */
 export function createPlaywrightConfig({
   env = process.env,
   testDir = 'e2e/web',
   mockApiCommand = 'pnpm mock-api',
-  previewCommand = 'node scripts/e2e/serve-dist.mjs',
+  previewCommand = 'pnpm exec serve-dist',
 } = {}) {
   const webPreviewPort = required('WEB_PREVIEW_PORT', env.WEB_PREVIEW_PORT);
   // A deploy export is built for `/<repository>/` (EXPO_PUBLIC_BASE_URL, set by
@@ -59,8 +59,8 @@ export function createPlaywrightConfig({
       },
       {
         // Not `expo serve`: it serves at `/` only, and a deploy export's paths
-        // all carry the base path. The preview server serves the export the
-        // way GitHub Pages does - under the base path, `/settings` from
+        // all carry the base path. The preview server (bin/serve-dist.mjs)
+        // serves the export the way GitHub Pages does - under the base path, `/settings` from
         // `settings.html`, and `404.html` (with a 404) for a path with no
         // file, which is how a deep link into a dynamic route boots the router.
         command: previewCommand,
