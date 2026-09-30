@@ -831,19 +831,31 @@ test('a flag missing its value exits 1 with a message and no stack trace', () =>
 });
 
 test('a consumer meeting every requirement exits 0 and says so', () => {
-  const root = tree({ 'package.json': JSON.stringify({ scripts: { 'badges:render': 'node badges.mjs' } }) });
+  const root = tree({ 'package.json': JSON.stringify({ scripts: {} }) });
   assert.deepEqual(runMain(['--root', root, '--profile', 'badges']), {
     code: 0,
-    stdout: 'ok    badges:render\n\nEvery requirement of the workflows this repository calls is satisfied.\n',
+    stdout: 'ok    no copy of the badge renderer\n\nEvery requirement of the workflows this repository calls is satisfied.\n',
     stderr: '',
   });
 });
 
 test('the root defaults to the working directory the program was given', () => {
-  const root = tree({ 'package.json': JSON.stringify({ scripts: { 'badges:render': 'x' } }) });
+  // A copy only that directory holds, so passing would mean it read another.
+  const root = tree({ 'package.json': '{}', 'scripts/badges/render.mjs': '' });
   const { code, stdout } = runMain(['--profile', 'badges'], { cwd: root });
-  assert.equal(code, 0);
-  assert.match(stdout, /^ok    badges:render\n/);
+  assert.equal(code, 1);
+  assert.match(stdout, /^FAIL {2}no copy of the badge renderer: scripts\/badges\/render\.mjs is a copy of what this family ships\./);
+});
+
+// publish-badges.yml renders with the package's render-badges now, so calling
+// it asks nothing of the consumer's package.json; the copy it replaced blocks.
+test('calling publish-badges.yml needs no badges:render script, and a copy of the renderer blocks', () => {
+  const badges = (files) =>
+    check(readContract(), readConsumer(tree(files)), { profiles: ['badges'] }).filter((r) => r.req.profile === 'badges');
+  assert.deepEqual(badges({ 'package.json': '{}' }).map((r) => [r.req.id, r.level]), [['no-copy.badges', 'ok']]);
+  const copied = badges({ 'package.json': '{}', 'scripts/badges/badge.mjs': '', 'scripts/badges/status-badge.test.mjs': '' });
+  assert.deepEqual(copied.map((r) => [r.req.id, r.level]), [['no-copy.badges', 'fail']]);
+  assert.match(copied[0].reason, /scripts\/badges\/badge\.mjs, scripts\/badges\/status-badge\.test\.mjs are copies/);
 });
 
 test('a degraded-only consumer exits 0 and counts what degraded', () => {
@@ -1159,7 +1171,7 @@ test('each problem is a blocking finding that reads, sums up and serializes like
 
 test('the program fails on a call that does not fit, and --json carries the call rule id', () => {
   const root = tree({
-    'package.json': JSON.stringify({ scripts: { 'badges:render': 'x' } }),
+    'package.json': '{}',
     '.github/workflows/cd.yml':
       'jobs:\n  store:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-store.yml@x\n    with:\n      lane: upload\n',
   });

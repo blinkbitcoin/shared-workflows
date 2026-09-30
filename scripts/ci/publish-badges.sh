@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # Publishes the branch's rendered badges to gh-pages/badges/<branch>/.
 #
-# The consumer's render script (publish-badges.yml's `render-script`, default
-# `badges:render`) has already written coverage/badge/{unit,e2e,coverage,security}.svg
-# and their .json siblings; this only moves them onto the branch GitHub serves
-# through raw.githubusercontent.com. A badge the render script chose not to
-# write - a skipped Unit writes no coverage badge - is simply not copied, so the
-# one already published stays. The Security badge follows the same rule: the
-# render script writes it only when handed a verdict (publish-badges.yml's
+# The render step (render-badges.sh: the package's render-badges, or the
+# consumer script publish-badges.yml's `render-script` names) has already
+# written coverage/badge/{unit,e2e,coverage,security}.svg and their .json
+# siblings; this only moves them onto the branch GitHub serves through
+# raw.githubusercontent.com. A badge the renderer chose not to write - a
+# skipped Unit writes no coverage badge - is simply not copied, so the one
+# already published stays. The Security badge follows the same rule: the
+# renderer writes it only when handed a verdict (publish-badges.yml's
 # security-verdict), so a run without one leaves the published badge.
 #
 # A *skipped* suite leaves its published status badge alone too. The caller
 # skips a suite its change cannot affect (check-code.yml's unit-changed and
-# e2e-changed), and a render script handed `skipped` draws a grey "skipped"
+# e2e-changed), and a renderer handed `skipped` draws a grey "skipped"
 # badge - publishing that would overwrite the branch's last real answer with
 # "this run did not look". So unit.* and e2e.* are dropped here when their
-# result is `skipped`, whatever the render script wrote.
+# result is `skipped`, whatever the renderer wrote.
 #
 # Env: BRANCH (required), SHA (required), BADGE_DIR (default coverage/badge),
 # BADGE_UNIT / BADGE_E2E (the suites' job results; optional).
@@ -31,13 +32,13 @@ gh_pages_assert_branch "$BRANCH"
 root="$(consumer_root)"
 cd "$root"
 badge_dir="${BADGE_DIR:-coverage/badge}"
-[ -d "$badge_dir" ] || die "no badge directory at $root/$badge_dir - did the render script run?"
+[ -d "$badge_dir" ] || die "no badge directory at $root/$badge_dir - did the render step run?"
 
 badges=()
 while IFS= read -r file; do badges+=("$file"); done < <(
   find "$badge_dir" -maxdepth 1 -type f \( -name '*.svg' -o -name '*.json' \) | sort
 )
-[ "${#badges[@]}" -gt 0 ] || die "no .svg/.json badges in $root/$badge_dir - did the render script run?"
+[ "${#badges[@]}" -gt 0 ] || die "no .svg/.json badges in $root/$badge_dir - did the render step run?"
 
 kept=()
 for file in "${badges[@]}"; do

@@ -42,7 +42,7 @@ teardown() {
   [ -n "${TMP:-}" ] && rm -rf "$TMP"
 }
 
-# The render script's output, stubbed: these scripts only ever copy files.
+# The renderer's output, stubbed: these scripts only ever copy files.
 render_badges() {
   local root="$1" coverage="$2"
   mkdir -p "$root/coverage/badge"

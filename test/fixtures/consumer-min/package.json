@@ -40,7 +40,6 @@
     "test": "node -e 0",
     "test:coverage": "node -e 0",
     "test:scripts": "node -e 0",
-    "badges:render": "node -e 0",
     "build:web": "node -e 0",
     "test:e2e:web": "node -e 0",
     "test:e2e:ios": "node -e 0",

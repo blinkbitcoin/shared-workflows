@@ -403,16 +403,23 @@
     },
 
     {
-      "id": "script.badges-render",
-      "kind": "package-script",
-      "target": "badges:render",
+      "id": "no-copy.badges",
+      "kind": "no-copy",
+      "label": "no copy of the badge renderer",
+      "target": [
+        "scripts/badges/badge.mjs", "scripts/badges/badge.test.mjs",
+        "scripts/badges/coverage-badge.mjs", "scripts/badges/coverage-badge.test.mjs",
+        "scripts/badges/render.mjs", "scripts/badges/render.test.mjs",
+        "scripts/badges/security-badge.mjs", "scripts/badges/security-badge.test.mjs",
+        "scripts/badges/status-badge.mjs", "scripts/badges/status-badge.test.mjs"
+      ],
       "profile": "badges",
-      "neededBy": "publish-badges.yml (render-script)",
+      "neededBy": "the render-badges program @blinkbitcoin/dev-config ships and publish-badges.yml runs; a copy in your repository is compared with it by nothing and drifts",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Add a \"badges:render\" script that reads BADGE_OUT_DIR, BADGE_UNIT, BADGE_E2E, BADGE_UNIT_LABEL and BADGE_E2E_LABEL and writes into coverage/badge, or stop calling publish-badges.yml.",
-      "guide": "publish-badgesyml"
+      "fix": "Delete the copy and its tests, and point any script that ran it at the package's program (\"badges:render\": \"render-badges\"). publish-badges.yml already renders with render-badges unless your caller names a script in render-script.",
+      "guide": "no-copies-of-this-family"
     },
 
     {
