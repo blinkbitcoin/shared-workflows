@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# store-notes.sh runs @blinkbitcoin/app-tooling's store-notes program from this
+# gen-store-notes.sh runs @blinkbitcoin/app-tooling's gen-store-notes program from this
 # checkout in the consumer's directory. Most cases run the real generator, so
 # what reaches the lanes is asserted end to end; the ones about the exact
 # arguments and environment it is handed, or about what happens when it
@@ -29,7 +29,7 @@ setup() {
 }
 
 commit() { git -C "$ROOT" commit -q --allow-empty -m "$1"; }
-notes() { run bash "$REPO_ROOT/scripts/release/store-notes.sh"; }
+notes() { run bash "$REPO_ROOT/scripts/release/gen-store-notes.sh"; }
 meta() { cat "$WORKFLOWS_RELEASE_META_DIR/$1"; }
 # json EXPRESSION - EXPRESSION over store-notes.json, bound as `notes`, printed.
 json() {
@@ -65,7 +65,7 @@ SH
   notes
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   not_contains "$output" "::warning::" || fail "warned without a reason: $output"
-  contains "$output" "running store-notes --from-commits" || fail "the commit path did not run: $output"
+  contains "$output" "running gen-store-notes --from-commits" || fail "the commit path did not run: $output"
   [ "$(meta store-notes.txt)" = "$(printf 'New\n• A feature.\n\nFixed\n• A fix.')" ] \
     || fail "unexpected notes: $(meta store-notes.txt)"
   [ "$(meta release-notes.md)" = "$(meta store-notes.txt)" ] || fail "release-notes.md is not the notes: $(meta release-notes.md)"
@@ -97,7 +97,7 @@ SH
   cp "$REPO_ROOT/packages/app-tooling/fixtures/store-notes/release-body.md" "$BATS_TEST_TMPDIR/body.md"
   RELEASE_BODY_FILE="$BATS_TEST_TMPDIR/body.md" STORE_NOTES_LOCALES='en-US,de-DE' notes
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "running store-notes --from-body --body-section" || fail "the body path did not run: $output"
+  contains "$output" "running gen-store-notes --from-body --body-section" || fail "the body path did not run: $output"
   contains "$(meta store-notes.txt)" "Signing in sticks now" || fail "the section was not used: $(meta store-notes.txt)"
   [ "$(json 'Object.keys(notes).sort().join()')" = "de-DE,en-US" ] \
     || fail "STORE_NOTES_LOCALES did not decide the locales: $(meta store-notes.json)"
@@ -118,7 +118,7 @@ SH
   RELEASE_BODY_FILE="$BATS_TEST_TMPDIR/body.md" STORE_NOTES_LOCALES='en,de' notes
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   argv="$(cat "$BATS_TEST_TMPDIR/argv.txt")"
-  contains "$argv" "$REPO_ROOT/packages/app-tooling/bin/store-notes.mjs --from-body $BATS_TEST_TMPDIR/body.md --body-section" \
+  contains "$argv" "$REPO_ROOT/packages/app-tooling/bin/gen-store-notes.mjs --from-body $BATS_TEST_TMPDIR/body.md --body-section" \
     || fail "the package's generator was not run on the body: $argv"
   contains "$argv" "--locales en,de" || fail "the locales were not passed as a flag: $argv"
   contains "$argv" "--out $WORKFLOWS_RELEASE_META_DIR" || fail "--out is not the release-meta directory: $argv"
@@ -203,7 +203,7 @@ SH
 @test "no node on PATH is an error naming it" {
   mkdir -p "$BATS_TEST_TMPDIR/bare"
   for tool in dirname mkdir; do ln -s "$(command -v "$tool")" "$BATS_TEST_TMPDIR/bare/$tool"; done
-  run env PATH="$BATS_TEST_TMPDIR/bare" "$BASH" "$REPO_ROOT/scripts/release/store-notes.sh"
+  run env PATH="$BATS_TEST_TMPDIR/bare" "$BASH" "$REPO_ROOT/scripts/release/gen-store-notes.sh"
   [ "$status" -ne 0 ] || fail "exited 0 without node: $output"
   contains "$output" "missing command: node" || fail "unexpected message: $output"
 }

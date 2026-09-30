@@ -1,6 +1,6 @@
 import { createJestConfig } from '@blinkbitcoin/app-tooling/expo/jest';
 
-// Everything generic - the two projects, the worktree ignores, the transforms,
+// Everything generic - the two projects, the ignored directories, the transforms,
 // the console guard, the Expo stand-ins and the 100% thresholds - is the
 // preset's. This file holds this app's paths.
 export default createJestConfig({

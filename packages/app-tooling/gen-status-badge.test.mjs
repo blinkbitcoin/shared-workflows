@@ -6,9 +6,9 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BadgeError, STATUS_RESULTS } from './lib/badge.mjs';
-import { main as statusMain, writeStatusBadge } from './bin/status-badge.mjs';
+import { main as statusMain, writeStatusBadge } from './bin/gen-status-badge.mjs';
 
-const tmp = mkdtempSync(path.join(tmpdir(), 'status-badge-'));
+const tmp = mkdtempSync(path.join(tmpdir(), 'gen-status-badge-'));
 after(() => rmSync(tmp, { recursive: true, force: true }));
 
 /** A fresh output directory per case, so no test reads another's leftovers. */
@@ -69,12 +69,12 @@ const runScript = (script, args, { cwd, env = {} }) =>
     env: { ...process.env, ...env },
   });
 
-describe('status-badge main', () => {
+describe('gen-status-badge main', () => {
   test('writes the named badge and reports it', () => {
     const dir = outDir();
     const { out, io } = capture();
     assert.equal(statusMain(['e2e', 'E2E', 'cancelled', '--out', dir], io), 0);
-    assert.deepEqual(out, ['status-badge: E2E: cancelled']);
+    assert.deepEqual(out, ['gen-status-badge: E2E: cancelled']);
     assert.ok(readFileSync(path.join(dir, 'e2e.svg'), 'utf8').includes('cancelled'));
   });
 
@@ -84,7 +84,7 @@ describe('status-badge main', () => {
     assert.match(err[0], /unknown job result "green"/);
     assert.equal(
       err[1],
-      'usage: status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]',
+      'usage: gen-status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]',
     );
   });
 
@@ -99,13 +99,13 @@ describe('status-badge main', () => {
 
   test('as a command it writes into coverage/badge by default', () => {
     const cwd = mkdtempSync(path.join(tmp, 'cwd-'));
-    const ok = runScript('status-badge.mjs', ['unit', 'Unit', 'success'], { cwd });
+    const ok = runScript('gen-status-badge.mjs', ['unit', 'Unit', 'success'], { cwd });
     assert.equal(ok.status, 0, ok.stderr);
-    assert.equal(ok.stdout, 'status-badge: Unit: passing\n');
+    assert.equal(ok.stdout, 'gen-status-badge: Unit: passing\n');
     assert.ok(readFileSync(path.join(cwd, 'coverage/badge/unit.svg'), 'utf8').includes('passing'));
 
-    const bad = runScript('status-badge.mjs', [], { cwd });
+    const bad = runScript('gen-status-badge.mjs', [], { cwd });
     assert.equal(bad.status, 1);
-    assert.match(bad.stderr, /usage: status-badge </);
+    assert.match(bad.stderr, /usage: gen-status-badge </);
   });
 });

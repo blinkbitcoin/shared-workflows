@@ -7,11 +7,11 @@ table and the rules CI enforces. This file covers the workflow around a change.
 
 ```sh
 mise trust && mise install   # node, pnpm, shellcheck, actionlint, zizmor, gitleaks, bats, yq, typos, lefthook, act
-make hooks                   # install the git hooks (once per clone, see below)
+make setup-hooks                   # install the git hooks (once per clone, see below)
 make check                   # verify the toolchain by running every gate
 ```
 
-`make hooks` installs into `.git/hooks`, which a `git worktree` **shares with
+`make setup-hooks` installs into `.git/hooks`, which a `git worktree` **shares with
 the main checkout**. So it is one command per clone rather than per worktree,
 and running it from a topic worktree makes these hooks live in every worktree
 of that clone — including the main one. `mise exec -- lefthook uninstall`
@@ -65,7 +65,7 @@ their pin. Mark breaking changes with `!` (`feat(workflows)!: ...`) or a
 ## Before you push
 
 ```sh
-make check   # shellcheck, actionlint, zizmor, bats, test-package, test-script-modules, check-versions, tool-versions, typos, gitleaks
+make check   # check-ci (shellcheck, actionlint, zizmor), test (bats, the packages, the Node scripts), check-version-pins, check-tool-versions, check-spell (typos), check-secrets (gitleaks)
 ```
 
 The `pre-push` hook runs exactly that, and `pre-commit` runs a faster subset on
@@ -84,7 +84,7 @@ each of its exit paths:
 | --- | --- |
 | `scripts/ci/lint-ci.sh` | `test/lint-ci.bats` |
 | `scripts/ota/export.sh` | `test/ota-export.bats` (`scripts/web/export.sh` already has `test/export.bats`) |
-| `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-script-modules`, 100% gate) |
+| `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-scripts`, 100% gate) |
 | `packages/app-tooling/bin/check-tool-versions.mjs` | `packages/app-tooling/check-tool-versions.test.mjs` |
 | `packages/app-tooling/lib/pin.mjs` | `packages/app-tooling/pin.test.mjs` |
 | `packages/app-tooling/expo/eslint.mjs` (an Expo preset) | `packages/app-tooling/eslint.test.mjs` |
@@ -165,7 +165,7 @@ has the diagram.
 That puts a rule that spans repositories in one of two places:
 
 - **A requirement in `contract.json`**, checked by
-  `packages/app-tooling/bin/check-consumer-contract.mjs`. That covers package scripts,
+  `packages/app-tooling/bin/check-contract.mjs`. That covers package scripts,
   files, lanes, the rule that `make ci` and CI run the same gates in both
   directions, and the rule that the lanes read only the `APP_REVIEW_*` names
   `publish-store.yml` passes. Its tests use in-memory fixture consumers,
@@ -188,8 +188,8 @@ change to `build-prepare.yml` or `build-android.yml` goes out, run the
 Linux half of a consumer's internal release here with [nektos/act]:
 
 ```sh
-make smoke-local           # Prepare, against the template at main
-make smoke-local-android   # Prepare, then the unsigned Android build (much longer)
+make test-smoke-local           # Prepare, against the template at main
+make test-smoke-local-android   # Prepare, then the unsigned Android build (much longer)
 ```
 
 Allow a quarter of an hour: Setup installs every pinned tool into a fresh
@@ -241,7 +241,7 @@ job" log on GitHub before merging.
   so a change here that the consumer's copy does not follow turns the
   consumer's CI red on its next run.
 - **A tool version bump** moves `scripts/lib/versions.sh` *and* the mirrors in
-  `.mise.toml` and the workflow defaults; `make check-versions` is what fails
+  `.mise.toml` and the workflow defaults; `make check-version-pins` is what fails
   otherwise.
 - **A change to an Expo preset** (`packages/app-tooling/expo/`) keeps its test green: the test
   evaluates the template's file as it was and the file it becomes

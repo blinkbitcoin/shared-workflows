@@ -3,7 +3,7 @@
 #
 # scripts/lib/versions.sh: the one place this repository writes down the tool
 # versions it pins. It is sourced, not run - by yq-version.sh, the installers
-# and check-versions.sh, which mirrors it into .mise.toml and the workflow input
+# and check-version-pins.sh, which mirrors it into .mise.toml and the workflow input
 # defaults - so what it has to do is define every pin, export it to the
 # processes that source it, and do nothing else.
 #
@@ -12,7 +12,7 @@
 # processes; each checksum (the SHA-256 of a pinned download) is 64 hex
 # digits and exported; and every line of the file that is not a comment is a
 # plain `export NAME="value"`, so sourcing it cannot run a command. Whether the pins agree with .mise.toml is
-# check-versions.sh's job, tested in test/plumbing.bats.
+# check-version-pins.sh's job, tested in test/plumbing.bats.
 
 load test_helper
 

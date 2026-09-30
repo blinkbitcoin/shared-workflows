@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Renders every CI badge a branch publishes: coverage, Unit, E2E and Security.
 // `publish-badges.yml` runs it from its own checkout of shared-workflows
-// (scripts/ci/render-badges.sh), in the consumer's root, unless the caller names
+// (scripts/ci/gen-badges.sh), in the consumer's root, unless the caller names
 // a script of its own in `render-script`; a consumer runs the same program on a
-// laptop as `pnpm exec render-badges`. It takes no arguments - the workflow and
+// laptop as `pnpm exec gen-badges`. It takes no arguments - the workflow and
 // a consumer's `make` target both hand it everything as environment:
 //
 //   BADGE_UNIT / BADGE_E2E        GitHub job results (`needs.<job>.result`)
@@ -22,8 +22,8 @@
 import { BadgeError } from '../lib/badge.mjs';
 import { isProgram } from '../lib/is-program.mjs';
 import { writeSecurityBadge } from '../lib/security-badge.mjs';
-import { BADGE_DIR, SUMMARY_PATH, writeCoverageBadge } from './coverage-badge.mjs';
-import { writeStatusBadge } from './status-badge.mjs';
+import { BADGE_DIR, SUMMARY_PATH, writeCoverageBadge } from './gen-coverage-badge.mjs';
+import { writeStatusBadge } from './gen-status-badge.mjs';
 
 /** What to do about the coverage badge, given the Unit job's result. */
 export function coverageModeFor(unitResult) {

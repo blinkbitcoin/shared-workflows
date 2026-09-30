@@ -2,7 +2,7 @@
 // Answer "is this repository wired up for the shared workflows?" in one report,
 // before a run spends twenty minutes answering it one red job at a time.
 //
-//   check-consumer-contract [--root DIR] [--profile checks,unit,...] [--json] [--skeleton]
+//   check-contract [--root DIR] [--profile checks,unit,...] [--json] [--skeleton]
 //
 // Why this exists. Every gate in this family already fails with a good message:
 // `run-script.sh` names the script it wanted, `tool-version.sh` names the file.

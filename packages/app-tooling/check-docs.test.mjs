@@ -516,8 +516,8 @@ describe('3-5. the app-tooling programs', () => {
 
   test('runProgram runs a sibling program in the directory it is given and returns its status', () => {
     const fx = tree();
-    assert.equal(runProgram('make-help', [], { cwd: fx.repo, env: process.env, stdio: 'ignore' }), 0);
-    assert.equal(runProgram('make-help', ['--nope'], { cwd: fx.repo, env: process.env, stdio: 'ignore' }), 1);
+    assert.equal(runProgram('help', [], { cwd: fx.repo, env: process.env, stdio: 'ignore' }), 0);
+    assert.equal(runProgram('help', ['--nope'], { cwd: fx.repo, env: process.env, stdio: 'ignore' }), 1);
   });
 });
 

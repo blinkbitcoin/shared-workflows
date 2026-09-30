@@ -1,5 +1,5 @@
 // Pure badge logic: thresholds, the GitHub-result map and the SVG renderer.
-// The programs in bin/ (render-badges, coverage-badge, status-badge) and
+// The programs in bin/ (gen-badges, gen-coverage-badge, gen-status-badge) and
 // lib/security-badge.mjs wrap it with file reads/writes, environment reads and
 // exit codes, so the arithmetic and the markup are unit tested without touching
 // the filesystem (`badge.test.mjs`).
@@ -111,7 +111,7 @@ export function parseStatus(argv) {
   const status = argv[i + 1];
   if (!(status in PLACEHOLDERS)) {
     throw new BadgeError(
-      `coverage-badge: --status must be one of ${Object.keys(PLACEHOLDERS).join(', ')}`,
+      `gen-coverage-badge: --status must be one of ${Object.keys(PLACEHOLDERS).join(', ')}`,
     );
   }
   return status;
@@ -126,11 +126,11 @@ export function coverageFrom(summary) {
   const lines = summary?.total?.lines;
   if (!lines || typeof lines.covered !== 'number' || typeof lines.total !== 'number') {
     throw new BadgeError(
-      'coverage-badge: coverage-summary.json has no total.lines — is `json-summary` still in jest.config.ts coverageReporters?',
+      'gen-coverage-badge: coverage-summary.json has no total.lines — is `json-summary` still in jest.config.ts coverageReporters?',
     );
   }
   if (lines.total === 0) {
-    throw new BadgeError('coverage-badge: no lines measured at all — refusing to render');
+    throw new BadgeError('gen-coverage-badge: no lines measured at all — refusing to render');
   }
   const pct = (lines.covered / lines.total) * 100;
   return {

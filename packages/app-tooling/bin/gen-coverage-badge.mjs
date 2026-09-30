@@ -3,14 +3,14 @@
 // shields.io URL. The number comes from Jest's `json-summary` reporter
 // (`coverage/coverage-summary.json`), never from scraping the HTML report.
 //
-//   coverage-badge                    measure
-//   coverage-badge --status failing   red placeholder
-//   coverage-badge --status pending   yellow placeholder
+//   gen-coverage-badge                    measure
+//   gen-coverage-badge --status failing   red placeholder
+//   gen-coverage-badge --status pending   yellow placeholder
 //
 // A placeholder is what CI writes when Unit *failed*; a Unit that merely
 // skipped writes nothing at all, so a red checks run leaves the branch's
 // badge as it was. `--out` and `--summary` exist for tests and for a CI layout
-// that keeps its artifacts elsewhere. render-badges calls the same writer.
+// that keeps its artifacts elsewhere. gen-badges calls the same writer.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
@@ -52,7 +52,7 @@ export function writeCoverageBadge({
       summary = JSON.parse(readFileSync(summaryFile, 'utf8'));
     } catch (e) {
       throw new BadgeError(
-        `coverage-badge: ${summaryFile} is missing or unreadable (${e.message}) — run \`make test-coverage\` first`,
+        `gen-coverage-badge: ${summaryFile} is missing or unreadable (${e.message}) — run \`make test-coverage\` first`,
       );
     }
     result = coverageFrom(summary);
@@ -76,7 +76,7 @@ export function main(
       summaryFile: argValue(argv, '--summary', SUMMARY_PATH),
       status,
     });
-    log(`coverage-badge: ${message} (${detail})`);
+    log(`gen-coverage-badge: ${message} (${detail})`);
     return 0;
   } catch (e) {
     if (!(e instanceof BadgeError)) throw e;

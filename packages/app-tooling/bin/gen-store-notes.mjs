@@ -9,11 +9,11 @@
 //
 // It runs in the app's repository: the working directory is the app, where
 // its commits, its fastlane/metadata/ios locales and its optional
-// store-notes.prompt.md are. shared-workflows' scripts/release/store-notes.sh runs
-// it from the workflows checkout; on a laptop it is `pnpm exec store-notes`.
+// store-notes.prompt.md are. shared-workflows' scripts/release/gen-store-notes.sh runs
+// it from the workflows checkout; on a laptop it is `pnpm exec gen-store-notes`.
 //
-//   store-notes --from-body RELEASE_BODY.md --out dist/
-//   store-notes --from-commits v1.2.0..HEAD --out -
+//   gen-store-notes --from-body RELEASE_BODY.md --out dist/
+//   gen-store-notes --from-commits v1.2.0..HEAD --out -
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -384,7 +384,7 @@ export async function buildNotes({
 
 // ---------- CLI ----------
 
-export const USAGE = `usage: store-notes (--from-body FILE | --from-commits [RANGE] | --tag TAG | --pr N | --preview) [options]
+export const USAGE = `usage: gen-store-notes (--from-body FILE | --from-commits [RANGE] | --tag TAG | --pr N | --preview) [options]
 
 Store notes for a build, from a release-please body or from
 conventional commit subjects, for the app in the working directory. Nothing
@@ -397,7 +397,7 @@ is set; ./store-notes.prompt.md is added to its prompt when present.
   --tag TAG             render from release TAG's body (gh release view), with --body-section
   --pr N                render from pull request N's body (gh pr view), with --body-section
   --preview             render from --tag or --pr when given, else $TAG or $PR,
-                        else the commits since the last v* tag (what make store-notes runs)
+                        else the commits since the last v* tag (what make gen-store-notes runs)
   --body-section        also take a verbatim "## Store notes" section from the body
   --locales a,b         locales to emit (default: $STORE_NOTES_LOCALES, else
                         the locale directories under fastlane/metadata/ios)
@@ -405,9 +405,9 @@ is set; ./store-notes.prompt.md is added to its prompt when present.
   --out DIR|-           write store-notes.json + store-notes.txt into DIR, or - for stdout
   --help                this text
 
-  store-notes --from-body RELEASE_BODY.md --out dist/
-  store-notes --from-commits v1.2.0..HEAD --out -
-  TAG=v1.4.0 store-notes --preview`;
+  gen-store-notes --from-body RELEASE_BODY.md --out dist/
+  gen-store-notes --from-commits v1.2.0..HEAD --out -
+  TAG=v1.4.0 gen-store-notes --preview`;
 
 /** The flags that each name where the changes come from; at most one may be given. */
 const SOURCE_FLAGS = ['--from-body', '--from-commits', '--tag', '--pr'];
@@ -458,7 +458,7 @@ export function parseArgs(argv) {
 
 /**
  * `options` with its source settled. `--preview` is the laptop preview `make
- * store-notes` runs: with no source flag it takes `$TAG`, then `$PR`, the
+ * gen-store-notes` runs: with no source flag it takes `$TAG`, then `$PR`, the
  * variables make passes through from its command line, and otherwise the
  * commits since the last tag. Only `--preview` reads them: they are common
  * names, and a CI step that happens to carry one must not change its source.

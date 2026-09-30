@@ -9,8 +9,8 @@
 # warning with and without a job summary, a working directory below the
 # workspace, the path through a symlinked .workflows, and both refusals - no
 # node, and no checker beside the script.
-# The checker's own rules are packages/app-tooling/check-consumer-contract.test.mjs
-# and contract-doctor.bats.
+# The checker's own rules are packages/app-tooling/check-contract.test.mjs
+# and contract-program.bats.
 
 load test_helper
 
@@ -164,6 +164,6 @@ write_failing_consumer() { # <directory>
   write_passing_consumer "$ws"
   GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash "$tree/scripts/ci/contract-check.sh"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::contract-check.sh: no checker at $tree/packages/app-tooling/bin/check-consumer-contract.mjs" ||
+  contains "$output" "::error::contract-check.sh: no checker at $tree/packages/app-tooling/bin/check-contract.mjs" ||
     fail "does not name where it looked: $output"
 }

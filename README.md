@@ -187,7 +187,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `self-unit.yml`    | `Tests`<br>`Package`              | The bats suite, and node:test over every package under `packages/`. Called by `self-ci.yml` |
 | `self-store-notes.yml` | `Dry run`<br>`Validate` | `pr-store-notes.yml` run for real against the template in a dry run, then its `section` output checked. Called by `self-ci.yml` and `self-release.yml` |
 | `self-smoke.yml`   | `Checks`<br>`Unit`<br>`E2E`       | Runs the family against a real consumer repo. Weekly, and on dispatch                          |
-| `self-act-smoke.yml` | `Prepare`<br>`Build Android` | The Linux release jobs against the template, run on a laptop with act (`make smoke-local`). Dispatch-only, never run on GitHub |
+| `self-act-smoke.yml` | `Prepare`<br>`Build Android` | The Linux release jobs against the template, run on a laptop with act (`make test-smoke-local`). Dispatch-only, never run on GitHub |
 | `self-release.yml` | `Release PR`<br>`Store notes`<br>`Major tag`<br>`Publish app-tooling` | release-please maintains the version PR; on release, the store notes dry run runs from the release commit, then `v0` and `v0.<minor>` move and the npm package publishes |
 
 ## Repository layout
@@ -229,7 +229,7 @@ npx --package=@blinkbitcoin/app-tooling check-tool-versions
 npx --package=@blinkbitcoin/app-tooling check-tool-versions typos shellcheck
 ```
 
-`make check-versions` binds `versions.json` to `scripts/lib/versions.sh` and
+`make check-version-pins` binds `versions.json` to `scripts/lib/versions.sh` and
 `.mise.toml` for the seven tools the workflows install themselves (`actionlint`,
 `shellcheck`, `yq`, `typos`, `lefthook`, `zizmor`, `gitleaks`), and one-way for `bats`, `node` and
 `pnpm`. It is not a whole-file check: `act` is pinned in `.mise.toml` alone and
@@ -245,7 +245,7 @@ full version instead when every change should be reviewed before it lands —
 
 ## What a consumer provides
 
-Run `npx --package=@blinkbitcoin/app-tooling check-consumer-contract` in your
+Run `npx --package=@blinkbitcoin/app-tooling check-contract` in your
 repo for the list, checked rather than read: it reports every requirement of
 the workflows your callers actually name, with a fix per finding.
 `check-code.yml` runs the same check as its first job, so an adopting repository

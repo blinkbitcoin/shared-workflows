@@ -5,7 +5,7 @@ repo on the baseline, whatever package manager or toolchain provisioner that
 repo uses. Its top level is the developer tooling that is not React Native
 specific: the pinned tool table, the checks that enforce it, the contract
 checker, the repository guards, the CI badge renderer and the store notes
-generator the release workflows run ([`store-notes`](#store-notes)). Under
+generator the release workflows run ([`gen-store-notes`](#gen-store-notes)). Under
 `expo/` are the presets an Expo app extends ([Expo presets](#expo-presets)).
 
 ```sh
@@ -47,13 +47,13 @@ told its `typos` is missing.
 `match: "major"` pins only the major version, for runtimes deliberately held
 loose (`node`, `pnpm`). Everything else is exact.
 
-## `check-consumer-contract`
+## `check-contract`
 
 ```sh
-check-consumer-contract                     # this repository, against the contract
-check-consumer-contract --skeleton          # ...and what would clear every failure
-check-consumer-contract --json              # the same findings, machine-readable
-check-consumer-contract --profile checks    # before you have written a caller
+check-contract                     # this repository, against the contract
+check-contract --skeleton          # ...and what would clear every failure
+check-contract --json              # the same findings, machine-readable
+check-contract --profile checks    # before you have written a caller
 ```
 
 Answers "is this repository wired up for the shared workflows?" in one report.
@@ -217,7 +217,7 @@ check-code-scanning [--config FILE]         # CodeQL on this machine, with the c
 (`grep ... $(MAKEFILE_LIST) | sort | awk ...`) is not logic in a recipe:
 
 ```sh
-make-help [--root DIR]    # every ##-documented target, sorted, includes followed
+help [--root DIR]    # every ##-documented target, sorted, includes followed
 ```
 
 ### The configuration file
@@ -263,10 +263,10 @@ becomes one line:
 
 | Target or script | The call |
 | --- | --- |
-| `make help` | `pnpm exec make-help` |
+| `make help` | `pnpm exec help` |
 | `check-docs` | `pnpm exec check-docs` |
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
-| worktree ignores | `pnpm exec check-ignored-directories` |
+| `check-ignored-directories` | `pnpm exec check-ignored-directories` |
 | `deps:licenses` | `check-licenses` |
 | `check-code-scanning` | `pnpm exec check-code-scanning` |
 | `deps:check` | `bash node_modules/@blinkbitcoin/app-tooling/checks/expo-doctor.sh` |
@@ -287,7 +287,7 @@ scope list.
 
 | Import | What it gives | The app keeps |
 | --- | --- | --- |
-| `@blinkbitcoin/app-tooling/expo/jest` | `createJestConfig(options)`: the app and plugins projects, worktree ignores,<br>transforms, the console guard, the Expo stand-ins, 100% thresholds, `json-summary` | setup files, aliases, generated and zero-statement paths |
+| `@blinkbitcoin/app-tooling/expo/jest` | `createJestConfig(options)`: the app and plugins projects, the ignored directories,<br>transforms, the console guard, the Expo stand-ins, 100% thresholds, `json-summary` | setup files, aliases, generated and zero-statement paths |
 | `@blinkbitcoin/app-tooling/expo/jest/console` | `allowConsole`, and the recorder behind the silent-tests guard | nothing |
 | `@blinkbitcoin/app-tooling/expo/jest/mocks/*` | stand-ins for `expo-secure-store`, `expo-sqlite/kv-store`, `expo-updates`,<br>mapped by the Jest preset | nothing |
 | `@blinkbitcoin/app-tooling/expo/eslint` | `createEslintConfig(options)`: generic ignores, Expo's preset, every rule Biome owns<br>switched off, Node globals | generated paths, extra Node files |
@@ -353,12 +353,12 @@ check-lockfile [--root DIR]     # every lockfile resolution is the npm registry,
   the workflows pin. CI already runs that commit's code, so installing it adds
   no trust. Another repository, path or commit fails, and so does every git
   source when the calls pin no single commit.
-- `check-consumer-contract`'s `pin.one-commit` row asserts the same agreement:
+- `check-contract`'s `pin.one-commit` row asserts the same agreement:
   every call, and each package in `package.json` and `pnpm-lock.yaml`.
 
 ## CI badges
 
-`render-badges` draws the badges `publish-badges.yml` publishes to a
+`gen-badges` draws the badges `publish-badges.yml` publishes to a
 consumer's `gh-pages`: coverage (line coverage from Jest's
 `coverage/coverage-summary.json`), Unit, E2E and Security, each a shields.io
 "flat" SVG plus its endpoint JSON, with no dependency. `publish-badges.yml`
@@ -367,12 +367,12 @@ script of its own in `render-script`, so a consumer needs nothing for CI. A
 laptop runs the same program from the installed package:
 
 ```sh
-BADGE_UNIT=success BADGE_E2E=skipped render-badges   # every badge the environment asks for, into coverage/badge
-coverage-badge [--status failing|pending] [--out DIR] [--summary FILE]
-status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
+BADGE_UNIT=success BADGE_E2E=skipped gen-badges   # every badge the environment asks for, into coverage/badge
+gen-coverage-badge [--status failing|pending] [--out DIR] [--summary FILE]
+gen-status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
 ```
 
-- `render-badges` takes no arguments. It reads `BADGE_UNIT` and `BADGE_E2E`
+- `gen-badges` takes no arguments. It reads `BADGE_UNIT` and `BADGE_E2E`
   (GitHub job results), `BADGE_UNIT_LABEL` / `BADGE_E2E_LABEL`,
   `BADGE_COVERAGE` (`measure`, `failing`, `pending` or `skip`),
   `BADGE_COVERAGE_SUMMARY`, `BADGE_OUT_DIR`, and `BADGE_SECURITY` /
@@ -382,7 +382,7 @@ status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
   publishing leaves the ones already published.
 - An unknown job result, verdict or colour exits 1 rather than drawing a green
   badge.
-- `coverage-badge` and `status-badge` draw one badge each, with the same code.
+- `gen-coverage-badge` and `gen-status-badge` draw one badge each, with the same code.
 
 ## The checks CI runs, for a laptop
 
@@ -407,15 +407,15 @@ bash node_modules/@blinkbitcoin/app-tooling/ci/lint-ci.sh          # actionlint,
 - **Expo doctor:** `expo install --check` is advisory. Drift is printed, counted in a warning (an annotation under Actions) and never fails: Expo publishes patches most weeks, and a release cooldown refuses each for a day. Doctor then runs with its own version check off, and its status is the gate's. It is your pinned `expo-doctor` devDependency, or the latest through `pnpm dlx`; with no `expo` dependency the drift half is skipped.
 - **Run with `bash`, not as a program:** the scripts source `lib/` beside them, and a `node_modules/.bin` link would break that.
 
-## `store-notes`
+## `gen-store-notes`
 
 ```sh
-store-notes --from-commits [RANGE] --out -                   # since the last v* tag, as JSON on stdout
-store-notes --from-body RELEASE_BODY.md --body-section --out dist/
-store-notes --tag v1.4.0                                     # that release's body, read with gh
-store-notes --pr 67                                          # that pull request's body, read with gh
-store-notes --preview                                        # --tag/--pr, else $TAG/$PR, else the commits
-store-notes --help
+gen-store-notes --from-commits [RANGE] --out -                   # since the last v* tag, as JSON on stdout
+gen-store-notes --from-body RELEASE_BODY.md --body-section --out dist/
+gen-store-notes --tag v1.4.0                                     # that release's body, read with gh
+gen-store-notes --pr 67                                          # that pull request's body, read with gh
+gen-store-notes --preview                                        # --tag/--pr, else $TAG/$PR, else the commits
+gen-store-notes --help
 ```
 
 The store notes for a build, for the app in the working directory:
@@ -423,7 +423,7 @@ grouped plain-text prose (New, Improved, Fixed) from a release-please body or
 from conventional commit subjects, cut to each store's limit, written as
 `store-notes.json` and `store-notes.txt` for the lanes. `build-prepare.yml` and
 `pr-store-notes.yml` run this program from the workflows checkout, so a
-consumer ships no generator of its own (the contract's `no-copy.store-notes`
+consumer ships no generator of its own (the contract's `no-copy.gen-store-notes`
 row).
 
 - **Source:** exactly one of `--from-body`, `--from-commits`, `--tag` or `--pr`.
@@ -439,7 +439,7 @@ row).
 
   ```make
   store-notes: ## Preview store notes for HEAD (TAG=vX.Y.Z uses that release body, PR=N that release PR's body)
-  	pnpm exec store-notes --preview
+  	pnpm exec gen-store-notes --preview
   ```
 
 - **Locales:** `--locales a,b`, else `$STORE_NOTES_LOCALES`, else the locale

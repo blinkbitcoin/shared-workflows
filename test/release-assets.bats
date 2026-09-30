@@ -302,7 +302,7 @@ $second"
 
 # The regression U1 was: the strip ran from the heading to the next `## `, so a
 # notes file that itself starts with a heading terminated the strip early and its
-# tail stacked on every re-run. That was the *default* shape - store-notes.sh's old
+# tail stacked on every re-run. That was the *default* shape - gen-store-notes.sh's old
 # commit-subject fallback wrote `## <version> (<build>)` - and a release-please
 # body still starts with `## [x.y.z](...)`.
 @test "append is idempotent when the notes file itself starts with a ## heading" {

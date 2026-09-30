@@ -1,15 +1,15 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/ci/render-badges.sh, publish-badges.yml's render step: its own test.
-# By default it runs @blinkbitcoin/app-tooling's render-badges from this
+# scripts/ci/gen-badges.sh, publish-badges.yml's render step: its own test.
+# By default it runs @blinkbitcoin/app-tooling's gen-badges from this
 # checkout, in the consumer root; a caller's `render-script` hands the render
 # to that consumer script through run-script.sh instead. The renderer's own
-# cases are in packages/app-tooling/render-badges.test.mjs; these are the
+# cases are in packages/app-tooling/gen-badges.test.mjs; these are the
 # wrapper's: which renderer, where it runs, and each way it fails.
 load test_helper
 
-SCRIPT="$REPO_ROOT/scripts/ci/render-badges.sh"
+SCRIPT="$REPO_ROOT/scripts/ci/gen-badges.sh"
 
 setup() {
   # consumer_root() is GITHUB_WORKSPACE + WORKING_DIRECTORY, as on a runner
@@ -35,10 +35,10 @@ SH
   : > "$WORKFLOWS_TEST_LOG"
 }
 
-@test "by default it renders with the package's render-badges, into the consumer root" {
+@test "by default it renders with the package's gen-badges, into the consumer root" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "rendering with @blinkbitcoin/app-tooling's render-badges" \
+  contains "$output" "rendering with @blinkbitcoin/app-tooling's gen-badges" \
     || fail "the log does not say which renderer ran: $output"
   grep -q 'passing' "$CONSUMER/coverage/badge/e2e.svg" || fail "no e2e badge in the consumer's coverage/badge"
   [ -f "$CONSUMER/coverage/badge/unit.svg" ] || fail "no unit badge in the consumer's coverage/badge"
@@ -88,9 +88,9 @@ SH
   mkdir -p "$tree/scripts/ci" "$tree/scripts/lib"
   cp "$SCRIPT" "$tree/scripts/ci/"
   cp "$REPO_ROOT/scripts/lib/common.sh" "$tree/scripts/lib/"
-  run bash "$tree/scripts/ci/render-badges.sh"
+  run bash "$tree/scripts/ci/gen-badges.sh"
   [ "$status" -eq 1 ] || fail "exited $status without a renderer: $output"
-  contains "$output" "no renderer at $tree/packages/app-tooling/bin/render-badges.mjs" || fail "output: $output"
+  contains "$output" "no renderer at $tree/packages/app-tooling/bin/gen-badges.mjs" || fail "output: $output"
 }
 
 @test "without node it is fatal, and names the command" {

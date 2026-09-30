@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetch a GitHub release's body into $WORKFLOWS_OUT/release-body.md and point
-# RELEASE_BODY_FILE at it, so store-notes.sh generates store notes from what was
+# RELEASE_BODY_FILE at it, so gen-store-notes.sh generates store notes from what was
 # actually published rather than from the commit log.
 #
 # The body is the human-written release text (release-please's changelog, or an

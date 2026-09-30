@@ -14,7 +14,7 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BadgeError, COLORS } from './lib/badge.mjs';
-import { coverageModeFor, renderBadges, main as renderMain } from './bin/render-badges.mjs';
+import { coverageModeFor, renderBadges, main as renderMain } from './bin/gen-badges.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'badge-render-'));
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -216,14 +216,14 @@ describe('render main', () => {
       path.join(cwd, 'coverage/coverage-summary.json'),
       JSON.stringify(summaryWith(3, 4)),
     );
-    const ok = runScript('render-badges.mjs', [], {
+    const ok = runScript('gen-badges.mjs', [], {
       cwd,
       env: { BADGE_UNIT: 'success', BADGE_E2E: 'skipped', BADGE_OUT_DIR: '', BADGE_COVERAGE: '' },
     });
     assert.equal(ok.status, 0, ok.stderr);
     assert.ok(readFileSync(path.join(cwd, 'coverage/badge/coverage.svg'), 'utf8').includes('75%'));
 
-    const bad = runScript('render-badges.mjs', [], {
+    const bad = runScript('gen-badges.mjs', [], {
       cwd,
       env: { BADGE_UNIT: 'nonsense', BADGE_E2E: 'skipped', BADGE_COVERAGE: 'skip' },
     });
@@ -231,12 +231,12 @@ describe('render main', () => {
     assert.match(bad.stderr, /unknown job result "nonsense"/);
   });
 
-  // `pnpm exec render-badges` reaches it through a link in node_modules/.bin;
+  // `pnpm exec gen-badges` reaches it through a link in node_modules/.bin;
   // a guard that saw that as "imported" would render nothing and exit 0.
   test('run through a link, as node_modules/.bin holds it, it still renders', () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmp, 'link-')));
-    const link = path.join(cwd, 'render-badges');
-    symlinkSync(path.join(HERE, 'bin', 'render-badges.mjs'), link);
+    const link = path.join(cwd, 'gen-badges');
+    symlinkSync(path.join(HERE, 'bin', 'gen-badges.mjs'), link);
     const run = spawnSync(process.execPath, [link], {
       cwd,
       encoding: 'utf8',

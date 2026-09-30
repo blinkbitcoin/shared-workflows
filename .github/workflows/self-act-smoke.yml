@@ -1,6 +1,6 @@
 name: Smoke (local, act)
 # The Linux half of a consumer's internal release, runnable on a laptop with
-# nektos/act: `make smoke-local` (Prepare) or `make smoke-local-android`
+# nektos/act: `make test-smoke-local` (Prepare) or `make test-smoke-local-android`
 # (Prepare, then the Android build). It exists so a change to build-prepare or
 # build-android can be seen failing here before it is merged, released
 # and picked up by every consumer on @v0 - which is how v0.6.0 shipped a
@@ -9,7 +9,7 @@ name: Smoke (local, act)
 # `workflow_dispatch` only, and never dispatched on GitHub: act is the caller.
 # What act cannot show: the token a called workflow really gets (act hands
 # every job a full-scope token, so a `permissions` mistake looks fine here),
-# tag and ref rules, and anything on a macOS runner. scripts/self/act-smoke.sh
+# tag and ref rules, and anything on a macOS runner. scripts/self/smoke-local.sh
 # is the entry point and says the same; it also runs upload-artifact@v7 and
 # download-artifact@v8 as their last v4, which is what act's artifact server
 # understands - the workflows themselves keep the versions GitHub runs.
@@ -17,7 +17,7 @@ name: Smoke (local, act)
 # `./`, not `@v0`: act resolves a local path to the checkout it runs in, so the
 # workflow under test is this tree's. The `.workflows` checkout inside
 # build-prepare still clones this repository from GitHub at the local HEAD, so
-# the branch has to be pushed first - act-smoke.sh refuses otherwise.
+# the branch has to be pushed first - smoke-local.sh refuses otherwise.
 on:
   workflow_dispatch:
     inputs:
@@ -45,7 +45,7 @@ jobs:
       stage: internal
       # Never a real tag from a laptop: the token act runs with is the
       # developer's own, and reserve-tag.sh would create `v<version>-build.<n>`
-      # on the consumer for real. test/act-smoke.bats holds this at false.
+      # on the consumer for real. test/smoke-local.bats holds this at false.
       reserve-tag: false
       # No green gate: nothing has run for this commit anywhere.
       require-green-workflow: ''

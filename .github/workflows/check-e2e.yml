@@ -54,7 +54,7 @@ on:
         type: number
         default: 34
       maestro-version:
-        description: Maestro CLI version (kept equal to scripts/lib/versions.sh MAESTRO_VERSION; enforced by scripts/self/check-versions.sh)
+        description: Maestro CLI version (kept equal to scripts/lib/versions.sh MAESTRO_VERSION; enforced by scripts/self/check-version-pins.sh)
         type: string
         default: '2.10.0'
       maestro-sha256:

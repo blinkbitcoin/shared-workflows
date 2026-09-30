@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
 # The consumer-contract checker, end to end, and the shape of the job that runs
 # it. The unit-level behaviour lives in
-# packages/app-tooling/check-consumer-contract.test.mjs (node:test); what is here
+# packages/app-tooling/check-contract.test.mjs (node:test); what is here
 # is what only a real checkout and the real workflow file can answer. The
 # wrapper the Contract job runs, scripts/ci/contract-check.sh, has its own file:
 # contract-check.bats.
 
 load test_helper
 
-DOCTOR="$REPO_ROOT/packages/app-tooling/bin/check-consumer-contract.mjs"
+PROGRAM="$REPO_ROOT/packages/app-tooling/bin/check-contract.mjs"
 # Exported, not just set: the two workflow-shape cases below read it from
 # node's process.env. Set in the file body so it is there for every case.
 CHECKS="$REPO_ROOT/.github/workflows/check-code.yml"
@@ -35,7 +35,7 @@ write_caller() {
   write_caller check-code.yml check-unit.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
 
-  run node "$DOCTOR" --root "$TMP"
+  run node "$PROGRAM" --root "$TMP"
   [ "$status" -eq 1 ] || fail "expected a failing exit, got $status"
 
   # The point of the whole exercise: one report naming every blocked item.
@@ -51,7 +51,7 @@ write_caller() {
 @test "every finding names what to do about it" {
   write_caller check-code.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
-  run node "$DOCTOR" --root "$TMP"
+  run node "$PROGRAM" --root "$TMP"
   while IFS= read -r line; do
     case "$line" in
       FAIL*|warn*) contains "$line" "Fix: " || fail "a finding with no fix: $line" ;;
@@ -64,7 +64,7 @@ write_caller() {
   # Fastfile. Being wrong in this direction is what makes a report ignorable.
   write_caller check-code.yml
   printf '{"name":"app"}\n' > "$TMP/package.json"
-  run node "$DOCTOR" --root "$TMP"
+  run node "$PROGRAM" --root "$TMP"
   not_contains "$output" ".maestro" || fail "e2e findings leaked into a checks-only repo: $output"
   not_contains "$output" "Fastfile" || fail "release findings leaked into a checks-only repo: $output"
 }
@@ -77,7 +77,7 @@ write_caller() {
   } > "$TMP/.github/workflows/ci.yml"
   printf '{"name":"app"}\n' > "$TMP/package.json"
 
-  run node "$DOCTOR" --root "$TMP"
+  run node "$PROGRAM" --root "$TMP"
   not_contains "$output" "check:docs" || fail "docs-check is off but was still reported: $output"
   not_contains "$output" "deps:licenses" || fail "licenses is off but was still reported: $output"
 }
@@ -97,7 +97,7 @@ JSON
   printf '[tools]\nnode = "24"\npnpm = "12"\n' > "$TMP/.mise.toml"
   : > "$TMP/pnpm-lock.yaml"
 
-  run node "$DOCTOR" --root "$TMP"
+  run node "$PROGRAM" --root "$TMP"
   # deps:check, deps:audit and check:ci are all absent, and all have fallbacks.
   [ "$status" -eq 0 ] || fail "fallback-only gaps must not block a run: $output"
   contains "$output" "warn  deps:audit" || fail "a taken fallback must still be reported: $output"
@@ -109,7 +109,7 @@ JSON
   local summary="$BATS_TEST_TMPDIR/summary.md"
   : > "$summary"
 
-  GITHUB_STEP_SUMMARY="$summary" run node "$DOCTOR" --root "$TMP"
+  GITHUB_STEP_SUMMARY="$summary" run node "$PROGRAM" --root "$TMP"
   run cat "$summary"
   contains "$output" "## Consumer contract" || fail "no summary heading: $output"
   contains "$output" "**blocked**" || fail "the summary does not mark blocked rows: $output"
@@ -121,7 +121,7 @@ JSON
   printf '{"name":"app"}\n' > "$TMP/package.json"
   # stdout only: the ::error:: annotation goes to stderr, and a consumer piping
   # this into jq must get JSON and nothing else.
-  node "$DOCTOR" --root "$TMP" --json > "$BATS_TEST_TMPDIR/out.json" 2>/dev/null || true
+  node "$PROGRAM" --root "$TMP" --json > "$BATS_TEST_TMPDIR/out.json" 2>/dev/null || true
   F="$BATS_TEST_TMPDIR/out.json" run node -e '
     const rows = JSON.parse(require("fs").readFileSync(process.env.F, "utf8"));
     if (!rows.every((r) => r.id && r.level)) throw new Error("a row with no id or level");
@@ -134,7 +134,7 @@ JSON
   # It runs before the setup action on purpose - a consumer whose toolchain is
   # the thing that is missing must still get a report. Anything it shells out to
   # would be a tool the failing repository may not have.
-  run grep -nE "(child_process|execSync|spawnSync)" "$DOCTOR"
+  run grep -nE "(child_process|execSync|spawnSync)" "$PROGRAM"
   [ "$status" -ne 0 ] || fail "the checker shells out, so it cannot run before setup: $output"
 }
 
@@ -176,7 +176,7 @@ JSON
   # is no better than the gate it runs ahead of.
   write_caller check-code.yml
   printf '{ "name": "x",, }' > "$TMP/package.json"
-  run node "$DOCTOR" --root "$TMP"
+  run node "$PROGRAM" --root "$TMP"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status"
   contains "$output" "::error::" || fail "no annotation: $output"
   contains "$output" "is not valid JSON" || fail "the message does not name the problem: $output"
@@ -185,7 +185,7 @@ JSON
 }
 
 @test "an unknown argument is an annotation too" {
-  run node "$DOCTOR" --nope
+  run node "$PROGRAM" --nope
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status"
   contains "$output" "::error::unknown argument: --nope" || fail "$output"
   not_contains "$output" "node:internal" || fail "a stack trace leaked: $output"
@@ -196,7 +196,7 @@ JSON
   # are named after workflows. It matches no requirement, so every check would
   # skip and the run would end "every requirement is satisfied": a green answer
   # to a question nobody asked.
-  run node "$DOCTOR" --root "$TMP" --profile lint
+  run node "$PROGRAM" --root "$TMP" --profile lint
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status"
   contains "$output" "unknown profile(s): lint" || fail "$output"
   contains "$output" "known: " || fail "the message does not say what is valid: $output"
@@ -219,8 +219,8 @@ JSON
   run node "$bin/check-tool-versions" node
   contains "$output" "node" || fail "check-tool-versions printed nothing through a symlink: $output"
 
-  run node "$bin/check-consumer-contract" --root "$TMP" --profile checks
-  contains "$output" "package.json" || fail "check-consumer-contract printed nothing through a symlink: $output"
+  run node "$bin/check-contract" --root "$TMP" --profile checks
+  contains "$output" "package.json" || fail "check-contract printed nothing through a symlink: $output"
 }
 
 # --- the adoption doc ---------------------------------------------------

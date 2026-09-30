@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/self/check-versions.sh (`make check-versions`): every pinned tool
+# scripts/self/check-version-pins.sh (`make check-version-pins`): every pinned tool
 # version agrees across scripts/lib/versions.sh, the workflow and action input
 # defaults, .mise.toml and packages/app-tooling/versions.json. Its only real
 # behaviour is failing when they disagree, so each comparison it makes is
@@ -12,9 +12,9 @@
 
 load test_helper
 
-# The files check-versions.sh reads, copied into a tree of their own so a test
+# The files check-version-pins.sh reads, copied into a tree of their own so a test
 # can make them disagree without touching the real ones.
-FILES="scripts/self/check-versions.sh
+FILES="scripts/self/check-version-pins.sh
 scripts/lib/versions.sh
 .github/workflows/check-e2e.yml
 .github/workflows/build-android.yml
@@ -31,7 +31,7 @@ setup() {
 copy_tree() {
   local file
   TREE="$(mktemp -d "$BATS_TEST_TMPDIR/tree.XXXXXX")"
-  GATE="$TREE/scripts/self/check-versions.sh"
+  GATE="$TREE/scripts/self/check-version-pins.sh"
   while read -r file; do
     mkdir -p "$TREE/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$TREE/$file"
@@ -56,11 +56,11 @@ errors() { grep -c '::error::' <<< "$output" || true; }
   mkdir -p "$work"
   cp -R "$REPO_ROOT/scripts" "$REPO_ROOT/.github" "$REPO_ROOT/packages" "$work/"
   cp "$REPO_ROOT/.mise.toml" "$work/"
-  run mise exec -- bash "$work/scripts/self/check-versions.sh"
+  run mise exec -- bash "$work/scripts/self/check-version-pins.sh"
   [ "$status" -eq 0 ] || fail "the unmodified tree must pass: $output"
 
   sed -i.bak 's/^export YQ_VERSION=.*/export YQ_VERSION="0.0.0"/' "$work/scripts/lib/versions.sh"
-  run mise exec -- bash "$work/scripts/self/check-versions.sh"
+  run mise exec -- bash "$work/scripts/self/check-version-pins.sh"
   [ "$status" -ne 0 ] || fail "a drifted yq pin must fail the gate: $output"
   contains "$output" "yq" || fail "does not name the drifted tool: $output"
 }
@@ -79,7 +79,7 @@ errors() { grep -c '::error::' <<< "$output" || true; }
   ln -s "$(command -v dirname)" "$bin/dirname"
   run env PATH="$bin" "$BASH" "$GATE"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::check-versions.sh needs yq on PATH (run it through 'mise exec --')" ||
+  contains "$output" "::error::check-version-pins.sh needs yq on PATH (run it through 'mise exec --')" ||
     fail "the missing yq is not explained: $output"
 }
 

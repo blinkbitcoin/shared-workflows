@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Publishes the branch's rendered badges to gh-pages/badges/<branch>/.
 #
-# The render step (render-badges.sh: the package's render-badges, or the
+# The render step (gen-badges.sh: the package's gen-badges, or the
 # consumer script publish-badges.yml's `render-script` names) has already
 # written coverage/badge/{unit,e2e,coverage,security}.svg and their .json
 # siblings; this only moves them onto the branch GitHub serves through

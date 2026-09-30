@@ -5,7 +5,7 @@ this repo.
 
 ## 60-second start
 
-0. Run `npx --package=@blinkbitcoin/app-tooling check-consumer-contract` in your
+0. Run `npx --package=@blinkbitcoin/app-tooling check-contract` in your
    repo to see what this family will need from it — see [The contract
    check](#the-contract-check). `check-code.yml` runs the same thing on every push.
    If your app was **not** generated from the template, start at
@@ -88,7 +88,7 @@ it is the one worth checking before you move the pin.
 
 ## The contract check
 
-`check-code.yml`'s `Contract` job runs one script — `check-consumer-contract` — against
+`check-code.yml`'s `Contract` job runs one script — `check-contract` — against
 your repository and reports **everything** this family will need from it, before
 any of the gates that would each die on their own.
 
@@ -145,7 +145,7 @@ flowchart LR
   end
   subgraph shared["shared-workflows at the pinned commit"]
     data["contract.json"]
-    checker["check-consumer-contract.mjs"]
+    checker["check-contract.mjs"]
   end
   subgraph self["shared-workflows' own CI"]
     fixtures["fixture consumers, aligned and misaligned"]
@@ -193,8 +193,8 @@ the same report before you push:
 
 ```sh
 pnpm add -D @blinkbitcoin/app-tooling
-pnpm exec check-consumer-contract              # this repository
-pnpm exec check-consumer-contract --skeleton   # ...and the package.json and
+pnpm exec check-contract              # this repository
+pnpm exec check-contract --skeleton   # ...and the package.json and
                                                #    caller changes that clear it
 ```
 
@@ -204,7 +204,7 @@ you have written a caller at all.
 
 ### Trying it against a real run
 
-`check-consumer-contract` predicts; the [Smoke](../.github/workflows/self-smoke.yml)
+`check-contract` predicts; the [Smoke](../.github/workflows/self-smoke.yml)
 workflow in this repository actually runs. It takes any repository and ref, so
 you can point it at yours before you have committed a caller at all:
 
@@ -275,7 +275,7 @@ something your repository does not provide, the annotation has three lines:
 ```
 ::error::consumer package.json has no "check:docs" script, and no check:docs binary in node_modules/.bin
 Fix: add a "check:docs" script, or switch the gate that calls it off in your caller - run
-check-consumer-contract for which input that is, and for everything else this repository is missing
+check-contract for which input that is, and for everything else this repository is missing
 Contract: .../docs/consumer-guide.md#script-contract
 ```
 
@@ -914,8 +914,8 @@ the way a workflow-status badge takes `?branch=main`; every other branch gets
 its own directory, and `pr-closed.yml` drops it when the PR closes.
 
 **Rendering and publishing both live here.** The renderer is
-`@blinkbitcoin/app-tooling`'s `render-badges` program, which
-`scripts/ci/render-badges.sh` runs from this repository's own checkout, in the
+`@blinkbitcoin/app-tooling`'s `gen-badges` program, which
+`scripts/ci/gen-badges.sh` runs from this repository's own checkout, in the
 consumer's root: the same commit as the workflow, so your repository needs no
 script, no copy and no installed package for it. A consumer that draws its own
 badges names its package script in `render-script`, and that script runs
@@ -931,10 +931,10 @@ To render the same badges on a laptop, run the program from the installed
 package with the same environment, after your coverage run:
 
 ```sh
-BADGE_UNIT=success BADGE_E2E=skipped pnpm exec render-badges   # into coverage/badge
+BADGE_UNIT=success BADGE_E2E=skipped pnpm exec gen-badges   # into coverage/badge
 ```
 
-`coverage-badge` and `status-badge` render one badge each, for a layout that
+`gen-coverage-badge` and `gen-status-badge` render one badge each, for a layout that
 wants only one. A copy of the renderer in your repository (`scripts/badges/`,
 where the template kept it) is a `no-copy` row in the contract check: see
 [No copies of this family](#no-copies-of-this-family).
@@ -949,7 +949,7 @@ where the template kept it) is a `no-copy` row in the contract check: see
 | `security-verdict` | `''` | `check-security.yml`'s `verdict` output, as it is. Empty renders no security badge, so the published one stays |
 | `security-label` | `Security` | Text on the left half of the security badge |
 | `coverage-artifact` | `coverage` | Artifact holding the consumer's `coverage/` directory (`check-unit.yml` uploads it under this name). Downloaded only when `unit-result` is `success` |
-| `render-script` | `''` | Consumer script that renders the badges into `badge-dir` instead of `render-badges`. Empty renders with `render-badges`. The default used to be `badges:render`: pass that to keep a renderer of your own |
+| `render-script` | `''` | Consumer script that renders the badges into `badge-dir` instead of `gen-badges`. Empty renders with `gen-badges`. The default used to be `badges:render`: pass that to keep a renderer of your own |
 | `badge-dir` | `coverage/badge` | Consumer-relative directory the badges are rendered into and `publish-badges.sh` copies from |
 
 No outputs. Secrets: `consumer-token` (optional). The calling job must grant
@@ -957,10 +957,10 @@ No outputs. Secrets: `consumer-token` (optional). The calling job must grant
 writes, and the scope is declared on the job rather than at the top of the file
 for exactly that reason.
 
-**The environment the renderer is handed**, `render-badges` or a
+**The environment the renderer is handed**, `gen-badges` or a
 `render-script` of your own: `BADGE_OUT_DIR`, `BADGE_UNIT`, `BADGE_E2E`,
 `BADGE_UNIT_LABEL`, `BADGE_E2E_LABEL`, `BADGE_SECURITY` (empty, or the verdict
-line to render `security.svg` from) and `BADGE_SECURITY_LABEL`. `render-badges`
+line to render `security.svg` from) and `BADGE_SECURITY_LABEL`. `gen-badges`
 also reads `BADGE_COVERAGE` (`measure`, `failing`, `pending` or `skip`; derived
 from `BADGE_UNIT` when unset) and `BADGE_COVERAGE_SUMMARY` (default
 `coverage/coverage-summary.json`). `run-script.sh` runs `pnpm run NAME` with no
@@ -1452,7 +1452,7 @@ Prebuild → `fastlane android build` → `fastlane android verify`, on
 | `release-meta-artifact` | `release-meta` | Artifact downloaded for `build-info.json` and the store notes |
 | `aab-artifact` / `apk-artifact` / `mapping-artifact` | `android-aab` / `android-apk` / `android-mapping` | Upload names |
 | `mapping-path` | `android/app/build/outputs/mapping/**/mapping.txt` | Consumer-relative glob for the mapping file. Override it when the consumer uses a non-default variant output directory — the upload is `if-no-files-found: warn`, so a wrong path yields a green build and permanently unreadable Play crash reports |
-| `bundletool-version` | `1.17.2` | bundletool release downloaded before the lane runs (the `android build` lane derives the universal APK from the .aab with it, and no runner image ships it). Kept equal to `scripts/lib/versions.sh` by `scripts/self/check-versions.sh` |
+| `bundletool-version` | `1.17.2` | bundletool release downloaded before the lane runs (the `android build` lane derives the universal APK from the .aab with it, and no runner image ships it). Kept equal to `scripts/lib/versions.sh` by `scripts/self/check-version-pins.sh` |
 | `bundletool-sha256` | `''` | Expected sha256 of the jar; empty skips verification. Google publishes no checksum file alongside the release, so pinning the bytes is opt-in |
 | `build-env` | `{}` | Non-secret build environment, published before prebuild — see [`build-env`](#build-env). Put `ANDROID_UPLOAD_CERT_SHA256` here: the `android verify` lane forwards it to `verify-android.sh` as `--cert-sha256`, which turns "the aab is signed" into "the aab is signed by the expected key" |
 
@@ -1730,7 +1730,7 @@ human to review with the version bump. The section it writes is what the
 release lanes later ship: release-please builds the GitHub release body from
 the text between the two `---` lines of the merged PR body, and
 `build-prepare.yml` with `release-tag` reads the `## Store notes` section of
-that body back verbatim (`store-notes --body-section`), so beta and production
+that body back verbatim (`gen-store-notes --body-section`), so beta and production
 never regenerate what was reviewed.
 
 | Input | Default | Meaning |
@@ -2205,12 +2205,12 @@ and must not be able to put a stale `sha` or `stage` back on the release.
 
 ### Store notes
 
-The store notes come from `store-notes`, a program in
+The store notes come from `gen-store-notes`, a program in
 `@blinkbitcoin/app-tooling`. `build-prepare.yml` and `pr-store-notes.yml` run
-it through `scripts/release/store-notes.sh`, from the `.workflows` checkout at your
+it through `scripts/release/gen-store-notes.sh`, from the `.workflows` checkout at your
 pin, in your `working-directory`. You ship no generator of your own: a
 `scripts/release/notes.mjs` is not run (the run warns), and the
-`no-copy.store-notes` row of the [contract check](#no-copies-of-this-family)
+`no-copy.gen-store-notes` row of the [contract check](#no-copies-of-this-family)
 blocks it.
 
 It renders grouped, plain-text notes (New, Improved, Fixed) that every store
@@ -2270,10 +2270,10 @@ the file, the package's part is the whole prompt.
 On a laptop, the same program from the installed package:
 
 ```sh
-pnpm exec store-notes --from-commits --out -                          # since the last v* tag
-pnpm exec store-notes --from-body RELEASE_BODY.md --body-section --out dist/
-pnpm exec store-notes --tag v1.4.0                                    # a release's body, through gh
-pnpm exec store-notes --pr 67                                         # a release PR's body, through gh
+pnpm exec gen-store-notes --from-commits --out -                          # since the last v* tag
+pnpm exec gen-store-notes --from-body RELEASE_BODY.md --body-section --out dist/
+pnpm exec gen-store-notes --tag v1.4.0                                    # a release's body, through gh
+pnpm exec gen-store-notes --pr 67                                         # a release PR's body, through gh
 ```
 
 `--tag` and `--pr` read the body with `gh release view` and `gh pr view` in
@@ -2282,11 +2282,11 @@ section is what you see. `--preview` picks the source itself: `--tag` or
 `--pr` when given, else the `TAG` or `PR` environment variable, else the
 commits since the last `v*` tag. That makes a preview target one line with no
 shell in it, which `check-make-recipes` requires; make hands
-`make store-notes TAG=v1.4.0` to the recipe's environment:
+`make gen-store-notes TAG=v1.4.0` to the recipe's environment:
 
 ```make
 store-notes: ## Preview store notes for HEAD (TAG=vX.Y.Z uses that release body, PR=N that release PR's body)
-	pnpm exec store-notes --preview
+	pnpm exec gen-store-notes --preview
 ```
 
 Only `--preview` reads `TAG` and `PR`: they are common names, and a CI step
@@ -2416,7 +2416,7 @@ line for line, both repos read on the same date):
 | `check-prebuild` | `check-code.yml` (`prebuild-check` toggle, **off** by default) | yes — expensive, so the template does not enable the toggle |
 | `check:bundle-secrets` | `check-code.yml` (`bundle-secrets` toggle, **off** by default) | yes (`make bundle-secrets-check`) — the toggle stays off because it is minutes, not seconds |
 | `check:release` | `check-code.yml` (`release-checks` toggle, off by default) | **opt-in** — only a consumer with a release setup ships it; the toggle stays `false` otherwise |
-| `badges:render` | `publish-badges.yml` (`render-script`, empty by default) | **opt-in** — only for a consumer that draws its own badges and names the script in `render-script`; by default `publish-badges.yml` renders with the package's `render-badges`, and the template's own renderer (`scripts/badges/`) is a `no-copy` row |
+| `badges:render` | `publish-badges.yml` (`render-script`, empty by default) | **opt-in** — only for a consumer that draws its own badges and names the script in `render-script`; by default `publish-badges.yml` renders with the package's `gen-badges`, and the template's own renderer (`scripts/badges/`) is a `no-copy` row |
 | `test:e2e:web` | `build-web.yml` (`e2e-script`) | yes (`bash scripts/e2e/web.sh`, which honors `PLAYWRIGHT_SKIP_EXPORT` — see [the Playwright / export contract](#the-playwright--export-contract)) |
 
 The template also ships `lint:fix`, `format`, `i18n:check`, `codegen:check`,
@@ -2590,7 +2590,7 @@ Node file and the mock server, `commitlint --print-config` the same rules,
 ```ts
 import { createJestConfig } from '@blinkbitcoin/app-tooling/expo/jest';
 
-// Everything generic - the two projects, the worktree ignores, the transforms,
+// Everything generic - the two projects, the ignored directories, the transforms,
 // the console guard, the Expo stand-ins and the 100% thresholds - is the
 // preset's. This file holds this app's paths.
 export default createJestConfig({
@@ -2958,7 +2958,7 @@ each one lives so a future edit doesn't quietly regress it.
 | A renamed App Review env name breaks the review form silently - deliver and pilot accept a smaller hash without erroring | `test/workflow-shape.bats` derives the names from a committed copy of the template's `fastlane/lanes/shared.rb` and compares both directions |
 | A non-secret value passed as a workflow input is public, so a credential smuggled through one leaks quietly | `scripts/lib/build-env.sh` refuses keys ending in `_KEY`/`_TOKEN`/`_PASSWORD`/`_SECRET`/… and logs key names only; `test/build-env.bats` (the key rules) and `test/lib-build-env.bats` (the library) |
 | An unset repo variable is `''`, which a `type: number` input rejects outright | The guide's `fromJSON(vars.X \|\| '1000')` idiom for `build-number-offset` and `rollout` |
-| No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-versions.sh`) |
+| No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-version-pins.sh`) |
 | A Release E2E build resolves `.env.production` at bundle time, so `EXPO_PUBLIC_*` from a dotenv file never reaches it; an exported variable beats the dotenv file, `NODE_ENV` does not (`@expo/env` assigns it from `--dev`) | `check-e2e.yml`'s `build-env` input, published before `Prebuild (ios)`; the template passes its mock API URL there |
 | A `.app` built against one `build-env` must not be restored for another, or the fix looks like it did nothing | `scripts/ci/native-keys.sh` folds a digest of `BUILD_ENV` into `ios-key` (`-env{8hex}`; empty leaves the key byte-identical); `test/native-keys.bats` |
 | A Release iOS app never asks Metro for a bundle, so starting Metro for it is pure wall clock — and a launch script must not demand `metro.log` on that path | `check-e2e.yml` `ios` job gates `Start Metro`/`Wait for Metro` on `ios-configuration != 'Release'`; `scripts/e2e/app-launch.sh` requires `metro.log` only when it will read it; `test/app-launch.bats` |

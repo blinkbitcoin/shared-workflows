@@ -15,7 +15,7 @@ on:
     # passes nothing runs every gate.
     inputs:
       code:
-        description: Run shellcheck and actionlint
+        description: Run check-ci (shellcheck, actionlint and zizmor)
         type: boolean
         default: true
       tooling:
@@ -34,19 +34,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
-      - run: make lint-scripts lint-workflows
+      - run: make check-ci
   security:
     name: Security
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # fetch-depth: 0, because `make secrets` scans the whole history with
+      # fetch-depth: 0, because `make check-secrets` scans the whole history with
       # gitleaks and refuses a shallow clone. The other jobs here take the
       # default single commit.
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - uses: jdx/mise-action@v4
-      - run: make workflow-security secrets
+      - run: make check-secrets
   tooling:
     name: Tooling
     if: ${{ inputs.tooling }}
@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
-      - run: make check-versions tool-versions
+      - run: make check-version-pins check-tool-versions
   docs:
     name: Docs
     runs-on: ubuntu-latest
@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
-      - run: make spell
+      - run: make check-spell
   commits:
     name: Commits
     # A called workflow sees the caller's event, so this is the PR check it

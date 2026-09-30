@@ -3,10 +3,10 @@
 #
 # `gh` is stubbed with a script that serves a PR body out of a file and writes
 # `pr edit --body-file` back into it, so the whole round trip - fetch, strip,
-# generate, inject, edit - runs without GitHub. The generator store-notes.sh runs is
+# generate, inject, edit - runs without GitHub. The generator gen-store-notes.sh runs is
 # faked too, with a `node` on PATH that turns the body's bullets into
 # store-notes.txt, so each case sees exactly which bullets it was fed; one case
-# runs the real one (packages/app-tooling/bin/store-notes.mjs, whose own test is
+# runs the real one (packages/app-tooling/bin/gen-store-notes.mjs, whose own test is
 # packages/app-tooling/store-notes.test.mjs).
 #
 # A dry run from a body file must not touch `gh` at all, so those cases arm
@@ -230,7 +230,7 @@ generator_writes() { printf '%b' "$1" > "$WORKFLOWS_TEST_NOTES"; }
   [ "$(edits)" -eq 0 ] || fail "the PR was edited anyway: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
-# store-notes.sh asserts the file exists; an empty one would still be a section
+# gen-store-notes.sh asserts the file exists; an empty one would still be a section
 # with no notes in it, and an empty store text is rejected by App Store Connect.
 @test "an empty store-notes.txt is an error, not an empty section" {
   generator_writes ''

@@ -13,9 +13,9 @@ import {
   main as coverageMain,
   SUMMARY_PATH,
   writeCoverageBadge,
-} from './bin/coverage-badge.mjs';
+} from './bin/gen-coverage-badge.mjs';
 
-const tmp = mkdtempSync(path.join(tmpdir(), 'coverage-badge-'));
+const tmp = mkdtempSync(path.join(tmpdir(), 'gen-coverage-badge-'));
 after(() => rmSync(tmp, { recursive: true, force: true }));
 
 /** A fresh output directory per case, so no test reads another's leftovers. */
@@ -26,7 +26,7 @@ const summaryWith = (covered, total) => ({
   total: { lines: { covered, total, skipped: 0, pct: (covered / total) * 100 } },
 });
 
-// render-badges imports them from here, as the template's scripts did.
+// gen-badges imports them from here, as the template's scripts did.
 test('the default paths are the ones the badge library holds', () => {
   assert.equal(BADGE_DIR, badge.BADGE_DIR);
   assert.equal(SUMMARY_PATH, badge.SUMMARY_PATH);
@@ -90,14 +90,14 @@ const runScript = (script, args, { cwd, env = {} }) =>
     env: { ...process.env, ...env },
   });
 
-describe('coverage-badge main', () => {
+describe('gen-coverage-badge main', () => {
   test('measures the summary named by --summary into --out', () => {
     const dir = outDir();
     const summaryFile = path.join(tmp, 'main-summary.json');
     writeFileSync(summaryFile, JSON.stringify(summaryWith(1, 2)));
     const { out, err, io } = capture();
     assert.equal(coverageMain(['--out', dir, '--summary', summaryFile], io), 0);
-    assert.deepEqual(out, ['coverage-badge: 50% (1/2 lines)']);
+    assert.deepEqual(out, ['gen-coverage-badge: 50% (1/2 lines)']);
     assert.deepEqual(err, []);
     assert.ok(readFileSync(path.join(dir, 'coverage.svg'), 'utf8').includes('50%'));
   });
@@ -106,7 +106,7 @@ describe('coverage-badge main', () => {
     const dir = outDir();
     const { out, io } = capture();
     assert.equal(coverageMain(['--status', 'pending', '--out', dir], io), 0);
-    assert.deepEqual(out, ['coverage-badge: pending (placeholder)']);
+    assert.deepEqual(out, ['gen-coverage-badge: pending (placeholder)']);
   });
 
   test('a missing summary exits 1 with the reason', () => {
@@ -135,13 +135,13 @@ describe('coverage-badge main', () => {
 
   test('as a command it writes coverage/badge from coverage/coverage-summary.json', () => {
     const cwd = mkdtempSync(path.join(tmp, 'cwd-'));
-    const missing = runScript('coverage-badge.mjs', [], { cwd });
+    const missing = runScript('gen-coverage-badge.mjs', [], { cwd });
     assert.equal(missing.status, 1);
     assert.match(missing.stderr, /coverage\/coverage-summary\.json is missing/);
 
-    const placeholder = runScript('coverage-badge.mjs', ['--status', 'failing'], { cwd });
+    const placeholder = runScript('gen-coverage-badge.mjs', ['--status', 'failing'], { cwd });
     assert.equal(placeholder.status, 0, placeholder.stderr);
-    assert.equal(placeholder.stdout, 'coverage-badge: failing (placeholder)\n');
+    assert.equal(placeholder.stdout, 'gen-coverage-badge: failing (placeholder)\n');
     assert.ok(readFileSync(path.join(cwd, 'coverage/badge/coverage.svg'), 'utf8'));
   });
 });

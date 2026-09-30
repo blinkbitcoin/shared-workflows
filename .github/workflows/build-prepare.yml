@@ -31,7 +31,7 @@ on:
         type: number
         default: 1000
       store-notes-locales:
-        description: "Locales the store notes generator (the store-notes program in @blinkbitcoin/app-tooling) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
+        description: "Locales the store notes generator (the gen-store-notes program in @blinkbitcoin/app-tooling) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
         type: string
         default: ''
       stage:
@@ -251,7 +251,7 @@ jobs:
           # the job env, so the `||` is what makes the input the fallback rather
           # than the override.
           RELEASE_BODY_FILE: ${{ env.RELEASE_BODY_FILE || inputs.release-body-file }}
-        run: bash "$WORKFLOWS_DIR/scripts/release/store-notes.sh"
+        run: bash "$WORKFLOWS_DIR/scripts/release/gen-store-notes.sh"
       - name: Upload release-meta
         uses: actions/upload-artifact@v7
         with:

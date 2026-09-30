@@ -99,7 +99,7 @@ on:
         type: string
         default: 'android/app/build/outputs/mapping/**/mapping.txt'
       bundletool-version:
-        description: bundletool release the `android build` lane derives the universal APK with (kept equal to scripts/lib/versions.sh BUNDLETOOL_VERSION; enforced by scripts/self/check-versions.sh)
+        description: bundletool release the `android build` lane derives the universal APK with (kept equal to scripts/lib/versions.sh BUNDLETOOL_VERSION; enforced by scripts/self/check-version-pins.sh)
         type: string
         default: '1.17.2'
       bundletool-sha256:

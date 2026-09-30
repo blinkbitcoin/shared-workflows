@@ -106,7 +106,7 @@ export function main(
  * node_modules/.bin as a link, so the advertised `pnpm exec check-tool-versions`
  * made the two differ - and this guard then said "imported": no output, exit 0,
  * a version gate that silently passed. Only `node packages/.../bin/x.mjs`, the
- * path `make tool-versions` happens to use, ever ran.
+ * path `make check-tool-versions` happens to use, ever ran.
  */
 export function isProgram(moduleUrl, scriptPath) {
   if (!scriptPath) return false;

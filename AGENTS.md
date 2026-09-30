@@ -29,7 +29,7 @@ scripts/release/    version and store notes resolution, fastlane invocation, rel
                     the release PR's dispatches (dispatch-release-pr-ci, dispatch-at-tag)
 scripts/web/        web export, Playwright install and run
 scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
-scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke,
+scripts/self/       this repo's own upkeep (check-version-pins, tag-major, smoke-local,
                     package-copies, render-contract-table, check-store-notes-section,
                     changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
@@ -47,20 +47,19 @@ Every row is a make target; nothing here is run through a package manager.
 
 | Target | |
 |---|---|
-| `make hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
-| `make check` | Everything self-ci runs: the nine gates below |
-| `make lint-scripts` | shellcheck every script under `scripts/` (bash strict) |
-| `make lint-workflows` | Lint the workflows and composite actions (actionlint) |
-| `make workflow-security` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
-| `make test` | The bats suite over the pure scripts |
+| `make setup-hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
+| `make check` | Everything self-ci runs: `check-ci`, the three test suites, the version checks, `check-spell` and `check-secrets` |
+| `make check-ci` | The CI code: shellcheck over every script under `scripts/` (bash strict), actionlint over the workflows and composite actions, and zizmor's security audit of both (offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
+| `make test` | Every test suite: `test-unit`, `test-package` and `test-scripts` |
+| `make test-unit` | The bats suite over the scripts, the workflows' shape and the docs' facts |
 | `make test-package` | `node:test` over every package under `packages/`, 100% lines, branches and functions |
-| `make test-script-modules` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
-| `make check-versions` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
-| `make tool-versions` | Fail when an installed tool is not the version `packages/app-tooling/versions.json` pins |
-| `make spell` | typos over the whole repo |
-| `make secrets` | Scan the whole git history for committed secrets (gitleaks) |
-| `make smoke-local` | Prepare against the template with nektos/act — Docker and a pushed branch required; not part of `check` (CONTRIBUTING.md, "Running the release pipeline locally") |
-| `make smoke-local-android` | `smoke-local`, then the unsigned Android build |
+| `make test-scripts` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
+| `make check-version-pins` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
+| `make check-tool-versions` | Fail when an installed tool is not the version `packages/app-tooling/versions.json` pins |
+| `make check-spell` | typos over the whole repo |
+| `make check-secrets` | Scan the whole git history for committed secrets (gitleaks) |
+| `make test-smoke-local` | Prepare against the template with nektos/act — Docker and a pushed branch required; not part of `check` (CONTRIBUTING.md, "Running the release pipeline locally") |
+| `make test-smoke-local-android` | `test-smoke-local`, then the unsigned Android build |
 | `make help` | Show every target with its description |
 
 ## Rules of the road
@@ -69,10 +68,10 @@ Every row is a make target; nothing here is run through a package manager.
   (`git worktree add ../shared-workflows-<topic> -b <branch> origin/main`),
   never by switching branches in the shared clone: several agent sessions share
   that checkout, and a commit made there lands on whatever branch another
-  session left checked out. **`make hooks` is the one thing that is not
+  session left checked out. **`make setup-hooks` is the one thing that is not
   worktree-scoped:** a worktree shares `.git/hooks` with the main checkout, so
   running it from a topic worktree makes these hooks live in every worktree of
-  the clone. That is intended once this is on `main` — one `make hooks` per
+  the clone. That is intended once this is on `main` — one `make setup-hooks` per
   physical clone — but a branch that changes `lefthook.yml` changes what every
   sibling worktree runs. `mise exec -- lefthook uninstall` reverses it.
 - **The consumer guide is the contract.** Adding, renaming or re-defaulting a
@@ -117,7 +116,7 @@ Every row is a make target; nothing here is run through a package manager.
   inside such a function with `|| return` or `|| die "..."`, and list into a
   variable before looping over it. Each of these once let a script carry on
   with an empty value (`ios-simulator.sh`, `workflows_app_id`,
-  `workflows_fingerprint`, `act-smoke.sh`, `cancel-runs.sh`).
+  `workflows_fingerprint`, `smoke-local.sh`, `cancel-runs.sh`).
 - **Never set a locale as a command prefix in shell code.** Write
   `env LC_ALL=C sort`, not `LC_ALL=C sort`: with the prefix, bash itself
   switches locale for the one command, and a Homebrew bash on macOS doing that
@@ -130,7 +129,7 @@ Every row is a make target; nothing here is run through a package manager.
   every branch and exit path. No exceptions, no allowlist.**
   - **The file:**
     - `scripts/ci/x.sh` has `test/x.bats` (`test/ci-x.bats` when another script is also called `x`).
-    - A Node script `scripts/lib/x.mjs` has `test/x.test.mjs`, under `make test-script-modules`' 100% gate.
+    - A Node script `scripts/lib/x.mjs` has `test/x.test.mjs`, under `make test-scripts`' 100% gate.
     - A package's program, module or Expo preset, `packages/<package>/bin/x.mjs`, `lib/x.mjs` or `expo/x.mjs`, has `packages/<package>/x.test.mjs`; so does a Jest runtime file, `packages/<package>/expo/jest/**/x.cjs`.
     - A package's byte-identical copy of a script is tested by its original's own test plus `test/package-copies.bats`.
   - **What counts:**
@@ -145,7 +144,7 @@ Every row is a make target; nothing here is run through a package manager.
   enforces this.
 - **Tool versions live in `scripts/lib/versions.sh`**, mirrored into
   `.mise.toml` and into workflow input defaults. Never bump one copy alone;
-  `make check-versions` is what catches it.
+  `make check-version-pins` is what catches it.
 - **Jobs check this repo out into `.workflows/`** via `job.workflow_repository` /
   `job.workflow_sha`, and reference everything through `$WORKFLOWS_DIR`. Never reference
   a path under `scripts/` or `.github/actions/` from a consumer-visible
@@ -159,7 +158,7 @@ Every row is a make target; nothing here is run through a package manager.
   `contents: write` / `actions: read|write` as given (v0.6.2; the shape test
   holds both halves).
 - **A change to `build-prepare.yml`, `build-android.yml` or the scripts
-  they run gets `make smoke-local` before the PR.** No gate in this repo
+  they run gets `make test-smoke-local` before the PR.** No gate in this repo
   executes those workflows - they only run inside a consumer - and v0.6.0
   broke every consumer's internal release with `make check` green. (The one
   reusable workflow a gate here does execute is `pr-store-notes.yml`: the
@@ -228,8 +227,8 @@ Every row is a make target; nothing here is run through a package manager.
   was rejected for exactly this reason; so was "ids" for identifiers in a
   status message.
 - **A make target is named for what it checks or does, never after the tool
-  that does it.** `workflow-security`, not `zizmor`; `lint-scripts`, not
-  `shellcheck`. A tool's name tells a reader nothing
+  that does it.** `check-ci`, not `zizmor`; `check-spell`, not
+  `typos`. A tool's name tells a reader nothing
   until they already know the tool. It belongs in the `##` description, where
   `make help` shows it beside the name. `test/docs-contract.bats` fails on a
   target named after a tool pinned in `.mise.toml`.
@@ -266,18 +265,18 @@ Every row is a make target; nothing here is run through a package manager.
 
 | Layer | Where | Run with |
 |---|---|---|
-| Pure bash scripts, one test file each | `test/<name>.bats` | `make test` |
-| The Node scripts under `scripts/`, one test file each, 100% lines, branches and functions | `test/<name>.test.mjs` | `make test-script-modules` |
-| Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test` |
-| The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
-| The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
+| Pure bash scripts, one test file each | `test/<name>.bats` | `make test-unit` |
+| The Node scripts under `scripts/`, one test file each, 100% lines, branches and functions | `test/<name>.test.mjs` | `make test-scripts` |
+| Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test-unit` |
+| The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make test-smoke-local` |
+| The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-program.bats` | `make test-unit` |
 | The app-tooling programs and modules at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, the store notes generator and its LLM adapters, and each program's flags, messages and exit codes | `packages/app-tooling/*.test.mjs` | `make test-package` |
 | Each Expo preset (`expo/`) against the template: the template's file as it is and the file it becomes, evaluated under the same stand-ins and compared (lefthook through the real `lefthook dump`); the guide's examples are those files | `packages/app-tooling/*.test.mjs` | `make test-package` |
-| Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
-| Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
-| That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |
-| The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
-| That every script has its own test file that runs it, with no exceptions | `test/script-coverage.bats` | `make test` |
+| Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test-unit` |
+| Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test-unit` |
+| That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test-unit` |
+| The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test-unit` |
+| That every script has its own test file that runs it, with no exceptions | `test/script-coverage.bats` | `make test-unit` |
 | `pr-store-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-store-notes.yml`, `scripts/self/check-store-notes-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
 
@@ -286,7 +285,7 @@ suite reads this repository and `test/fixtures/consumer-min` only. The one CI
 job that checks a consumer out is the store notes dry run, and it tests this
 repository's `pr-store-notes.yml` against the template's `main`, not the
 template against a rule: the generator it runs is this repository's own
-`store-notes`, and a red dry run from a broken setup on that `main` (its store
+`gen-store-notes`, and a red dry run from a broken setup on that `main` (its store
 metadata, its prompt addendum) is a deliberate trade, because the template is where every release here
 is first executed. A consumer is held to the contract by its own
 `Contract` job, against the version of this repository it calls, and it is the
