@@ -2270,7 +2270,27 @@ On a laptop, the same program from the installed package:
 ```sh
 pnpm exec store-notes --from-commits --out -                          # since the last v* tag
 pnpm exec store-notes --from-body RELEASE_BODY.md --body-section --out dist/
+pnpm exec store-notes --tag v1.4.0                                    # a release's body, through gh
+pnpm exec store-notes --pr 67                                         # a release PR's body, through gh
 ```
+
+`--tag` and `--pr` read the body with `gh release view` and `gh pr view` in
+your repository, and imply `--body-section`, so a reviewed `## Store notes`
+section is what you see. `--preview` picks the source itself: `--tag` or
+`--pr` when given, else the `TAG` or `PR` environment variable, else the
+commits since the last `v*` tag. That makes a preview target one line with no
+shell in it, which `check-make-recipes` requires; make hands
+`make release-notes TAG=v1.4.0` to the recipe's environment:
+
+```make
+release-notes: ## Preview store notes for HEAD (TAG=vX.Y.Z uses that release body, PR=N that release PR's body)
+	pnpm exec store-notes --preview
+```
+
+Only `--preview` reads `TAG` and `PR`: they are common names, and a CI step
+that happens to carry one must not change where its notes come from. Both set
+at once, a pull request that is not a number, a missing `gh`, a tag or pull
+request that does not exist and an empty body each fail with the reason.
 
 The provider adapters it uses are exported for an app's own LLM calls:
 `@blinkbitcoin/dev-config/llm` (`adapterFor`, `KEY_ENV`, `EFFORTS`,

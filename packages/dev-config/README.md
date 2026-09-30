@@ -204,6 +204,9 @@ bash node_modules/@blinkbitcoin/dev-config/ci/lint-ci.sh       # actionlint, ziz
 ```sh
 store-notes --from-commits [RANGE] --out -                   # since the last v* tag, as JSON on stdout
 store-notes --from-body RELEASE_BODY.md --body-section --out dist/
+store-notes --tag v1.4.0                                     # that release's body, read with gh
+store-notes --pr 67                                          # that pull request's body, read with gh
+store-notes --preview                                        # --tag/--pr, else $TAG/$PR, else the commits
 store-notes --help
 ```
 
@@ -214,6 +217,22 @@ from conventional commit subjects, cut to each store's limit, written as
 `pr-release-notes.yml` run this program from the workflows checkout, so a
 consumer ships no generator of its own (the contract's `no-copy.store-notes`
 row).
+
+- **Source:** exactly one of `--from-body`, `--from-commits`, `--tag` or `--pr`.
+  `--tag` and `--pr` read the body with the GitHub CLI (`gh release view` and
+  `gh pr view`, in the working directory's repository) and imply
+  `--body-section`. A missing `gh`, a tag or pull request that is not there,
+  and an empty body each fail with the reason.
+- **`--preview`:** the source a laptop preview wants, with no logic in the
+  caller: `--tag` or `--pr` when given, else `$TAG`, else `$PR`, else the
+  commits since the last `v*` tag. Only `--preview` reads `TAG` and `PR`, so a
+  CI step that happens to carry either keeps its source. A make target is one
+  line, and make passes its command-line variables through the environment:
+
+  ```make
+  release-notes: ## Preview store notes for HEAD (TAG=vX.Y.Z uses that release body, PR=N that release PR's body)
+  	pnpm exec store-notes --preview
+  ```
 
 - **Locales:** `--locales a,b`, else `$NOTES_LOCALES`, else the locale
   directories under `fastlane/metadata/ios`, else `en-US`.

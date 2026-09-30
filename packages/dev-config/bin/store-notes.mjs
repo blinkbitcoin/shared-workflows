@@ -384,7 +384,7 @@ export async function buildNotes({
 
 // ---------- CLI ----------
 
-export const USAGE = `usage: store-notes (--from-body FILE | --from-commits [RANGE]) [options]
+export const USAGE = `usage: store-notes (--from-body FILE | --from-commits [RANGE] | --tag TAG | --pr N | --preview) [options]
 
 Store release notes for a build, from a release-please body or from
 conventional commit subjects, for the app in the working directory. Nothing
@@ -394,6 +394,10 @@ is set; ./release-notes.prompt.md is added to its prompt when present.
 
   --from-body FILE      render from a release body (e.g. the GitHub release)
   --from-commits [R]    render from conventional commit subjects in range R
+  --tag TAG             render from release TAG's body (gh release view), with --body-section
+  --pr N                render from pull request N's body (gh pr view), with --body-section
+  --preview             render from --tag or --pr when given, else $TAG or $PR,
+                        else the commits since the last v* tag (what make release-notes runs)
   --body-section        also take a verbatim "## Store notes" section from the body
   --locales a,b         locales to emit (default: $NOTES_LOCALES, else
                         the locale directories under fastlane/metadata/ios)
@@ -402,18 +406,26 @@ is set; ./release-notes.prompt.md is added to its prompt when present.
   --help                this text
 
   store-notes --from-body RELEASE_BODY.md --out dist/
-  store-notes --from-commits v1.2.0..HEAD --out -`;
+  store-notes --from-commits v1.2.0..HEAD --out -
+  TAG=v1.4.0 store-notes --preview`;
+
+/** The flags that each name where the changes come from; at most one may be given. */
+const SOURCE_FLAGS = ['--from-body', '--from-commits', '--tag', '--pr'];
 
 export function parseArgs(argv) {
   const options = {
     fromBody: '',
     fromCommits: false,
     range: '',
+    tag: '',
+    pr: '',
+    preview: false,
     locales: [],
     out: '',
     includeChangelog: process.env.STORE_NOTES_INCLUDE_CHANGELOG === 'true',
     bodySection: false,
   };
+  const sources = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const next = () => {
@@ -421,23 +433,79 @@ export function parseArgs(argv) {
       if (argv[i] === undefined) throw new Error(`${arg} needs a value`);
       return argv[i];
     };
+    if (SOURCE_FLAGS.includes(arg)) sources.push(arg);
     if (arg === '--from-body') options.fromBody = next();
     else if (arg === '--from-commits') {
       options.fromCommits = true;
       if (argv[i + 1] && !argv[i + 1].startsWith('--')) options.range = next();
-    } else if (arg === '--locales') options.locales = next().split(',').filter(Boolean);
+    } else if (arg === '--tag') options.tag = next();
+    else if (arg === '--pr') options.pr = next();
+    else if (arg === '--preview') options.preview = true;
+    else if (arg === '--locales') options.locales = next().split(',').filter(Boolean);
     else if (arg === '--out') options.out = next();
     else if (arg === '--include-changelog') options.includeChangelog = true;
     else if (arg === '--body-section') options.bodySection = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
-  if (!options.fromBody && !options.fromCommits) {
-    throw new Error('one of --from-body FILE or --from-commits [RANGE] is required');
+  if (sources.length > 1) {
+    throw new Error(`${sources.join(' and ')} are mutually exclusive: give one source of changes`);
   }
-  if (options.fromBody && options.fromCommits) {
-    throw new Error('--from-body and --from-commits are mutually exclusive');
+  if (!sources.length && !options.preview) {
+    throw new Error('one of --from-body FILE, --from-commits [RANGE], --tag TAG, --pr N or --preview is required');
   }
   return options;
+}
+
+/**
+ * `options` with its source settled. `--preview` is the laptop preview `make
+ * release-notes` runs: with no source flag it takes `$TAG`, then `$PR`, the
+ * variables make passes through from its command line, and otherwise the
+ * commits since the last tag. Only `--preview` reads them: they are common
+ * names, and a CI step that happens to carry one must not change its source.
+ * A release or pull request body always means `--body-section`, as the recipe
+ * this replaced did, so a reviewed `## Store notes` section is what shows.
+ */
+export function resolveSource(options, env = process.env) {
+  const resolved = { ...options };
+  let prFrom = '--pr';
+  if (resolved.preview && !resolved.fromBody && !resolved.fromCommits && !resolved.tag && !resolved.pr) {
+    const tag = String(env.TAG ?? '').trim();
+    const pr = String(env.PR ?? '').trim();
+    if (tag && pr) throw new Error('TAG and PR are mutually exclusive: give one of them, or neither to preview from the commits');
+    resolved.tag = tag;
+    resolved.pr = pr;
+    prFrom = 'PR';
+    if (!tag && !pr) resolved.fromCommits = true;
+  }
+  if (resolved.pr && !/^[1-9]\d*$/.test(resolved.pr)) {
+    throw new Error(`${prFrom} takes a pull request number, got ${JSON.stringify(resolved.pr)}`);
+  }
+  if (resolved.tag || resolved.pr) resolved.bodySection = true;
+  return resolved;
+}
+
+/**
+ * The body of release `tag` or pull request `pr` in the repository at `cwd`,
+ * read with the GitHub CLI through `exec` (execFileSync's shape). A missing
+ * CLI, a tag or pull request that is not there, and an empty body each fail
+ * with the reason: previewing an empty body would look like a release with
+ * nothing in it.
+ */
+export function fetchBody({ tag, pr }, { cwd = process.cwd(), exec = execFileSync } = {}) {
+  const [kind, id, what] = tag ? ['release', tag, `release ${tag}`] : ['pr', pr, `pull request ${pr}`];
+  const args = [kind, 'view', id, '--json', 'body', '-q', '.body'];
+  let body;
+  try {
+    body = exec('gh', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (failure) {
+    if (failure.code === 'ENOENT') {
+      throw new Error('gh is not installed: --tag and --pr read the body with the GitHub CLI (https://cli.github.com)');
+    }
+    const reason = String(failure.stderr || failure.message).trim().split('\n')[0];
+    throw new Error(`gh ${kind} view ${id} failed: ${reason}`);
+  }
+  if (!String(body).trim()) throw new Error(`the body of ${what} is empty`);
+  return String(body);
 }
 
 /**
@@ -465,7 +533,8 @@ export function resolveLocales(options, env = process.env, cwd = process.cwd()) 
 
 /**
  * Command-line entry; returns the exit code. Any failure is one line on stderr
- * and exit 1. `rewrite` is the LLM pass, injectable like `buildNotes`'s.
+ * and exit 1. `rewrite` is the LLM pass, injectable like `buildNotes`'s, and
+ * `exec` runs `gh` for --tag and --pr (execFileSync's shape).
  */
 export async function main(
   argv = process.argv.slice(2),
@@ -475,10 +544,11 @@ export async function main(
     write = (text) => process.stdout.write(text),
     error = console.error,
     rewrite = rewriteNotes,
+    exec = execFileSync,
   } = {},
 ) {
   try {
-    await run(argv, { cwd, env, write, error, rewrite });
+    await run(argv, { cwd, env, write, error, rewrite, exec });
     return 0;
   } catch (failure) {
     error(String(failure.message ?? failure));
@@ -486,18 +556,20 @@ export async function main(
   }
 }
 
-async function run(argv, { cwd, env, write, error, rewrite }) {
+async function run(argv, { cwd, env, write, error, rewrite, exec }) {
   if (argv.includes('--help') || argv.includes('-h')) {
     write(`${USAGE}\n`);
     return;
   }
-  const options = parseArgs(argv);
+  const options = resolveSource(parseArgs(argv), env);
   const locales = resolveLocales(options, env, cwd);
 
   let items = [];
   let verbatim = '';
-  if (options.fromBody) {
-    const body = readFileSync(path.resolve(cwd, options.fromBody), 'utf8');
+  if (options.fromBody || options.tag || options.pr) {
+    const body = options.fromBody
+      ? readFileSync(path.resolve(cwd, options.fromBody), 'utf8')
+      : fetchBody(options, { cwd, exec });
     items = parseBody(body);
     // A hand-written override is still repository prose: it goes through the
     // same filter as everything the renderer produces.

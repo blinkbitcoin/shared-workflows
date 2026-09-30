@@ -15,6 +15,7 @@ import {
   DEFAULT_PROMPT_FILE,
   discoverLocales,
   extractStoreSection,
+  fetchBody,
   limitText,
   loadPrompt,
   main,
@@ -24,6 +25,7 @@ import {
   renderChangelog,
   renderNotes,
   resolveLocales,
+  resolveSource,
   STORE_LIMITS,
   TRUNCATION_SUFFIX,
   toStoreNotes,
@@ -742,4 +744,134 @@ test('the package publishes the program and the prompt it reads', () => {
   assert.equal(pkg.exports['./store-notes'], './bin/store-notes.mjs');
   assert.ok(pkg.files.includes(path.basename(DEFAULT_PROMPT_FILE)), 'the default prompt is not published');
   assert.equal(path.dirname(DEFAULT_PROMPT_FILE), here);
+});
+
+// ---------- --tag, --pr and --preview: the body from GitHub ----------
+
+/** A stand-in for execFileSync that answers `gh` with `body`, recording each call. */
+function fakeGh(calls, answer = () => fixture('release-body.md')) {
+  return (command, args, options) => {
+    calls.push({ command, args, cwd: options.cwd });
+    return answer(args);
+  };
+}
+
+/** An error shaped like execFileSync's when the command ran and failed. */
+function ghFailure(stderr, message = 'Command failed: gh') {
+  return () => {
+    throw Object.assign(new Error(message), { status: 1, stderr });
+  };
+}
+
+test('--tag, --pr and --preview are sources, and only one source may be given', () => {
+  assert.equal(parseArgs(['--tag', 'v1.4.0']).tag, 'v1.4.0');
+  assert.equal(parseArgs(['--pr', '67']).pr, '67');
+  assert.equal(parseArgs(['--preview']).preview, true);
+  assert.equal(parseArgs(['--preview', '--from-commits']).fromCommits, true);
+  assert.throws(() => parseArgs(['--tag', 'v1', '--pr', '2']), /^Error: --tag and --pr are mutually exclusive/);
+  assert.throws(() => parseArgs(['--from-commits', '--tag', 'v1']), /--from-commits and --tag are mutually exclusive/);
+  assert.throws(() => parseArgs(['--pr']), /--pr needs a value/);
+  assert.throws(() => parseArgs(['--locales', 'en-US']), /--tag TAG, --pr N or --preview is required/);
+});
+
+test('--preview takes TAG, then PR, from the environment, and otherwise the commits', () => {
+  const preview = parseArgs(['--preview']);
+  const { tag, pr, fromCommits: none, bodySection } = resolveSource(preview, { TAG: ' v1.4.0 ' });
+  assert.deepEqual({ tag, pr, none, bodySection }, { tag: 'v1.4.0', pr: '', none: false, bodySection: true });
+  const fromPr = resolveSource(preview, { PR: '67', TAG: '' });
+  assert.equal(fromPr.pr, '67');
+  assert.equal(fromPr.bodySection, true);
+  const fromCommits = resolveSource(preview, {});
+  assert.equal(fromCommits.fromCommits, true);
+  assert.equal(fromCommits.bodySection, false);
+  assert.throws(() => resolveSource(preview, { TAG: 'v1', PR: '2' }), /^Error: TAG and PR are mutually exclusive/);
+  assert.throws(() => resolveSource(preview, { PR: 'main' }), /^Error: PR takes a pull request number, got "main"$/);
+  // The options it was given are left as they were.
+  assert.equal(preview.tag, '');
+});
+
+test('a flag wins over the environment, and without --preview the environment is never read', () => {
+  const flagged = resolveSource(parseArgs(['--preview', '--pr', '5']), { TAG: 'v9', PR: '9' });
+  assert.deepEqual([flagged.tag, flagged.pr], ['', '5']);
+  const commits = resolveSource(parseArgs(['--from-commits']), { TAG: 'v9' });
+  assert.deepEqual([commits.tag, commits.fromCommits, commits.bodySection], ['', true, false]);
+  const body = resolveSource(parseArgs(['--from-body', 'a.md']));
+  assert.deepEqual([body.fromBody, body.bodySection], ['a.md', false]);
+  assert.throws(() => resolveSource(parseArgs(['--pr', '0'])), /^Error: --pr takes a pull request number, got "0"$/);
+});
+
+test('fetchBody asks gh for the release or the pull request body, in the app directory', () => {
+  const calls = [];
+  assert.equal(fetchBody({ tag: 'v1.4.0' }, { cwd: '/app', exec: fakeGh(calls) }), fixture('release-body.md'));
+  fetchBody({ pr: '67' }, { cwd: '/app', exec: fakeGh(calls) });
+  assert.deepEqual(calls, [
+    { command: 'gh', args: ['release', 'view', 'v1.4.0', '--json', 'body', '-q', '.body'], cwd: '/app' },
+    { command: 'gh', args: ['pr', 'view', '67', '--json', 'body', '-q', '.body'], cwd: '/app' },
+  ]);
+});
+
+test('fetchBody names what failed: a tag or pull request that is not there, or an empty body', () => {
+  assert.throws(
+    () => fetchBody({ tag: 'v9.9.9' }, { exec: ghFailure('release not found\nmore detail\n') }),
+    /^Error: gh release view v9\.9\.9 failed: release not found$/,
+  );
+  assert.throws(
+    () => fetchBody({ pr: '404' }, { exec: ghFailure('', 'Command failed: gh pr view 404') }),
+    /^Error: gh pr view 404 failed: Command failed: gh pr view 404$/,
+  );
+  assert.throws(() => fetchBody({ tag: 'v1' }, { exec: () => ' \n' }), /^Error: the body of release v1 is empty$/);
+  assert.throws(() => fetchBody({ pr: '3' }, { exec: () => '' }), /^Error: the body of pull request 3 is empty$/);
+});
+
+test('fetchBody says gh is missing when it is not on PATH', async () => {
+  await withEnv({ PATH: '/nonexistent' }, async () => {
+    assert.throws(() => fetchBody({ tag: 'v1' }), /^Error: gh is not installed: --tag and --pr read the body/);
+  });
+  const missing = () => {
+    throw Object.assign(new Error('spawnSync gh ENOENT'), { code: 'ENOENT' });
+  };
+  assert.throws(() => fetchBody({ pr: '1' }, { exec: missing }), /gh is not installed/);
+});
+
+test("main --tag previews that release's reviewed Store notes section", async () => {
+  const calls = [];
+  const { code, out, err } = await runMain(['--tag', 'v1.4.0', '--locales', 'en-US'], {
+    cwd: fixtures,
+    exec: fakeGh(calls),
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(err, []);
+  assert.equal(calls[0].cwd, fixtures);
+  assert.match(JSON.parse(out)['en-US'].play, /^Signing in sticks now/);
+});
+
+test("main --preview with PR in its environment reads that pull request's body", async () => {
+  const calls = [];
+  const { code, out } = await runMain(['--preview', '--locales', 'en-US'], {
+    env: { PR: '67' },
+    exec: fakeGh(calls, () => fixture('release-pr-body.md')),
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(calls[0].args.slice(0, 3), ['pr', 'view', '67']);
+  assert.match(JSON.parse(out)['en-US'].testflight, /^New\n• Add the local half of the security gate\./);
+});
+
+test('main --preview with neither TAG nor PR previews the commits and calls no gh', async () => {
+  const { code, out } = await runMain(['--preview', '--locales', 'en-US'], {
+    exec: () => {
+      throw new Error('gh must not be called');
+    },
+  });
+  assert.equal(code, 0);
+  assert.ok(JSON.parse(out)['en-US'].testflight.length > 0);
+});
+
+test('main reports a gh failure on stderr and exits 1', async () => {
+  const { code, out, err } = await runMain(['--preview'], {
+    env: { TAG: 'v0.0.0' },
+    exec: ghFailure('release not found\n'),
+  });
+  assert.equal(code, 1);
+  assert.equal(out, '');
+  assert.deepEqual(err, ['gh release view v0.0.0 failed: release not found']);
 });
