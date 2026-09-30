@@ -37,7 +37,8 @@
     "./check-workflow-names": "./bin/check-workflow-names.mjs",
     "./check-coverage-empty": "./bin/check-coverage-empty.mjs",
     "./check-lockfile": "./bin/check-lockfile.mjs",
-    "./fix-tooling-pin": "./bin/fix-tooling-pin.mjs"
+    "./fix-tooling-pin": "./bin/fix-tooling-pin.mjs",
+    "./check-make-recipes": "./bin/check-make-recipes.mjs"
   },
   "bin": {
     "check-tool-versions": "./bin/check-tool-versions.mjs",
@@ -49,7 +50,8 @@
     "check-workflow-names": "./bin/check-workflow-names.mjs",
     "check-coverage-empty": "./bin/check-coverage-empty.mjs",
     "check-lockfile": "./bin/check-lockfile.mjs",
-    "fix-tooling-pin": "./bin/fix-tooling-pin.mjs"
+    "fix-tooling-pin": "./bin/fix-tooling-pin.mjs",
+    "check-make-recipes": "./bin/check-make-recipes.mjs"
   },
   "engines": {
     "node": ">=20"
