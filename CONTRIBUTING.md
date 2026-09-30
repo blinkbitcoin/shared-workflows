@@ -118,8 +118,8 @@ An allowlist used to excuse eight scripts as "cannot run from a bats suite":
 the native builds, the Maestro runners and Metro. Every one of them could.
 `test/script-coverage.bats` now fails if an allowlist comes back.
 
-`make test-package` holds the Node package at 100% lines, branches and
-functions. Each program's command-line entry is a `main(argv, { ... })` that
+`make test-package` holds every Node package under `packages/` at 100% lines,
+branches and functions. Each program's command-line entry is a `main(argv, { ... })` that
 takes its streams, environment and filesystem as arguments and returns the exit
 code, so every flag, message and exit path is a `node:test` case in-process; one
 case per program also runs the file as a real child process, which node's
@@ -254,8 +254,8 @@ here and every consumer's CI.
 Releases are automated: release-please keeps a release PR open on `main`, and
 squash-merging it cuts the version and re-points the moving `v0`/`v0.<minor>` tags.
 Never move a tag or edit a version by hand. There is one release PR per
-package (the workflows and `@blinkbitcoin/dev-config`), and every push to
-`main` rebuilds each open one on that `main` (`always-update` in
-`release-please-config.json`), so merging one never leaves the other
-conflicting. Each rebuild dismisses an approval: approve a release PR right
+component (the workflows, `@blinkbitcoin/dev-config` and
+`@blinkbitcoin/expo-tooling`), and every push to `main` rebuilds each open one
+on that `main` (`always-update` in `release-please-config.json`), so merging
+one never leaves the others conflicting. Each rebuild dismisses an approval: approve a release PR right
 before merging it.

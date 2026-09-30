@@ -4,7 +4,7 @@
 #
 #   code      true when shellcheck or actionlint has something new to read
 #   tooling   true when check-versions or tool-versions has something new to read
-#   package   true when the packages/dev-config suite has something new to read
+#   package   true when a package's suite (anything under packages/) has something new to read
 #
 # Include-based, unlike the consumer classifier (scripts/ci/changed-class.sh):
 # each of these gates is one make target whose inputs are known exactly, so
@@ -25,7 +25,7 @@ every_gate='^Makefile$|^\.mise\.toml$|^\.github/workflows/self-(ci|checks|unit)\
 code_globs="$every_gate"'|^scripts/.*\.sh$|^\.shellcheckrc$|^\.github/workflows/|^\.github/actionlint\.yaml$'
 # The files scripts/self/check-versions.sh compares, and the tool-versions check.
 tooling_globs="$every_gate"'|^scripts/lib/versions\.sh$|^scripts/self/check-versions\.sh$|^packages/dev-config/versions\.json$|^packages/dev-config/bin/check-tool-versions\.mjs$|^\.github/workflows/(check-e2e|build-android)\.yml$|^\.github/actions/maestro/'
-package_globs="$every_gate"'|^packages/dev-config/'
+package_globs="$every_gate"'|^packages/'
 
 run_every_gate() {
   gh_output code true

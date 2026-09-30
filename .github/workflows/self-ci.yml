@@ -26,8 +26,8 @@ concurrency:
 # A tag here would test the last release on every pull request.
 jobs:
   # Which of the narrow gates this change can affect: Code (shellcheck,
-  # actionlint), Tooling (the version checks) and Package (the dev-config
-  # suite). The rest - Tests, Security, Docs, Commits - read the whole tree or
+  # actionlint), Tooling (the version checks) and Package (the suites of the
+  # packages under packages/). The rest - Tests, Security, Docs, Commits - read the whole tree or
   # the whole history and run on every change. A skipped job counts as passing,
   # which is why this is a job and not a `paths` filter on the trigger.
   #

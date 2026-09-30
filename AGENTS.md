@@ -2,9 +2,10 @@
 
 The shared engineering baseline, in two halves. Reusable GitHub Actions
 workflows, composite actions and bash scripts for building, testing and
-releasing React Native (Expo) apps; and `packages/dev-config`, published as
-`@blinkbitcoin/dev-config`, which is the developer tooling a repo installs and
-is not React Native specific. Consumers pin `@v0` and call the workflows;
+releasing React Native (Expo) apps; and the packages a repo installs:
+`packages/dev-config`, published as `@blinkbitcoin/dev-config`, the developer
+tooling that is not React Native specific, and `packages/expo-tooling`
+(`@blinkbitcoin/expo-tooling`), the home of the presets an Expo app extends. Consumers pin `@v0` and call the workflows;
 nothing here is copied into their repos. The published
 contract is [`docs/consumer-guide.md`](docs/consumer-guide.md) — a change to an
 input, output, secret or env var is a change to every app that pins this repo.
@@ -32,6 +33,7 @@ scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
+packages/           dev-config (tooling any repo installs), expo-tooling (the Expo presets)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
                     forensics, runners
 ```
@@ -48,7 +50,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make lint-workflows` | Lint the workflows and composite actions (actionlint) |
 | `make workflow-security` | Security audit of the workflows and actions (zizmor, offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
 | `make test` | The bats suite over the pure scripts |
-| `make test-package` | `node:test` over `packages/dev-config` |
+| `make test-package` | `node:test` over every package under `packages/`, 100% lines, branches and functions |
 | `make test-script-modules` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
 | `make check-versions` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
 | `make tool-versions` | Fail when an installed tool is not the version `packages/dev-config/versions.json` pins |
@@ -95,8 +97,8 @@ Every row is a make target; nothing here is run through a package manager.
   script gets its own test file with a case for each exit path (the rule
   below), every workflow
   rule gets a `test/workflow-shape.bats` or `test/consumer-contract.bats`
-  assertion, and `packages/dev-config` is gated by `make test-package` at
-  100% lines, branches and functions. A threshold is never lowered and no file
+  assertion, and every package under `packages/` is gated by
+  `make test-package` at 100% lines, branches and functions. A threshold is never lowered and no file
   is excluded from coverage to make a PR pass; if something truly cannot be
   tested, the PR says what and why.
 - **Shell lives in `scripts/`, never inline in a workflow.** A `run:` block of
@@ -181,10 +183,11 @@ Every row is a make target; nothing here is run through a package manager.
   commit. The green one is the signal. The red one goes away only when the PR
   is opened by the RELEASE_TAGGER App (the guarded step in `pr-release.yml`;
   needs the App's two secrets on this repo).
-  There are two release PRs, one per package (`separate-pull-requests`),
-  and both bump `.release-please-manifest.json`. `always-update` in
+  There are three release PRs, one per component - the workflows,
+  `dev-config` and `expo-tooling` (`separate-pull-requests`) - and each bumps
+  `.release-please-manifest.json`. `always-update` in
   `release-please-config.json` rebuilds every open one on each push to
-  `main`, so merging one never leaves the other conflicting. Each rebuild is a
+  `main`, so merging one never leaves the others conflicting. Each rebuild is a
   force push, which dismisses an approval: approve a release PR right
   before merging it.
 
@@ -210,7 +213,7 @@ Every row is a make target; nothing here is run through a package manager.
     rel->>rel: release-notes job runs pr-release-notes.yml against the template, dry run, from that commit
     rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after that dry run passed
     rel->>tags: publish-dev-config job publishes the npm package, when paths-released names it
-    rel->>pr: the other package's open release PR is rebuilt on the new main, manifest included
+    rel->>pr: the other components' open release PRs are rebuilt on the new main, manifest included
   ```
 
 - **No vague abbreviations, anywhere a human reads.** Write the word:

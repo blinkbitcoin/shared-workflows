@@ -1,7 +1,7 @@
 name: Self unit
 # The two test suites, split so a run says which one failed: the bats cases
-# over the shell scripts and the workflow shapes, and node:test over
-# packages/dev-config. Called from self-ci.yml, which turns these into
+# over the shell scripts and the workflow shapes, and node:test over every
+# package under packages/. Called from self-ci.yml, which turns these into
 # `Unit / Tests` and `Unit / Package`.
 #
 # Kept apart from self-checks.yml because they answer different questions - "is
@@ -14,7 +14,7 @@ on:
     # the bats suite reads the whole tree and runs on every change.
     inputs:
       package:
-        description: Run the packages/dev-config suite
+        description: Run the suites of the packages under packages/
         type: boolean
         default: true
 permissions: { contents: read }

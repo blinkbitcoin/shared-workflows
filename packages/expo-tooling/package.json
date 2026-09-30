@@ -1,0 +1,21 @@
+{
+  "name": "@blinkbitcoin/expo-tooling",
+  "version": "0.1.0",
+  "description": "The shared Expo and React Native tooling presets: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blinkbitcoin/shared-workflows.git",
+    "directory": "packages/expo-tooling"
+  },
+  "files": [
+    "README.md"
+  ],
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}
