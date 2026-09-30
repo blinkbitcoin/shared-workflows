@@ -20,7 +20,7 @@ cd "$root"
 runner="scripts/security/$job.sh"
 [ -f "$runner" ] || die_fix \
   "the $job scanner is switched on, but this repository has no $runner" \
-  "add $runner, or set \"jobs\": { \"$job\": { \"enabled\": false } } in security-policy.json, or pass $job: false to check-security.yml" \
+  "add $runner, or set \"jobs\": { \"$job\": { \"enabled\": false } } in security-settings.json, or pass $job: false to check-security.yml" \
   "check-securityyml"
 
 out="${SECURITY_DIR:-.security}"

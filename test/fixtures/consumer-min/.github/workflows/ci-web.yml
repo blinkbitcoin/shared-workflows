@@ -26,5 +26,5 @@ jobs:
       # first falsy operand and `||` the first truthy one, so
       # `cond && '' || '--dev'` evaluates to '--dev' on BOTH branches (the empty
       # string is falsy) and would quietly deploy a dev bundle.
-      export-args: ${{ github.event_name != 'release' && '--dev' || '' }}
+      build-arguments: ${{ github.event_name != 'release' && '--dev' || '' }}
       deploy: ${{ github.event_name == 'release' }}

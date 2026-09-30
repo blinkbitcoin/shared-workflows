@@ -8,7 +8,7 @@
 WORKFLOWS_OUT="${WORKFLOWS_OUT:-${RUNNER_TEMP:-/tmp}/workflows}"
 # Fastlane reads this to decide where to drop the .ipa/.aab it builds.
 WORKFLOWS_OUTPUT_DIR="${WORKFLOWS_OUTPUT_DIR:-$WORKFLOWS_OUT}"
-WORKFLOWS_RELEASE_META_DIR="${WORKFLOWS_RELEASE_META_DIR:-$WORKFLOWS_OUT/release-meta}"
+WORKFLOWS_RELEASE_META_DIR="${WORKFLOWS_RELEASE_META_DIR:-$WORKFLOWS_OUT/build-info}"
 WORKFLOWS_OTA_DIR="${WORKFLOWS_OTA_DIR:-$WORKFLOWS_OUT/ota}"
 # Where the artifacts a release job downloads are staged for release-assets.sh.
 WORKFLOWS_ASSETS_DIR="${WORKFLOWS_ASSETS_DIR:-$WORKFLOWS_OUT/assets}"

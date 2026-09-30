@@ -2,7 +2,7 @@
 # Publishes the branch's rendered badges to gh-pages/badges/<branch>/.
 #
 # The render step (gen-badges.sh: the package's gen-badges, or the
-# consumer script publish-badges.yml's `render-script` names) has already
+# consumer script publish-badges.yml's `badges-script` names) has already
 # written coverage/badge/{unit,e2e,coverage,security}.svg and their .json
 # siblings; this only moves them onto the branch GitHub serves through
 # raw.githubusercontent.com. A badge the renderer chose not to write - a
@@ -12,7 +12,7 @@
 # security-verdict), so a run without one leaves the published badge.
 #
 # A *skipped* suite leaves its published status badge alone too. The caller
-# skips a suite its change cannot affect (check-code.yml's unit-changed and
+# skips a suite its change cannot affect (check.yml's unit-changed and
 # e2e-changed), and a renderer handed `skipped` draws a grey "skipped"
 # badge - publishing that would overwrite the branch's last real answer with
 # "this run did not look". So unit.* and e2e.* are dropped here when their

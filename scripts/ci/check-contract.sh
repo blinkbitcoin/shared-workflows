@@ -2,7 +2,7 @@
 # Report every unmet requirement of this workflow family in the consumer, in one
 # place, before the gates that would each die on their own.
 #
-# A thin wrapper, like every other step's script: check-code.yml wires the inputs and
+# A thin wrapper, like every other step's script: check.yml wires the inputs and
 # this resolves the consumer root and calls the checker.
 #
 # The checker lives in packages/app-tooling rather than here because a consumer
@@ -15,7 +15,7 @@ source "$(dirname "$0")/../lib/common.sh"
 require_cmd node
 
 checker="$(cd "$(dirname "$0")/../.." && pwd)/packages/app-tooling/bin/check-contract.mjs"
-[ -f "$checker" ] || die "contract-check.sh: no checker at $checker"
+[ -f "$checker" ] || die "check-contract.sh: no checker at $checker"
 
 # Two steps, not `cd "$(consumer_root)"`: a command substitution used as an
 # argument does not propagate its exit status, and `cd ""` is a successful

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run .github/workflows/self-act-smoke.yml on this machine with nektos/act:
+# Run .github/workflows/self-smoke-local.yml on this machine with nektos/act:
 # the Linux half of a consumer's internal release (Prepare, and with --android
 # the Android build) against the workflows in this checkout. See the comment
 # at the top of that workflow for what act can and cannot show.
@@ -24,7 +24,7 @@ for arg in "$@"; do
   esac
 done
 
-workflow=.github/workflows/self-act-smoke.yml
+workflow=.github/workflows/self-smoke-local.yml
 [ -f "$workflow" ] || die "run from the repository root: $workflow not found in $PWD"
 
 docker info >/dev/null 2>&1 || die "docker is not running - act needs a Docker daemon"
@@ -77,7 +77,7 @@ download_v4="$(substitute download-artifact v4.3.0)"
 
 # act's artifact server listens on, and hands the job, one address: by default
 # the host's default-route address. Behind a VPN that is the tunnel's own
-# address, which nothing reaches - the release-meta upload timed out five times
+# address, which nothing reaches - the build-info upload timed out five times
 # against 10.2.0.2 on a Mac with a VPN up, after every step before it had
 # passed. The job runs on the host network (act's default), where loopback is
 # the host's own on Linux and forwarded to the Mac's under OrbStack, so the

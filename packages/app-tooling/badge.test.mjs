@@ -22,7 +22,7 @@ const summaryWith = (covered, total) => ({
   total: { lines: { covered, total, skipped: 0, pct: (covered / total) * 100 } },
 });
 
-// publish-badges.yml's `badge-dir` default and check-unit.yml's coverage
+// publish-badges.yml's `badge-directory` default and test-unit.yml's coverage
 // artifact layout both assume these two paths; moving one strands the other.
 test('the default paths are the ones publish-badges.yml assumes', () => {
   assert.equal(BADGE_DIR, 'coverage/badge');

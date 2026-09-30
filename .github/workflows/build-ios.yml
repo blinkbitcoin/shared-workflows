@@ -30,7 +30,7 @@ on:
         description: Extra space-separated consumer-relative shell globs whose file contents are folded into the native dependency hash
         type: string
         default: ''
-      xcode:
+      xcode-version:
         description: Xcode version to build with (empty uses the runner default); sets DEVELOPER_DIR and is folded into the Pods cache key
         type: string
         default: ''
@@ -62,11 +62,11 @@ on:
         description: Application id passed to the lanes as ANDROID_PACKAGE. Required even on the iOS build - the consumer's Fastfile asserts all five contract variables in `before_all`, for every lane on both platforms
         type: string
         required: true
-      ios-signing:
+      ios-signing-enabled:
         description: >-
           Sign the build and export an .ipa. Off produces an unsigned archive
           instead, which still compiles, still runs the verify gate and needs no
-          Apple account at all - the tier a repository sits in before its
+          Apple account at all - the state a repository is in before its
           certificates exist. Off also produces no .ipa, so nothing can be
           uploaded to a store.
         type: boolean
@@ -75,10 +75,10 @@ on:
         description: Run the `ios verify` lane after `ios build`
         type: boolean
         default: true
-      release-meta-artifact:
+      build-info-artifact:
         description: Artifact produced by build-prepare that carries build-info.json and the store notes
         type: string
-        default: 'release-meta'
+        default: 'build-info'
       ipa-artifact:
         description: Artifact name for the signed .ipa
         type: string
@@ -87,7 +87,7 @@ on:
         description: Artifact name for the dSYM bundle
         type: string
         default: 'ios-dsym'
-      build-env:
+      environment-variables:
         description: 'Flat JSON object of non-secret build environment variables published before prebuild, the lanes and the scripts (e.g. {"OTA_ENABLED":"true","EXPO_UPDATES_URL":"https://..."}). Keys must be UPPER_SNAKE and anything that reads as a credential is refused - this is a workflow input, so GitHub neither masks nor hides it'
         type: string
         default: '{}'
@@ -123,7 +123,7 @@ jobs:
     environment: ${{ inputs.environment }}
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
-      WORKFLOWS_XCODE: ${{ inputs.xcode }}
+      WORKFLOWS_XCODE: ${{ inputs.xcode-version }}
       WORKFLOWS_STAGE: ${{ inputs.stage }}
       APP_VERSION: ${{ inputs.version }}
       APP_BUILD_NUMBER: ${{ inputs.build-number }}
@@ -136,7 +136,7 @@ jobs:
       # The non-empty value sits in the `&&` slot on purpose: GitHub's `&&`
       # yields its first falsy operand, so `cond && '' || X` would return X on
       # both branches and pin every build to one Xcode.
-      DEVELOPER_DIR: ${{ inputs.xcode && format('/Applications/Xcode_{0}.app/Contents/Developer', inputs.xcode) || '' }}
+      DEVELOPER_DIR: ${{ inputs.xcode-version && format('/Applications/Xcode_{0}.app/Contents/Developer', inputs.xcode-version) || '' }}
     steps:
       - name: Checkout consumer
         uses: actions/checkout@v7
@@ -168,21 +168,21 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           native-cache-version: ${{ inputs.native-cache-version }}
           native-extra-globs: ${{ inputs.native-extra-globs }}
-          xcode: ${{ inputs.xcode }}
+          xcode-version: ${{ inputs.xcode-version }}
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          # Ruby unconditionally here (unlike check-e2e.yml, which installs it only on
+          # Ruby unconditionally here (unlike test-e2e.yml, which installs it only on
           # a cache miss): fastlane is the whole point of this job.
-          ruby: 'true'
+          ruby-enabled: 'true'
       - name: Decode secrets
         env:
           ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
         run: bash "$WORKFLOWS_DIR/scripts/release/decode-secrets.sh"
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash "$WORKFLOWS_DIR/scripts/release/build-env.sh"
       - name: Prebuild (ios)
         run: bash "$WORKFLOWS_DIR/scripts/native/prebuild.sh" ios
@@ -197,10 +197,10 @@ jobs:
             pods-${{ runner.os }}-
       - name: Pod install
         run: bash "$WORKFLOWS_DIR/scripts/native/pods.sh"
-      - name: Download release-meta
+      - name: Download build-info
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.release-meta-artifact }}
+          name: ${{ inputs.build-info-artifact }}
           path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
       - name: Fastlane ios build
         env:
@@ -219,7 +219,7 @@ jobs:
           # Non-empty value in the `&&` slot: GitHub's `&&` yields its first
           # falsy operand, so `cond && '' || X` would be X on both branches.
           # fastlane.sh appends $LANE_ARGS to the lane arguments.
-          LANE_ARGS: ${{ !inputs.ios-signing && 'skip_signing:true' || '' }}
+          LANE_ARGS: ${{ !inputs.ios-signing-enabled && 'skip_signing:true' || '' }}
         run: bash "$WORKFLOWS_DIR/scripts/release/fastlane.sh" ios build
       - name: Fastlane ios verify
         if: ${{ inputs.verify }}
@@ -236,17 +236,17 @@ jobs:
           # Non-empty value in the `&&` slot: GitHub's `&&` yields its first
           # falsy operand, so `cond && '' || X` would be X on both branches.
           # fastlane.sh appends $LANE_ARGS to the lane arguments.
-          LANE_ARGS: ${{ !inputs.ios-signing && 'skip_signing:true' || '' }}
+          LANE_ARGS: ${{ !inputs.ios-signing-enabled && 'skip_signing:true' || '' }}
         run: bash "$WORKFLOWS_DIR/scripts/release/fastlane.sh" ios verify
       - name: Upload ios-ipa
         # `!cancelled()`, like the Android apk and mapping uploads: a failed
         # `verify` is exactly when a human needs the .ipa to reproduce it, and
         # without this the artifact dies with the runner.
         #
-        # Gated on ios-signing as well: an unsigned build packages no .ipa, and
+        # Gated on ios-signing-enabled as well: an unsigned build packages no .ipa, and
         # this step's `if-no-files-found: error` would turn that into a red step
         # on a run that did exactly what it was asked to.
-        if: ${{ !cancelled() && inputs.ios-signing }}
+        if: ${{ !cancelled() && inputs.ios-signing-enabled }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.ipa-artifact }}

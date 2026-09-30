@@ -40,7 +40,7 @@ test('a nested group is conservatively a violation', () => {
   ]);
 });
 
-test("the organisation's default holds the licences the template accepted", () => {
+test("the organisation's default holds the licenses the template accepted", () => {
   assert.deepEqual(DEFAULT_ALLOWED, [
     'MIT',
     'Apache-2.0',
@@ -57,7 +57,7 @@ test("the organisation's default holds the licences the template accepted", () =
   ]);
 });
 
-test('a wider allowlist lets a licence through that the default refuses', () => {
+test('a wider allowlist lets a license through that the default refuses', () => {
   assert.equal(licenseAllowed('LGPL-3.0-only'), false);
   assert.equal(licenseAllowed('LGPL-3.0-only', [...DEFAULT_ALLOWED, 'LGPL-3.0-only']), true);
 });
@@ -74,7 +74,7 @@ test('parseArgs takes each --allow and --root, and refuses anything else', () =>
   assert.throws(() => parseArgs(['--nope', 'x'], '/w'), /unexpected --nope x/);
 });
 
-/** Captures what `main` writes, and answers the licence listing with `report`. */
+/** Captures what `main` writes, and answers the license listing with `report`. */
 const run = (report, argv = []) => {
   const out = [];
   const err = [];
@@ -91,7 +91,7 @@ const run = (report, argv = []) => {
   return { code, out, err, roots };
 };
 
-test('main asks for the production licences in the root and passes an allowed set', () => {
+test('main asks for the production licenses in the root and passes an allowed set', () => {
   const { code, out, err, roots } = run({ MIT: [{ name: 'a' }, { name: 'b' }], ISC: [{ name: 'c' }] });
   assert.equal(code, 0);
   assert.deepEqual(roots, ['/repo']);
@@ -99,18 +99,18 @@ test('main asks for the production licences in the root and passes an allowed se
   assert.deepEqual(err, []);
 });
 
-test('main names every disallowed package and fails, saying where an accepted licence goes', () => {
+test('main names every disallowed package and fails, saying where an accepted license goes', () => {
   const { code, out, err } = run({ 'GPL-3.0': [{ name: 'b' }, { name: 'c' }] });
   assert.equal(code, 1);
   assert.deepEqual(out, []);
   assert.deepEqual(err, [
     'disallowed license GPL-3.0: b',
     'disallowed license GPL-3.0: c',
-    'licenses: 2 package(s) outside the allowlist; a licence this repository accepts goes in an --allow',
+    'licenses: 2 package(s) outside the allowlist; a license this repository accepts goes in an --allow',
   ]);
 });
 
-test('an --allow passes a licence the default refuses', () => {
+test('an --allow passes a license the default refuses', () => {
   assert.equal(run({ 'LGPL-3.0-only': [{ name: 'a' }] }, ['--allow', 'LGPL-3.0-only']).code, 0);
 });
 

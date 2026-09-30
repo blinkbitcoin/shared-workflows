@@ -20,7 +20,7 @@ reverses it.
 There is no `package.json` and nothing to `npm install`: every tool comes from
 `.mise.toml`, and the hooks call them through `mise exec --` so a hook and CI
 run the same pinned binary. The one exception is commitlint, which npx fetches
-on demand with the same invocation `scripts/checks/commitlint.sh` uses in CI.
+on demand with the same invocation `scripts/checks/commits.sh` uses in CI.
 
 ## Branching
 
@@ -82,14 +82,14 @@ each of its exit paths:
 
 | Script | Its test |
 | --- | --- |
-| `scripts/ci/lint-ci.sh` | `test/lint-ci.bats` |
+| `scripts/ci/check-ci.sh` | `test/check-ci.bats` |
 | `scripts/ota/export.sh` | `test/ota-export.bats` (`scripts/web/export.sh` already has `test/export.bats`) |
 | `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-scripts`, 100% gate) |
 | `packages/app-tooling/bin/check-tool-versions.mjs` | `packages/app-tooling/check-tool-versions.test.mjs` |
 | `packages/app-tooling/lib/pin.mjs` | `packages/app-tooling/pin.test.mjs` |
 | `packages/app-tooling/expo/eslint.mjs` (an Expo preset) | `packages/app-tooling/eslint.test.mjs` |
 | `packages/app-tooling/expo/jest/mocks/expo-updates.cjs` | `packages/app-tooling/expo-updates.test.mjs` |
-| `packages/app-tooling/checks/i18n.sh` (a copy) | the original's `test/i18n.bats`, plus `test/package-copies.bats` |
+| `packages/app-tooling/checks/generated.sh` (a copy) | the original's `test/generated.bats`, plus `test/package-copies.bats` |
 
 A case in a shared suite such as `plumbing.bats` or `fallback-gates.bats` is
 fine on top, but it is never the script's own test: when the suite changes,
@@ -154,7 +154,7 @@ guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
 This repository never checks out a consumer to check it against a rule, in
 CI or in a test. (The store notes dry run in `self-store-notes.yml` checks the
 template out to execute this repository's `pr-store-notes.yml`, not to judge
-the template.) The direction is the other way round: each consumer's `check-code.yml` run starts with a
+the template.) The direction is the other way round: each consumer's `check.yml` run starts with a
 `Contract` job, which reads [`packages/app-tooling/contract.json`](packages/app-tooling/contract.json)
 from the exact version of this repository that consumer calls and checks the
 consumer against it. A consumer that has drifted fails **its own** PR, and a
@@ -204,7 +204,7 @@ The jobs are Linux containers, so a Mac runs them too (arm64 natively; tested
 with OrbStack). act's artifact server listens on `127.0.0.1`, which the job
 reaches over the host network act gives it. act would otherwise pick the host's
 default-route address, and behind a VPN that is the tunnel's own address: the
-`release-meta` upload then times out after every step before it has passed.
+`build-info` upload then times out after every step before it has passed.
 A Docker that cannot reach the host's loopback from a host-network container
 takes another address through `WORKFLOWS_ACT_ARTIFACT_ADDR`.
 
@@ -228,7 +228,7 @@ job" log on GitHub before merging.
   the fixtures under `test/fixtures/consumer-min/` updated in the same commit.
   `test/consumer-contract.bats` keeps the guide's examples and the fixtures
   byte-identical.
-- **A new gate** - a step in `check-code.yml` or `check-unit.yml` that runs a consumer
+- **A new gate** - a step in `check.yml` or `test-unit.yml` that runs a consumer
   script - needs its requirement in `contract.json`, gated on the step's input;
   `test/consumer-contract.bats` fails until it has one. From the next release,
   every consumer's `Contract` job then requires `make ci` to reach it, and fails

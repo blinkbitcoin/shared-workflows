@@ -6,10 +6,10 @@ command -v yq >/dev/null 2>&1 || { echo "::error::check-version-pins.sh needs yq
 fail=0
 # Anchored to the input, not to "some input in this file defaults to 34":
 # yq reads the declared default rather than any line that happens to match.
-api_level=$(yq -r '.on.workflow_call.inputs."android-api-level".default' .github/workflows/check-e2e.yml)
-[ "$api_level" = "$ANDROID_API_LEVEL" ] || { echo "::error::check-e2e.yml android-api-level default ($api_level) != $ANDROID_API_LEVEL"; fail=1; }
-maestro_input=$(yq -r '.on.workflow_call.inputs."maestro-version".default' .github/workflows/check-e2e.yml)
-[ "$maestro_input" = "$MAESTRO_VERSION" ] || { echo "::error::check-e2e.yml maestro-version default ($maestro_input) != $MAESTRO_VERSION"; fail=1; }
+api_level=$(yq -r '.on.workflow_call.inputs."android-api-level".default' .github/workflows/test-e2e.yml)
+[ "$api_level" = "$ANDROID_API_LEVEL" ] || { echo "::error::test-e2e.yml android-api-level default ($api_level) != $ANDROID_API_LEVEL"; fail=1; }
+maestro_input=$(yq -r '.on.workflow_call.inputs."maestro-version".default' .github/workflows/test-e2e.yml)
+[ "$maestro_input" = "$MAESTRO_VERSION" ] || { echo "::error::test-e2e.yml maestro-version default ($maestro_input) != $MAESTRO_VERSION"; fail=1; }
 grep -q "default: '$MAESTRO_VERSION'" .github/actions/maestro/action.yml || { echo "::error::maestro action default != $MAESTRO_VERSION"; fail=1; }
 bundletool_input=$(yq -r '.on.workflow_call.inputs."bundletool-version".default' .github/workflows/build-android.yml)
 [ "$bundletool_input" = "$BUNDLETOOL_VERSION" ] || { echo "::error::build-android.yml bundletool-version default ($bundletool_input) != $BUNDLETOOL_VERSION"; fail=1; }

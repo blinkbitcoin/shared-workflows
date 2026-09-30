@@ -1,4 +1,4 @@
-name: PR Closed
+name: PR closed
 on:
   workflow_call: {}
   # The caller triggers this on `pull_request: [closed]` and grants
@@ -20,7 +20,7 @@ jobs:
       # consumer out for. The shared-workflows checkout below is still
       # required by the shape rule that every job with a `run:` step checks
       # out .workflows. Setup never runs here (no $WORKFLOWS_DIR), so the script is reached
-      # through the plain .workflows/ checkout path, the same way check-code.yml's
+      # through the plain .workflows/ checkout path, the same way check.yml's
       # `changes` job reaches changed-class.sh.
       - name: Checkout shared-workflows
         uses: actions/checkout@v7

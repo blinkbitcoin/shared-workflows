@@ -61,7 +61,7 @@ on:
         description: Xcode scheme passed to the lanes as IOS_SCHEME. Required for the same reason as `ios-bundle-id`
         type: string
         required: true
-      android-signing:
+      android-signing-enabled:
         description: >-
           Sign with the upload keystore. Off lets the release build fall back to
           the debug keystore (the consumer's signing config plugin does this and
@@ -78,10 +78,10 @@ on:
         description: Run the `android verify` lane after `android build`
         type: boolean
         default: true
-      release-meta-artifact:
+      build-info-artifact:
         description: Artifact produced by build-prepare that carries build-info.json and the store notes
         type: string
-        default: 'release-meta'
+        default: 'build-info'
       aab-artifact:
         description: Artifact name for the signed .aab
         type: string
@@ -106,7 +106,7 @@ on:
         description: Expected sha256 of the bundletool jar; empty skips verification (Google publishes no checksum file, so this is opt-in)
         type: string
         default: ''
-      build-env:
+      environment-variables:
         description: 'Flat JSON object of non-secret build environment variables published before prebuild, the lanes and the scripts (e.g. {"OTA_ENABLED":"true","EXPO_UPDATES_URL":"https://..."}). Keys must be UPPER_SNAKE and anything that reads as a credential is refused - this is a workflow input, so GitHub neither masks nor hides it'
         type: string
         default: '{}'
@@ -179,7 +179,7 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           # fastlane's android lanes are Ruby, same as the iOS ones.
-          ruby: 'true'
+          ruby-enabled: 'true'
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
@@ -192,9 +192,9 @@ jobs:
           ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: bash "$WORKFLOWS_DIR/scripts/release/decode-secrets.sh"
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash "$WORKFLOWS_DIR/scripts/release/build-env.sh"
       - name: Prebuild (android)
         run: bash "$WORKFLOWS_DIR/scripts/native/prebuild.sh" android
@@ -207,10 +207,10 @@ jobs:
           BUNDLETOOL_VERSION: ${{ inputs.bundletool-version }}
           BUNDLETOOL_SHA256: ${{ inputs.bundletool-sha256 }}
         run: bash "$WORKFLOWS_DIR/scripts/ci/bundletool-install.sh"
-      - name: Download release-meta
+      - name: Download build-info
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.release-meta-artifact }}
+          name: ${{ inputs.build-info-artifact }}
           path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
       - name: Fastlane android build
         env:
@@ -228,7 +228,7 @@ jobs:
           # Non-empty value in the `&&` slot: GitHub's `&&` yields its first
           # falsy operand, so `cond && '' || X` would be X on both branches.
           # fastlane.sh appends $LANE_ARGS to the lane arguments.
-          LANE_ARGS: ${{ !inputs.android-signing && 'skip_signing:true' || '' }}
+          LANE_ARGS: ${{ !inputs.android-signing-enabled && 'skip_signing:true' || '' }}
         run: bash "$WORKFLOWS_DIR/scripts/release/fastlane.sh" android build
       # Between build and verify: the digests describe what the lane just
       # produced, and verify is the step that checks the apk it is about to
@@ -239,19 +239,19 @@ jobs:
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
         run: bash "$WORKFLOWS_DIR/scripts/release/artifact-hashes.sh"
-      # ANDROID_UPLOAD_CERT_SHA256 comes from build-env; the lane forwards it to
+      # ANDROID_UPLOAD_CERT_SHA256 comes from environment-variables; the lane forwards it to
       # the consumer's verify-android.sh as --cert-sha256, which is what turns
       # "the aab is signed" into "the aab is signed by the expected key".
       - name: Fastlane android verify
         if: ${{ inputs.verify }}
         env:
-          # The enriched copy, not release-meta's: it carries
+          # The enriched copy, not build-info's: it carries
           # artifacts.apkSha256, which is what the consumer's verify-android
           # compares the universal apk against.
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_OUTPUT_DIR }}/build-info.json
           STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
           STORE_NOTES_JSON: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.json
-          # Published by build-env; forwarded explicitly so the contract is
+          # Published by environment-variables; forwarded explicitly so the contract is
           # visible at the step that depends on it. Empty means "signature
           # present" only; set it to assert the signing key's fingerprint.
           ANDROID_UPLOAD_CERT_SHA256: ${{ env.ANDROID_UPLOAD_CERT_SHA256 }}
@@ -263,7 +263,7 @@ jobs:
           # Non-empty value in the `&&` slot: GitHub's `&&` yields its first
           # falsy operand, so `cond && '' || X` would be X on both branches.
           # fastlane.sh appends $LANE_ARGS to the lane arguments.
-          LANE_ARGS: ${{ !inputs.android-signing && 'skip_signing:true' || '' }}
+          LANE_ARGS: ${{ !inputs.android-signing-enabled && 'skip_signing:true' || '' }}
         run: bash "$WORKFLOWS_DIR/scripts/release/fastlane.sh" android verify
       - name: Upload android-aab
         uses: actions/upload-artifact@v7

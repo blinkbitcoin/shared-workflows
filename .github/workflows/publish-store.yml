@@ -2,7 +2,7 @@
 # "<caller job> / <this job>", e.g. "Upload iOS / Store", and should not need
 # to know fastlane's word for a named task to read it. The file keeps its name
 # because consumers pin it by path.
-name: Store
+name: Publish store
 on:
   workflow_call:
     inputs:
@@ -19,11 +19,11 @@ on:
         type: string
         default: '.'
       linux-runner:
-        description: Runner label for Linux jobs (unused directly; `runner` selects the runner for the lane job)
+        description: Runner label for the lane job, unless macos-enabled is true
         type: string
         default: 'ubuntu-latest'
       macos-runner:
-        description: Runner label for macOS jobs (unused directly; `runner` selects the runner for the lane job)
+        description: Runner label for the lane job when macos-enabled is true
         type: string
         default: 'macos-26'
       native-cache-version:
@@ -38,7 +38,7 @@ on:
         description: 'Lane name: ios build|verify|upload_internal|promote_beta|release_production|phased|upload_symbols, android build|verify|upload_internal|promote_beta|release_production|rollout|halt'
         type: string
         required: true
-      lane-args:
+      lane-arguments:
         description: Space-separated fastlane key:value arguments appended to the lane invocation (e.g. 'percentage:0.1')
         type: string
         default: ''
@@ -53,20 +53,23 @@ on:
           validating metadata paths, and stops short of only the store call
           itself. Same name and meaning as the template's cd-store-listing.yml
           `dry_run` dispatch input, which already forwards its own flag here
-          through `env-json`'s DRY_RUN key; this input is OR'd with that one
-          (see the Fastlane lane step) so neither can disarm the other.
+          through `environment-variables`' DRY_RUN key; this input is OR'd with
+          that one (see the Fastlane lane step) so neither can disarm the other.
         type: boolean
         default: false
-      runner:
-        description: Runner label for the lane job (an iOS lane that touches Xcode needs a macOS runner; a store-API-only lane does not)
-        type: string
-        default: 'ubuntu-latest'
+      macos-enabled:
+        description: Run the lane job on macos-runner rather than linux-runner (an iOS lane that touches Xcode needs macOS; a store-API-only lane does not)
+        type: boolean
+        default: false
       environment:
         description: GitHub Environment whose secrets/approvals gate this lane (empty means no environment)
         type: string
         default: ''
-      env-json:
-        description: Flat JSON object of extra environment variables published to the lane (configuration only - secrets belong in `secrets:`)
+      environment-variables:
+        description: >-
+          Non-secret environment for the lane, as a flat JSON object (configuration
+          only - secrets belong in `secrets:`). Keys may be lower-case here, because
+          they reach a fastlane lane whose own option names are. Keys only are logged.
         type: string
         default: '{}'
       artifacts:
@@ -74,7 +77,7 @@ on:
         type: string
         default: ''
       release-assets:
-        description: Glob pattern of assets to download from the `release-tag` release into the same directory as `artifacts` (empty downloads nothing) - for a lane whose binary is not in this run, like a store with no promote endpoint on a promotion tier
+        description: Glob pattern of assets to download from the `release-tag` release into the same directory as `artifacts` (empty downloads nothing) - for a lane whose binary is not in this run, like a store with no promote endpoint on a promotion stage
         type: string
         default: ''
       release-tag:
@@ -101,7 +104,7 @@ on:
         description: Application id passed to the lane as ANDROID_PACKAGE. All five contract variables are required on every lane - the consumer's Fastfile asserts them in `before_all`, for both platforms, and rejects empty ones
         type: string
         required: true
-      ruby:
+      ruby-enabled:
         description: Install Ruby via ruby/setup-ruby (leave on unless the consumer has no Gemfile)
         type: boolean
         default: true
@@ -109,10 +112,6 @@ on:
         description: Job timeout; raise it for a lane that waits on App Store Connect processing
         type: number
         default: 45
-      build-env:
-        description: 'Flat JSON object of non-secret build environment variables published before prebuild, the lanes and the scripts (e.g. {"OTA_ENABLED":"true","EXPO_UPDATES_URL":"https://..."}). Keys must be UPPER_SNAKE and anything that reads as a credential is refused - this is a workflow input, so GitHub neither masks nor hides it'
-        type: string
-        default: '{}'
     secrets:
       consumer-token:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
@@ -151,7 +150,7 @@ on:
         description: Google Play service account JSON (raw)
         required: false
       # Huawei AppGallery Connect API client. Both halves are secrets: the
-      # client id is one half of the credential pair, and env-json is printed.
+      # client id is one half of the credential pair, and environment-variables is printed.
       HUAWEI_CLIENT_ID:
         description: AppGallery Connect API client id
         required: false
@@ -159,7 +158,7 @@ on:
         description: AppGallery Connect API client secret
         required: false
       # App Review contact and demo-account details. These are secrets, not
-      # `env-json` configuration: env-json values are printed to the log, and a
+      # `environment-variables` configuration: those values are printed to the log, and a
       # reviewer demo login is a real credential.
       APP_REVIEW_EMAIL:
         description: App Review contact email
@@ -190,7 +189,7 @@ jobs:
     # ("Upload iOS", "Promote Android", "Halt Android"); repeating the lane id
     # here only put fastlane vocabulary in front of the reader.
     name: Store
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ inputs.macos-enabled && inputs.macos-runner || inputs.linux-runner }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     environment: ${{ inputs.environment }}
     env:
@@ -228,7 +227,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
-          ruby: ${{ inputs.ruby }}
+          ruby-enabled: ${{ inputs.ruby-enabled }}
       - name: Download artifacts
         if: ${{ inputs.artifacts != '' }}
         uses: actions/download-artifact@v8
@@ -239,7 +238,7 @@ jobs:
           # which artifact carried it.
           merge-multiple: true
           path: ${{ env.WORKFLOWS_ASSETS_DIR }}
-      # A lane whose binary is not in this run: a promotion tier builds nothing,
+      # A lane whose binary is not in this run: a promotion stage builds nothing,
       # and download-artifact only sees the current run's artifacts. A store
       # with no promote endpoint re-uploads the bundle the release carries,
       # into the same directory, so the lane finds it the same way.
@@ -251,13 +250,9 @@ jobs:
           RELEASE_TAG: ${{ inputs.release-tag }}
           RELEASE_ASSETS: ${{ inputs.release-assets }}
         run: bash "$WORKFLOWS_DIR/scripts/release/release-assets-fetch.sh" "$RELEASE_TAG" "$RELEASE_ASSETS" "$WORKFLOWS_ASSETS_DIR"
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
-        run: bash "$WORKFLOWS_DIR/scripts/release/build-env.sh"
-      - name: Publish env-json
-        env:
-          WORKFLOWS_ENV_JSON: ${{ inputs.env-json }}
+          WORKFLOWS_ENV_JSON: ${{ inputs.environment-variables }}
         run: bash "$WORKFLOWS_DIR/scripts/release/env-json.sh"
       - name: Decode secrets
         env:
@@ -269,13 +264,13 @@ jobs:
         env:
           PLATFORM: ${{ inputs.platform }}
           LANE: ${{ inputs.lane }}
-          LANE_ARGS: ${{ inputs.lane-args }}
-          # OR'd with whatever env-json already put in $GITHUB_ENV, never
+          LANE_ARGS: ${{ inputs.lane-arguments }}
+          # OR'd with whatever environment-variables already put in $GITHUB_ENV, never
           # replacing it: a step's own `env:` wins over an inherited
           # $GITHUB_ENV value of the same name, so writing this input's value
           # alone would silently override - and could disarm - a caller like
           # the template's cd-store-listing.yml, which forwards its own
-          # dry_run dispatch input (default true) through env-json's DRY_RUN
+          # dry_run dispatch input (default true) through environment-variables' DRY_RUN
           # key rather than through this input.
           DRY_RUN: ${{ (inputs.dry-run || env.DRY_RUN == '1') && '1' || '0' }}
           # The lanes read their binaries out of WORKFLOWS_OUTPUT_DIR, but this

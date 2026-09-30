@@ -16,7 +16,7 @@ load test_helper
 # can make them disagree without touching the real ones.
 FILES="scripts/self/check-version-pins.sh
 scripts/lib/versions.sh
-.github/workflows/check-e2e.yml
+.github/workflows/test-e2e.yml
 .github/workflows/build-android.yml
 .github/actions/maestro/action.yml
 .mise.toml
@@ -83,21 +83,21 @@ errors() { grep -c '::error::' <<< "$output" || true; }
     fail "the missing yq is not explained: $output"
 }
 
-@test "a check-e2e.yml android-api-level default that disagrees fails the gate" {
+@test "a test-e2e.yml android-api-level default that disagrees fails the gate" {
   copy_tree
-  drift .github/workflows/check-e2e.yml "/android-api-level:/,/default:/ s/default: .*/default: 12/"
+  drift .github/workflows/test-e2e.yml "/android-api-level:/,/default:/ s/default: .*/default: 12/"
   run bash "$GATE"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::check-e2e.yml android-api-level default (12) != $ANDROID_API_LEVEL" || fail "$output"
+  contains "$output" "::error::test-e2e.yml android-api-level default (12) != $ANDROID_API_LEVEL" || fail "$output"
   [ "$(errors)" -eq 1 ] || fail "one drift must be one error: $output"
 }
 
-@test "a check-e2e.yml maestro-version default that disagrees fails the gate" {
+@test "a test-e2e.yml maestro-version default that disagrees fails the gate" {
   copy_tree
-  drift .github/workflows/check-e2e.yml "/maestro-version:/,/default:/ s/default: .*/default: '0.0.1'/"
+  drift .github/workflows/test-e2e.yml "/maestro-version:/,/default:/ s/default: .*/default: '0.0.1'/"
   run bash "$GATE"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::check-e2e.yml maestro-version default (0.0.1) != $MAESTRO_VERSION" || fail "$output"
+  contains "$output" "::error::test-e2e.yml maestro-version default (0.0.1) != $MAESTRO_VERSION" || fail "$output"
   [ "$(errors)" -eq 1 ] || fail "one drift must be one error: $output"
 }
 
@@ -167,7 +167,7 @@ errors() { grep -c '::error::' <<< "$output" || true; }
 
 @test "every disagreement is reported in one run, not only the first" {
   copy_tree
-  drift .github/workflows/check-e2e.yml "/android-api-level:/,/default:/ s/default: .*/default: 12/"
+  drift .github/workflows/test-e2e.yml "/android-api-level:/,/default:/ s/default: .*/default: 12/"
   drift packages/app-tooling/versions.json 's/"node": { "version": "[^"]*"/"node": { "version": "99"/'
   run bash "$GATE"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"

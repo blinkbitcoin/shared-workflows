@@ -1,6 +1,6 @@
 # Forensics
 
-What `check-e2e.yml` and `build-web.yml` upload when something goes wrong, and how to read
+What `test-e2e.yml` and `build-web.yml` upload when something goes wrong, and how to read
 it. Every forensics step runs with `if: always()`, so it uploads on both pass
 and fail (a green run's artifact is usually small and worth skimming anyway).
 
@@ -110,7 +110,7 @@ status of the step** — the retry replaces the first attempt's Maestro debug
 output on disk before `collect-forensics.sh` runs, so if the suite failed then
 passed on retry, the uploaded video/log are the retry's, not the failure's. If
 you need to see the first attempt's flake, re-run with
-`maestro-include-tags`/`exclude-tags` narrowed to the flaky flow, or watch the
+`include-tags`/`exclude-tags` narrowed to the flaky flow, or watch the
 job log directly — the `::group::` blocks for both attempts stay in the raw
 log even though the artifact only carries the final attempt's files.
 
@@ -131,7 +131,7 @@ log even though the artifact only carries the final attempt's files.
 
 ## build-web.yml (Playwright)
 
-`build-web.yml`'s `playwright` job forensics step uploads `playwright-report/` (Playwright's
+`build-web.yml`'s `e2e` job forensics step uploads `playwright-report/` (Playwright's
 own HTML report, traces and screenshots) as `playwright-report`; open
 `index.html` locally (`npx playwright show-report <dir>`) for the interactive
 trace viewer — it's more useful than the individual PNGs for a web failure.

@@ -7,13 +7,13 @@ inputs:
   native-cache-version:
     description: Cache key version prefix; bump to invalidate every native cache at once
     default: 'v1'
-  xcode:
+  xcode-version:
     description: Xcode version folded into the iOS cache key ("default" is used when empty)
     default: ''
   native-extra-globs:
     description: Extra glob patterns folded into the native dependency hash
     default: ''
-  build-env:
+  environment-variables:
     description: Build environment JSON folded into the iOS cache key; the .app embeds EXPO_PUBLIC_* at bundle time, so two values must not share an entry (empty leaves the key unchanged)
     default: ''
 outputs:
@@ -55,7 +55,7 @@ runs:
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
         NATIVE_CACHE_VERSION: ${{ inputs.native-cache-version }}
-        XCODE: ${{ inputs.xcode }}
+        XCODE: ${{ inputs.xcode-version }}
         NATIVE_EXTRA_GLOBS: ${{ inputs.native-extra-globs }}
-        BUILD_ENV: ${{ inputs.build-env }}
+        BUILD_ENV: ${{ inputs.environment-variables }}
       run: bash "${{ github.action_path }}/../../../scripts/ci/native-keys.sh"

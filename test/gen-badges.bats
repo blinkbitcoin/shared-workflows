@@ -3,7 +3,7 @@
 #
 # scripts/ci/gen-badges.sh, publish-badges.yml's render step: its own test.
 # By default it runs @blinkbitcoin/app-tooling's gen-badges from this
-# checkout, in the consumer root; a caller's `render-script` hands the render
+# checkout, in the consumer root; a caller's `badges-script` hands the render
 # to that consumer script through run-script.sh instead. The renderer's own
 # cases are in packages/app-tooling/gen-badges.test.mjs; these are the
 # wrapper's: which renderer, where it runs, and each way it fails.
@@ -54,7 +54,7 @@ SH
   [ ! -e "$BATS_TEST_TMPDIR/site" ] || fail "the badges landed in the step's own directory"
 }
 
-@test "a render-script hands the render to that consumer script instead" {
+@test "a badges-script hands the render to that consumer script instead" {
   RENDER_SCRIPT='badges:render' run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "rendering with the consumer's \"badges:render\" script" \
@@ -64,7 +64,7 @@ SH
   [ ! -e "$CONSUMER/coverage/badge" ] || fail "the package's renderer ran as well"
 }
 
-@test "a render-script the consumer does not ship fails with the fix" {
+@test "a badges-script the consumer does not ship fails with the fix" {
   RENDER_SCRIPT='badges:mine' run bash "$SCRIPT"
   [ "$status" -eq 1 ] || fail "exited $status for a missing script: $output"
   contains "$output" 'consumer package.json has no "badges:mine" script' || fail "output: $output"

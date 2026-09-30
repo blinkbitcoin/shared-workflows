@@ -56,8 +56,8 @@ SH
     run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   run cat "$GITHUB_OUTPUT"
-  contains "$output" "fp-ios=iosaaa111" || fail "$output"
-  contains "$output" "fp-android=andbbb222" || fail "$output"
+  contains "$output" "fingerprint-ios=iosaaa111" || fail "$output"
+  contains "$output" "fingerprint-android=andbbb222" || fail "$output"
   run cat "$GITHUB_ENV"
   contains "$output" "FINGERPRINT_IOS=iosaaa111" || fail "$output"
   contains "$output" "FINGERPRINT_ANDROID=andbbb222" || fail "$output"
@@ -70,8 +70,8 @@ SH
   WORKFLOWS_TEST_FP_IOS='{"hash":"iosaaa111"}' WORKFLOWS_TEST_FP_ANDROID='{"hash":"andbbb222"}' \
     bash "$SCRIPT"
   run cat "$GITHUB_OUTPUT"
-  not_contains "$output" "fp-ios=andbbb222" || fail "iOS got Android's hash: $output"
-  not_contains "$output" "fp-android=iosaaa111" || fail "Android got iOS's hash: $output"
+  not_contains "$output" "fingerprint-ios=andbbb222" || fail "iOS got Android's hash: $output"
+  not_contains "$output" "fingerprint-android=iosaaa111" || fail "Android got iOS's hash: $output"
 }
 
 @test "a bare-hash output from an older fingerprint CLI is still read" {
@@ -79,7 +79,7 @@ SH
   WORKFLOWS_TEST_FP_IOS='iosplain111' WORKFLOWS_TEST_FP_ANDROID='andplain222' run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   run cat "$GITHUB_OUTPUT"
-  contains "$output" "fp-ios=iosplain111" || fail "$output"
+  contains "$output" "fingerprint-ios=iosplain111" || fail "$output"
 }
 
 @test "an empty hash is fatal rather than an empty fingerprint" {
@@ -90,7 +90,7 @@ SH
     run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "an empty hash must not be published: $output"
   run cat "$GITHUB_OUTPUT"
-  not_contains "$output" "fp-ios=" || fail "it published an empty iOS fingerprint: $output"
+  not_contains "$output" "fingerprint-ios=" || fail "it published an empty iOS fingerprint: $output"
 }
 
 @test "a failing fingerprint CLI is fatal, and asks about the devDependency" {
@@ -113,8 +113,8 @@ SH
     run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   run cat "$GITHUB_OUTPUT"
-  contains "$output" "fp-ios=preios" || fail "$output"
-  contains "$output" "fp-android=preand" || fail "$output"
+  contains "$output" "fingerprint-ios=preios" || fail "$output"
+  contains "$output" "fingerprint-android=preand" || fail "$output"
 }
 
 @test "what this publishes is what the OTA gate reads" {

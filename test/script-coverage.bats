@@ -236,11 +236,11 @@ for s in ['scripts/ci/tool-version.sh', 'scripts/ci/free-disk.sh', 'scripts/lib/
 }
 
 @test "a package's copy of a script stands for its original, and a stray one is named" {
-  [ "$(copy_original packages/app-tooling/checks/i18n.sh)" = "scripts/checks/i18n.sh" ] || fail "the copy's original was not found"
+  [ "$(copy_original packages/app-tooling/checks/generated.sh)" = "scripts/checks/generated.sh" ] || fail "the copy's original was not found"
   [ "$(copy_original packages/app-tooling/zizmor.yml)" = "" ] || fail "a non-script was mapped"
-  all_scripts() { printf '%s\n' packages/app-tooling/checks/i18n.sh packages/app-tooling/checks/stray.sh; }
+  all_scripts() { printf '%s\n' packages/app-tooling/checks/generated.sh packages/app-tooling/checks/stray.sh; }
   local missing
-  missing="$(without_own_test "scripts/checks/i18n.sh	test/i18n.bats" | tr '\n' ' ')"
+  missing="$(without_own_test "scripts/checks/generated.sh	test/generated.bats" | tr '\n' ' ')"
   [ "$missing" = "packages/app-tooling/checks/stray.sh " ] || fail "expected only the stray copy: $missing"
 }
 

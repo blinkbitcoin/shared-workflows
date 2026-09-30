@@ -1,21 +1,21 @@
 #!/usr/bin/env bats
 load test_helper
 
-# self-act-smoke.yml is excluded from workflow-shape.bats with the other
+# self-smoke-local.yml is excluded from workflow-shape.bats with the other
 # self-* workflows, so its own invariants live here: it is act's entry point
 # into the release workflows and must never reach GitHub or create anything.
 
-WF="$REPO_ROOT/.github/workflows/self-act-smoke.yml"
+WF="$REPO_ROOT/.github/workflows/self-smoke-local.yml"
 SCRIPT="$REPO_ROOT/scripts/self/smoke-local.sh"
 
 @test "the smoke workflow is workflow_dispatch only, so GitHub never runs it" {
   [ "$(yq -r '.on | keys | join(",")' "$WF")" = "workflow_dispatch" ] \
-    || fail "self-act-smoke.yml has triggers other than workflow_dispatch: $(yq -r '.on | keys' "$WF")"
+    || fail "self-smoke-local.yml has triggers other than workflow_dispatch: $(yq -r '.on | keys' "$WF")"
 }
 
 @test "every job calls a workflow from this checkout, never @v0" {
   bad=$(yq -r '[.jobs[].uses | select(test("^\\./\\.github/workflows/") | not)] | join(", ")' "$WF")
-  [ -z "$bad" ] || fail "self-act-smoke.yml calls a workflow outside this checkout: $bad"
+  [ -z "$bad" ] || fail "self-smoke-local.yml calls a workflow outside this checkout: $bad"
 }
 
 @test "the smoke never reserves a tag and never waits on a green gate" {
@@ -28,12 +28,12 @@ SCRIPT="$REPO_ROOT/scripts/self/smoke-local.sh"
 @test "the Android build is opt-in and unsigned" {
   [ "$(yq -r '.jobs."build-android".if' "$WF")" = '${{ inputs.android }}' ] \
     || fail "build-android is not gated on inputs.android"
-  [ "$(yq -r '.jobs."build-android".with."android-signing"' "$WF")" = "false" ] \
+  [ "$(yq -r '.jobs."build-android".with."android-signing-enabled"' "$WF")" = "false" ] \
     || fail "build-android must run unsigned"
 }
 
 @test "no job sets a macOS runner: the smoke is the Linux half only" {
-  ! grep -qE 'macos' "$WF" || fail "self-act-smoke.yml mentions a macOS runner"
+  ! grep -qE 'macos' "$WF" || fail "self-smoke-local.yml mentions a macOS runner"
 }
 
 # --- the entry script -------------------------------------------------------
@@ -98,7 +98,7 @@ setup() {
   [ "$status" -eq 0 ] || fail "output: $output"
   args="$(cat "$BATS_TEST_TMPDIR/act.args")"
   contains "$args" "workflow_dispatch" || fail "args: $args"
-  contains "$args" ".github/workflows/self-act-smoke.yml" || fail "args: $args"
+  contains "$args" ".github/workflows/self-smoke-local.yml" || fail "args: $args"
   contains "$args" "ubuntu-latest=catthehacker/ubuntu:act-latest" || fail "args: $args"
   contains "$args" "--artifact-server-path" || fail "args: $args"
   # Loopback, not act's default-route guess: behind a VPN that is a tunnel

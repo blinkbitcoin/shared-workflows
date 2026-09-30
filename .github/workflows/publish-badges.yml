@@ -1,4 +1,4 @@
-name: Badges
+name: Publish badges
 # Publishes a consumer's per-branch CI badges to its own `gh-pages` branch:
 # `badges/<branch>/{unit,e2e,coverage,security}.svg`. The README embeds main's the way a
 # workflow-status badge takes `?branch=main`, and every other branch gets its
@@ -8,7 +8,7 @@ name: Badges
 # program, run from this repository's own checkout by
 # scripts/ci/gen-badges.sh, so a consumer needs no script and no copy; a
 # consumer that draws its own badges names its package script in
-# `render-script` instead. Publishing is scripts/ci/publish-badges.sh. A closed
+# `badges-script` instead. Publishing is scripts/ci/publish-badges.sh. A closed
 # PR's directory is dropped by pr-closed.yml.
 on:
   workflow_call:
@@ -46,7 +46,7 @@ on:
         type: string
         required: true
       docs-only:
-        description: check-code.yml's docs-only output; 'true' skips this job, because the jobs the badges describe never ran
+        description: check.yml's docs-only output; 'true' skips this job, because the jobs the badges describe never ran
         type: string
         default: 'false'
       unit-label:
@@ -66,14 +66,14 @@ on:
         type: string
         default: 'Security'
       coverage-artifact:
-        description: Artifact holding the consumer's coverage/ directory (check-unit.yml uploads it as `coverage`); downloaded only when the unit job succeeded
+        description: Artifact holding the consumer's coverage/ directory (test-unit.yml uploads it as `coverage`); downloaded only when the unit job succeeded
         type: string
         default: 'coverage'
-      render-script:
-        description: Consumer package.json script that renders the badges into badge-dir instead of @blinkbitcoin/app-tooling's gen-badges; empty (the default) renders with gen-badges from this repository's checkout
+      badges-script:
+        description: Consumer package.json script that renders the badges into badge-directory instead of @blinkbitcoin/app-tooling's gen-badges; empty (the default) renders with gen-badges from this repository's checkout
         type: string
         default: ''
-      badge-dir:
+      badge-directory:
         description: Consumer-relative directory the badges are rendered into, and the one publish-badges.sh copies to gh-pages
         type: string
         default: 'coverage/badge'
@@ -139,8 +139,8 @@ jobs:
           path: ${{ inputs.working-directory }}/coverage
       - name: Render badges
         env:
-          RENDER_SCRIPT: ${{ inputs.render-script }}
-          BADGE_OUT_DIR: ${{ inputs.badge-dir }}
+          RENDER_SCRIPT: ${{ inputs.badges-script }}
+          BADGE_OUT_DIR: ${{ inputs.badge-directory }}
           BADGE_UNIT: ${{ inputs.unit-result }}
           BADGE_E2E: ${{ inputs.e2e-result }}
           BADGE_UNIT_LABEL: ${{ inputs.unit-label }}
@@ -153,7 +153,7 @@ jobs:
           # head_ref on a PR (the branch the badge is *for*), ref_name on a push.
           BRANCH: ${{ github.head_ref || github.ref_name }}
           SHA: ${{ github.sha }}
-          BADGE_DIR: ${{ inputs.badge-dir }}
+          BADGE_DIR: ${{ inputs.badge-directory }}
           # A skipped suite's status badge is not published (see the script).
           BADGE_UNIT: ${{ inputs.unit-result }}
           BADGE_E2E: ${{ inputs.e2e-result }}

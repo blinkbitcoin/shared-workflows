@@ -1,4 +1,4 @@
-name: CodeQL
+name: Check code scanning
 # Advanced-setup CodeQL rather than GitHub's Default setup: the query suite,
 # the path exclusions and the alert-suppression mechanism then live in the
 # consumer's repository as reviewable files, instead of in a settings page.
@@ -18,7 +18,7 @@ on:
         type: string
         default: ''
       working-directory:
-        description: Consumer directory relative to GITHUB_WORKSPACE (unused by this workflow; CodeQL reads the whole checkout and the config file's paths-ignore scopes it)
+        description: Consumer directory relative to GITHUB_WORKSPACE (unused by this workflow; CodeQL reads the whole checkout and the configuration file's paths-ignore scopes it)
         type: string
         default: '.'
       linux-runner:
@@ -37,12 +37,12 @@ on:
         description: Comma-separated CodeQL languages to analyze
         type: string
         default: 'javascript-typescript'
-      config-file:
-        description: Consumer-relative CodeQL config file (query suite, packs, paths-ignore)
+      configuration-file:
+        description: Consumer-relative CodeQL configuration file (query suite, packs, paths-ignore)
         type: string
         default: './.github/codeql/codeql-config.yml'
-      docs-globs:
-        description: Extra regex alternatives (POSIX ERE, '|'-joined) added to the built-in docs pattern for docs-only detection
+      docs-patterns:
+        description: Extra regular expression alternatives (POSIX ERE, '|'-joined) added to the built-in docs pattern for docs-only detection
         type: string
         default: ''
     secrets:
@@ -70,7 +70,7 @@ jobs:
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
           fetch-depth: 0
-      # No setup here, exactly as in check-code.yml: changed-class.sh is pure git,
+      # No setup here, exactly as in check.yml: changed-class.sh is pure git,
       # so this job reaches it through the plain .workflows checkout ($WORKFLOWS_DIR is
       # published by the setup action, which never runs in this job).
       - name: Checkout shared-workflows
@@ -83,7 +83,7 @@ jobs:
       - name: Classify changed files
         id: classify
         env:
-          # Byte-identical to check-code.yml's expression on purpose: the classifier
+          # Byte-identical to check.yml's expression on purpose: the classifier
           # is the family's single source for "is this docs-only", and a second
           # spelling of the base sha is a second rule. On a `schedule` event both
           # operands are empty, the script logs "no base sha" and fails open with
@@ -91,10 +91,10 @@ jobs:
           # main is for.
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}
+          DOCS_GLOBS_EXTRA: ${{ inputs.docs-patterns }}
         run: bash ".workflows/scripts/ci/changed-class.sh" "$BASE_SHA" "$HEAD_SHA"
-  analyze:
-    name: Analyze
+  code-scanning:
+    name: Code scanning
     needs: [changes]
     # Nothing to analyse when no code moved. CodeQL is informational and must
     # not be a required check, so a skip here blocks nothing.
@@ -132,13 +132,13 @@ jobs:
           # check), so dying on a file the consumer never had is the wrong
           # trade. Empty means CodeQL's own defaults: the analysis still runs,
           # without the consumer's exclusions or suppression pack. That
-          # difference is reported, not hidden - `check-code.yml`'s contract job
+          # difference is reported, not hidden - `check.yml`'s contract job
           # names a missing config file as a degraded requirement.
           #
-          # `A && B || C` yields B when A is truthy: `inputs.config-file` is a
+          # `A && B || C` yields B when A is truthy: `inputs.configuration-file` is a
           # non-empty string, so the middle operand can never be the falsy one
           # that makes this idiom bite.
-          config-file: ${{ hashFiles(inputs.config-file) != '' && inputs.config-file || '' }}
+          config-file: ${{ hashFiles(inputs.configuration-file) != '' && inputs.configuration-file || '' }}
       - name: Analyze
         uses: github/codeql-action/analyze@v4
         with:

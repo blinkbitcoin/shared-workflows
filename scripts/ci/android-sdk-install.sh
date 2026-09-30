@@ -7,7 +7,7 @@
 # Android Emulator: Error on ZipFile unknown archive", then adb failing to
 # reach an emulator that never started). Pre-installing here makes the action's
 # own sdkmanager call a no-op - it skips a package already at the current
-# revision, the same property the system-image cache in check-e2e.yml relies on - so
+# revision, the same property the system-image cache in test-e2e.yml relies on - so
 # a corrupt archive costs a retry instead of the job.
 #
 # Usage: android-sdk-install.sh <sdk-package>...   (ANDROID_SDK_RETRIES: 2)
@@ -44,7 +44,7 @@ attempt=0
 while :; do
   # --channel=0 (stable) is what the action asks for, so the revision resolved
   # here is the one it then finds installed. stdin is closed so an unaccepted
-  # licence fails instead of waiting for a prompt that will never come; stdout
+  # license fails instead of waiting for a prompt that will never come; stdout
   # is dropped (progress bars only) and stderr kept - that is where sdkmanager
   # reports the archive it could not read.
   if "$sdkmanager" --install "$@" --channel=0 < /dev/null > /dev/null; then

@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/checks/expo-doctor.sh: the Expo project health check this repository
-# runs for a consumer that ships no `deps:check` script of its own, and that
+# scripts/checks/expo-health.sh: the Expo project health check this repository
+# runs for a consumer that ships no `check:expo-health` script of its own, and that
 # @blinkbitcoin/app-tooling ships for a consumer's `make check-deps`. SDK drift
 # (`expo install --check`) is reported and never fails the gate; expo-doctor
 # then runs with its own version check off, and its status is the gate's. The
@@ -18,7 +18,7 @@
 
 load test_helper
 
-SCRIPT="$REPO_ROOT/scripts/checks/expo-doctor.sh"
+SCRIPT="$REPO_ROOT/scripts/checks/expo-health.sh"
 
 DRIFT_TABLE='The following packages should be updated for best compatibility with the installed expo version:
   expo-router@6.0.1 - expected version: 6.0.2

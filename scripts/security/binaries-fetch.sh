@@ -21,7 +21,7 @@ tag="${1:-}"
 dir="${2:?usage: binaries-fetch.sh TAG DIR}"
 [ -n "$tag" ] || die_fix \
   "the binaries job is on, but no release-tag was given" \
-  "pass release-tag: <the release to check> to check-security.yml, or binaries: false for a tier with no release" \
+  "pass release-tag: <the release to check> to check-security.yml, or binaries: false for a stage with no release" \
   "check-securityyml"
 
 gh release view "$tag" --json tagName >/dev/null 2>&1 \

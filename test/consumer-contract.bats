@@ -96,7 +96,7 @@ guide_yaml_block() {
   # `name:block` rather than a running counter: the guide has ```yaml blocks
   # that are not caller examples (the secrets-policy snippet is block 5), so the
   # index and the position in this list stopped being the same number once
-  # check-codeql.yml's section landed further down the page.
+  # check-code-scanning.yml's section landed further down the page.
   for spec in ci:1 ci-web:2 ci-pr-closed:3 ci-pr-title:4 ci-codeql:6 ci-security:8; do
     wf="${spec%:*}"
     n="${spec##*:}"
@@ -115,7 +115,7 @@ on_block() {
 }
 
 # The caller the guide tells consumers to copy must not carry a `paths-ignore`:
-# that would be a second, narrower docs rule competing with check-code.yml's
+# that would be a second, narrower docs rule competing with check.yml's
 # classifier, the exact defect PR 3 removed. The fixture is the guide's example
 # byte for byte (above), so asserting it here asserts what consumers copy.
 @test "the fixture's ci.yml triggers carry no paths-ignore" {
@@ -124,7 +124,7 @@ on_block() {
   [ "$(grep -c . <<<"$block")" -ge 5 ] \
     || fail "read no trigger block from $file - the parser or the file shape changed"
   ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
-    || fail "$file's triggers carry a paths-ignore, a second docs rule beside check-code.yml's classifier"
+    || fail "$file's triggers carry a paths-ignore, a second docs rule beside check.yml's classifier"
 }
 
 # The example runs iOS on pushes to main and keeps it off PRs unless one carries
@@ -142,10 +142,10 @@ on_block() {
     || fail "$file has no labeled trigger, so adding the label starts no run"
 }
 
-# The guide's `docs-globs` row restates changed-class.sh's default pattern by
+# The guide's `docs-patterns` row restates changed-class.sh's default pattern by
 # hand, with markdown pipe escaping. Two hand-maintained copies of a regex is
 # exactly the kind of drift this suite exists to catch.
-# Same rule as ci.yml above, for the same reason: check-codeql.yml's `changes` job is
+# Same rule as ci.yml above, for the same reason: check-code-scanning.yml's `changes` job is
 # the single docs classifier, so a `paths-ignore` on the caller's triggers would
 # be a second, narrower copy of it. esign's caller still carries one; ours must
 # not grow one back. The schedule trigger is asserted too - it is what makes a
@@ -159,28 +159,28 @@ on_block() {
   [ "$(grep -c . <<<"$block")" -ge 5 ] \
     || fail "read no trigger block from $file - the parser or the file shape changed"
   ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
-    || fail "$file's triggers carry a paths-ignore, a second docs rule beside check-codeql.yml's classifier"
+    || fail "$file's triggers carry a paths-ignore, a second docs rule beside check-code-scanning.yml's classifier"
   grep -q 'schedule' <<<"$block" \
     || fail "$file has no schedule trigger, so a new query never re-scans an idle main"
 }
 
-@test "the guide's docs-globs row quotes changed-class.sh's default pattern" {
+@test "the guide's docs-patterns row quotes changed-class.sh's default pattern" {
   script=$(sed -n "s/^default_docs_globs='\(.*\)'$/\1/p" "$REPO_ROOT/scripts/ci/changed-class.sh")
   [ -n "$script" ] || fail "could not read default_docs_globs from scripts/ci/changed-class.sh"
   # The row's first backticked run starting with ^docs/, with \| unescaped.
-  row=$(grep -F '| `docs-globs` |' "$GUIDE" | head -1)
-  [ -n "$row" ] || fail "no docs-globs row in $GUIDE"
+  row=$(grep -F '| `docs-patterns` |' "$GUIDE" | head -1)
+  [ -n "$row" ] || fail "no docs-patterns row in $GUIDE"
   quoted=$(grep -oE '`\^docs/[^`]*`' <<<"$row" | head -1 | tr -d '`' | sed 's/\\|/|/g')
   [ "$quoted" = "$script" ] \
-    || fail "the guide's docs-globs row quotes '$quoted' but changed-class.sh defaults to '$script'"
+    || fail "the guide's docs-patterns row quotes '$quoted' but changed-class.sh defaults to '$script'"
 }
 
 @test "every workflow_call input is documented in the guide's table for that workflow" {
   command -v yq >/dev/null || skip "yq not installed"
   missing=()
-  for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
+  for wf in check test-unit test-e2e build-web publish-badges pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-store-notes publish-promotion-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     [ -n "$section" ] || fail "no '### \`$wf.yml\`' section in docs/consumer-guide.md"
@@ -203,9 +203,9 @@ on_block() {
   # removed or renamed - a phantom a reader would try to pass.
   command -v yq >/dev/null || skip "yq not installed"
   phantom=()
-  for wf in check-code check-unit check-e2e build-web publish-badges pr-title check-codeql \
+  for wf in check test-unit test-e2e build-web publish-badges pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-store-notes publish-promotion-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     inputs="$(yq -r '.on.workflow_call.inputs | keys | .[]' "$file")"
@@ -239,13 +239,13 @@ on_block() {
 # checks/unit step runs, with the input that switches it. These cases hold it to
 # that, from this repository alone: no consumer checkout is involved.
 
-# `script<TAB>condition` for every check-code.yml/check-unit.yml step that runs a consumer
+# `script<TAB>condition` for every check.yml/test-unit.yml step that runs a consumer
 # script: SCRIPT_NAME for run-script.sh, the positional name for
-# run-consumer-or.sh. An expression SCRIPT_NAME (check-unit.yml) is resolved to the
+# run-consumer-or.sh. An expression SCRIPT_NAME (test-unit.yml) is resolved to the
 # defaults of the `*-script` inputs it names.
 ci_steps() {
   local f
-  for f in check-code check-unit; do
+  for f in check test-unit; do
     yq -o=json '.' "$REPO_ROOT/.github/workflows/$f.yml"
   done | node -e '
 let buf = "";
@@ -279,7 +279,7 @@ const c = require(process.argv[1]);
 const out = [];
 for (const line of process.env.STEPS.split("\n")) {
   const [script, cond] = line.split("\t");
-  // check-unit.yml falls back to plain `test` when coverage is off; the contract
+  // test-unit.yml falls back to plain `test` when coverage is off; the contract
   // names test:coverage for that step, gated on the same input.
   if (script === "test") continue;
   const req = c.requirements.find((r) => ["package-script", "script-or-dep"].includes(r.kind) && r.target === script);
@@ -311,7 +311,7 @@ console.log(c.requirements
     "$REPO_ROOT/.github/workflows/publish-store.yml" | sort)"
   contract="$(node -e '
 const c = require(process.argv[1]);
-console.log(c.requirements.find((r) => r.id === "lane.app-review-env").target.slice().sort().join("\n"));
+console.log(c.requirements.find((r) => r.id === "lane-environment.app-review").target.slice().sort().join("\n"));
 ' "$REPO_ROOT/packages/app-tooling/contract.json")"
   [ "$(grep -c . <<<"$declared")" -ge 7 ] || fail "found only '$declared' in publish-store.yml"
   [ "$declared" = "$contract" ] || fail "publish-store.yml passes:

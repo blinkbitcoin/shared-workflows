@@ -24,7 +24,7 @@ test('parseMakefile reads rules, their recipe lines and plain includes', () => {
     '.PHONY: check',
     'include make/shared.mk $(DIR)/x.mk',
     '-include local.mk',
-    'check: check-code check-docs ## Every gate',
+    'check: check check-docs ## Every gate',
     '',
     'check-docs: ## Docs',
     '\tbash scripts/docs.sh',
@@ -49,7 +49,7 @@ test('parseMakefile reads rules, their recipe lines and plain includes', () => {
 test('an aggregate and every single-call shape pass', () => {
   assert.equal(recipeProblem(recipe()), null);
   for (const line of [
-    'bash node_modules/@blinkbitcoin/app-tooling/checks/i18n.sh',
+    'bash node_modules/@blinkbitcoin/app-tooling/checks/generated.sh',
     '@bash scripts/x.sh --flag $(ARGS)',
     '-node scripts/y.mjs',
     'pnpm exec check-diagrams --all',

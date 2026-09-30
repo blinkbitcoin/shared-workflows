@@ -1,4 +1,4 @@
-name: Web
+name: Build web
 on:
   workflow_call:
     inputs:
@@ -26,8 +26,8 @@ on:
         description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
         type: string
         default: 'v1'
-      playwright:
-        description: Run the Playwright e2e suite against the exported web build
+      e2e:
+        description: Run the web E2E suite (Playwright) against the exported web build
         type: boolean
         default: true
       deploy:
@@ -38,15 +38,15 @@ on:
         description: Base URL to bake into the export via EXPO_PUBLIC_BASE_URL (e.g. a project Pages path)
         type: string
         default: ''
-      export-script:
+      build-script:
         description: Consumer package.json script that exports the web build
         type: string
         default: 'build:web'
-      export-args:
+      build-arguments:
         description: Extra space-separated flags appended to the export script's own args (e.g. '--dev')
         type: string
         default: ''
-      output-dir:
+      output-directory:
         description: Consumer-relative directory the export script writes to
         type: string
         default: 'dist'
@@ -54,16 +54,16 @@ on:
         description: Consumer package.json script that runs the Playwright suite
         type: string
         default: 'test:e2e:web'
-      playwright-browsers:
+      e2e-browsers:
         description: Space-separated browser names passed to `playwright install`
         type: string
         default: 'chromium'
-      docs-globs:
-        description: Extra regex alternatives (POSIX ERE, '|'-joined) added to the built-in docs pattern, which the web class also never reads
+      docs-patterns:
+        description: Extra regular expression alternatives (POSIX ERE, '|'-joined) added to the built-in docs pattern, which the web class also never reads
         type: string
         default: ''
-      web-ignore-globs:
-        description: Extra regex alternatives (POSIX ERE, '|'-joined) for paths the web build and its Playwright suite never read, added to the built-in list behind web-changed
+      web-ignore-patterns:
+        description: Extra regular expression alternatives (POSIX ERE, '|'-joined) for paths the web build and its Playwright suite never read, added to the built-in list behind web-changed
         type: string
         default: ''
     secrets:
@@ -94,7 +94,7 @@ jobs:
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
           fetch-depth: 0
-      # No setup here, exactly as in check-code.yml: changed-class.sh is pure git,
+      # No setup here, exactly as in check.yml: changed-class.sh is pure git,
       # so this job reaches it through the plain .workflows checkout ($WORKFLOWS_DIR is
       # published by the setup action, which never runs in this job).
       - name: Checkout shared-workflows
@@ -107,14 +107,14 @@ jobs:
       - name: Classify changed files
         id: classify
         env:
-          # Byte-identical to check-code.yml's expression on purpose: one rule for
+          # Byte-identical to check.yml's expression on purpose: one rule for
           # what the diff is. A `release` event has neither operand, so the script
           # logs "no base sha" and fails open - a release always builds and
           # deploys.
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          DOCS_GLOBS_EXTRA: ${{ inputs.docs-globs }}
-          WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-globs }}
+          DOCS_GLOBS_EXTRA: ${{ inputs.docs-patterns }}
+          WEB_IGNORE_GLOBS_EXTRA: ${{ inputs.web-ignore-patterns }}
         run: bash ".workflows/scripts/ci/changed-class.sh" "$BASE_SHA" "$HEAD_SHA"
   build:
     # Job names say what a step is for, not which tool does it - they show in
@@ -124,7 +124,7 @@ jobs:
     name: Build
     needs: changes
     # != 'false', not == 'true': an output that never arrived runs the build.
-    # `playwright` and `deploy` need this job, so a skip here skips them too.
+    # `e2e` and `deploy` need this job, so a skip here skips them too.
     if: ${{ needs.changes.outputs.web-changed != 'false' }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
@@ -148,30 +148,30 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
       - name: Export web build
         env:
-          EXPORT_SCRIPT: ${{ inputs.export-script }}
-          EXPORT_ARGS: ${{ inputs.export-args }}
+          EXPORT_SCRIPT: ${{ inputs.build-script }}
+          EXPORT_ARGS: ${{ inputs.build-arguments }}
           EXPO_PUBLIC_BASE_URL: ${{ inputs.base-url }}
-          OUTPUT_DIR: ${{ inputs.output-dir }}
+          OUTPUT_DIR: ${{ inputs.output-directory }}
         run: bash "$WORKFLOWS_DIR/scripts/web/export.sh"
       - name: Upload web-dist
         uses: actions/upload-artifact@v7
         with:
           name: web-dist
-          path: ${{ inputs.working-directory }}/${{ inputs.output-dir }}
+          path: ${{ inputs.working-directory }}/${{ inputs.output-directory }}
           retention-days: 1
           # Every other upload in this family sets this explicitly. Failing here
-          # beats the playwright job downloading an empty artifact and failing
+          # beats the e2e job downloading an empty artifact and failing
           # on a missing index.html one job later.
           if-no-files-found: error
       - name: Upload Pages artifact
         if: ${{ inputs.deploy }}
         uses: actions/upload-pages-artifact@v5
         with:
-          path: ${{ inputs.working-directory }}/${{ inputs.output-dir }}
-  playwright:
+          path: ${{ inputs.working-directory }}/${{ inputs.output-directory }}
+  e2e:
     name: E2E
     needs: build
-    if: ${{ inputs.playwright }}
+    if: ${{ inputs.e2e }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:
@@ -196,7 +196,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: web-dist
-          path: ${{ inputs.working-directory }}/${{ inputs.output-dir }}
+          path: ${{ inputs.working-directory }}/${{ inputs.output-directory }}
       - name: Resolve Playwright version
         id: pw
         run: bash "$WORKFLOWS_DIR/scripts/web/playwright-cache-key.sh"
@@ -207,9 +207,9 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright browsers
         env:
-          PLAYWRIGHT_BROWSERS: ${{ inputs.playwright-browsers }}
+          PLAYWRIGHT_BROWSERS: ${{ inputs.e2e-browsers }}
         run: bash "$WORKFLOWS_DIR/scripts/web/playwright-install.sh"
-      - name: Playwright suite
+      - name: E2E suite
         env:
           E2E_SCRIPT: ${{ inputs.e2e-script }}
           PLAYWRIGHT_SKIP_EXPORT: '1'
@@ -226,8 +226,8 @@ jobs:
           path: ${{ inputs.working-directory }}/playwright-report
   deploy:
     name: Deploy
-    needs: [build, playwright]
-    if: ${{ always() && inputs.deploy && needs.build.result == 'success' && (needs.playwright.result == 'success' || needs.playwright.result == 'skipped') }}
+    needs: [build, e2e]
+    if: ${{ always() && inputs.deploy && needs.build.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 10
     permissions:

@@ -30,7 +30,7 @@ if [ -n "$_maestro_sha_override" ]; then
 elif [ "$MAESTRO_VERSION" != "$pinned_version" ]; then
   # The pinned checksum belongs to the pinned version: another version's
   # archive can only fail it, and skipping the check is the hole this closes.
-  die "Maestro $MAESTRO_VERSION is not the pinned $pinned_version: pass its release archive's SHA-256 as MAESTRO_SHA256 (maestro-sha256 in check-e2e.yml)"
+  die "Maestro $MAESTRO_VERSION is not the pinned $pinned_version: pass its release archive's SHA-256 as MAESTRO_SHA256 (maestro-sha256 in test-e2e.yml)"
 fi
 require_cmd curl unzip
 

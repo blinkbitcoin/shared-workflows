@@ -20,8 +20,8 @@ below drift apart.
 ```
 .github/workflows/  the reusable workflows (workflow_call) + this repo's self-* CI
 .github/actions/    composite actions (setup, maestro, forensics, free-disk, native-key)
-scripts/checks/     the check-code.yml steps (audit, codegen, commitlint, expo-doctor, i18n)
-scripts/ci/         shared CI plumbing (changed-class, lint-ci, pnpm-install, tool-version, gh-pages badges)
+scripts/checks/     the check.yml steps (audit, commits, expo-health, generated, secrets)
+scripts/ci/         shared CI plumbing (changed-class, check-ci, pnpm-install, tool-version, gh-pages badges)
 scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
 scripts/native/     prebuild, pods, iOS/Android builds and packaging
 scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
@@ -82,7 +82,7 @@ Every row is a make target; nothing here is run through a package manager.
   move together or neither does. A real consumer passes inputs of its own, so
   it is held to the fixture only where it must not diverge: its `ci.yml`
   trigger block, which is where a second docs rule (`paths-ignore`) would creep
-  back in beside `check-code.yml`'s classifier.
+  back in beside `check.yml`'s classifier.
 - **Anything generic lives here, and a consumer only calls it.** That covers
   code (checks, runners, scanners, release scripts, test and build presets)
   and it covers the pipeline itself: which jobs run, in what order, behind
@@ -234,9 +234,11 @@ Every row is a make target; nothing here is run through a package manager.
   target named after a tool pinned in `.mise.toml`.
 - **Workflow files carry their stage in the name.** GitHub reads only the top
   level of `.github/workflows/`, so the prefix is the only grouping there is:
-  `check-` gates every change, `build-` makes artifacts, `publish-` ships to a
-  store, a release, OTA or badges, `pr-` hooks pull request events, and `self-`
-  is this repository's own CI. A new workflow takes one of these
+  `check-` (or `check.yml`) runs static gates on every change and never runs a
+  test, `test-` runs test suites, `build-` makes artifacts, `publish-` ships to
+  a store, a release, OTA or badges, `pr-` hooks pull request events, and
+  `self-` is this repository's own CI. The display name is the file stem in
+  words (`publish-ota.yml` is "Publish OTA"). A new workflow takes one of these
   (`test/workflow-shape.bats` fails otherwise). Renaming a callable workflow
   breaks every consumer: commit it as `feat(workflows)!:` with a
   `BREAKING CHANGE:` footer naming old and new, and open the template PR that
@@ -268,7 +270,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Pure bash scripts, one test file each | `test/<name>.bats` | `make test-unit` |
 | The Node scripts under `scripts/`, one test file each, 100% lines, branches and functions | `test/<name>.test.mjs` | `make test-scripts` |
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test-unit` |
-| The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make test-smoke-local` |
+| The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-smoke-local.yml` via act | `make test-smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-program.bats` | `make test-unit` |
 | The app-tooling programs and modules at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, the store notes generator and its LLM adapters, and each program's flags, messages and exit codes | `packages/app-tooling/*.test.mjs` | `make test-package` |
 | Each Expo preset (`expo/`) against the template: the template's file as it is and the file it becomes, evaluated under the same stand-ins and compared (lefthook through the real `lefthook dump`); the guide's examples are those files | `packages/app-tooling/*.test.mjs` | `make test-package` |

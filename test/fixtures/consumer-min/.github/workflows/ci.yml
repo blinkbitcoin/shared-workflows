@@ -4,7 +4,7 @@ on:
     branches: [main]
     # No paths-ignore: it would be a second, narrower docs rule that already
     # disagrees with the classifier's (it misses LICENSE and the issue/PR
-    # templates). check-code.yml's `changes` job is the single source - it
+    # templates). check.yml's `changes` job is the single source - it
     # classifies pushes too, so a docs-only merge still skips unit and e2e.
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -17,14 +17,14 @@ concurrency:
 jobs:
   checks:
     name: Checks
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-code.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0
   unit:
     name: Unit
     needs: checks
     # `!= 'false'`: an output that never arrived runs the suite. A docs-only
     # change is `false` here too.
     if: ${{ needs.checks.outputs.unit-changed != 'false' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-unit.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0
   e2e:
     name: E2E
     # `unit` as well as `checks`: a failed unit run then never reaches E2E. A
@@ -37,7 +37,7 @@ jobs:
       needs.checks.result == 'success' &&
       contains(fromJSON('["success", "skipped"]'), needs.unit.result) &&
       needs.checks.outputs.e2e-changed != 'false'
-    uses: blinkbitcoin/shared-workflows/.github/workflows/check-e2e.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-e2e.yml@v0
     with:
       # iOS is opt-in because macOS bills at 10x on a private repo. On a
       # public repo standard runners are free, macOS included, so set the repo
@@ -46,7 +46,7 @@ jobs:
       # is what makes the label alone start a run), so it waits for Android
       # alone, a third of the wall-clock. See docs/runners.md.
       ios: ${{ (github.event_name != 'pull_request' && vars.E2E_IOS == 'true') || contains(github.event.pull_request.labels.*.name, 'e2e:ios') }}
-      macos-runner: ${{ vars.WORKFLOWS_MACOS_RUNNER || 'macos-26' }}
+      macos-runner: ${{ vars.MACOS_RUNNER || 'macos-26' }}
       dev-client: true
       e2e-setup-script: scripts/e2e/ci-mock-api-up.sh
       e2e-teardown-script: scripts/e2e/ci-mock-api-down.sh

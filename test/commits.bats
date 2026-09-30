@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/checks/commitlint.sh: lints a pull request's title, and its commits
+# scripts/checks/commits.sh: lints a pull request's title, and its commits
 # when given a range. A consumer with @commitlint/cli as a devDependency is
 # linted by its own commitlint through pnpm, from its own root; any other is
 # linted by a pinned commitlint through npx with a conventional-commits
@@ -16,7 +16,7 @@
 
 load test_helper
 
-SCRIPT="$REPO_ROOT/scripts/checks/commitlint.sh"
+SCRIPT="$REPO_ROOT/scripts/checks/commits.sh"
 
 setup() {
   STUB="$BATS_TEST_TMPDIR/bin"

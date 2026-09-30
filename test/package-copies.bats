@@ -9,7 +9,7 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (15 files)" || fail "output: $output"
+  contains "$output" "package copies ok (14 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
@@ -19,8 +19,8 @@ tree() {
   cp "$REPO_ROOT/scripts/self/package-copies.sh" "$tree/scripts/self/"
   cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions}.sh "$tree/scripts/lib/"
   cp "$REPO_ROOT/scripts/release/resolve-version.sh" "$REPO_ROOT/scripts/release/build-info.sh" "$tree/scripts/release/"
-  cp "$REPO_ROOT"/scripts/checks/{i18n,codegen,secrets,run-script,expo-doctor}.sh "$tree/scripts/checks/"
-  cp "$REPO_ROOT"/scripts/ci/{lint-ci,maestro-install}.sh "$tree/scripts/ci/"
+  cp "$REPO_ROOT"/scripts/checks/{generated,secrets,run-script,expo-health}.sh "$tree/scripts/checks/"
+  cp "$REPO_ROOT"/scripts/ci/{check-ci,maestro-install}.sh "$tree/scripts/ci/"
   cp "$REPO_ROOT/scripts/hooks/install-if-lockfile-changed.sh" "$tree/scripts/hooks/"
   cp "$REPO_ROOT/.github/zizmor.yml" "$tree/.github/"
 }
@@ -29,9 +29,9 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 15 files into packages/app-tooling" || fail "output: $output"
-  for rel in release/resolve-version.sh release/build-info.sh checks/i18n.sh checks/codegen.sh checks/secrets.sh \
-    checks/run-script.sh checks/expo-doctor.sh ci/lint-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
+  contains "$output" "copied 14 files into packages/app-tooling" || fail "output: $output"
+  for rel in release/resolve-version.sh release/build-info.sh checks/generated.sh checks/secrets.sh \
+    checks/run-script.sh checks/expo-health.sh ci/check-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh; do
     cmp -s "$tree/scripts/$rel" "$tree/packages/app-tooling/$rel" || fail "packages/app-tooling/$rel is not a copy"
   done
@@ -76,7 +76,7 @@ packaged_consumer() {
   consumer="$BATS_TEST_TMPDIR/app"
   mkdir -p "$consumer/src/i18n/locales"
   printf 'msgid ""\n' > "$consumer/src/i18n/locales/en.po"
-  printf '{"scripts":{"i18n:extract":"%s"}}\n' "$1" > "$consumer/package.json"
+  printf '{"scripts":{"gen:i18n":"%s"}}\n' "$1" > "$consumer/package.json"
   git -C "$consumer" init -q
   git -C "$consumer" -c user.email=t@t -c user.name=t add -A
   git -C "$consumer" -c user.email=t@t -c user.name=t commit -qm init
@@ -86,7 +86,7 @@ packaged_consumer() {
   command -v pnpm >/dev/null || skip "pnpm not installed"
   packaged_consumer "true"
   cd "$consumer"
-  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/i18n.sh"
+  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/generated.sh"
   [ "$status" -eq 0 ] || fail "a current consumer failed: $output"
 }
 
@@ -94,7 +94,7 @@ packaged_consumer() {
   command -v pnpm >/dev/null || skip "pnpm not installed"
   packaged_consumer "echo changed >> src/i18n/locales/en.po"
   cd "$consumer"
-  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/i18n.sh"
+  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/generated.sh"
   [ "$status" -ne 0 ] || fail "stale catalogs passed: $output"
-  contains "$output" "run \"pnpm run i18n:extract\" and commit the result" || fail "output: $output"
+  contains "$output" "run \"pnpm run gen:i18n\" and commit the result" || fail "output: $output"
 }

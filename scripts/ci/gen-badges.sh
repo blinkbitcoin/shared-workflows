@@ -6,7 +6,7 @@
 # from this repository's own checkout: the same commit as the workflow that
 # runs it, so a consumer needs no script, no copy and no installed package for
 # it. A caller that renders its own badges names its package script in
-# `render-script` (RENDER_SCRIPT here), and that script runs through
+# `badges-script` (RENDER_SCRIPT here), and that script runs through
 # run-script.sh instead, exactly as before.
 #
 # Everything the renderer reads (BADGE_OUT_DIR, BADGE_UNIT, BADGE_E2E, the
@@ -18,7 +18,7 @@ require_cmd node
 
 script="${RENDER_SCRIPT:-}"
 if [ -n "$script" ]; then
-  log "badges: rendering with the consumer's \"$script\" script (render-script)"
+  log "badges: rendering with the consumer's \"$script\" script (badges-script)"
   exec bash "$(dirname "$0")/../checks/run-script.sh" "$script"
 fi
 
@@ -27,7 +27,7 @@ renderer="$(cd "$(dirname "$0")/../.." && pwd)/packages/app-tooling/bin/gen-badg
 
 # Two steps, not `cd "$(consumer_root)"`: a command substitution used as an
 # argument does not propagate its exit status, and `cd ""` is a successful
-# no-op. Same reason as contract-check.sh.
+# no-op. Same reason as check-contract.sh.
 root="$(consumer_root)"
 cd "$root"
 log "badges: rendering with @blinkbitcoin/app-tooling's gen-badges"

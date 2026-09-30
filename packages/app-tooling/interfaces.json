@@ -59,7 +59,7 @@
           "type": "string",
           "required": true
         },
-        "android-signing": {
+        "android-signing-enabled": {
           "type": "boolean",
           "required": false
         },
@@ -67,7 +67,7 @@
           "type": "boolean",
           "required": false
         },
-        "release-meta-artifact": {
+        "build-info-artifact": {
           "type": "string",
           "required": false
         },
@@ -95,7 +95,7 @@
           "type": "string",
           "required": false
         },
-        "build-env": {
+        "environment-variables": {
           "type": "string",
           "required": false
         }
@@ -152,7 +152,7 @@
           "type": "string",
           "required": false
         },
-        "xcode": {
+        "xcode-version": {
           "type": "string",
           "required": false
         },
@@ -184,7 +184,7 @@
           "type": "string",
           "required": true
         },
-        "ios-signing": {
+        "ios-signing-enabled": {
           "type": "boolean",
           "required": false
         },
@@ -192,7 +192,7 @@
           "type": "boolean",
           "required": false
         },
-        "release-meta-artifact": {
+        "build-info-artifact": {
           "type": "string",
           "required": false
         },
@@ -204,7 +204,7 @@
           "type": "string",
           "required": false
         },
-        "build-env": {
+        "environment-variables": {
           "type": "string",
           "required": false
         }
@@ -292,11 +292,11 @@
           "type": "boolean",
           "required": false
         },
-        "release-meta-artifact": {
+        "build-info-artifact": {
           "type": "string",
           "required": false
         },
-        "build-env": {
+        "environment-variables": {
           "type": "string",
           "required": false
         }
@@ -315,8 +315,8 @@
       "outputs": [
         "version",
         "build-number",
-        "fp-ios",
-        "fp-android",
+        "fingerprint-ios",
+        "fingerprint-android",
         "sha"
       ]
     },
@@ -346,7 +346,7 @@
           "type": "string",
           "required": false
         },
-        "playwright": {
+        "e2e": {
           "type": "boolean",
           "required": false
         },
@@ -358,15 +358,15 @@
           "type": "string",
           "required": false
         },
-        "export-script": {
+        "build-script": {
           "type": "string",
           "required": false
         },
-        "export-args": {
+        "build-arguments": {
           "type": "string",
           "required": false
         },
-        "output-dir": {
+        "output-directory": {
           "type": "string",
           "required": false
         },
@@ -374,15 +374,15 @@
           "type": "string",
           "required": false
         },
-        "playwright-browsers": {
+        "e2e-browsers": {
           "type": "string",
           "required": false
         },
-        "docs-globs": {
+        "docs-patterns": {
           "type": "string",
           "required": false
         },
-        "web-ignore-globs": {
+        "web-ignore-patterns": {
           "type": "string",
           "required": false
         }
@@ -397,157 +397,7 @@
         "web-changed"
       ]
     },
-    "check-code.yml": {
-      "inputs": {
-        "repository": {
-          "type": "string",
-          "required": false
-        },
-        "ref": {
-          "type": "string",
-          "required": false
-        },
-        "working-directory": {
-          "type": "string",
-          "required": false
-        },
-        "linux-runner": {
-          "type": "string",
-          "required": false
-        },
-        "macos-runner": {
-          "type": "string",
-          "required": false
-        },
-        "native-cache-version": {
-          "type": "string",
-          "required": false
-        },
-        "typecheck": {
-          "type": "boolean",
-          "required": false
-        },
-        "lint": {
-          "type": "boolean",
-          "required": false
-        },
-        "format": {
-          "type": "boolean",
-          "required": false
-        },
-        "knip": {
-          "type": "boolean",
-          "required": false
-        },
-        "spell": {
-          "type": "boolean",
-          "required": false
-        },
-        "docs-check": {
-          "type": "boolean",
-          "required": false
-        },
-        "i18n": {
-          "type": "boolean",
-          "required": false
-        },
-        "graphql-codegen": {
-          "type": "boolean",
-          "required": false
-        },
-        "expo-doctor": {
-          "type": "boolean",
-          "required": false
-        },
-        "audit": {
-          "type": "boolean",
-          "required": false
-        },
-        "audit-level": {
-          "type": "string",
-          "required": false
-        },
-        "audit-soft-on-pr": {
-          "type": "boolean",
-          "required": false
-        },
-        "commitlint": {
-          "type": "boolean",
-          "required": false
-        },
-        "commitlint-commits": {
-          "type": "boolean",
-          "required": false
-        },
-        "actionlint": {
-          "type": "boolean",
-          "required": false
-        },
-        "shellcheck": {
-          "type": "boolean",
-          "required": false
-        },
-        "zizmor": {
-          "type": "boolean",
-          "required": false
-        },
-        "secret-scan": {
-          "type": "boolean",
-          "required": false
-        },
-        "licenses": {
-          "type": "boolean",
-          "required": false
-        },
-        "prebuild-check": {
-          "type": "boolean",
-          "required": false
-        },
-        "bundle-secrets": {
-          "type": "boolean",
-          "required": false
-        },
-        "release-checks": {
-          "type": "boolean",
-          "required": false
-        },
-        "contract-check": {
-          "type": "boolean",
-          "required": false
-        },
-        "contract-only": {
-          "type": "boolean",
-          "required": false
-        },
-        "docs-only-detection": {
-          "type": "boolean",
-          "required": false
-        },
-        "docs-globs": {
-          "type": "string",
-          "required": false
-        },
-        "unit-ignore-globs": {
-          "type": "string",
-          "required": false
-        },
-        "e2e-ignore-globs": {
-          "type": "string",
-          "required": false
-        }
-      },
-      "secrets": {
-        "consumer-token": {
-          "required": false
-        }
-      },
-      "outputs": [
-        "docs-only",
-        "unit-changed",
-        "e2e-changed"
-      ]
-    },
-    "check-codeql.yml": {
+    "check-code-scanning.yml": {
       "inputs": {
         "repository": {
           "type": "string",
@@ -577,11 +427,11 @@
           "type": "string",
           "required": false
         },
-        "config-file": {
+        "configuration-file": {
           "type": "string",
           "required": false
         },
-        "docs-globs": {
+        "docs-patterns": {
           "type": "string",
           "required": false
         }
@@ -593,119 +443,6 @@
       },
       "outputs": [
         "docs-only"
-      ]
-    },
-    "check-e2e.yml": {
-      "inputs": {
-        "repository": {
-          "type": "string",
-          "required": false
-        },
-        "ref": {
-          "type": "string",
-          "required": false
-        },
-        "working-directory": {
-          "type": "string",
-          "required": false
-        },
-        "linux-runner": {
-          "type": "string",
-          "required": false
-        },
-        "macos-runner": {
-          "type": "string",
-          "required": false
-        },
-        "default-branch": {
-          "type": "string",
-          "required": false
-        },
-        "native-cache-version": {
-          "type": "string",
-          "required": false
-        },
-        "native-extra-globs": {
-          "type": "string",
-          "required": false
-        },
-        "ios": {
-          "type": "boolean",
-          "required": false
-        },
-        "android": {
-          "type": "boolean",
-          "required": false
-        },
-        "xcode": {
-          "type": "string",
-          "required": false
-        },
-        "android-api-level": {
-          "type": "number",
-          "required": false
-        },
-        "maestro-version": {
-          "type": "string",
-          "required": false
-        },
-        "maestro-sha256": {
-          "type": "string",
-          "required": false
-        },
-        "maestro-flows": {
-          "type": "string",
-          "required": false
-        },
-        "maestro-include-tags": {
-          "type": "string",
-          "required": false
-        },
-        "maestro-exclude-tags": {
-          "type": "string",
-          "required": false
-        },
-        "suite-timeout-minutes": {
-          "type": "number",
-          "required": false
-        },
-        "dev-client": {
-          "type": "boolean",
-          "required": false
-        },
-        "ios-configuration": {
-          "type": "string",
-          "required": false
-        },
-        "build-env": {
-          "type": "string",
-          "required": false
-        },
-        "e2e-setup-script": {
-          "type": "string",
-          "required": false
-        },
-        "e2e-teardown-script": {
-          "type": "string",
-          "required": false
-        },
-        "ios-artifact-name": {
-          "type": "string",
-          "required": false
-        },
-        "android-artifact-name": {
-          "type": "string",
-          "required": false
-        }
-      },
-      "secrets": {
-        "consumer-token": {
-          "required": false
-        }
-      },
-      "outputs": [
-        "ios-result",
-        "android-result"
       ]
     },
     "check-security.yml": {
@@ -766,7 +503,7 @@
           "type": "boolean",
           "required": false
         },
-        "openant": {
+        "review-codebase": {
           "type": "boolean",
           "required": false
         },
@@ -778,11 +515,11 @@
           "type": "string",
           "required": false
         },
-        "build-env": {
+        "environment-variables": {
           "type": "string",
           "required": false
         },
-        "sarif-upload": {
+        "sarif-upload-enabled": {
           "type": "boolean",
           "required": false
         }
@@ -802,7 +539,7 @@
         "verdict"
       ]
     },
-    "check-unit.yml": {
+    "check.yml": {
       "inputs": {
         "repository": {
           "type": "string",
@@ -828,24 +565,100 @@
           "type": "string",
           "required": false
         },
-        "coverage": {
+        "types": {
           "type": "boolean",
           "required": false
         },
-        "test-script": {
+        "lint": {
+          "type": "boolean",
+          "required": false
+        },
+        "format": {
+          "type": "boolean",
+          "required": false
+        },
+        "unused": {
+          "type": "boolean",
+          "required": false
+        },
+        "spell": {
+          "type": "boolean",
+          "required": false
+        },
+        "docs": {
+          "type": "boolean",
+          "required": false
+        },
+        "generated": {
+          "type": "boolean",
+          "required": false
+        },
+        "expo-health": {
+          "type": "boolean",
+          "required": false
+        },
+        "audit": {
+          "type": "boolean",
+          "required": false
+        },
+        "audit-level": {
           "type": "string",
           "required": false
         },
-        "coverage-script": {
+        "audit-soft-on-pr": {
+          "type": "boolean",
+          "required": false
+        },
+        "commits": {
+          "type": "boolean",
+          "required": false
+        },
+        "commits-all": {
+          "type": "boolean",
+          "required": false
+        },
+        "ci": {
+          "type": "boolean",
+          "required": false
+        },
+        "secrets": {
+          "type": "boolean",
+          "required": false
+        },
+        "licenses": {
+          "type": "boolean",
+          "required": false
+        },
+        "prebuild": {
+          "type": "boolean",
+          "required": false
+        },
+        "release": {
+          "type": "boolean",
+          "required": false
+        },
+        "contract": {
+          "type": "boolean",
+          "required": false
+        },
+        "contract-only": {
+          "type": "boolean",
+          "required": false
+        },
+        "docs-only-detection": {
+          "type": "boolean",
+          "required": false
+        },
+        "docs-patterns": {
           "type": "string",
           "required": false
         },
-        "scripts-test-script": {
+        "unit-ignore-patterns": {
           "type": "string",
           "required": false
         },
-        "coverage-artifact-retention-days": {
-          "type": "number",
+        "e2e-ignore-patterns": {
+          "type": "string",
           "required": false
         }
       },
@@ -854,7 +667,11 @@
           "required": false
         }
       },
-      "outputs": []
+      "outputs": [
+        "docs-only",
+        "unit-changed",
+        "e2e-changed"
+      ]
     },
     "pr-closed.yml": {
       "inputs": {},
@@ -887,7 +704,7 @@
           "type": "string",
           "required": false
         },
-        "config-file": {
+        "configuration-file": {
           "type": "string",
           "required": false
         },
@@ -917,7 +734,7 @@
       },
       "outputs": [
         "release-created",
-        "tag-name",
+        "release-tag",
         "paths-released",
         "pr-number",
         "pr-branch"
@@ -969,7 +786,7 @@
           "type": "string",
           "required": false
         },
-        "build-env": {
+        "environment-variables": {
           "type": "string",
           "required": false
         }
@@ -1081,11 +898,11 @@
           "type": "string",
           "required": false
         },
-        "render-script": {
+        "badges-script": {
           "type": "string",
           "required": false
         },
-        "badge-dir": {
+        "badge-directory": {
           "type": "string",
           "required": false
         }
@@ -1127,7 +944,7 @@
           "type": "string",
           "required": true
         },
-        "tag": {
+        "release-tag": {
           "type": "string",
           "required": true
         },
@@ -1253,7 +1070,7 @@
       },
       "outputs": []
     },
-    "publish-promotion-retry.yml": {
+    "publish-retry.yml": {
       "inputs": {
         "repository": {
           "type": "string",
@@ -1325,7 +1142,7 @@
           "type": "string",
           "required": true
         },
-        "lane-args": {
+        "lane-arguments": {
           "type": "string",
           "required": false
         },
@@ -1333,15 +1150,15 @@
           "type": "boolean",
           "required": false
         },
-        "runner": {
-          "type": "string",
+        "macos-enabled": {
+          "type": "boolean",
           "required": false
         },
         "environment": {
           "type": "string",
           "required": false
         },
-        "env-json": {
+        "environment-variables": {
           "type": "string",
           "required": false
         },
@@ -1377,16 +1194,12 @@
           "type": "string",
           "required": true
         },
-        "ruby": {
+        "ruby-enabled": {
           "type": "boolean",
           "required": false
         },
         "timeout-minutes": {
           "type": "number",
-          "required": false
-        },
-        "build-env": {
-          "type": "string",
           "required": false
         }
       },
@@ -1452,6 +1265,173 @@
           "required": false
         },
         "APP_REVIEW_NOTES": {
+          "required": false
+        }
+      },
+      "outputs": []
+    },
+    "test-e2e.yml": {
+      "inputs": {
+        "repository": {
+          "type": "string",
+          "required": false
+        },
+        "ref": {
+          "type": "string",
+          "required": false
+        },
+        "working-directory": {
+          "type": "string",
+          "required": false
+        },
+        "linux-runner": {
+          "type": "string",
+          "required": false
+        },
+        "macos-runner": {
+          "type": "string",
+          "required": false
+        },
+        "default-branch": {
+          "type": "string",
+          "required": false
+        },
+        "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "native-extra-globs": {
+          "type": "string",
+          "required": false
+        },
+        "ios": {
+          "type": "boolean",
+          "required": false
+        },
+        "android": {
+          "type": "boolean",
+          "required": false
+        },
+        "xcode-version": {
+          "type": "string",
+          "required": false
+        },
+        "android-api-level": {
+          "type": "number",
+          "required": false
+        },
+        "maestro-version": {
+          "type": "string",
+          "required": false
+        },
+        "maestro-sha256": {
+          "type": "string",
+          "required": false
+        },
+        "flows": {
+          "type": "string",
+          "required": false
+        },
+        "include-tags": {
+          "type": "string",
+          "required": false
+        },
+        "exclude-tags": {
+          "type": "string",
+          "required": false
+        },
+        "suite-timeout-minutes": {
+          "type": "number",
+          "required": false
+        },
+        "dev-client": {
+          "type": "boolean",
+          "required": false
+        },
+        "ios-configuration": {
+          "type": "string",
+          "required": false
+        },
+        "environment-variables": {
+          "type": "string",
+          "required": false
+        },
+        "e2e-setup-script": {
+          "type": "string",
+          "required": false
+        },
+        "e2e-teardown-script": {
+          "type": "string",
+          "required": false
+        },
+        "ios-artifact": {
+          "type": "string",
+          "required": false
+        },
+        "android-artifact": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "secrets": {
+        "consumer-token": {
+          "required": false
+        }
+      },
+      "outputs": [
+        "ios-result",
+        "android-result"
+      ]
+    },
+    "test-unit.yml": {
+      "inputs": {
+        "repository": {
+          "type": "string",
+          "required": false
+        },
+        "ref": {
+          "type": "string",
+          "required": false
+        },
+        "working-directory": {
+          "type": "string",
+          "required": false
+        },
+        "linux-runner": {
+          "type": "string",
+          "required": false
+        },
+        "macos-runner": {
+          "type": "string",
+          "required": false
+        },
+        "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "coverage": {
+          "type": "boolean",
+          "required": false
+        },
+        "unit-script": {
+          "type": "string",
+          "required": false
+        },
+        "coverage-script": {
+          "type": "string",
+          "required": false
+        },
+        "scripts-script": {
+          "type": "string",
+          "required": false
+        },
+        "coverage-artifact-retention-days": {
+          "type": "number",
+          "required": false
+        }
+      },
+      "secrets": {
+        "consumer-token": {
           "required": false
         }
       },

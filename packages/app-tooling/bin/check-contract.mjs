@@ -147,7 +147,7 @@ export function readCallers(root, io = defaultIo) {
 }
 
 /**
- * Which reusable workflows this repository actually calls, e.g. `check-code.yml`.
+ * Which reusable workflows this repository actually calls, e.g. `check.yml`.
  * This is what makes the report honest: a repo with no e2e caller must not be
  * told it is missing `.maestro/`.
  */
@@ -411,7 +411,7 @@ export function checkCalls(consumer, interfaces) {
  * `true`, `false`, or `'unknown'` for a toggle wired to an expression.
  *
  * `'unknown'` is its own answer rather than a guess in either direction. This
- * job blocks every other job in check-code.yml, so treating `${{ vars.X }}` as on
+ * job blocks every other job in check.yml, so treating `${{ vars.X }}` as on
  * would let a repository that legitimately has that gate off be blocked by a
  * requirement it does not have - a false failure on ten jobs, from a value we
  * cannot read. Treating it as off would be the opposite mistake, and silence
@@ -432,12 +432,12 @@ export function toggleOn(req, inputs) {
 export function activeProfiles(uses, override) {
   if (override && override.length > 0) return new Set(override);
   const active = new Set();
-  if (uses.has('check-code.yml')) active.add('checks');
-  if (uses.has('check-unit.yml')) active.add('unit');
-  if (uses.has('check-e2e.yml')) active.add('e2e');
+  if (uses.has('check.yml')) active.add('checks');
+  if (uses.has('test-unit.yml')) active.add('unit');
+  if (uses.has('test-e2e.yml')) active.add('e2e');
   if (uses.has('build-web.yml')) active.add('web');
   if (uses.has('publish-badges.yml')) active.add('badges');
-  if (uses.has('check-codeql.yml')) active.add('codeql');
+  if (uses.has('check-code-scanning.yml')) active.add('code-scanning');
   for (const name of ['build-prepare.yml', 'build-ios.yml', 'build-android.yml', 'publish-store.yml', 'publish-ota.yml']) {
     if (uses.has(name)) active.add('release');
   }
@@ -467,10 +467,6 @@ export function checkRequirement(req, consumer) {
         ? ok()
         : missing(`${req.target} is not a dependency`);
 
-    case 'script-or-dep':
-      if (scripts[req.target]) return ok(`"${req.target}" script`);
-      return deps[req.target] ? ok(`${req.target} dependency`) : missing(`neither a "${req.target}" script nor a ${req.target} dependency`);
-
     case 'file': {
       const found = req.target.find(has);
       return found ? ok(found) : missing(`none of ${req.target.join(', ')} exists`);
@@ -481,7 +477,7 @@ export function checkRequirement(req, consumer) {
         ? ok()
         : missing(`${req.target}/ is missing or empty`);
 
-    case 'mise-tool': {
+    case 'pinned-tool': {
       const { file, tools } = consumer.miseTools;
       if (file === null) return missing('no mise config (.mise.toml)');
       const absent = req.target.filter((tool) => !tools.has(tool));
@@ -540,7 +536,7 @@ export function checkRequirement(req, consumer) {
       return problems.length === 0 ? ok() : missing(problems.join('; '));
     }
 
-    case 'fastlane-lane': {
+    case 'lane': {
       // A textual scan of fastlane/**.rb, not a Ruby parse: enough to catch a
       // lane that was never written, and honest about being no more than that.
       const dir = path.join(root, 'fastlane');
@@ -591,7 +587,7 @@ export function checkRequirement(req, consumer) {
         : missing(`\`make ${req.target}\` runs ${orphans.join(', ')}, and no CI step does`);
     }
 
-    case 'fastlane-env-subset': {
+    case 'lane-environment': {
       // A lane reading an environment variable the lane workflow never passes
       // gets an empty string, and fastlane uploads the empty value.
       const text = collectRuby(path.join(root, 'fastlane'), io);
@@ -655,7 +651,7 @@ export function readMakefile(root, io = defaultIo) {
 
 /**
  * The package scripts CI runs for this caller, from the contract itself: every
- * script requirement of the check-code and check-unit workflows whose workflow is called
+ * script requirement of the check and test-unit workflows whose workflow is called
  * and whose toggle is on. `on` holds the toggles known to be on; `maybe` adds
  * the ones wired to an expression, so neither direction of the gate-set check
  * fails on a value it cannot read.
@@ -665,7 +661,7 @@ export function ciScripts(contract, uses, inputs, profiles) {
   const on = new Set();
   const maybe = new Set();
   for (const req of contract.requirements) {
-    if (!['package-script', 'script-or-dep'].includes(req.kind)) continue;
+    if (req.kind !== 'package-script') continue;
     if (!['checks', 'unit'].includes(req.profile) || !active.has(req.profile)) continue;
     const state = toggleOn(req, inputs);
     if (state === true) on.add(req.target);
@@ -763,12 +759,8 @@ export function summaryTable(results) {
 /** The package.json scripts and caller inputs that would clear every failure. */
 export function skeleton(results) {
   const failed = results.filter((r) => r.level === 'fail');
-  // `script-or-dep` is deliberately not in here. knip is the only member, and
-  // its whole point is that a package.json script of that name breaks a
-  // different gate - a skeleton that suggested one would contradict the fix
-  // printed two lines above it.
   const scripts = failed.filter((r) => r.req.kind === 'package-script');
-  const deps = failed.filter((r) => r.req.kind === 'package-dep' || r.req.kind === 'script-or-dep');
+  const deps = failed.filter((r) => r.req.kind === 'package-dep');
   const toggles = failed.filter((r) => r.req.toggle && r.req.defaultOn);
   const lines = [];
   if (scripts.length > 0) {

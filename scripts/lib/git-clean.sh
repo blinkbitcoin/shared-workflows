@@ -1,5 +1,5 @@
 # Shared helper for "regenerate, then fail if that produced any diff" checks
-# (codegen.sh, i18n.sh). Source it; do not execute.
+# (generated.sh). Source it; do not execute.
 # shellcheck shell=bash
 
 # assert_clean_paths PATH... [-- COMMAND...]

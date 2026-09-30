@@ -1,4 +1,4 @@
-name: Prepare
+name: Build prepare
 on:
   workflow_call:
     inputs:
@@ -58,11 +58,11 @@ on:
         description: 'When the gated workflow has no run for the target sha, or its run was cancelled or failed, dispatch it once at `release-tag` and wait for that run instead of failing. Needs `release-tag` and `actions: write` on the calling job'
         type: boolean
         default: false
-      release-meta-artifact:
+      build-info-artifact:
         description: Artifact name carrying build-info.json, store-notes.json, store-notes.txt and release-notes.md to the later jobs
         type: string
-        default: 'release-meta'
-      build-env:
+        default: 'build-info'
+      environment-variables:
         description: 'Flat JSON object of non-secret build environment variables published before prebuild, the lanes and the scripts (e.g. {"OTA_ENABLED":"true","EXPO_UPDATES_URL":"https://..."}). Keys must be UPPER_SNAKE and anything that reads as a credential is refused - this is a workflow input, so GitHub neither masks nor hides it'
         type: string
         default: '{}'
@@ -83,12 +83,12 @@ on:
       build-number:
         description: 'Resolved build number (first-parent commit count + build-number-offset)'
         value: ${{ jobs.prepare.outputs.build-number }}
-      fp-ios:
+      fingerprint-ios:
         description: '@expo/fingerprint hash of the iOS native layer'
-        value: ${{ jobs.prepare.outputs.fp-ios }}
-      fp-android:
+        value: ${{ jobs.prepare.outputs.fingerprint-ios }}
+      fingerprint-android:
         description: '@expo/fingerprint hash of the Android native layer'
-        value: ${{ jobs.prepare.outputs.fp-android }}
+        value: ${{ jobs.prepare.outputs.fingerprint-android }}
       sha:
         description: 'Commit the release was prepared from (the release-tag commit when release-tag is set, else github.sha)'
         value: ${{ jobs.prepare.outputs.sha }}
@@ -124,8 +124,8 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       build-number: ${{ steps.version.outputs.build-number }}
-      fp-ios: ${{ steps.fingerprint.outputs.fp-ios }}
-      fp-android: ${{ steps.fingerprint.outputs.fp-android }}
+      fingerprint-ios: ${{ steps.fingerprint.outputs.fingerprint-ios }}
+      fingerprint-android: ${{ steps.fingerprint.outputs.fingerprint-android }}
       sha: ${{ steps.sha.outputs.sha }}
     steps:
       - name: Checkout consumer
@@ -155,15 +155,15 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.release-tag }}
         run: bash ".workflows/scripts/release/target-sha.sh" "$RELEASE_TAG"
-      # build-env and the version come before the green gate and before Setup:
+      # environment-variables and the version come before the green gate and before Setup:
       # both need only git and gh, and the build tag below must be reserved
       # seconds after the push, not after a 35-minute wait for CI. Literal
       # `.workflows/` paths, like every step above: $WORKFLOWS_DIR is published
       # by Setup and is empty here (v0.6.0 used it and exited 127 on every
       # consumer's next push).
-      - name: Publish build-env
+      - name: Publish environment-variables
         env:
-          WORKFLOWS_BUILD_ENV: ${{ inputs.build-env }}
+          WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       - name: Resolve version
         id: version
@@ -243,7 +243,7 @@ jobs:
           APP_BUILD_NUMBER: ${{ steps.version.outputs.build-number }}
           STORE_NOTES_LOCALES: ${{ inputs.store-notes-locales }}
           # The store notes generator may draft with an LLM; the
-          # provider/model live in build-env, only the keys are secrets.
+          # provider/model live in environment-variables, only the keys are secrets.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # env.RELEASE_BODY_FILE is set by the step above when release-tag was
@@ -252,10 +252,10 @@ jobs:
           # than the override.
           RELEASE_BODY_FILE: ${{ env.RELEASE_BODY_FILE || inputs.release-body-file }}
         run: bash "$WORKFLOWS_DIR/scripts/release/gen-store-notes.sh"
-      - name: Upload release-meta
+      - name: Upload build-info
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.release-meta-artifact }}
+          name: ${{ inputs.build-info-artifact }}
           path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
           retention-days: 30
           overwrite: true

@@ -4,13 +4,13 @@
 # These two files are the only gate that runs on a developer's machine before a
 # commit exists, and nothing else in the suite would notice if they rotted:
 # a mistyped hook name is silently never installed, and a commitlint pin that
-# drifts from scripts/checks/commitlint.sh lets a message pass locally and fail
+# drifts from scripts/checks/commits.sh lets a message pass locally and fail
 # in CI (or the reverse, which is worse — it trains people to --no-verify).
 load test_helper
 
 CONFIG="$REPO_ROOT/lefthook.yml"
 COMMITLINT="$REPO_ROOT/commitlint.config.mjs"
-CI_COMMITLINT="$REPO_ROOT/scripts/checks/commitlint.sh"
+CI_COMMITLINT="$REPO_ROOT/scripts/checks/commits.sh"
 
 setup() {
   command -v yq >/dev/null 2>&1 || skip "yq not on PATH (run through 'mise exec --')"
@@ -79,10 +79,10 @@ GIT_HOOKS='applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-co
 }
 
 # The hook and CI must resolve the same commitlint, or a message that passes
-# one fails the other. scripts/checks/commitlint.sh is the original; the hook
+# one fails the other. scripts/checks/commits.sh is the original; the hook
 # copies its invocation, including the doubled -p that is the only form npx
 # installs both packages with.
-@test "the commit-msg hook pins the same commitlint as scripts/checks/commitlint.sh" {
+@test "the commit-msg hook pins the same commitlint as scripts/checks/commits.sh" {
   run yq -r '.["commit-msg"].commands.commitlint.run' "$CONFIG"
   hook_run="$output"
   contains "$hook_run" "--edit" || fail "commit-msg hook must lint the message file: $hook_run"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Lint a consumer's own shell scripts and .github/workflows/ with the same pinned
-# actionlint/shellcheck versions this repo's own `make check` uses.
+# The CI check: lint a consumer's own shell scripts and .github/workflows/, and
+# audit .github/ for workflow security, with the same pinned shellcheck,
+# actionlint and zizmor versions this repository's own `make check-ci` uses.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/versions.sh"
@@ -18,21 +19,20 @@ for dir in "${shellcheck_paths[@]}"; do
 done
 
 if [ "${#existing[@]}" -eq 0 ] && [ ! -d .github/workflows ]; then
-  log "lint-ci: no ${shellcheck_paths[*]} and no .github/workflows/ in $root; nothing to lint"
+  log "check-ci: no ${shellcheck_paths[*]} and no .github/workflows/ in $root; nothing to lint"
   exit 0
 fi
 
 require_cmd mise
 
-# WORKFLOWS_ACTIONLINT / WORKFLOWS_SHELLCHECK let a single invocation toggle either half
-# independently (check-code.yml's `actionlint` and `shellcheck` inputs), while
-# `make check` (no env set) still runs both. The two halves are guarded
-# separately on purpose: a consumer with workflows but no scripts/ directory (a
-# perfectly normal Expo app) must still get actionlint.
-if [ "${WORKFLOWS_ACTIONLINT:-true}" = "true" ] && [ -d .github/workflows ]; then
+# One gate, the three linters of the CI code (check.yml's `ci` input turns it
+# on or off as a whole). Each half is guarded on what it reads: a consumer with
+# workflows but no scripts/ directory (a perfectly normal Expo app) must still
+# get actionlint and zizmor.
+if [ -d .github/workflows ]; then
   mise x "actionlint@$ACTIONLINT_VERSION" -- actionlint -color
 else
-  log "lint-ci: skipping actionlint"
+  log "check-ci: skipping actionlint"
 fi
 
 # zizmor is the security half of the workflow lint: template injection, broad
@@ -46,7 +46,7 @@ fi
 # stops at the nearest `.git` *directory*, and a worktree's `.git` is a file,
 # so a run from a worktree nested in another checkout would read that
 # checkout's policy instead.
-if [ "${WORKFLOWS_ZIZMOR:-true}" = "true" ] && [ -d .github/workflows ]; then
+if [ -d .github/workflows ]; then
   if [ -f .github/zizmor.yml ]; then
     config=.github/zizmor.yml
   elif [ -f zizmor.yml ]; then
@@ -60,10 +60,10 @@ if [ "${WORKFLOWS_ZIZMOR:-true}" = "true" ] && [ -d .github/workflows ]; then
   fi
   mise x "zizmor@$ZIZMOR_VERSION" -- zizmor --offline --min-severity medium --config "$config" .github
 else
-  log "lint-ci: skipping zizmor"
+  log "check-ci: skipping zizmor"
 fi
 
-if [ "${WORKFLOWS_SHELLCHECK:-true}" = "true" ] && [ "${#existing[@]}" -gt 0 ]; then
+if [ "${#existing[@]}" -gt 0 ]; then
   files=()
   while IFS= read -r f; do
     files+=("$f")
@@ -72,5 +72,5 @@ if [ "${WORKFLOWS_SHELLCHECK:-true}" = "true" ] && [ "${#existing[@]}" -gt 0 ]; 
     mise x "shellcheck@$SHELLCHECK_VERSION" -- shellcheck -x "${files[@]}"
   fi
 else
-  log "lint-ci: skipping shellcheck"
+  log "check-ci: skipping shellcheck"
 fi

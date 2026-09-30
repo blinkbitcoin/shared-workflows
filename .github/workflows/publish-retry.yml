@@ -1,4 +1,4 @@
-name: Promotion Retry
+name: Publish retry
 # The second line behind build-prepare.yml's green gate. The gate waits for the
 # gated build and, with require-green-dispatch, starts a missing or red one
 # once; what it cannot fix is a promotion that timed out waiting, or whose
@@ -70,4 +70,4 @@ jobs:
           GH_REPO: ${{ inputs.repository || github.repository }}
           WORKFLOW: ${{ inputs.workflow }}
           HEAD_SHA: ${{ inputs.head-sha }}
-        run: bash ".workflows/scripts/release/rerun-blocked.sh"
+        run: bash ".workflows/scripts/release/retry.sh"

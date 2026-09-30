@@ -2,7 +2,7 @@
 # Fold the per-platform build-info records staged in a directory into the one
 # build-info.json that ships on the release.
 #
-#   build-info.json           the record build-prepare produced (release-meta)
+#   build-info.json           the record build-prepare produced (build-info)
 #   build-info.<platform>.json  the same record plus that platform's
 #                             `artifacts` digests, written by artifact-hashes.sh
 #
@@ -40,7 +40,7 @@ fi
 
 base="$dir/build-info.json"
 if [ ! -f "$base" ]; then
-  # No release-meta record staged (a caller with release-notes-artifact: ''), so the
+  # No build-info record staged (a caller with release-notes-artifact: ''), so the
   # platform copy is the only record there is.
   log "no build-info.json in $dir - seeding it from ${overlays[0]}"
   cp "${overlays[0]}" "$base"

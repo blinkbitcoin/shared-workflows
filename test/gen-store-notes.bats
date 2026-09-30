@@ -121,7 +121,7 @@ SH
   contains "$argv" "$REPO_ROOT/packages/app-tooling/bin/gen-store-notes.mjs --from-body $BATS_TEST_TMPDIR/body.md --body-section" \
     || fail "the package's generator was not run on the body: $argv"
   contains "$argv" "--locales en,de" || fail "the locales were not passed as a flag: $argv"
-  contains "$argv" "--out $WORKFLOWS_RELEASE_META_DIR" || fail "--out is not the release-meta directory: $argv"
+  contains "$argv" "--out $WORKFLOWS_RELEASE_META_DIR" || fail "--out is not the build-info directory: $argv"
   [ "$(cat "$BATS_TEST_TMPDIR/locales.txt")" = "en,de" ] || fail "STORE_NOTES_LOCALES was not forwarded"
   # The generator wrote no release-notes.md, so the script makes one rather than
   # leaving the release body empty.

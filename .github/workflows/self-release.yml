@@ -1,4 +1,4 @@
-name: Release
+name: Self release
 on:
   push:
     branches: [main]
@@ -16,7 +16,7 @@ jobs:
   # by name, because one opened with GITHUB_TOKEN gets a pull_request run that
   # never gets a job. Nothing is dispatched at the tag: the jobs below chain off
   # its outputs instead.
-  release-please:
+  release-pr:
     name: Release PR
     uses: ./.github/workflows/pr-release.yml
     permissions:
@@ -36,8 +36,8 @@ jobs:
   # reusable workflow. Same called workflow as self-ci.yml.
   store-notes:
     name: Store notes
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release-created == 'true' }}
+    needs: release-pr
+    if: ${{ needs.release-pr.outputs.release-created == 'true' }}
     uses: ./.github/workflows/self-store-notes.yml
     permissions:
       contents: read
@@ -46,12 +46,12 @@ jobs:
     name: Major tag
     # The dry run is a need, not a parallel job: a failed or skipped
     # dry run skips this job, and the tags stay on the last release.
-    needs: [release-please, store-notes]
+    needs: [release-pr, store-notes]
     # Job outputs are strings and every non-empty string is truthy in a GitHub
     # expression, so a bare `outputs.release-created` also fires on the literal
     # "false" a no-release push produces - which would run tag-major.sh with an
     # empty TAG and leave main permanently red.
-    if: ${{ needs.release-please.outputs.release-created == 'true' }}
+    if: ${{ needs.release-pr.outputs.release-created == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -62,16 +62,16 @@ jobs:
           fetch-depth: 0
       - name: Move the moving major/minor tags to this release
         env:
-          TAG: ${{ needs.release-please.outputs.tag-name }}
+          TAG: ${{ needs.release-pr.outputs.release-tag }}
         run: bash scripts/self/tag-major.sh
 
   publish-app-tooling:
     name: Publish app-tooling
-    needs: release-please
+    needs: release-pr
     # paths-released names every package this push released; the root package
     # is `.`, the npm package its directory. The workflow also prints it to the
     # job summary, so a path spelled wrong here shows up there.
-    if: ${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/app-tooling') }}
+    if: ${{ contains(fromJSON(needs.release-pr.outputs.paths-released || '[]'), 'packages/app-tooling') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

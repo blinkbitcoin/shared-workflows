@@ -1,4 +1,4 @@
-name: CI
+name: Self CI
 on:
   push: { branches: [main] }
   # No filter for the release PR here: `branches-ignore` under pull_request
@@ -16,7 +16,7 @@ concurrency:
   group: self-ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 # Callers rather than one job running `make check`, so a run graph names
-# the gate that failed: `Checks / Code`, `Checks / Security`, ...,
+# the gate that failed: `Checks / CI`, `Checks / Secrets`, ...,
 # `Unit / Tests`, `Unit / Package`, `Store notes / Dry run / Draft` and
 # `Store notes / Validate`. That is the shape a consumer's own CI has,
 # and the reason to match it is the same one - a reader should see which gate
@@ -25,9 +25,9 @@ concurrency:
 # Local paths, not @v0: this repository's CI has to run the ref under review.
 # A tag here would test the last release on every pull request.
 jobs:
-  # Which of the narrow gates this change can affect: Code (shellcheck,
-  # actionlint), Tooling (the version checks) and Package (the suites of the
-  # packages under packages/). The rest - Tests, Security, Docs, Commits - read the whole tree or
+  # Which of the narrow gates this change can affect: CI (shellcheck,
+  # actionlint, zizmor), Versions (the version checks) and Package (the suites
+  # of the packages under packages/). The rest - Tests, Secrets, Spell, Commits - read the whole tree or
   # the whole history and run on every change. A skipped job counts as passing,
   # which is why this is a job and not a `paths` filter on the trigger.
   #
@@ -39,8 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      code: ${{ steps.classify.outputs.code }}
-      tooling: ${{ steps.classify.outputs.tooling }}
+      ci: ${{ steps.classify.outputs.ci }}
+      versions: ${{ steps.classify.outputs.versions }}
       package: ${{ steps.classify.outputs.package }}
     steps:
       - uses: actions/checkout@v7
@@ -56,8 +56,8 @@ jobs:
     needs: changes
     uses: ./.github/workflows/self-checks.yml
     with:
-      code: ${{ needs.changes.outputs.code != 'false' }}
-      tooling: ${{ needs.changes.outputs.tooling != 'false' }}
+      ci: ${{ needs.changes.outputs.ci != 'false' }}
+      versions: ${{ needs.changes.outputs.versions != 'false' }}
   # No `needs: checks`. A consumer gates its unit job that way to keep a red
   # run out of a twenty-minute E2E. Here every job finishes in about two
   # minutes, so serializing would buy latency and nothing else.

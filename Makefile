@@ -15,7 +15,7 @@ MISE := $(shell command -v mise >/dev/null 2>&1 && echo 'mise exec --')
 # gate, as `check-ci` is one gate in a consumer.
 #
 # `find`, not `scripts/*/*.sh`: that glob is fixed at depth 2, so a script one
-# directory deeper is skipped silently. Same form as scripts/ci/lint-ci.sh.
+# directory deeper is skipped silently. Same form as scripts/ci/check-ci.sh.
 #
 # The --offline flag of zizmor: the online audits call the GitHub API, and a gate must give
 # the same answer without a network. Policy (tag pins allowed) in

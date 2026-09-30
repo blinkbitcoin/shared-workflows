@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // GitHub's CodeQL analysis, on this machine: the same language, query suite,
-// packs and path exclusions as check-codeql.yml reads from the repository's
+// packs and path exclusions as check-code-scanning.yml reads from the repository's
 // configuration file - and so the same findings, before a push, with each
 // inline `// codeql[<rule-id>]` marker shown as suppressing its finding or not.
 //
 //   check-code-scanning [--root DIR] [--config FILE] [--language LANGUAGE]
 //
-// --config defaults to `.github/codeql/codeql-config.yml`, check-codeql.yml's
+// --config defaults to `.github/codeql/codeql-config.yml`, check-code-scanning.yml's
 // own default. --language defaults to its default too, `javascript-typescript`,
 // the one language mapped here: the suite path and the query pack are named
 // after the language, so another one needs this mapping extended rather than

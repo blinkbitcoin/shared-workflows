@@ -59,18 +59,18 @@ lane() { run bash "$REPO_ROOT/scripts/release/fastlane.sh" "$@"; }
 # path resolves one directory too deep and the lane reads the wrong file.
 @test "every path variable reaches the lane absolute" {
   root="$(cd "$ROOT" && pwd -P)"
-  BUILD_INFO_FILE=release-meta/build-info.json \
-    STORE_NOTES_FILE=release-meta/store-notes.txt \
-    STORE_NOTES_JSON=release-meta/store-notes.json \
+  BUILD_INFO_FILE=build-info/build-info.json \
+    STORE_NOTES_FILE=build-info/store-notes.txt \
+    STORE_NOTES_JSON=build-info/store-notes.json \
     ANDROID_UPLOAD_KEYSTORE_PATH=secrets/upload.jks \
     PLAY_SERVICE_ACCOUNT_JSON_PATH=/already/absolute.json \
     lane android build
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  grep -qx "BUILD_INFO_FILE=$root/release-meta/build-info.json" "$WORKFLOWS_TEST_LOG" \
+  grep -qx "BUILD_INFO_FILE=$root/build-info/build-info.json" "$WORKFLOWS_TEST_LOG" \
     || fail "BUILD_INFO_FILE was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"
-  grep -qx "STORE_NOTES_FILE=$root/release-meta/store-notes.txt" "$WORKFLOWS_TEST_LOG" \
+  grep -qx "STORE_NOTES_FILE=$root/build-info/store-notes.txt" "$WORKFLOWS_TEST_LOG" \
     || fail "STORE_NOTES_FILE was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"
-  grep -qx "STORE_NOTES_JSON=$root/release-meta/store-notes.json" "$WORKFLOWS_TEST_LOG" \
+  grep -qx "STORE_NOTES_JSON=$root/build-info/store-notes.json" "$WORKFLOWS_TEST_LOG" \
     || fail "STORE_NOTES_JSON was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"
   grep -qx "ANDROID_UPLOAD_KEYSTORE_PATH=$root/secrets/upload.jks" "$WORKFLOWS_TEST_LOG" \
     || fail "ANDROID_UPLOAD_KEYSTORE_PATH was not absolutised: $(cat "$WORKFLOWS_TEST_LOG")"

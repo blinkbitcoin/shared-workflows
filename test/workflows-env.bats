@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/ci/workflows-env.sh: the `setup` composite action (and check-e2e.yml's
+# scripts/ci/workflows-env.sh: the `setup` composite action (and test-e2e.yml's
 # build-ios job, as its first step) publishes WORKFLOWS_DIR and
 # WORKING_DIRECTORY into $GITHUB_ENV and keeps the `.workflows/` checkout out of
 # the consumer's git status. A wrong WORKFLOWS_DIR makes every later

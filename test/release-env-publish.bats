@@ -51,7 +51,7 @@ setup() {
   local out="$RUNNER_TEMP/workflows"
   [ "$output" = "WORKFLOWS_OUT=$out
 WORKFLOWS_OUTPUT_DIR=$out
-WORKFLOWS_RELEASE_META_DIR=$out/release-meta
+WORKFLOWS_RELEASE_META_DIR=$out/build-info
 WORKFLOWS_OTA_DIR=$out/ota
 WORKFLOWS_ASSETS_DIR=$out/assets" ] || fail "unexpected environment file: $output"
   [ -d "$out" ] || fail "the output directory was not created"
@@ -63,7 +63,7 @@ WORKFLOWS_ASSETS_DIR=$out/assets" ] || fail "unexpected environment file: $outpu
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   run cat "$GITHUB_ENV"
   contains "$output" "WORKFLOWS_OTA_DIR=$BATS_TEST_TMPDIR/elsewhere/ota" || fail "the caller's directory was not published: $output"
-  contains "$output" "WORKFLOWS_RELEASE_META_DIR=$BATS_TEST_TMPDIR/custom/release-meta" ||
+  contains "$output" "WORKFLOWS_RELEASE_META_DIR=$BATS_TEST_TMPDIR/custom/build-info" ||
     fail "a default did not follow the caller's output directory: $output"
 }
 

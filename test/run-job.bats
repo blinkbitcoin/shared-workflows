@@ -52,7 +52,7 @@ EOF
   run bash "$REPO_ROOT/scripts/security/run-job.sh" code
   [ "$status" -eq 1 ] || fail "expected a hard failure, got $status: $output"
   contains "$output" 'scripts/security/code.sh' || fail "the error does not name the missing runner: $output"
-  contains "$output" 'security-policy.json' || fail "the error does not say how to switch the job off: $output"
+  contains "$output" 'security-settings.json' || fail "the error does not say how to switch the job off: $output"
 }
 
 # A runner that exits 0 without writing its SARIF would reach the verdict as

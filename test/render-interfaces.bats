@@ -50,9 +50,9 @@ $want"
     || fail "an input with no required: did not default to optional string"
   [ "$(yq -r '.workflows."publish-ota.yml".secrets.OTA_PUBLISH_TOKEN.required' "$INTERFACES")" = "false" ] \
     || fail "publish-ota's secret lost its required flag"
-  [ "$(yq -r '.workflows."check-code.yml".outputs | join(" ")' "$INTERFACES")" = \
-    "$(yq -r '.on.workflow_call.outputs | keys | join(" ")' "$REPO_ROOT/.github/workflows/check-code.yml")" ] \
-    || fail "check-code's outputs are not the ones it declares"
+  [ "$(yq -r '.workflows."check.yml".outputs | join(" ")' "$INTERFACES")" = \
+    "$(yq -r '.on.workflow_call.outputs | keys | join(" ")' "$REPO_ROOT/.github/workflows/check.yml")" ] \
+    || fail "check's outputs are not the ones it declares"
   [ "$(yq -r '.workflows."pr-closed.yml".inputs | length' "$INTERFACES")" = "0" ] \
     || fail "a workflow with no inputs did not render as an empty table"
 }

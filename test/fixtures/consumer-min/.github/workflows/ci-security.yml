@@ -2,7 +2,7 @@ name: Security
 on:
   push:
     branches: [main]
-    # No paths-ignore: check-code.yml's `changes` job is this family's single
+    # No paths-ignore: check.yml's `changes` job is this family's single
     # docs classifier, and a second, narrower copy of it here would drift from it.
   pull_request:
     types: [opened, synchronize, reopened]
