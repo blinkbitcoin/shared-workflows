@@ -26,6 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
+      # GNU parallel lets `make test-unit` run one bats job per core, as it does
+      # on a laptop, so a test that only passes alone fails here too.
+      - run: sudo apt-get install -y --no-install-recommends parallel
       - run: make test-unit
   package:
     name: Package

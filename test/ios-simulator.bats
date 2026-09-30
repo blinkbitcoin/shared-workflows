@@ -354,7 +354,13 @@ only_path() {
   contains "$output" "unified log stopped" || fail "output: $output"
   [ ! -f "$WORKFLOWS_OUT/ios-record.pid" ] || fail "recording pid file survived"
   [ ! -f "$WORKFLOWS_OUT/ios-unified-log.pid" ] || fail "unified-log pid file survived"
-  sleep 1
+  # Poll rather than sleep a fixed second: under a parallel run a killed process
+  # can take longer than that to go.
+  local i
+  for i in $(seq 1 50); do
+    kill -0 "$rec" 2>/dev/null || kill -0 "$logp" 2>/dev/null || break
+    sleep 0.2
+  done
   ! kill -0 "$rec" 2>/dev/null || fail "recording (pid $rec) still running"
   ! kill -0 "$logp" 2>/dev/null || fail "log stream (pid $logp) still running"
 }

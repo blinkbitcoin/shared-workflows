@@ -138,6 +138,12 @@ Every row is a make target; nothing here is run through a package manager.
   - **"It needs Xcode" is not an exception.** A script that needs Xcode, a simulator, CocoaPods, Gradle, an emulator, Maestro or a network is run against fakes of those tools on `PATH` that record their calls. `test/app-launch.bats` and `test/native-ios-build.bats` show how. Eight scripts once sat on an allowlist as "cannot run from a test", and every one of them could.
   - **Where tests live:** in `test/`, not beside the script, because `scripts/` is what callers check out and what shellcheck lints.
   - **Enforced:** `test/script-coverage.bats` fails naming every script without its own test, and fails if an allowlist comes back.
+- **Tests run in parallel, so each one stands alone.** `make test-unit` runs
+  one bats job per core (the suite goes from about eight minutes to two), and
+  CI does the same. A test uses its own `$BATS_TEST_TMPDIR`, never a fixed path
+  another test also writes, and polls for a background process instead of
+  sleeping a fixed time: a busy machine overruns any fixed wait. A test that
+  passes alone and fails in the parallel run is a broken test.
 - **Every assertion ends in `|| fail "..."`** — bash 3.2 (macOS's
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`

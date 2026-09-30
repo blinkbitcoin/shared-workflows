@@ -20,10 +20,12 @@ STUB
   export PATH="$bin:$PATH"
 }
 
-# Waits for the background fake to write its line into the log.
+# Waits for the background fake to write its line into the log: up to ten
+# seconds, returning as soon as it is there. A two-second budget ran out when
+# the suite runs in parallel and every core is busy.
 metro_log() {
   local i
-  for i in 1 2 3 4 5 6 7 8 9 10; do
+  for i in $(seq 1 50); do
     [ -s "$WORKFLOWS_OUT/metro.log" ] && break
     sleep 0.2
   done
