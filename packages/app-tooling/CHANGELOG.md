@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.1.1...app-tooling-v0.2.0) (2026-09-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **workflows:** a consumer's scripts/security/ is now a no-copy.security failure in the contract check. Delete it, keep security-settings.json (add "rules" to jobs.code for your own Semgrep rules), and run the package's check-security locally. The file.security-* rows are gone.
+
+### Features
+
+* **workflows:** ship the security scanners instead of requiring each consumer to ([#155](https://github.com/blinkbitcoin/shared-workflows/issues/155)) ([92caa95](https://github.com/blinkbitcoin/shared-workflows/commit/92caa95b7028b3d3c2c4a55fca1cbccebce02127))
+
 ## [0.1.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.1.0...app-tooling-v0.1.1) (2026-09-30)
 
 

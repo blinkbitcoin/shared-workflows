@@ -1,6 +1,6 @@
 {
   "name": "@blinkbitcoin/app-tooling",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "The shared app tooling: the pinned tool table, the checks that enforce it, the contract checker, the CI badge renderer and the store notes generator, and under expo/ the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets an Expo app extends.",
   "license": "MIT",
   "type": "module",
