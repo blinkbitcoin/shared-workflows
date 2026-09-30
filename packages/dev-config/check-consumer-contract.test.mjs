@@ -777,6 +777,13 @@ test('a make ci prerequisite that is a file, not a rule, reaches nothing and bre
   assert.equal(runs.level, 'ok', runs.reason);
 });
 
+test('the Makefile reader follows include and -include to the fragments that exist', () => {
+  const files = { Makefile: 'include make/gates.mk make/gone.mk\n-include local.mk\nci: check\n', 'make/gates.mk': 'check:\n\tpnpm lint\n' };
+  const make = readMakefile('', consumer({ files }).io);
+  assert.deepEqual([...make.reachable('ci')], ['ci', 'check']);
+  assert.equal(make.rules.get('check').recipe, '\tpnpm lint\n');
+});
+
 test('the Makefile reader visits a prerequisite shared by two targets once, and survives a cycle', () => {
   const make = readMakefile('', consumer({ files: { Makefile: 'ci: a b\na: shared\nb: shared\nshared: ci\n' } }).io);
   assert.deepEqual([...make.reachable('ci')], ['ci', 'a', 'shared', 'b']);

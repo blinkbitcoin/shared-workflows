@@ -946,6 +946,45 @@
       "severity": "required",
       "fix": "Delete the copies and their tests, and import from the package instead: adapterFor, KEY_ENV, EFFORTS, parseEffort and parseExtraParams from @blinkbitcoin/dev-config/llm, and thinks, mergeRequest and unfence from @blinkbitcoin/dev-config/llm-request.",
       "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-test-siblings",
+      "kind": "no-copy",
+      "label": "no copy of check-test-siblings",
+      "target": ["scripts/test-siblings.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-test-siblings program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the test that reimplements it, put its rules in the testSiblings section of dev-config.json, and run pnpm exec check-test-siblings from make check instead.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-docs",
+      "kind": "no-copy",
+      "label": "no copy of check-docs",
+      "target": ["scripts/check-docs.sh", "scripts/check-docs.test.mjs", "scripts/manifest-structural.mjs", "scripts/manifest-structural.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-docs program @blinkbitcoin/dev-config ships, which runs check-make-target-names, check-docs-tables and check-diagrams after its own two checks; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copies and their tests, put your architecture paths and target-name exceptions in the docs section of dev-config.json, and point make check-docs at pnpm exec check-docs.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.check-licenses",
+      "kind": "no-copy",
+      "label": "no copy of check-licenses",
+      "target": ["scripts/check-licenses.mjs", "scripts/check-licenses.test.mjs"],
+      "profile": "checks",
+      "neededBy": "the check-licenses program @blinkbitcoin/dev-config ships, with the organisation's licence allowlist; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy and its test, and point deps:licenses at check-licenses; a licence only your repository accepts goes in an --allow.",
+      "guide": "no-copies-of-this-family"
     }
   ]
 }

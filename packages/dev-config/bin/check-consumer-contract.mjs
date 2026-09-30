@@ -24,6 +24,7 @@
 import { appendFileSync, existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { expandIncludes } from '../lib/makefile.mjs';
 import { pinProblems } from '../lib/pin.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -614,10 +615,12 @@ export function checkRequirement(req, consumer) {
  * The consumer's Makefile as `{ rules, reachable(target) }`: each rule's
  * prerequisites and recipe text, and every target a `make TARGET` reaches by
  * following prerequisites. Parsed, not run - running `make` here would run the
- * gates themselves. `null` when there is no Makefile.
+ * gates themselves. `null` when there is no Makefile. Its `include` and
+ * `-include` lines are followed to the files that exist, so a gate defined in a
+ * shared `.mk` fragment is part of what `make ci` reaches.
  */
 export function readMakefile(root, io = defaultIo) {
-  const text = io.read(path.join(root, 'Makefile'));
+  const text = expandIncludes(path.join(root, 'Makefile'), (file) => io.read(file), root);
   if (text === null) return null;
   const rules = new Map();
   let current = null;

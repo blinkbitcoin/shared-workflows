@@ -96,6 +96,18 @@ test('main fails on a target named after a tool, and on allowances that no longe
   ]);
 });
 
+test('main follows include and -include to the fragments that exist, and holds their targets to the rule', () => {
+  const { out, err, io } = capture();
+  const read = tree({
+    Makefile: `include shared.mk\n-include local.mk\n${MAKEFILE}`,
+    'shared.mk': 'check-knip: ## Knip\n\ttrue\n',
+    'package.json': PKG,
+  });
+  assert.equal(main(['--allow', 'gen-graphql=generated'], { ...io, cwd: '/r', read }), 1);
+  assert.deepEqual(out, []);
+  assert.match(err[0], /^check-knip \(knip\) is named after a tool/);
+});
+
 test('main works with neither a .mise.toml nor a package.json', () => {
   const { out, io } = capture();
   assert.equal(main([], { ...io, cwd: '/r', read: tree({ Makefile: MAKEFILE }) }), 0);
