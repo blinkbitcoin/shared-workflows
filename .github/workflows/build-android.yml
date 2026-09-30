@@ -215,7 +215,7 @@ jobs:
       - name: Fastlane android build
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
-          RELEASE_NOTES_STORE_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/notes-store.txt
+          STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
           STORE_NOTES_JSON: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.json
           # Passed alongside the decoded file (ANDROID_UPLOAD_KEYSTORE_PATH):
           # a lane may read either form, and a lane that reads the base64 with
@@ -249,7 +249,7 @@ jobs:
           # artifacts.apkSha256, which is what the consumer's verify-android
           # compares the universal apk against.
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_OUTPUT_DIR }}/build-info.json
-          RELEASE_NOTES_STORE_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/notes-store.txt
+          STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
           STORE_NOTES_JSON: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.json
           # Published by build-env; forwarded explicitly so the contract is
           # visible at the step that depends on it. Empty means "signature

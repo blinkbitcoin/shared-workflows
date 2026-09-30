@@ -1,17 +1,17 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# The section is rendered with body-section.sh, the same code pr-notes.sh uses,
+# The section is rendered with body-section.sh, the same code pr-store-notes.sh uses,
 # so a change to how a block looks moves both sides of this check together.
 load test_helper
 
 setup() {
-  CHECK="$REPO_ROOT/scripts/self/check-release-notes-section.sh"
+  CHECK="$REPO_ROOT/scripts/self/check-store-notes-section.sh"
   unset SECTION SECTION_TITLE
   printf '• close the alerts\n• speed up launch\n' > "$BATS_TEST_TMPDIR/notes"
 }
 
-# render TITLE - the section pr-notes.sh would output for TITLE: the block
+# render TITLE - the section pr-store-notes.sh would output for TITLE: the block
 # without its leading blank line.
 render() {
   bash -c 'source "$1/scripts/lib/common.sh"; source "$1/scripts/lib/body-section.sh"; render_section_block "$2" "$3"' \

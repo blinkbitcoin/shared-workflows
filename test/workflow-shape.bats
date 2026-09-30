@@ -22,7 +22,7 @@ setup() {
 @test "every reusable workflow this family publishes is present" {
   for w in check-code check-unit check-e2e build-web publish-badges pr-closed pr-title check-codeql \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-release-notes publish-promotion-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-promotion-retry pr-release; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
       return 1
@@ -329,7 +329,7 @@ lane_step_count() {
 }
 
 @test "every workflow that runs prebuild, a lane or the notes generator accepts build-env" {
-  for w in build-prepare build-ios build-android publish-store pr-release-notes check-security; do
+  for w in build-prepare build-ios build-android publish-store pr-store-notes check-security; do
     f="$REPO_ROOT/.github/workflows/$w.yml"
     have=$(yq -r '.on.workflow_call.inputs | has("build-env")' "$f")
     [ "$have" = "true" ] || fail "$w.yml does not declare a build-env input"
@@ -369,14 +369,14 @@ lane_step_count() {
 # Empty, so the store notes generator picks the locales from the listings the
 # app actually has. A default here won over that: an app with de-DE metadata
 # got en-US-only store notes from CI.
-@test "notes-locales defaults to empty in both workflows that run the notes generator" {
-  for wf in build-prepare pr-release-notes; do
+@test "store-notes-locales defaults to empty in both workflows that run the store notes generator" {
+  for wf in build-prepare pr-store-notes; do
     f="$REPO_ROOT/.github/workflows/$wf.yml"
-    got=$(yq -r '.on.workflow_call.inputs."notes-locales".default' "$f")
-    [ "$got" = "" ] || fail "$wf.yml notes-locales defaults to '$got', expected empty"
+    got=$(yq -r '.on.workflow_call.inputs."store-notes-locales".default' "$f")
+    [ "$got" = "" ] || fail "$wf.yml store-notes-locales defaults to '$got', expected empty"
   done
-  [ "$(grep -c '| `notes-locales` | `'"''"'` |' "$REPO_ROOT/docs/consumer-guide.md")" -eq 2 ] \
-    || fail "the consumer guide does not document the empty notes-locales default in both workflows"
+  [ "$(grep -c '| `store-notes-locales` | `'"''"'` |' "$REPO_ROOT/docs/consumer-guide.md")" -eq 2 ] \
+    || fail "the consumer guide does not document the empty store-notes-locales default in both workflows"
 }
 
 # The digest step writes an enriched build-info.json into $WORKFLOWS_OUTPUT_DIR; the
@@ -436,11 +436,11 @@ lane_step_count() {
   # order is read out of the numbered list instead.
   step_index() { printf '%s\n' "$names" | grep -nxF "$1" | head -1 | cut -d: -f1; }
   merge_i=$(step_index "Merge platform build-info")
-  notes_i=$(step_index "Download notes")
+  notes_i=$(step_index "Download release notes")
   assets_i=$(step_index "Download assets")
   upload_i=$(step_index "Release assets")
   [ -n "$merge_i" ] || fail "publish-github-release never merges the platform build-info: $names"
-  [ "$notes_i" -lt "$assets_i" ] || fail "publish-github-release stages assets before notes: $names"
+  [ "$notes_i" -lt "$assets_i" ] || fail "publish-github-release stages assets before the release notes: $names"
   [ "$assets_i" -lt "$merge_i" ] || fail "the merge runs before the assets are staged: $names"
   [ "$merge_i" -lt "$upload_i" ] || fail "the merge runs after the upload: $names"
 }
@@ -486,15 +486,15 @@ lane_step_count() {
     || fail "the release download is out of order: $names"
 }
 
-# notes-text is the one way a caller hands publish-github-release notes it
+# release-notes-text is the one way a caller hands publish-github-release release notes it
 # composed itself, without a job to upload them as an artifact. It has to reach
 # the script, where it wins over the notes file.
-@test "publish-github-release hands notes-text to the release step" {
+@test "publish-github-release hands release-notes-text to the release step" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/publish-github-release.yml"
-  [ "$(yq -r '.on.workflow_call.inputs."notes-text".default' "$f")" = "" ] || fail "notes-text does not default to empty"
-  [ "$(yq -r '[.jobs.release.steps[] | select(.id == "assets")][0].env.NOTES_TEXT' "$f")" = '${{ inputs.notes-text }}' ] \
-    || fail "the release step does not read notes-text"
+  [ "$(yq -r '.on.workflow_call.inputs."release-notes-text".default' "$f")" = "" ] || fail "release-notes-text does not default to empty"
+  [ "$(yq -r '[.jobs.release.steps[] | select(.id == "assets")][0].env.RELEASE_NOTES_TEXT' "$f")" = '${{ inputs.release-notes-text }}' ] \
+    || fail "the release step does not read release-notes-text"
 }
 
 # pr-release.yml starts the caller's CI on each release PR and its follow-on
@@ -526,42 +526,42 @@ lane_step_count() {
   [ "$(yq -r "$app.if" "$f")" = "\${{ env.HAVE_RELEASE_TAGGER_APP == 'true' }}" ] || fail "the App token is minted without the App's secrets"
 }
 
-# pr-release-notes.yml's dry run. `dry-run` defaults off and
+# pr-store-notes.yml's dry run. `dry-run` defaults off and
 # `pr-number` keeps meaning what it did, so every existing caller is
 # unaffected; the step has to read both new inputs, and the `section` output
 # has to be wired from the step through the job to the workflow, or a
 # dry run reads an empty string and a consumer's check of it is vacuous.
-@test "pr-release-notes declares dry-run, body-file and an optional pr-number, and passes them to the script" {
+@test "pr-store-notes declares dry-run, body-file and an optional pr-number, and passes them to the script" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/pr-release-notes.yml"
+  f="$REPO_ROOT/.github/workflows/pr-store-notes.yml"
   [ "$(yq -r '.on.workflow_call.inputs."dry-run".type' "$f")" = "boolean" ] || fail "dry-run is not a boolean input"
   [ "$(yq -r '.on.workflow_call.inputs."dry-run".default' "$f")" = "false" ] || fail "dry-run does not default to false"
   [ "$(yq -r '.on.workflow_call.inputs."body-file".type' "$f")" = "string" ] || fail "body-file is not a string input"
   [ "$(yq -r '.on.workflow_call.inputs."body-file".default' "$f")" = "" ] || fail "body-file has a default"
   [ "$(yq -r '.on.workflow_call.inputs."pr-number".required // false' "$f")" = "false" ] || fail "pr-number is still required"
   [ "$(yq -r '.on.workflow_call.inputs."pr-number".default' "$f")" = "" ] || fail "pr-number has a non-empty default"
-  step='.jobs.notes.steps[] | select(.name == "Draft the release notes into the release PR")'
+  step='.jobs.draft.steps[] | select(.name == "Draft the store notes into the release PR")'
   [ "$(yq -r "$step | .env.DRY_RUN" "$f")" = '${{ inputs.dry-run }}' ] || fail "the step does not pass dry-run as DRY_RUN"
   [ "$(yq -r "$step | .env.PR_BODY_FILE" "$f")" = '${{ inputs.body-file }}' ] || fail "the step does not pass body-file as PR_BODY_FILE"
   [ "$(yq -r "$step | .env.PR_NUMBER" "$f")" = '${{ inputs.pr-number }}' ] || fail "the step does not pass pr-number as PR_NUMBER"
-  grep -qF 'scripts/release/pr-notes.sh' <<<"$(yq -r "$step | .run" "$f")" || fail "the step no longer runs pr-notes.sh"
+  grep -qF 'scripts/release/pr-store-notes.sh' <<<"$(yq -r "$step | .run" "$f")" || fail "the step no longer runs pr-store-notes.sh"
 }
 
-@test "pr-release-notes wires the section output from the step to the workflow, and keeps its write grant" {
+@test "pr-store-notes wires the section output from the step to the workflow, and keeps its write grant" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$REPO_ROOT/.github/workflows/pr-release-notes.yml"
-  [ "$(yq -r '.on.workflow_call.outputs.section.value' "$f")" = '${{ jobs.notes.outputs.section }}' ] \
-    || fail "the workflow's section output does not read the notes job"
-  [ "$(yq -r '.jobs.notes.outputs.section' "$f")" = '${{ steps.notes.outputs.section }}' ] \
-    || fail "the notes job's section output does not read the step"
-  [ "$(yq -r '.jobs.notes.steps[] | select(.name == "Draft the release notes into the release PR") | .id' "$f")" = "notes" ] \
-    || fail "the step the output reads is not the one that runs pr-notes.sh"
+  f="$REPO_ROOT/.github/workflows/pr-store-notes.yml"
+  [ "$(yq -r '.on.workflow_call.outputs.section.value' "$f")" = '${{ jobs.draft.outputs.section }}' ] \
+    || fail "the workflow's section output does not read the draft job"
+  [ "$(yq -r '.jobs.draft.outputs.section' "$f")" = '${{ steps.draft.outputs.section }}' ] \
+    || fail "the draft job's section output does not read the step"
+  [ "$(yq -r '.jobs.draft.steps[] | select(.name == "Draft the store notes into the release PR") | .id' "$f")" = "draft" ] \
+    || fail "the step the output reads is not the one that runs pr-store-notes.sh"
   # A dry run writes nothing, but a dry run must ask for what the real call
   # asks for, or it cannot catch a caller that grants too little.
-  [ "$(yq -r '.jobs.notes.permissions."pull-requests"' "$f")" = "write" ] \
-    || fail "the notes job no longer asks for pull-requests: write"
-  [ "$(yq -r '.jobs.notes.permissions.contents' "$f")" = "read" ] \
-    || fail "the notes job does not re-declare contents: read"
+  [ "$(yq -r '.jobs.draft.permissions."pull-requests"' "$f")" = "write" ] \
+    || fail "the draft job no longer asks for pull-requests: write"
+  [ "$(yq -r '.jobs.draft.permissions.contents' "$f")" = "read" ] \
+    || fail "the draft job does not re-declare contents: read"
 }
 
 # Issue #70: a dry run for the store lane. `default: false` is what

@@ -1,7 +1,7 @@
-name: Self release notes
-# pr-release-notes.yml, executed for real against the template, in a dry run.
+name: Self store notes
+# pr-store-notes.yml, executed for real against the template, in a dry run.
 # Called from self-ci.yml on every change, which turns these into
-# `Release notes / Dry run / Draft` and `Release notes / Validate`, and
+# `Store notes / Dry run / Draft` and `Store notes / Validate`, and
 # from self-release.yml, whose major-tag job waits on it: `v0` never moves to a
 # commit whose dry run failed.
 #
@@ -14,7 +14,7 @@ name: Self release notes
 #
 # The generator is the store-notes program from that same checkout, so what
 # the dry run executes is this ref's code. The template contributes its
-# checkout, its store metadata locales and its release-notes.prompt.md; the
+# checkout, its store metadata locales and its store-notes.prompt.md; the
 # trade, taken on purpose, is that a broken setup on its main turns this
 # repository's CI red until the template is fixed. That is the consumer every
 # release here is first executed by, so it is also the failure a release here
@@ -29,7 +29,7 @@ permissions: { contents: read }
 jobs:
   dry-run:
     name: Dry run
-    uses: ./.github/workflows/pr-release-notes.yml
+    uses: ./.github/workflows/pr-store-notes.yml
     # What the called job declares, so the dry run fails exactly where an
     # under-granting consumer caller would. A dry run from a body file writes
     # nothing with it; on a fork's pull request the token is read-only anyway.
@@ -52,4 +52,4 @@ jobs:
           persist-credentials: false
       - env:
           SECTION: ${{ needs.dry-run.outputs.section }}
-        run: bash scripts/self/check-release-notes-section.sh
+        run: bash scripts/self/check-store-notes-section.sh

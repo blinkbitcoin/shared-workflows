@@ -3,9 +3,9 @@
 #
 # `gh` is stubbed with a script that serves a PR body out of a file and writes
 # `pr edit --body-file` back into it, so the whole round trip - fetch, strip,
-# generate, inject, edit - runs without GitHub. The generator notes.sh runs is
+# generate, inject, edit - runs without GitHub. The generator store-notes.sh runs is
 # faked too, with a `node` on PATH that turns the body's bullets into
-# notes-store.txt, so each case sees exactly which bullets it was fed; one case
+# store-notes.txt, so each case sees exactly which bullets it was fed; one case
 # runs the real one (packages/dev-config/bin/store-notes.mjs, whose own test is
 # packages/dev-config/store-notes.test.mjs).
 #
@@ -29,7 +29,7 @@ setup() {
   mkdir -p "$RUNNER_TEMP"
   : > "$GITHUB_ENV"
   : > "$WORKFLOWS_TEST_LOG"
-  unset NOTES_LOCALES SECTION_TITLE PR_BODY_FILE DRY_RUN RELEASE_NOTES_LLM_PROVIDER STORE_NOTES_INCLUDE_CHANGELOG
+  unset STORE_NOTES_LOCALES SECTION_TITLE PR_BODY_FILE DRY_RUN STORE_NOTES_LLM_PROVIDER STORE_NOTES_INCLUDE_CHANGELOG
   cat > "$STUB/gh" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
@@ -64,10 +64,10 @@ for arg in "$@"; do
 done
 mkdir -p "$out"
 if [ -f "$WORKFLOWS_TEST_NOTES" ]; then
-  cp "$WORKFLOWS_TEST_NOTES" "$out/notes-store.txt"
+  cp "$WORKFLOWS_TEST_NOTES" "$out/store-notes.txt"
 else
   lines="$(grep '^\* ' "$body" | sed 's/^\* /• /' || true)"
-  printf '%s\n' "${lines:-Bug fixes and improvements.}" > "$out/notes-store.txt"
+  printf '%s\n' "${lines:-Bug fixes and improvements.}" > "$out/store-notes.txt"
 fi
 printf '{}\n' > "$out/store-notes.json"
 SH
@@ -89,7 +89,7 @@ This PR was generated with Release Please.
 EOF
 }
 
-pr_notes() { run bash "$REPO_ROOT/scripts/release/pr-notes.sh" "$@"; }
+pr_store_notes() { run bash "$REPO_ROOT/scripts/release/pr-store-notes.sh" "$@"; }
 edits() { grep -c '^pr edit' "$WORKFLOWS_TEST_LOG" || true; }
 
 # output_value KEY FILE - the value of KEY in a $GITHUB_OUTPUT file written in
@@ -117,11 +117,11 @@ dry_run_from_file() {
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/output" GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary"
   : > "$GITHUB_OUTPUT"
   : > "$GITHUB_STEP_SUMMARY"
-  PR_BODY_FILE=release-body.md DRY_RUN=true pr_notes "$@"
+  PR_BODY_FILE=release-body.md DRY_RUN=true pr_store_notes "$@"
 }
 
 @test "the generated notes land in a marker block before the closing rule" {
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   body="$(cat "$WORKFLOWS_TEST_BODY")"
   contains "$body" "<!-- workflows:append:Store notes -->
@@ -139,10 +139,10 @@ dry_run_from_file() {
 }
 
 @test "a second run is a no-op that does not edit the PR" {
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "first run exited $status: $output"
   first="$(cat "$WORKFLOWS_TEST_BODY")"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "second run exited $status: $output"
   [ "$(cat "$WORKFLOWS_TEST_BODY")" = "$first" ] || fail "the body changed on re-run: $(cat "$WORKFLOWS_TEST_BODY")"
   [ "$(edits)" -eq 1 ] || fail "expected one edit, saw $(edits): $(cat "$WORKFLOWS_TEST_LOG")"
@@ -154,23 +154,23 @@ dry_run_from_file() {
 # the rebuilt one ends in "\n". Compared raw, those never matched and every
 # run edited a PR whose block was already current.
 @test "a current block in a body that reads back with a trailing blank line is not edited" {
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "first run exited $status: $output"
   printf '\n' >> "$WORKFLOWS_TEST_BODY"
   [ "$(tail -c 2 "$WORKFLOWS_TEST_BODY" | od -An -c | tr -d ' ')" = '\n\n' ] \
     || fail "the fixture does not end in a blank line: $(od -c "$WORKFLOWS_TEST_BODY" | tail -3)"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "second run exited $status: $output"
   contains "$output" "body unchanged" || fail "the no-op was not logged: $output"
   [ "$(edits)" -eq 1 ] || fail "expected only the first run's edit, saw $(edits): $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
 @test "a dry run reports an unchanged body the same way" {
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "first run exited $status: $output"
   printf '\n' >> "$WORKFLOWS_TEST_BODY"
   export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary"
-  DRY_RUN=true pr_notes 53
+  DRY_RUN=true pr_store_notes 53
   [ "$status" -eq 0 ] || fail "dry run exited $status: $output"
   contains "$output" "body unchanged" || fail "the dry run did not report the no-op: $output"
   contains "$(cat "$GITHUB_STEP_SUMMARY")" "body unchanged" || fail "the summary does not say unchanged: $(cat "$GITHUB_STEP_SUMMARY")"
@@ -179,7 +179,7 @@ dry_run_from_file() {
 
 @test "a dry run says when a real run would edit" {
   export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary"
-  DRY_RUN=true pr_notes 53
+  DRY_RUN=true pr_store_notes 53
   [ "$status" -eq 0 ] || fail "dry run exited $status: $output"
   contains "$output" "a real run would edit the body" || fail "the dry run did not report the edit: $output"
   not_contains "$output" "body unchanged" || fail "a body without the block was reported unchanged: $output"
@@ -187,11 +187,11 @@ dry_run_from_file() {
 }
 
 @test "a previous run's block never feeds the generator" {
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "first run exited $status: $output"
   # release-please rewrote the changelog; the old block is still in the body.
   sed -i.bak 's/\* close the alerts/* close the alerts\n* speed up launch/' "$WORKFLOWS_TEST_BODY"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "second run exited $status: $output"
   body="$(cat "$WORKFLOWS_TEST_BODY")"
   [ "$(grep -c '^## Store notes$' "$WORKFLOWS_TEST_BODY")" -eq 1 ] || fail "the block stacked: $body"
@@ -201,19 +201,19 @@ dry_run_from_file() {
 
 @test "windows line endings in the fetched body are normalised" {
   sed -i.bak $'s/$/\r/' "$WORKFLOWS_TEST_BODY"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   ! grep -q $'\r' "$WORKFLOWS_TEST_BODY" || fail "carriage returns survived"
   [ "$(grep -c '^## Store notes$' "$WORKFLOWS_TEST_BODY")" -eq 1 ] || fail "no block: $(cat "$WORKFLOWS_TEST_BODY")"
 }
 
 # generator_writes TEXT - make the generator write TEXT (printf escapes
-# expanded) as notes-store.txt, whatever the body says.
+# expanded) as store-notes.txt, whatever the body says.
 generator_writes() { printf '%b' "$1" > "$WORKFLOWS_TEST_NOTES"; }
 
 @test "notes carrying a rule line are refused before they reach the PR" {
   generator_writes 'Fixed\n---\nMore\n'
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -ne 0 ] || fail "exited 0 with a rule line in the notes"
   contains "$output" "::error::" || fail "no error annotation: $output"
   contains "$output" "line of dashes" || fail "refused for another reason: $output"
@@ -224,26 +224,26 @@ generator_writes() { printf '%b' "$1" > "$WORKFLOWS_TEST_NOTES"; }
 # would go untested.
 @test "notes carrying an HTML tag are refused before they reach the PR" {
   generator_writes 'Fixed\n<details>x</details>\n'
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -ne 0 ] || fail "exited 0 with a tag in the notes"
   contains "$output" "HTML tag or comment" || fail "refused for another reason: $output"
   [ "$(edits)" -eq 0 ] || fail "the PR was edited anyway: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
-# notes.sh asserts the file exists; an empty one would still be a section
+# store-notes.sh asserts the file exists; an empty one would still be a section
 # with no notes in it, and an empty store text is rejected by App Store Connect.
-@test "an empty notes-store.txt is an error, not an empty section" {
+@test "an empty store-notes.txt is an error, not an empty section" {
   generator_writes ''
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -ne 0 ] || fail "exited 0 with empty notes"
-  contains "$output" "left no notes-store.txt" || fail "refused for another reason: $output"
+  contains "$output" "left no store-notes.txt" || fail "refused for another reason: $output"
   [ "$(edits)" -eq 0 ] || fail "the PR was edited anyway: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
 @test "the package's own generator drafts the section from the body's changelog" {
   rm "$STUB/node"
   command -v node >/dev/null || fail "no node to run the real generator with"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   not_contains "$output" "::warning::" || fail "warned: $output"
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "<!-- workflows:append:Store notes -->
@@ -255,19 +255,19 @@ Fixed
 }
 
 @test "the section title is configurable" {
-  SECTION_TITLE='What is new' pr_notes 53
+  SECTION_TITLE='What is new' pr_store_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   grep -qxF '<!-- workflows:append:What is new -->' "$WORKFLOWS_TEST_BODY" || fail "no titled block: $(cat "$WORKFLOWS_TEST_BODY")"
 }
 
 @test "a gh failure fails the script" {
   : > "$WORKFLOWS_TEST_GH_FAILS"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -ne 0 ] || fail "exited 0 although gh failed"
 }
 
 @test "a missing PR number and a missing body file is an error" {
-  pr_notes
+  pr_store_notes
   [ "$status" -ne 0 ] || fail "exited 0 without a PR number"
   contains "$output" "PR number" || fail "no usage message: $output"
   contains "$output" "PR_BODY_FILE" || fail "the message does not name the alternative: $output"
@@ -275,7 +275,7 @@ Fixed
 }
 
 @test "a dry run with no PR number and no body file is still an error" {
-  DRY_RUN=true pr_notes
+  DRY_RUN=true pr_store_notes
   [ "$status" -ne 0 ] || fail "exited 0 with nothing to read a body from"
   contains "$output" "PR_BODY_FILE" || fail "no usage message: $output"
 }
@@ -310,7 +310,7 @@ Fixed
 @test "a dry run with a PR number fetches the body and never edits it" {
   before="$(cat "$WORKFLOWS_TEST_BODY")"
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/output" GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary"
-  DRY_RUN=1 pr_notes 53
+  DRY_RUN=1 pr_store_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   grep -q '^pr view 53 --repo acme/app --json body' "$WORKFLOWS_TEST_LOG" || fail "the body was not fetched: $(cat "$WORKFLOWS_TEST_LOG")"
   [ "$(edits)" -eq 0 ] || fail "a dry run edited the PR: $(cat "$WORKFLOWS_TEST_LOG")"
@@ -322,7 +322,7 @@ Fixed
 @test "a dry run without GITHUB_STEP_SUMMARY still succeeds and logs the body" {
   : > "$WORKFLOWS_TEST_GH_FAILS"
   cp "$WORKFLOWS_TEST_BODY" "$ROOT/release-body.md"
-  PR_BODY_FILE=release-body.md DRY_RUN=true pr_notes
+  PR_BODY_FILE=release-body.md DRY_RUN=true pr_store_notes
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "This PR was generated with Release Please." || fail "the would-be body is not in the log: $output"
   # With no $GITHUB_OUTPUT the output goes to stdout, as gh_output does.
@@ -332,7 +332,7 @@ Fixed
 @test "a real run writes the section output too, and no summary" {
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/output" GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary"
   : > "$GITHUB_STEP_SUMMARY"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   [ "$(edits)" -eq 1 ] || fail "expected one edit: $(cat "$WORKFLOWS_TEST_LOG")"
   [ "$(output_value section "$GITHUB_OUTPUT")" = "$EXPECTED_SECTION" ] || fail "no section output: $(cat "$GITHUB_OUTPUT")"
@@ -341,10 +341,10 @@ Fixed
 }
 
 @test "an unchanged body still writes the section output" {
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "first run exited $status: $output"
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/output"
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -eq 0 ] || fail "second run exited $status: $output"
   contains "$output" "unchanged" || fail "the second run was not a no-op: $output"
   [ "$(output_value section "$GITHUB_OUTPUT")" = "$EXPECTED_SECTION" ] || fail "no section output: $(cat "$GITHUB_OUTPUT")"
@@ -354,7 +354,7 @@ Fixed
   body="$BATS_TEST_TMPDIR/given-body.md"
   cp "$WORKFLOWS_TEST_BODY" "$body"
   : > "$WORKFLOWS_TEST_BODY"
-  PR_BODY_FILE="$body" pr_notes 53
+  PR_BODY_FILE="$body" pr_store_notes 53
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   ! grep -q '^pr view' "$WORKFLOWS_TEST_LOG" || fail "the PR was fetched although a body file was given: $(cat "$WORKFLOWS_TEST_LOG")"
   [ "$(edits)" -eq 1 ] || fail "expected one edit: $(cat "$WORKFLOWS_TEST_LOG")"
@@ -363,16 +363,16 @@ Fixed
 
 @test "a body file without a PR number is an error outside a dry run" {
   cp "$WORKFLOWS_TEST_BODY" "$ROOT/release-body.md"
-  PR_BODY_FILE=release-body.md pr_notes
+  PR_BODY_FILE=release-body.md pr_store_notes
   [ "$status" -ne 0 ] || fail "exited 0 with no PR to edit"
   contains "$output" "DRY_RUN=true" || fail "the message does not say how to fix it: $output"
   [ ! -s "$WORKFLOWS_TEST_LOG" ] || fail "gh was called: $(cat "$WORKFLOWS_TEST_LOG")"
-  DRY_RUN=false PR_BODY_FILE=release-body.md pr_notes
+  DRY_RUN=false PR_BODY_FILE=release-body.md pr_store_notes
   [ "$status" -ne 0 ] || fail "exited 0 with DRY_RUN=false and no PR to edit"
 }
 
 @test "a body file that does not exist is an error" {
-  PR_BODY_FILE=missing.md DRY_RUN=true pr_notes
+  PR_BODY_FILE=missing.md DRY_RUN=true pr_store_notes
   [ "$status" -ne 0 ] || fail "exited 0 with a missing body file"
   contains "$output" "missing.md" || fail "the message does not name the file: $output"
   contains "$output" "working directory" || fail "the message does not say where relative paths are read from: $output"
@@ -387,7 +387,7 @@ Fixed
 }
 
 @test "a DRY_RUN that is not a boolean is an error, not a real run" {
-  DRY_RUN=yes pr_notes 53
+  DRY_RUN=yes pr_store_notes 53
   [ "$status" -ne 0 ] || fail "exited 0 with DRY_RUN=yes"
   contains "$output" "DRY_RUN must be" || fail "no message: $output"
   [ ! -s "$WORKFLOWS_TEST_LOG" ] || fail "gh was called: $(cat "$WORKFLOWS_TEST_LOG")"
@@ -395,7 +395,7 @@ Fixed
 
 @test "outside a dry run gh and GH_REPO are still required" {
   unset GH_REPO
-  pr_notes 53
+  pr_store_notes 53
   [ "$status" -ne 0 ] || fail "exited 0 without GH_REPO"
   contains "$output" "GH_REPO" || fail "no message: $output"
 }

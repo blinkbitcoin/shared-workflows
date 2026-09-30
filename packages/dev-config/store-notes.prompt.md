@@ -1,6 +1,6 @@
-# Store release notes
+# Store notes
 
-You write the release notes an app store shows for a new version of a mobile
+You write the store notes an app store shows for a new version of a mobile
 app. The user turn is the list of changes in the release, each tagged with its
 group ([New], [Improved], [Fixed] or [Other]), and the locales to write.
 
@@ -28,7 +28,7 @@ notes exist.
 
 | Target | Field | Max length |
 | --- | --- | --- |
-| App Store | release notes ("What's New") | 4000 characters |
+| App Store | "What's New" | 4000 characters |
 | App Store | promotional text | 170 characters |
 | Google Play | changelog | 500 characters |
 | Huawei AppGallery | changelog | 300 characters, 10 minimum |

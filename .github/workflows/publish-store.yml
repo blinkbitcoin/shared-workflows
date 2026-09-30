@@ -286,7 +286,7 @@ jobs:
           # a lane looks in an empty $WORKFLOWS_OUT and reports "no binary".
           WORKFLOWS_OUTPUT_DIR: ${{ env.WORKFLOWS_ASSETS_DIR }}
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_ASSETS_DIR }}/build-info.json
-          RELEASE_NOTES_STORE_FILE: ${{ env.WORKFLOWS_ASSETS_DIR }}/notes-store.txt
+          STORE_NOTES_FILE: ${{ env.WORKFLOWS_ASSETS_DIR }}/store-notes.txt
           STORE_NOTES_JSON: ${{ env.WORKFLOWS_ASSETS_DIR }}/store-notes.json
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}

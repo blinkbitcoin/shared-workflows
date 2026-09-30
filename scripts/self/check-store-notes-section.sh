@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Hold the release notes dry run to what it exists to prove: that
-# pr-release-notes.yml, run for real against a consumer, hands back a store
+# Hold the store notes dry run to what it exists to prove: that
+# pr-store-notes.yml, run for real against a consumer, hands back a store
 # notes section a release PR could carry.
 #
-# self-release-notes.yml runs the workflow in a dry run and passes its `section`
+# self-store-notes.yml runs the workflow in a dry run and passes its `section`
 # output here. A run that went green while rendering nothing would be the
 # failure this dry run was added to catch - a reusable workflow that no gate
 # executes - wearing a green check, so an empty, unmarked or note-less section
 # fails the job.
 #
-# Usage: check-release-notes-section.sh
+# Usage: check-store-notes-section.sh
 # Env: SECTION (the workflow's `section` output), SECTION_TITLE (default
 #      "Store notes"; the title the dry run passed, if any).
 set -euo pipefail
@@ -19,7 +19,7 @@ source "$(dirname "$0")/../lib/body-section.sh"
 title="${SECTION_TITLE:-Store notes}"
 section="${SECTION:-}"
 [ -n "$section" ] ||
-  die "the dry run's section output is empty: pr-release-notes.yml rendered no $title section, or its output is no longer wired to the job"
+  die "the dry run's section output is empty: pr-store-notes.yml rendered no $title section, or its output is no longer wired to the job"
 
 section_markers "$title"
 first="$(printf '%s\n' "$section" | head -1)"

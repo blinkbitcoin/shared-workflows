@@ -70,7 +70,7 @@ commit_file() {
   commit_file "other.txt"
   base=$(git -C "$repo" rev-parse HEAD)
   commit_file "docs/x.md"
-  commit_file "config/release-notes.prompt.md"
+  commit_file "config/store-notes.prompt.md"
   head=$(git -C "$repo" rev-parse HEAD)
   cd "$repo" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
@@ -80,7 +80,7 @@ commit_file() {
 @test "a replaced DOCS_GLOBS still never counts a prompt as docs" {
   commit_file "other.txt"
   base=$(git -C "$repo" rev-parse HEAD)
-  commit_file "handbook/release-notes.prompt.md"
+  commit_file "handbook/store-notes.prompt.md"
   head=$(git -C "$repo" rev-parse HEAD)
   cd "$repo" && DOCS_GLOBS='^handbook/' run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
   [ "$status" -eq 0 ] || fail "exited $status: $output"

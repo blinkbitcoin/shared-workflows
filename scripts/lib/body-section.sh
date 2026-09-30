@@ -1,12 +1,12 @@
 # shellcheck shell=bash
 # A marker-delimited section in a GitHub body: the release body's
 # `## Store notes` / `## Production` blocks (release-assets.sh append) and the
-# release PR body's `## Store notes` block (pr-notes.sh) are the same thing,
+# release PR body's `## Store notes` block (pr-store-notes.sh) are the same thing,
 # so this is the one place that knows how a block looks and how a stale one is
 # found. Requires common.sh.
 #
 # The block is delimited by HTML-comment markers, not by "the heading down to
-# the next `## `". The notes can *start* with a `## ` heading - notes.sh's
+# the next `## `". The notes can *start* with a `## ` heading - store-notes.sh's
 # old commit-subject fallback wrote `## <version> (<build>)` and a
 # release-please body starts with `## [x.y.z](...)` - so a heading scan stops
 # at the notes' own heading and leaves their tail behind, stacking a little
@@ -62,14 +62,14 @@ squeeze_blank_lines() {
   ' "$1"
 }
 
-# render_section_block TITLE NOTES_FILE - the block for TITLE, on stdout: one
+# render_section_block TITLE SECTION_FILE - the block for TITLE, on stdout: one
 # leading blank line, the begin marker, the heading, a blank line, the notes,
 # the end marker.
 render_section_block() {
-  local title="$1" notes_file="$2" begin_marker end_marker
+  local title="$1" section_file="$2" begin_marker end_marker
   section_markers "$title"
   printf '\n%s\n%s\n\n' "$begin_marker" "## $title"
-  cat "$notes_file"
+  cat "$section_file"
   printf '%s\n' "$end_marker"
 }
 

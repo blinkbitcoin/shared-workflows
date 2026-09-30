@@ -46,7 +46,7 @@ flowchart TD
   release["self-release.yml, release-please job (pr-release.yml)"]
   pr["release PR: chore(main) release X.Y.Z"]
   tag["tag vX.Y.Z and its GitHub release"]
-  notes["release-notes job: pr-release-notes.yml against the template, dry run"]
+  notes["store-notes job: pr-store-notes.yml against the template, dry run"]
   major["major-tag job, scripts/self/tag-major.sh"]
   moving["v0 and v0.&lt;minor&gt;"]
   consumer["a consumer pinned @v0"]
@@ -71,7 +71,7 @@ repository an hour earlier. Two consequences worth acting on: after a release
 here, the family watches the template's `CD / Internal` run, which is the first
 real execution of the reusable release workflows (the one gate in this
 repository that executes a reusable workflow is the dry run of
-`pr-release-notes.yml`, which `v0` waits on; the build and publish workflows
+`pr-store-notes.yml`, which `v0` waits on; the build and publish workflows
 run only inside a consumer — see `AGENTS.md`); and a repository that wants to
 decide when it moves pins `@v0.<minor>` or a full commit sha instead of `@v0`,
 and moves the pin as a reviewed commit.
@@ -1303,7 +1303,7 @@ flowchart LR
   end
   subgraph shared["shared-workflows @v0"]
     prrelease["pr-release.yml"]
-    prnotes["pr-release-notes.yml"]
+    prnotes["pr-store-notes.yml"]
     prepare["build-prepare.yml"]
     ios["build-ios.yml"]
     android["build-android.yml"]
@@ -1373,7 +1373,7 @@ writes `build-info.json` and the store notes, and uploads them as the
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | The consumer checkout uses `fetch-depth: 0` — version resolution reads `v*` tags and counts first-parent commits, and both are empty in a shallow clone |
 | `build-number-offset` | `1000` | Added to the first-parent commit count. Raise it, never lower it: App Store Connect and Play both permanently reject a build number that goes backwards |
-| `notes-locales` | `''` | Locales handed to the [store notes](#store-notes) generator, and passed to it as `--locales`. **Store metadata locale names, not language codes** — App Store Connect and Play key their listings on the full form (`en-US`, `de-DE`, `pt-BR`); a bare `en` matches no listing. Empty lets the generator decide: one per locale directory under your `fastlane/metadata/ios` |
+| `store-notes-locales` | `''` | Locales handed to the [store notes](#store-notes) generator, and passed to it as `--locales`. **Store metadata locale names, not language codes** — App Store Connect and Play key their listings on the full form (`en-US`, `de-DE`, `pt-BR`); a bare `en` matches no listing. Empty lets the generator decide: one per locale directory under your `fastlane/metadata/ios` |
 | `stage` | `internal` | Written to `build-info.json`'s `stage` |
 | `release-body-file` | `''` | Consumer-relative file holding a release body; switches note generation to `--from-body` |
 | `release-tag` | `''` | Existing release tag whose **body** becomes the store notes, fetched with `gh release view`. It also becomes the checked-out ref and the gated/stamped commit — see [Preparing from a release tag](#preparing-from-a-release-tag) |
@@ -1381,7 +1381,7 @@ writes `build-info.json` and the store notes, and uploads them as the
 | `require-green-workflow` | `''` | Workflow file name (e.g. `cd-internal.yml`) that must have concluded `success` for the **resolved target sha** (the `release-tag` commit when `release-tag` is set, else `github.sha`) before preparing. Empty disables the gate. The gate step runs **before** `Setup` (so a red upstream fails before anything is installed), which means it uses the `gh` and `yq` from the runner image — true of GitHub-hosted `ubuntu-latest`, not necessarily of a self-hosted `linux-runner` |
 | `reserve-tag` | `false` | Create the `v<version>-build.<n>` tag at the target sha **in Prepare, before the green gate**, while the commit is still the default branch tip; `publish-github-release.yml` then creates the release on the existing tag. GitHub refuses `GITHUB_TOKEN` a *new* tag on a commit whose `.github/workflows/*` differ from the tip ("create or update workflow without `workflows` permission", surfaced by the releases API as a bare 403) - and by the time a build's release is published a later merge may have touched a workflow. Needs **`contents: write`** on the calling job. A red gate deletes the tag this run reserved |
 | `require-green-dispatch` | `false` | With `require-green-workflow`: when the gated workflow has **no** run for the target sha, or its newest run was **cancelled** or **failed**, dispatch it once at `release-tag` and wait for that run instead of failing. Self-healing for a release whose internal build was lost (concurrency-group eviction, a flaky runner): the beta no longer waits for a human to dispatch by hand. A dispatched run that also fails is fatal; `skipped` is never dispatched. Needs `release-tag` and **`actions: write`** on the calling job. A promotion that still gives up is what [`publish-promotion-retry.yml`](#publish-promotion-retryyml) re-runs
-| `release-meta-artifact` | `release-meta` | Artifact name for `build-info.json`, `store-notes.json`, `notes-store.txt`, `notes.md` |
+| `release-meta-artifact` | `release-meta` | Artifact name for `build-info.json`, `store-notes.json`, `store-notes.txt`, `release-notes.md` |
 
 Outputs: `version`, `build-number`, `fp-ios`, `fp-android`, `sha` (the commit
 the release was prepared from). Secrets: `consumer-token`, `ANTHROPIC_API_KEY`
@@ -1534,7 +1534,7 @@ flowchart TD
   envjson -->|"validated env-json keys, into GITHUB_ENV"| decode
   decode -->|"upload.keystore, play-service-account.json, asc-key.p8, each mode 600"| secretsdir
   decode -->|"ANDROID_UPLOAD_KEYSTORE_PATH, PLAY_SERVICE_ACCOUNT_JSON_PATH, ASC_KEY_P8_PATH"| fastlane
-  assets -->|"WORKFLOWS_OUTPUT_DIR, BUILD_INFO_FILE, RELEASE_NOTES_STORE_FILE, STORE_NOTES_JSON point here"| fastlane
+  assets -->|"WORKFLOWS_OUTPUT_DIR, BUILD_INFO_FILE, STORE_NOTES_FILE, STORE_NOTES_JSON point here"| fastlane
   fastlane -->|"bundle exec fastlane PLATFORM LANE, plus lane-args"| fastfile
 ```
 
@@ -1560,7 +1560,7 @@ of making it - `phased` and the `pull_metadata` lanes check the same variable
 directly, for the one or two calls (Spaceship, `deliver`/`supply` commands)
 that sit outside `store_action`. So a dry run walks the *same* lane a real
 release does - credentials resolved, arguments built, metadata validated,
-release notes computed - and stops only at the network call to App Store
+store notes computed - and stops only at the network call to App Store
 Connect or Play.
 
 This is also the variable the template's `cd-store-listing.yml` already
@@ -1585,9 +1585,9 @@ Creates or moves a GitHub release and attaches the fixed asset set.
 | `tag` | (required) | Release tag to create or move |
 | `sha` | `''` | Commit the tag points at. **Creation only**: once the tag exists GitHub ignores a release's target commit, so a re-run after a force-push updates the release but leaves the tag where it was |
 | `title` | `''` | Release title; empty keeps GitHub's default (the tag) |
-| `notes-artifact` | `release-meta` | Artifact carrying the notes file |
-| `notes-file` | `notes.md` | File inside that artifact used as the body (or, in `append` mode, as the appended section) |
-| `notes-text` | `''` | The notes as text instead, winning over `notes-file`: for a caller whose section is a line it composes from its own inputs, such as a production stage, which would otherwise need a job of its own to upload that line as an artifact. `notes-artifact` is ignored for the notes when this is set |
+| `release-notes-artifact` | `release-meta` | Artifact carrying the release notes file |
+| `release-notes-file` | `release-notes.md` | File inside that artifact used as the release body (or, in `append` mode, as the appended section) |
+| `release-notes-text` | `''` | The release notes as text instead, winning over `release-notes-file`: for a caller whose section is a line it composes from its own inputs, such as a production stage, which would otherwise need a job of its own to upload that line as an artifact. `release-notes-artifact` is ignored for the release notes when this is set |
 | `assets-artifacts` | `''` | Artifact name or glob pattern whose files are attached |
 | `body-note` | `''` | Text placed at the top of the release body as a Markdown note admonition, at creation time. For a fact the notes cannot know — that store uploads were off and this build never reached a store, say. With no notes file of its own it is prepended to gh's generated notes rather than replacing them |
 | `append-title` | `Update` | Heading for the section added in `append` mode |
@@ -1603,7 +1603,7 @@ created with `GITHUB_TOKEN` does not trigger other workflows, so a downstream
 job declares `permissions: contents: write`, which the calling job must grant.
 
 Assets attached in every mode, when present in the downloaded directory:
-`build-info.json`, `store-notes.json`, `notes-store.txt`, `notes.md`, `*.ipa`,
+`build-info.json`, `store-notes.json`, `store-notes.txt`, `release-notes.md`, `*.ipa`,
 `*.aab`, `*.apk`, `*.dSYM.zip`, `dsyms.zip`, `mapping.txt`, plus a freshly
 computed `SHA256SUMS`. The list is fixed on purpose — a release whose asset set
 varies run to run cannot be verified by a downstream script.
@@ -1706,10 +1706,10 @@ jobs:
       dispatch-on-release: |
         cd-beta.yml tag={tag}
   store-notes:
-    name: Release notes
+    name: Store notes
     needs: release-please
     if: ${{ needs.release-please.outputs.pr-number != '' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-store-notes.yml@v0
     permissions:
       contents: read
       pull-requests: write
@@ -1723,9 +1723,9 @@ The internal build of the release commit runs before its tag exists, so
 `chore(main): release X.Y.Z` subject. A squash or rebase merge puts the PR
 title there; a merge commit works too, through its second parent.
 
-### `pr-release-notes.yml`
+### `pr-store-notes.yml`
 
-Drafts the store release notes into a release-please PR body, once, for a
+Drafts the store notes into a release-please PR body, once, for a
 human to review with the version bump. The section it writes is what the
 release lanes later ship: release-please builds the GitHub release body from
 the text between the two `---` lines of the merged PR body, and
@@ -1735,13 +1735,13 @@ never regenerate what was reviewed.
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Pass the release PR's head branch as `ref`, so the app's prompt addendum (`release-notes.prompt.md`) is the one under release. `macos-runner` and `native-cache-version` are unused here |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Pass the release PR's head branch as `ref`, so the app's prompt addendum (`store-notes.prompt.md`) is the one under release. `macos-runner` and `native-cache-version` are unused here |
 | `pr-number` | `''` | The release PR whose body receives the section: release-please's `pr` output, parsed in the caller's shell (`jq -r '.number // empty'`), never with `fromJSON()` in a step `env:` - the runner validates that even when the step's `if` is false, and the output is empty on a push that opens no PR. Required, except in a dry run with `body-file` |
-| `dry-run` | `false` | Generate the section and edit no PR: the body a real run would write, and whether it would edit at all, go to the job summary. See [Dry-running the release PR notes](#dry-running-the-release-pr-notes) |
+| `dry-run` | `false` | Generate the section and edit no PR: the body a real run would write, and whether it would edit at all, go to the job summary. See [Dry-running the store notes](#dry-running-the-store-notes) |
 | `body-file` | `''` | Path, relative to `working-directory`, of a release-please-shaped PR body to generate from instead of fetching the PR's. With `dry-run` the job needs no PR and calls no `gh`; without it, and with a `pr-number`, the edit writes this file's body plus the section to that PR |
 | `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `publish-github-release.yml` `append` replaces the block in place |
-| `notes-locales` | `''` | Locales handed to the [store notes](#store-notes) generator; store metadata locale names, not language codes. Empty lets the generator decide |
-| `build-env` | `{}` | Non-secret environment for the generator: `RELEASE_NOTES_LLM_PROVIDER`, `RELEASE_NOTES_LLM_MODEL`, `RELEASE_NOTES_LLM_EFFORT`,<br>`RELEASE_NOTES_LLM_EXTRA_PARAMS`, `OPENAI_BASE_URL`, `STORE_NOTES_INCLUDE_CHANGELOG` - see [`build-env`](#build-env) |
+| `store-notes-locales` | `''` | Locales handed to the [store notes](#store-notes) generator; store metadata locale names, not language codes. Empty lets the generator decide |
+| `build-env` | `{}` | Non-secret environment for the generator: `STORE_NOTES_LLM_PROVIDER`, `STORE_NOTES_LLM_MODEL`, `STORE_NOTES_LLM_EFFORT`,<br>`STORE_NOTES_LLM_EXTRA_PARAMS`, `OPENAI_BASE_URL`, `STORE_NOTES_INCLUDE_CHANGELOG` - see [`build-env`](#build-env) |
 
 Output: `section`, the rendered section as a multi-line string - the begin
 marker, `## <section-title>`, a blank line, the notes, the end marker. It is
@@ -1775,17 +1775,17 @@ Two consequences a caller signs up for:
   body carrying this block always differs. A caller that also dispatches CI on
   the release PR will see that CI run on every push too.
 - **A hand edit to the section survives only until the next push to `main`.**
-  Edit the app's `release-notes.prompt.md` instead (the next push regenerates), or edit the
+  Edit the app's `store-notes.prompt.md` instead (the next push regenerates), or edit the
   GitHub release body after merging and before the beta run's Prepare reads it.
 
 The template's `cd-release.yml` calls it as a second job:
 
 ```yaml
   store-notes:
-    name: Release notes
+    name: Store notes
     needs: release-please
     if: ${{ needs.release-please.outputs.pr-number != '' }}
-    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-store-notes.yml@v0
     permissions:
       contents: read
       pull-requests: write
@@ -1794,8 +1794,8 @@ The template's `cd-release.yml` calls it as a second job:
       ref: ${{ needs.release-please.outputs.pr-branch }}
       build-env: >-
         {"STORE_NOTES_INCLUDE_CHANGELOG":"${{ vars.STORE_NOTES_INCLUDE_CHANGELOG }}",
-         "RELEASE_NOTES_LLM_PROVIDER":"${{ vars.RELEASE_NOTES_LLM_PROVIDER }}",
-         "RELEASE_NOTES_LLM_MODEL":"${{ vars.RELEASE_NOTES_LLM_MODEL }}",
+         "STORE_NOTES_LLM_PROVIDER":"${{ vars.STORE_NOTES_LLM_PROVIDER }}",
+         "STORE_NOTES_LLM_MODEL":"${{ vars.STORE_NOTES_LLM_MODEL }}",
          "OPENAI_BASE_URL":"${{ vars.OPENAI_BASE_URL }}"}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -1804,10 +1804,10 @@ The template's `cd-release.yml` calls it as a second job:
 
 where the first job exposes `pr-number` and `pr-branch` from release-please's
 `pr` output, parsed in the shell. Nothing downstream waits on this job: the
-beta and web dispatches live in the first job, so a red `Release notes` job never
+beta and web dispatches live in the first job, so a red `Store notes` job never
 withholds a release, and `gh run rerun --failed` re-drafts the section.
 
-#### Dry-running the release PR notes
+#### Dry-running the store notes
 
 A release PR exists only between a release-please push and its merge, so
 without a dry run this workflow is first executed by the push that needs it.
@@ -1832,9 +1832,9 @@ your own works, and so does the one this repository keeps beside the generator,
 from the `.workflows` checkout at your pin:
 
 ```yaml
-  release-notes-dry-run:
-    name: Release notes dry run
-    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-release-notes.yml@v0
+  store-notes-dry-run:
+    name: Store notes dry run
+    uses: blinkbitcoin/shared-workflows/.github/workflows/pr-store-notes.yml@v0
     permissions:
       contents: read
       pull-requests: write
@@ -1843,14 +1843,14 @@ from the `.workflows` checkout at your pin:
       body-file: .workflows/packages/dev-config/fixtures/store-notes/release-body.md
 ```
 
-A job that `needs: release-notes-dry-run` can then hold
-`needs.release-notes-dry-run.outputs.section` to what a release PR must carry:
+A job that `needs: store-notes-dry-run` can then hold
+`needs.store-notes-dry-run.outputs.section` to what a release PR must carry:
 not empty, the begin marker as its first line and the end marker as its last.
 Pass no secrets there unless the dry run should spend LLM tokens on every
 pull request; without a key the generator drafts without the LLM pass. This
 repository runs the same dry run against the template's `main`, with that
 fixture, on every one of its own pull requests and before `v0` moves
-(`self-release-notes.yml`). With a `working-directory` other than `.`, the
+(`self-store-notes.yml`). With a `working-directory` other than `.`, the
 `.workflows` checkout is one level further up for each directory in it
 (`../.workflows/...`).
 
@@ -1918,7 +1918,7 @@ run promptly once the build goes green, and it calls no store.
 ### `build-env`
 
 `build-prepare.yml`, `build-ios.yml`, `build-android.yml`,
-`publish-store.yml` and `pr-release-notes.yml` take a `build-env` input: a flat JSON object of **non-secret**
+`publish-store.yml` and `pr-store-notes.yml` take a `build-env` input: a flat JSON object of **non-secret**
 environment variables, published to `$GITHUB_ENV` before prebuild, the lanes and
 the consumer scripts run. It is the only way a caller can get a value into those
 places — nothing else in the family forwards arbitrary environment.
@@ -1931,8 +1931,8 @@ places — nothing else in the family forwards arbitrary environment.
          "EXPO_PUBLIC_API_URL":"https://api.example.com",
          "ANDROID_UPLOAD_CERT_SHA256":"AA:BB:...",
          "STORE_NOTES_INCLUDE_CHANGELOG":"true",
-         "RELEASE_NOTES_LLM_PROVIDER":"anthropic",
-         "RELEASE_NOTES_LLM_MODEL":"claude-sonnet-4-5"}
+         "STORE_NOTES_LLM_PROVIDER":"anthropic",
+         "STORE_NOTES_LLM_MODEL":"claude-sonnet-4-5"}
 ```
 
 Rules, enforced by `scripts/lib/build-env.sh`:
@@ -1972,11 +1972,11 @@ drifted — `env-json` had no credential-name refusal at all, so a key like
 not mask. Keys are upper-cased before the credential and reserved-name rules are
 applied, so `sentry_auth_token` is refused exactly as `SENTRY_AUTH_TOKEN` is.
 
-So `RELEASE_NOTES_LLM_PROVIDER` / `RELEASE_NOTES_LLM_MODEL` /
-`RELEASE_NOTES_LLM_EFFORT` / `RELEASE_NOTES_LLM_EXTRA_PARAMS` /
+So `STORE_NOTES_LLM_PROVIDER` / `STORE_NOTES_LLM_MODEL` /
+`STORE_NOTES_LLM_EFFORT` / `STORE_NOTES_LLM_EXTRA_PARAMS` /
 `OPENAI_BASE_URL` / `STORE_NOTES_INCLUDE_CHANGELOG` go in `build-env`, while
 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are declared secrets on
-`build-prepare.yml` and `pr-release-notes.yml`.
+`build-prepare.yml` and `pr-store-notes.yml`.
 
 ### Preparing from a release tag
 
@@ -2016,8 +2016,8 @@ fingerprint, and the OTA gate downstream compares fingerprints.
 
 **This run's files win.** The carried-forward assets are staged in a scratch
 directory and copied in only where this run has no file of that name. Both
-sides carry `build-info.json`, `store-notes.json`, `notes-store.txt` and
-`notes.md`, and the source is by definition an earlier stage: promoting `vX.Y.Z`
+sides carry `build-info.json`, `store-notes.json`, `store-notes.txt` and
+`release-notes.md`, and the source is by definition an earlier stage: promoting `vX.Y.Z`
 from `vX.Y.Z-build.N` must keep the beta run's `"stage"` and its
 release-body-derived notes, not the internal run's — the more so because the
 same `build-info.json` becomes the OTA gate's fingerprint baseline downstream.
@@ -2074,7 +2074,7 @@ it out" and fail on the first real run instead.
 receives all five, from the job env or its own.
 
 Paths handed to a lane are made absolute by `scripts/release/fastlane.sh` before
-`bundle exec` — `WORKFLOWS_OUTPUT_DIR`, `BUILD_INFO_FILE`, `RELEASE_NOTES_STORE_FILE`,
+`bundle exec` — `WORKFLOWS_OUTPUT_DIR`, `BUILD_INFO_FILE`, `STORE_NOTES_FILE`,
 `STORE_NOTES_JSON`, `ANDROID_UPLOAD_KEYSTORE_PATH`,
 `PLAY_SERVICE_ACCOUNT_JSON_PATH`, `ASC_KEY_P8_PATH`, `BUNDLETOOL_JAR`. fastlane
 runs a lane with its working directory set to `fastlane/`, not the project root,
@@ -2147,7 +2147,7 @@ same way and additionally has to parse as JSON: a half-pasted service account
 would otherwise only fail deep inside a Play lane, after the build.
 
 The lanes themselves read: `APP_VERSION`, `APP_BUILD_NUMBER`,
-`RELEASE_NOTES_STORE_FILE`, `STORE_NOTES_JSON`, `IOS_BUNDLE_ID`, `IOS_SCHEME`,
+`STORE_NOTES_FILE`, `STORE_NOTES_JSON`, `IOS_BUNDLE_ID`, `IOS_SCHEME`,
 `ANDROID_PACKAGE`, `BUILD_INFO_FILE`, `WORKFLOWS_OUTPUT_DIR`, plus `ASC_KEY_ID`, `ASC_ISSUER_ID`,
 `ASC_KEY_P8_BASE64`, `MATCH_PASSWORD`, `MATCH_GIT_URL`,
 `MATCH_GIT_BASIC_AUTHORIZATION`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`,
@@ -2205,9 +2205,9 @@ and must not be able to put a stale `sha` or `stage` back on the release.
 
 ### Store notes
 
-The store release notes come from `store-notes`, a program in
-`@blinkbitcoin/dev-config`. `build-prepare.yml` and `pr-release-notes.yml` run
-it through `scripts/release/notes.sh`, from the `.workflows` checkout at your
+The store notes come from `store-notes`, a program in
+`@blinkbitcoin/dev-config`. `build-prepare.yml` and `pr-store-notes.yml` run
+it through `scripts/release/store-notes.sh`, from the `.workflows` checkout at your
 pin, in your `working-directory`. You ship no generator of your own: a
 `scripts/release/notes.mjs` is not run (the run warns), and the
 `no-copy.store-notes` row of the [contract check](#no-copies-of-this-family)
@@ -2222,19 +2222,19 @@ ticket key or markup:
   `## Store notes` section as written when it has one (`--body-section`).
   Otherwise the conventional commit subjects since the last `v*` tag; a
   `refactor` reaches the notes only with a `[user-visible]` marker.
-- **Locales.** `notes-locales` when set, else one per locale directory under
+- **Locales.** `store-notes-locales` when set, else one per locale directory under
   your `fastlane/metadata/ios`, else `en-US`.
 - **Output.** `store-notes.json` (`{"<locale>": {"testflight", "play", "appstore"}}`,
-  each cut to that store's limit) and `notes-store.txt`, which the lanes read.
+  each cut to that store's limit) and `store-notes.txt`, which the lanes read.
   `STORE_NOTES_INCLUDE_CHANGELOG=true` appends the full changelog, chores
   included.
-- **LLM pass (optional).** With `RELEASE_NOTES_LLM_PROVIDER` set to `anthropic`
+- **LLM pass (optional).** With `STORE_NOTES_LLM_PROVIDER` set to `anthropic`
   or `openai` and its key passed as a secret, a model rewrites the notes. The
   answer is used only when every locale passes the same checks; a missing key,
   an HTTP error or a rejected answer is a warning and the deterministic notes
-  ship. `RELEASE_NOTES_LLM_MODEL` picks the model, `RELEASE_NOTES_LLM_EFFORT`
+  ship. `STORE_NOTES_LLM_MODEL` picks the model, `STORE_NOTES_LLM_EFFORT`
   the reasoning effort (`none`, `low`, `medium`, `high` or `max`, `max` when
-  unset), `RELEASE_NOTES_LLM_EXTRA_PARAMS` a JSON object merged into the
+  unset), `STORE_NOTES_LLM_EXTRA_PARAMS` a JSON object merged into the
   request (a `null` value removes that field), and `OPENAI_BASE_URL` points the
   `openai` provider at any compatible endpoint. A malformed effort or extra
   parameters fails the step rather than quietly drafting something else.
@@ -2242,11 +2242,13 @@ ticket key or markup:
 #### The prompt, and what your app adds to it
 
 The model's system prompt is the package's `store-notes.prompt.md`, followed
-by your `release-notes.prompt.md` at the root of `working-directory` when you
-keep one. The package's part holds everything the generator depends on: the
-locales and the character limit it fills in, the store limits, the tone every
-store listing wants, and the JSON answer it validates. Yours says what only
-your app knows, and it is told to win wherever it is more specific:
+by your `store-notes.prompt.md` at the root of `working-directory` when you
+keep one. It used to be called `release-notes.prompt.md`; under that name it
+is not read, and the run warns. The package's part holds everything the
+generator depends on: the locales and the character limit it fills in, the
+store limits, the tone every store listing wants, and the JSON answer it
+validates. Yours says what only your app knows, and it is told to win wherever
+it is more specific:
 
 ```markdown
 ## Product
@@ -2280,10 +2282,10 @@ section is what you see. `--preview` picks the source itself: `--tag` or
 `--pr` when given, else the `TAG` or `PR` environment variable, else the
 commits since the last `v*` tag. That makes a preview target one line with no
 shell in it, which `check-make-recipes` requires; make hands
-`make release-notes TAG=v1.4.0` to the recipe's environment:
+`make store-notes TAG=v1.4.0` to the recipe's environment:
 
 ```make
-release-notes: ## Preview store notes for HEAD (TAG=vX.Y.Z uses that release body, PR=N that release PR's body)
+store-notes: ## Preview store notes for HEAD (TAG=vX.Y.Z uses that release body, PR=N that release PR's body)
 	pnpm exec store-notes --preview
 ```
 

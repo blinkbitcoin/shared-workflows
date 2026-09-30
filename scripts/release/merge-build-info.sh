@@ -40,7 +40,7 @@ fi
 
 base="$dir/build-info.json"
 if [ ! -f "$base" ]; then
-  # No release-meta record staged (a caller with notes-artifact: ''), so the
+  # No release-meta record staged (a caller with release-notes-artifact: ''), so the
   # platform copy is the only record there is.
   log "no build-info.json in $dir - seeding it from ${overlays[0]}"
   cp "${overlays[0]}" "$base"

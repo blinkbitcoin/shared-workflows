@@ -80,56 +80,56 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 }
 
 # --------------------------------------------------------------------------
-# The release notes dry run: pr-release-notes.yml, executed for real.
+# The store notes dry run: pr-store-notes.yml, executed for real.
 #
 # Every other reusable workflow runs only inside a consumer, so a mistake in
-# one ships with every gate here green. self-release-notes.yml runs this one
+# one ships with every gate here green. self-store-notes.yml runs this one
 # against the template in a dry run, on every change and before `v0` moves.
 # --------------------------------------------------------------------------
-RELEASE_NOTES="$REPO_ROOT/.github/workflows/self-release-notes.yml"
+SELF_STORE_NOTES="$REPO_ROOT/.github/workflows/self-store-notes.yml"
 
-@test "self-release-notes.yml runs the local pr-release-notes.yml against the template in a dry run" {
+@test "self-store-notes.yml runs the local pr-store-notes.yml against the template in a dry run" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.on | has("workflow_call")' "$RELEASE_NOTES")" = "true" ] || fail "self-release-notes.yml is not callable"
-  [ "$(yq -r '.jobs."dry-run".name' "$RELEASE_NOTES")" = "Dry run" ] || fail "the dry run job was renamed"
-  [ "$(yq -r '.jobs.notes.name' "$REPO_ROOT/.github/workflows/pr-release-notes.yml")" = "Draft" ] \
-    || fail "pr-release-notes.yml's job was renamed"
+  [ "$(yq -r '.on | has("workflow_call")' "$SELF_STORE_NOTES")" = "true" ] || fail "self-store-notes.yml is not callable"
+  [ "$(yq -r '.jobs."dry-run".name' "$SELF_STORE_NOTES")" = "Dry run" ] || fail "the dry run job was renamed"
+  [ "$(yq -r '.jobs.draft.name' "$REPO_ROOT/.github/workflows/pr-store-notes.yml")" = "Draft" ] \
+    || fail "pr-store-notes.yml's job was renamed"
   # Local, not @v0: the dry run has to run the ref under review.
-  [ "$(yq -r '.jobs."dry-run".uses' "$RELEASE_NOTES")" = "./.github/workflows/pr-release-notes.yml" ] \
-    || fail "the dry run does not call the local pr-release-notes.yml: $(yq -r '.jobs."dry-run".uses' "$RELEASE_NOTES")"
-  [ "$(yq -r '.jobs."dry-run".with.repository' "$RELEASE_NOTES")" = "blinkbitcoin/react-native-mobile-template" ] \
+  [ "$(yq -r '.jobs."dry-run".uses' "$SELF_STORE_NOTES")" = "./.github/workflows/pr-store-notes.yml" ] \
+    || fail "the dry run does not call the local pr-store-notes.yml: $(yq -r '.jobs."dry-run".uses' "$SELF_STORE_NOTES")"
+  [ "$(yq -r '.jobs."dry-run".with.repository' "$SELF_STORE_NOTES")" = "blinkbitcoin/react-native-mobile-template" ] \
     || fail "the dry run no longer targets the template"
-  [ "$(yq -r '.jobs."dry-run".with.ref' "$RELEASE_NOTES")" = "main" ] || fail "the dry run no longer reads the template's main"
-  [ "$(yq -r '.jobs."dry-run".with."dry-run"' "$RELEASE_NOTES")" = "true" ] || fail "the dry-run input is off - it would edit a PR"
-  [ "$(yq -r '.jobs."dry-run".with."body-file"' "$RELEASE_NOTES")" = ".workflows/packages/dev-config/fixtures/store-notes/release-body.md" ] \
+  [ "$(yq -r '.jobs."dry-run".with.ref' "$SELF_STORE_NOTES")" = "main" ] || fail "the dry run no longer reads the template's main"
+  [ "$(yq -r '.jobs."dry-run".with."dry-run"' "$SELF_STORE_NOTES")" = "true" ] || fail "the dry-run input is off - it would edit a PR"
+  [ "$(yq -r '.jobs."dry-run".with."body-file"' "$SELF_STORE_NOTES")" = ".workflows/packages/dev-config/fixtures/store-notes/release-body.md" ] \
     || fail "the dry run reads no body file, so it would need a release PR"
-  [ "$(yq -r '.jobs."dry-run".with."pr-number" // ""' "$RELEASE_NOTES")" = "" ] || fail "the dry run names a PR"
-  [ "$(yq -r '.jobs."dry-run".secrets // "none"' "$RELEASE_NOTES")" = "none" ] || fail "the dry run passes secrets"
-  [ "$(yq -r '.jobs."dry-run".permissions."pull-requests"' "$RELEASE_NOTES")" = "write" ] \
-    || fail "the dry run does not grant what pr-release-notes.yml's job declares"
+  [ "$(yq -r '.jobs."dry-run".with."pr-number" // ""' "$SELF_STORE_NOTES")" = "" ] || fail "the dry run names a PR"
+  [ "$(yq -r '.jobs."dry-run".secrets // "none"' "$SELF_STORE_NOTES")" = "none" ] || fail "the dry run passes secrets"
+  [ "$(yq -r '.jobs."dry-run".permissions."pull-requests"' "$SELF_STORE_NOTES")" = "write" ] \
+    || fail "the dry run does not grant what pr-store-notes.yml's job declares"
 }
 
-@test "self-release-notes.yml checks the section output with its own script" {
+@test "self-store-notes.yml checks the section output with its own script" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.jobs."validate".name' "$RELEASE_NOTES")" = "Validate" ] || fail "the validate job was renamed"
-  [ "$(yq -r '.jobs.validate.needs' "$RELEASE_NOTES")" = "dry-run" ] || fail "the section check does not wait on the dry run"
-  [ "$(yq -r '.jobs.validate."timeout-minutes"' "$RELEASE_NOTES")" != "null" ] || fail "the section check has no timeout"
-  step="$(yq -r '.jobs.validate.steps[] | select(.run != null)' "$RELEASE_NOTES")"
-  [ "$(yq -r '.run' <<<"$step")" = "bash scripts/self/check-release-notes-section.sh" ] \
-    || fail "the section check does not run scripts/self/check-release-notes-section.sh: $step"
+  [ "$(yq -r '.jobs."validate".name' "$SELF_STORE_NOTES")" = "Validate" ] || fail "the validate job was renamed"
+  [ "$(yq -r '.jobs.validate.needs' "$SELF_STORE_NOTES")" = "dry-run" ] || fail "the section check does not wait on the dry run"
+  [ "$(yq -r '.jobs.validate."timeout-minutes"' "$SELF_STORE_NOTES")" != "null" ] || fail "the section check has no timeout"
+  step="$(yq -r '.jobs.validate.steps[] | select(.run != null)' "$SELF_STORE_NOTES")"
+  [ "$(yq -r '.run' <<<"$step")" = "bash scripts/self/check-store-notes-section.sh" ] \
+    || fail "the section check does not run scripts/self/check-store-notes-section.sh: $step"
   [ "$(yq -r '.env.SECTION' <<<"$step")" = '${{ needs.dry-run.outputs.section }}' ] \
     || fail "the section check does not read the dry run's section output: $step"
-  [ -f "$REPO_ROOT/scripts/self/check-release-notes-section.sh" ] || fail "the check script is gone"
+  [ -f "$REPO_ROOT/scripts/self/check-store-notes-section.sh" ] || fail "the check script is gone"
 }
 
 @test "self-ci.yml runs the dry run on every change, with the grant the called job declares" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.jobs."release-notes".uses' "$CI")" = "./.github/workflows/self-release-notes.yml" ] \
-    || fail "self-ci.yml does not call self-release-notes.yml"
-  [ "$(yq -r '.jobs."release-notes".name' "$CI")" = "Release notes" ] || fail "the release notes job was renamed"
-  [ "$(yq -r '.jobs."release-notes".if // "always"' "$CI")" = "always" ] || fail "the dry run is gated: $(yq -r '.jobs."release-notes".if' "$CI")"
-  [ "$(yq -r '.jobs."release-notes".permissions.contents' "$CI")" = "read" ] || fail "the dry run job does not grant contents: read"
-  [ "$(yq -r '.jobs."release-notes".permissions."pull-requests"' "$CI")" = "write" ] \
+  [ "$(yq -r '.jobs."store-notes".uses' "$CI")" = "./.github/workflows/self-store-notes.yml" ] \
+    || fail "self-ci.yml does not call self-store-notes.yml"
+  [ "$(yq -r '.jobs."store-notes".name' "$CI")" = "Store notes" ] || fail "the store notes job was renamed"
+  [ "$(yq -r '.jobs."store-notes".if // "always"' "$CI")" = "always" ] || fail "the dry run is gated: $(yq -r '.jobs."store-notes".if' "$CI")"
+  [ "$(yq -r '.jobs."store-notes".permissions.contents' "$CI")" = "read" ] || fail "the dry run job does not grant contents: read"
+  [ "$(yq -r '.jobs."store-notes".permissions."pull-requests"' "$CI")" = "write" ] \
     || fail "the dry run job does not grant pull-requests: write, so the called job cannot start"
 }
 
@@ -137,15 +137,15 @@ RELEASE_NOTES="$REPO_ROOT/.github/workflows/self-release-notes.yml"
 # A release whose dry run failed must leave the tags where they were.
 @test "self-release.yml moves the major tag only after the release commit's dry run passed" {
   command -v yq >/dev/null || skip "yq not installed"
-  [ "$(yq -r '.jobs."release-notes".uses' "$RELEASE")" = "./.github/workflows/self-release-notes.yml" ] \
+  [ "$(yq -r '.jobs."store-notes".uses' "$RELEASE")" = "./.github/workflows/self-store-notes.yml" ] \
     || fail "self-release.yml does not run the dry run"
-  cond="$(yq -r '.jobs."release-notes".if' "$RELEASE")"
+  cond="$(yq -r '.jobs."store-notes".if' "$RELEASE")"
   [[ "$cond" == *"needs.release-please.outputs.release-created == 'true'"* ]] \
     || fail "the dry run is not gated on a release: $cond"
-  [ "$(yq -r '.jobs."release-notes".permissions."pull-requests"' "$RELEASE")" = "write" ] \
+  [ "$(yq -r '.jobs."store-notes".permissions."pull-requests"' "$RELEASE")" = "write" ] \
     || fail "the release dry run does not grant pull-requests: write"
   needs="$(yq -r '.jobs."major-tag".needs | (select(type == "!!seq") | join(",")) // .' "$RELEASE")"
-  [[ ",$needs," == *",release-notes,"* ]] || fail "major-tag does not need the dry run: $needs"
+  [[ ",$needs," == *",store-notes,"* ]] || fail "major-tag does not need the dry run: $needs"
   [[ ",$needs," == *",release-please,"* ]] || fail "major-tag lost its release-please need: $needs"
   [ "$(yq -r '.jobs."major-tag".if' "$RELEASE")" != "null" ] || fail "major-tag lost its if"
   # `always()` or `!cancelled()` would run it past a failed dry run.

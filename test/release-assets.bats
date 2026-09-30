@@ -87,7 +87,7 @@ SH
   export PATH="$STUB:$PATH"
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" WORKFLOWS_ASSETS_DIR="$ASSETS" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   mkdir -p "$RUNNER_TEMP"
-  unset GITHUB_OUTPUT TITLE TARGET_SHA NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE
+  unset GITHUB_OUTPUT TITLE TARGET_SHA RELEASE_NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE
 }
 
 source_release() {
@@ -191,15 +191,15 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
   : > "$WORKFLOWS_TEST_EXISTS"
   source_release
   printf 'this-run\n' > "$ASSETS/build-info.json"
-  printf 'this-run notes\n' > "$ASSETS/notes.md"
+  printf 'this-run notes\n' > "$ASSETS/release-notes.md"
   printf 'source\n' > "$WORKFLOWS_TEST_SOURCE_ASSETS/build-info.json"
-  printf 'source notes\n' > "$WORKFLOWS_TEST_SOURCE_ASSETS/notes.md"
+  printf 'source notes\n' > "$WORKFLOWS_TEST_SOURCE_ASSETS/release-notes.md"
   TAG=v1.2.3 FROM_TAG="$WORKFLOWS_TEST_SOURCE_TAG" release promote
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   [ "$(cat "$ASSETS/build-info.json")" = "this-run" ] \
     || fail "the source build-info.json overwrote this run's: $(cat "$ASSETS/build-info.json")"
-  [ "$(cat "$ASSETS/notes.md")" = "this-run notes" ] \
-    || fail "the source notes overwrote this run's: $(cat "$ASSETS/notes.md")"
+  [ "$(cat "$ASSETS/release-notes.md")" = "this-run notes" ] \
+    || fail "the source notes overwrote this run's: $(cat "$ASSETS/release-notes.md")"
   # The binaries this run does not have still come across.
   upload="$(grep '^release upload v1.2.3' "$WORKFLOWS_TEST_LOG")"
   contains "$upload" "app.aab" || fail "the carried-forward aab was dropped: $upload"
@@ -261,7 +261,7 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
 @test "append adds the section under its heading" {
   : > "$WORKFLOWS_TEST_EXISTS"
   printf -- '- rolled out to 10%%\n' > "$BATS_TEST_TMPDIR/section.md"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "Initial release notes." || fail "the existing body was dropped"
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "## Store rollout" || fail "no heading in: $(cat "$WORKFLOWS_TEST_BODY")"
@@ -271,10 +271,10 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
 @test "append is idempotent - a re-run yields a byte-identical body" {
   : > "$WORKFLOWS_TEST_EXISTS"
   printf -- '- rolled out to 10%%\n' > "$BATS_TEST_TMPDIR/section.md"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "first append exited $status: $output"
   first="$(cat "$WORKFLOWS_TEST_BODY")"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "second append exited $status: $output"
   second="$(cat "$WORKFLOWS_TEST_BODY")"
   [ "$first" = "$second" ] || fail "re-running append changed the body:
@@ -289,10 +289,10 @@ $second"
 @test "a re-run with different content replaces the section rather than stacking it" {
   : > "$WORKFLOWS_TEST_EXISTS"
   printf -- '- rolled out to 10%%\n' > "$BATS_TEST_TMPDIR/section.md"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "first append exited $status: $output"
   printf -- '- rolled out to 100%%\n' > "$BATS_TEST_TMPDIR/section.md"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "second append exited $status: $output"
   body="$(cat "$WORKFLOWS_TEST_BODY")"
   contains "$body" "rolled out to 100%" || fail "the new content is missing: $body"
@@ -302,7 +302,7 @@ $second"
 
 # The regression U1 was: the strip ran from the heading to the next `## `, so a
 # notes file that itself starts with a heading terminated the strip early and its
-# tail stacked on every re-run. That was the *default* shape - notes.sh's old
+# tail stacked on every re-run. That was the *default* shape - store-notes.sh's old
 # commit-subject fallback wrote `## <version> (<build>)` - and a release-please
 # body still starts with `## [x.y.z](...)`.
 @test "append is idempotent when the notes file itself starts with a ## heading" {
@@ -318,10 +318,10 @@ $second"
 
 - a fix
 EOF
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Release notes' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Release notes' release append
   [ "$status" -eq 0 ] || fail "first append exited $status: $output"
   first="$(cat "$WORKFLOWS_TEST_BODY")"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Release notes' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Release notes' release append
   [ "$status" -eq 0 ] || fail "second append exited $status: $output"
   second="$(cat "$WORKFLOWS_TEST_BODY")"
   [ "$first" = "$second" ] || fail "re-running append changed the body:
@@ -346,7 +346,7 @@ Initial release notes.
 - rolled out to 10%
 EOF
   printf -- '- rolled out to 100%%\n' > "$BATS_TEST_TMPDIR/section.md"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "migration append exited $status: $output"
   [ "$(grep -c '^## Store rollout$' "$WORKFLOWS_TEST_BODY")" -eq 1 ] \
     || fail "the legacy section was not replaced: $(cat "$WORKFLOWS_TEST_BODY")"
@@ -355,7 +355,7 @@ EOF
   grep -qxF '<!-- workflows:append:Store rollout -->' "$WORKFLOWS_TEST_BODY" \
     || fail "the migrated body carries no marker: $(cat "$WORKFLOWS_TEST_BODY")"
   first="$(cat "$WORKFLOWS_TEST_BODY")"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "second append exited $status: $output"
   [ "$first" = "$(cat "$WORKFLOWS_TEST_BODY")" ] || fail "the run after migration was not idempotent"
 }
@@ -369,7 +369,7 @@ EOF
   assets
   printf 'real sums\n' > "$ASSETS/SHA256SUMS"
   printf -- '- rolled out to 10%%\n' > "$BATS_TEST_TMPDIR/section.md"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" APPEND_TITLE='Store rollout' release append
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   ! grep -q '^release upload' "$WORKFLOWS_TEST_LOG" || fail "append uploaded assets: $(cat "$WORKFLOWS_TEST_LOG")"
   [ "$(cat "$ASSETS/SHA256SUMS")" = "real sums" ] \
@@ -377,26 +377,26 @@ EOF
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "rolled out to 10%" || fail "the body was not updated"
 }
 
-@test "append takes its section from NOTES_TEXT when there is no notes file" {
+@test "append takes its section from RELEASE_NOTES_TEXT when there is no notes file" {
   : > "$WORKFLOWS_TEST_EXISTS"
-  TAG=v1.2.3 NOTES_TEXT='release at 25%, platforms all' APPEND_TITLE='Production' RUNNER_TEMP="$BATS_TEST_TMPDIR" release append
+  TAG=v1.2.3 RELEASE_NOTES_TEXT='release at 25%, platforms all' APPEND_TITLE='Production' RUNNER_TEMP="$BATS_TEST_TMPDIR" release append
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "## Production" || fail "no heading in: $(cat "$WORKFLOWS_TEST_BODY")"
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "release at 25%, platforms all" || fail "no text in: $(cat "$WORKFLOWS_TEST_BODY")"
 }
 
-@test "NOTES_TEXT wins over a notes file" {
+@test "RELEASE_NOTES_TEXT wins over a notes file" {
   : > "$WORKFLOWS_TEST_EXISTS"
   printf 'from the file\n' > "$BATS_TEST_TMPDIR/section.md"
-  TAG=v1.2.3 NOTES_FILE="$BATS_TEST_TMPDIR/section.md" NOTES_TEXT='from the text' APPEND_TITLE='Production' \
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$BATS_TEST_TMPDIR/section.md" RELEASE_NOTES_TEXT='from the text' APPEND_TITLE='Production' \
     RUNNER_TEMP="$BATS_TEST_TMPDIR" release append
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$(cat "$WORKFLOWS_TEST_BODY")" "from the text" || fail "the text was not used: $(cat "$WORKFLOWS_TEST_BODY")"
   not_contains "$(cat "$WORKFLOWS_TEST_BODY")" "from the file" || fail "the file was used over the text: $(cat "$WORKFLOWS_TEST_BODY")"
 }
 
-@test "a release created with NOTES_TEXT gets it as its notes, not generated ones" {
-  TAG=v1.2.3 TARGET_SHA=deadbeef NOTES_TEXT='hand-written notes' RUNNER_TEMP="$BATS_TEST_TMPDIR" release create-prerelease
+@test "a release created with RELEASE_NOTES_TEXT gets it as its notes, not generated ones" {
+  TAG=v1.2.3 TARGET_SHA=deadbeef RELEASE_NOTES_TEXT='hand-written notes' RUNNER_TEMP="$BATS_TEST_TMPDIR" release create-prerelease
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   create="$(grep '^release create' "$WORKFLOWS_TEST_LOG")"
   contains "$create" "--notes-file $BATS_TEST_TMPDIR/workflows-release-notes-text.md" || fail "the text was not the notes: $create"
@@ -408,7 +408,7 @@ EOF
   : > "$WORKFLOWS_TEST_EXISTS"
   TAG=v1.2.3 release append
   [ "$status" -ne 0 ] || fail "appended nothing successfully: $output"
-  contains "$output" "NOTES_FILE" || fail "unexpected message: $output"
+  contains "$output" "RELEASE_NOTES_FILE" || fail "unexpected message: $output"
 }
 
 @test "an unknown mode is fatal" {
@@ -456,7 +456,7 @@ EOF
 @test "a failed FROM_TAG lookup stops the promote instead of guessing" {
   : > "$WORKFLOWS_TEST_EXISTS"
   : > "$WORKFLOWS_TEST_SOURCE_EXISTS"
-  cp "$WORKFLOWS_TEST_BODY" "$WORKFLOWS_TEST_SOURCE_ASSETS/notes.md"
+  cp "$WORKFLOWS_TEST_BODY" "$WORKFLOWS_TEST_SOURCE_ASSETS/release-notes.md"
   : > "$WORKFLOWS_TEST_LOOKUP_FAILS"
   TAG=v1.2.3 FROM_TAG="$WORKFLOWS_TEST_SOURCE_TAG" release promote
   [ "$status" -ne 0 ] || fail "a 403 was read as 'the source is gone': $output"
@@ -515,8 +515,8 @@ body_of() { sed -n 's/^release create [^ ]* //p' "$WORKFLOWS_TEST_LOG"; }
 
 @test "a supplied notes file keeps its content, with the note above it" {
   printf 'ipa\n' > "$ASSETS/app.ipa"
-  printf 'The real release notes.\n' > "$ASSETS/notes.md"
-  TAG=v1.2.3 NOTES_FILE="$ASSETS/notes.md" BODY_NOTE='No store upload.' \
+  printf 'The real release notes.\n' > "$ASSETS/release-notes.md"
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$ASSETS/release-notes.md" BODY_NOTE='No store upload.' \
  release create-prerelease
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   # Supplied notes are not generated ones, so gh must not be asked to generate.
@@ -526,10 +526,10 @@ body_of() { sed -n 's/^release create [^ ]* //p' "$WORKFLOWS_TEST_LOG"; }
 
 @test "no body note leaves the notes arguments exactly as they were" {
   printf 'ipa\n' > "$ASSETS/app.ipa"
-  printf 'The real release notes.\n' > "$ASSETS/notes.md"
-  TAG=v1.2.3 NOTES_FILE="$ASSETS/notes.md" release create-prerelease
+  printf 'The real release notes.\n' > "$ASSETS/release-notes.md"
+  TAG=v1.2.3 RELEASE_NOTES_FILE="$ASSETS/release-notes.md" release create-prerelease
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  grep -q -- "--notes-file $ASSETS/notes.md" "$WORKFLOWS_TEST_LOG" \
+  grep -q -- "--notes-file $ASSETS/release-notes.md" "$WORKFLOWS_TEST_LOG" \
     || fail "the supplied notes file was not used verbatim: $(cat "$WORKFLOWS_TEST_LOG")"
   ! grep -q -- 'workflows-release-note.md' "$WORKFLOWS_TEST_LOG" \
     || fail "a note file appeared without a body note"

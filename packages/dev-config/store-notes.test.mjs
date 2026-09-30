@@ -219,7 +219,7 @@ test('--include-changelog appends the full grouped list, chores included', async
 
 // ---------- cli ----------
 
-test('the cli writes store-notes.json and notes-store.txt into --out', () => {
+test('the cli writes store-notes.json and store-notes.txt into --out', () => {
   const out = tempDir();
   execFileSync(
     process.execPath,
@@ -228,7 +228,7 @@ test('the cli writes store-notes.json and notes-store.txt into --out', () => {
       encoding: 'utf8',
       env: {
         ...process.env,
-        RELEASE_NOTES_LLM_PROVIDER: '',
+        STORE_NOTES_LLM_PROVIDER: '',
         STORE_NOTES_INCLUDE_CHANGELOG: '',
       },
     },
@@ -239,7 +239,7 @@ test('the cli writes store-notes.json and notes-store.txt into --out', () => {
   assert.deepEqual(Object.keys(notes['en-US']).sort(), ['appstore', 'play', 'testflight']);
   assert.match(notes['en-US'].testflight, /^New\n• Stay signed in after a cold start\./);
   assert.equal(
-    readFileSync(path.join(out, 'notes-store.txt'), 'utf8'),
+    readFileSync(path.join(out, 'store-notes.txt'), 'utf8'),
     `${notes['en-US'].testflight}\n`,
   );
 });
@@ -257,7 +257,7 @@ test('the cli prints json to stdout with --out - and honours --body-section', ()
       '--out',
       '-',
     ],
-    { encoding: 'utf8', env: { ...process.env, RELEASE_NOTES_LLM_PROVIDER: '' } },
+    { encoding: 'utf8', env: { ...process.env, STORE_NOTES_LLM_PROVIDER: '' } },
   );
   const notes = JSON.parse(stdout);
   assert.deepEqual(Object.keys(notes), ['en-US', 'sv-SE']);
@@ -367,7 +367,7 @@ test('the cli sends --body-section through the same filter', () => {
   const notes = JSON.parse(
     execFileSync(process.execPath, [script, '--from-body', file, '--body-section', '--out', '-'], {
       encoding: 'utf8',
-      env: { ...process.env, RELEASE_NOTES_LLM_PROVIDER: '' },
+      env: { ...process.env, STORE_NOTES_LLM_PROVIDER: '' },
     }),
   );
   assert.equal(notes['en-US'].testflight, 'Read more about PR.');
@@ -420,7 +420,7 @@ test("the app's addendum follows the package's prompt after a blank line", () =>
   assert.equal(composePrompt('  ', null), '');
 });
 
-test("main reads the app's release-notes.prompt.md from its working directory", async () => {
+test("main reads the app's store-notes.prompt.md from its working directory", async () => {
   const app = tempDir();
   writeFileSync(path.join(app, APP_PROMPT_FILE), '## Product\n\n- **Name:** Acme for {{locales}}\n');
   const seen = [];
@@ -428,7 +428,7 @@ test("main reads the app's release-notes.prompt.md from its working directory", 
     seen.push(request.prompt);
     return null;
   };
-  const env = { RELEASE_NOTES_LLM_PROVIDER: 'anthropic' };
+  const env = { STORE_NOTES_LLM_PROVIDER: 'anthropic' };
   const withApp = await runMain(['--from-body', releaseBody, '--locales', 'en-US'], { cwd: app, env, rewrite });
   const without = await runMain(['--from-body', releaseBody, '--locales', 'en-US'], { cwd: tempDir(), env, rewrite });
   assert.equal(withApp.code, 0);
@@ -479,17 +479,17 @@ test('locales come from the ios metadata directories, ignoring the non-locales',
   assert.deepEqual(discoverLocales(path.join(dir, 'nope')), ['en-US']);
 });
 
-test('NOTES_LOCALES is honoured, below --locales and above discovery', () => {
-  // build-prepare exports it for its `notes-locales` input; before this the
+test('STORE_NOTES_LOCALES is honoured, below --locales and above discovery', () => {
+  // build-prepare exports it for its `store-notes-locales` input; before this the
   // input was plumbed through the whole workflow and then ignored.
   const flag = { locales: ['sv-SE'] };
   const none = { locales: [] };
-  assert.deepEqual(resolveLocales(flag, { NOTES_LOCALES: 'de,fr-FR' }), ['sv-SE']);
-  assert.deepEqual(resolveLocales(none, { NOTES_LOCALES: 'de,fr-FR' }), ['de', 'fr-FR']);
-  assert.deepEqual(resolveLocales(none, { NOTES_LOCALES: ' de , fr-FR ,' }), ['de', 'fr-FR']);
+  assert.deepEqual(resolveLocales(flag, { STORE_NOTES_LOCALES: 'de,fr-FR' }), ['sv-SE']);
+  assert.deepEqual(resolveLocales(none, { STORE_NOTES_LOCALES: 'de,fr-FR' }), ['de', 'fr-FR']);
+  assert.deepEqual(resolveLocales(none, { STORE_NOTES_LOCALES: ' de , fr-FR ,' }), ['de', 'fr-FR']);
   // An empty or absent value must not produce an empty locale list, which would
   // write a store-notes.json with no locales in it at all.
-  assert.deepEqual(resolveLocales(none, { NOTES_LOCALES: '' }), discoverLocales());
+  assert.deepEqual(resolveLocales(none, { STORE_NOTES_LOCALES: '' }), discoverLocales());
   assert.deepEqual(resolveLocales(none, {}), discoverLocales());
 });
 
@@ -525,7 +525,7 @@ test('STORE_NOTES_INCLUDE_CHANGELOG=true appends the changelog through the cli',
         encoding: 'utf8',
         env: {
           ...process.env,
-          RELEASE_NOTES_LLM_PROVIDER: '',
+          STORE_NOTES_LLM_PROVIDER: '',
           STORE_NOTES_INCLUDE_CHANGELOG: 'true',
         },
       },
@@ -534,7 +534,7 @@ test('STORE_NOTES_INCLUDE_CHANGELOG=true appends the changelog through the cli',
   assert.match(notes['en-US'].testflight, /\nChangelog\nNew: Stay signed in/);
 });
 
-test('notes-store.txt falls back to the first locale when en-US is not requested', () => {
+test('store-notes.txt falls back to the first locale when en-US is not requested', () => {
   const out = tempDir();
   execFileSync(
     process.execPath,
@@ -547,12 +547,12 @@ test('notes-store.txt falls back to the first locale when en-US is not requested
       '--out',
       out,
     ],
-    { encoding: 'utf8', env: { ...process.env, RELEASE_NOTES_LLM_PROVIDER: '' } },
+    { encoding: 'utf8', env: { ...process.env, STORE_NOTES_LLM_PROVIDER: '' } },
   );
   const notes = JSON.parse(readFileSync(path.join(out, 'store-notes.json'), 'utf8'));
   assert.deepEqual(Object.keys(notes), ['sv-SE']);
   assert.equal(
-    readFileSync(path.join(out, 'notes-store.txt'), 'utf8'),
+    readFileSync(path.join(out, 'store-notes.txt'), 'utf8'),
     `${notes['sv-SE'].testflight}\n`,
   );
 });
@@ -564,7 +564,7 @@ async function runMain(argv, io = {}) {
   const out = [];
   const err = [];
   const code = await main(argv, {
-    env: { RELEASE_NOTES_LLM_PROVIDER: '' },
+    env: { STORE_NOTES_LLM_PROVIDER: '' },
     write: (text) => out.push(text),
     error: (line) => err.push(line),
     ...io,
@@ -591,14 +591,14 @@ test('main resolves --from-body against cwd and writes both files into --out', a
   assert.deepEqual(err, [`store notes written to ${out} (en-US)`]);
   const notes = JSON.parse(readFileSync(path.join(out, 'store-notes.json'), 'utf8'));
   assert.equal(
-    readFileSync(path.join(out, 'notes-store.txt'), 'utf8'),
+    readFileSync(path.join(out, 'store-notes.txt'), 'utf8'),
     `${notes['en-US'].testflight}\n`,
   );
 });
 
 test('main takes the locales from the environment it is given', async () => {
   const { code, out } = await runMain(['--from-body', releaseBody], {
-    env: { NOTES_LOCALES: 'de,fr-FR' },
+    env: { STORE_NOTES_LOCALES: 'de,fr-FR' },
   });
   assert.equal(code, 0);
   assert.deepEqual(Object.keys(JSON.parse(out)), ['de', 'fr-FR']);
@@ -613,7 +613,7 @@ test('main renders an empty commit range from --from-commits', async () => {
 test('main hands the provider and model from its environment to the rewrite', async () => {
   const seen = [];
   const { code, out } = await runMain(['--from-body', releaseBody, '--locales', 'en-US'], {
-    env: { RELEASE_NOTES_LLM_PROVIDER: 'openai', RELEASE_NOTES_LLM_MODEL: 'gpt-5-mini' },
+    env: { STORE_NOTES_LLM_PROVIDER: 'openai', STORE_NOTES_LLM_MODEL: 'gpt-5-mini' },
     rewrite: async (request) => {
       seen.push(request);
       return { 'en-US': 'Rewritten.' };
@@ -633,7 +633,7 @@ async function mainRequest(extraEnv) {
     () =>
       withFetch(stubFetch(JSON.parse(fixture('openai-response.json')), calls), () =>
         runMain(['--from-body', releaseBody, '--locales', 'en-US'], {
-          env: { RELEASE_NOTES_LLM_PROVIDER: 'openai', ...extraEnv },
+          env: { STORE_NOTES_LLM_PROVIDER: 'openai', ...extraEnv },
         }),
       ),
   );
@@ -642,8 +642,8 @@ async function mainRequest(extraEnv) {
 
 test('effort none and a null extra parameter from the environment shape the request', async () => {
   const { code, out, err, sent } = await mainRequest({
-    RELEASE_NOTES_LLM_EFFORT: 'none',
-    RELEASE_NOTES_LLM_EXTRA_PARAMS: '{"response_format": null}',
+    STORE_NOTES_LLM_EFFORT: 'none',
+    STORE_NOTES_LLM_EXTRA_PARAMS: '{"response_format": null}',
   });
   assert.equal(code, 0);
   assert.deepEqual(err, []);
@@ -663,9 +663,9 @@ test('an unset effort from the environment thinks at max, with room to think', a
 });
 
 test('an effort outside the vocabulary fails the draft and names the variable', async () => {
-  const { code, err, sent } = await mainRequest({ RELEASE_NOTES_LLM_EFFORT: 'off' });
+  const { code, err, sent } = await mainRequest({ STORE_NOTES_LLM_EFFORT: 'off' });
   assert.equal(code, 1);
-  assert.match(err[0], /RELEASE_NOTES_LLM_EFFORT: expected one of none, low, medium, high, max/);
+  assert.match(err[0], /STORE_NOTES_LLM_EFFORT: expected one of none, low, medium, high, max/);
   assert.equal(sent.length, 0);
 });
 
@@ -689,7 +689,7 @@ test('main reports a bad argument on stderr and exits 1', async () => {
 
 test('main reports a failure that is not an Error as itself', async () => {
   const { code, err } = await runMain(['--from-body', releaseBody, '--locales', 'en-US'], {
-    env: { RELEASE_NOTES_LLM_PROVIDER: 'anthropic' },
+    env: { STORE_NOTES_LLM_PROVIDER: 'anthropic' },
     rewrite: async () => {
       throw 'provider exploded';
     },
@@ -701,7 +701,7 @@ test('main reports a failure that is not an Error as itself', async () => {
 test('the cli exits 1 with the reason on a bad argument', () => {
   const result = spawnSync(process.execPath, [script, '--nope'], {
     encoding: 'utf8',
-    env: { ...process.env, RELEASE_NOTES_LLM_PROVIDER: '' },
+    env: { ...process.env, STORE_NOTES_LLM_PROVIDER: '' },
   });
   assert.equal(result.status, 1);
   assert.equal(result.stderr, 'unknown argument: --nope\n');
