@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.10.0...dev-config-v0.11.0) (2026-09-30)
+
+
+### Features
+
+* **dev-config:** ship the badge renderer, and render publish-badges.yml's badges with it ([#132](https://github.com/blinkbitcoin/shared-workflows/issues/132)) ([97fba35](https://github.com/blinkbitcoin/shared-workflows/commit/97fba358bdf1085dccadc95bb73a050e83591965))
+* **dev-config:** ship the store notes generator and run it for every consumer ([#133](https://github.com/blinkbitcoin/shared-workflows/issues/133)) ([5c937a1](https://github.com/blinkbitcoin/shared-workflows/commit/5c937a1bc10494d9586137a7e65094b51a4935bc))
+
 ## [0.10.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.9.0...dev-config-v0.10.0) (2026-09-30)
 
 
