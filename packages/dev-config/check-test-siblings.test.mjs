@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { globToRegExp, main, parseArgs, problems, siblingsOf, sourceRule } from './bin/check-test-siblings.mjs';
+import { configRules, globToRegExp, main, parseArgs, problems, resolveRules, siblingsOf, sourceRule } from './bin/check-test-siblings.mjs';
 
 const BIN = fileURLToPath(new URL('./bin/check-test-siblings.mjs', import.meta.url));
 
@@ -147,7 +147,7 @@ describe('no allowlist', () => {
 
   test('a directory --exclude covers everything under it, and one that matches nothing is reported', () => {
     const own = parseArgs(['--source', '**/*.ts=.test.ts', '--exclude', 'vendor/', '--exclude', 'gone/**'], '/r');
-    assert.deepEqual(problems(['vendor/a.ts', 'b.ts', 'b.test.ts'], own), { sources: 1, found: ['--exclude gone/** matches no file; drop it'] });
+    assert.deepEqual(problems(['vendor/a.ts', 'b.ts', 'b.test.ts'], own), { sources: 1, found: ['exclude gone/** matches no file; drop it'] });
   });
 
   test('this program keeps no list of excused files', () => {
@@ -161,22 +161,23 @@ test('parseArgs reads every option, and refuses a malformed one', () => {
   assert.equal(options.sources.length, 4);
   assert.deepEqual(options.mirrors, [{ from: 'src/app/', to: 'src/__tests__/app/' }]);
   assert.equal(parseArgs(['--root', 'app', '--source', 'a/*.ts=.test.ts'], '/w').root, path.resolve('/w', 'app'));
-  assert.throws(() => parseArgs([], '/w'), /name the source files with at least one --source GLOB=SUFFIX/);
+  assert.deepEqual(parseArgs([], '/w'), { root: '/w', sources: [], excludes: [], mirrors: [] });
   for (const bad of [['--source'], ['--mirror'], ['--source', 'a/*.ts'], ['--source', 'a/*.ts=test.ts'], ['--mirror', 'src/app=src/__tests__/app'], ['--exclude'], ['--root'], ['--nope', 'x']]) {
     assert.throws(() => parseArgs(bad, '/w'), /unexpected .*: pass --source GLOB=SUFFIX\[,SUFFIX\], --exclude GLOB, --mirror FROM\/=TO\/ and --root DIR/, bad.join(' '));
   }
 });
 
 /** Runs main over an in-memory file list. */
-function run(files, argv = TEMPLATE) {
+function run(files, argv = TEMPLATE, config = {}) {
   const out = { log: [], error: [] };
+  const read = (file) => config[file] ?? null;
   const roots = [];
   const listFiles = (root) => {
     roots.push(root);
     if (files instanceof Error) throw files;
     return files;
   };
-  const code = main(argv, { cwd: '/repo', listFiles, log: (l) => out.log.push(l), error: (l) => out.error.push(l) });
+  const code = main(argv, { cwd: '/repo', listFiles, read, log: (l) => out.log.push(l), error: (l) => out.error.push(l) });
   return { code, roots, ...out };
 }
 
@@ -211,6 +212,88 @@ test('main fails on bad arguments and on a file list it cannot read', () => {
   assert.deepEqual(broken.error, ['test siblings: could not list the files of /repo: not a git repository']);
 });
 
+// The template's rules as its dev-config.json will hold them.
+const TEMPLATE_FILE = JSON.stringify({
+  testSiblings: {
+    sources: {
+      'scripts/**/*.{mjs,sh}': ['.test.mjs'],
+      'src/**/*.{ts,tsx}': ['.test.ts', '.test.tsx'],
+      'plugins/*.ts': ['.test.ts', '.test.tsx'],
+      'modules/*/index.ts': ['.test.ts', '.test.tsx'],
+    },
+    exclude: ['src/graphql/generated/**', 'src/i18n/locales/**', 'src/test/**', 'src/__tests__/**', '**/*.d.ts'],
+    mirror: { 'src/app/': 'src/__tests__/app/' },
+  },
+  docs: { architecture: ['scripts/'] },
+});
+const withFile = (text) => ({ '/repo/dev-config.json': text });
+
+describe('dev-config.json', () => {
+  test('with no flags the rules come from the file, and give what the flags gave', () => {
+    assert.deepEqual(run([...TREE, 'scripts/b.sh'], [], withFile(TEMPLATE_FILE)), run([...TREE, 'scripts/b.sh']));
+    assert.equal(run(TREE, [], withFile(TEMPLATE_FILE)).code, 0);
+  });
+
+  test('configRules keeps the order of sources, so the first match still decides', () => {
+    const rules = configRules(JSON.parse(TEMPLATE_FILE).testSiblings);
+    assert.deepEqual(rules.sources.map(({ glob, suffixes }) => [glob, suffixes]), options.sources.map(({ glob, suffixes }) => [glob, suffixes]));
+    assert.deepEqual(rules.excludes, options.excludes);
+    assert.deepEqual(rules.mirrors, options.mirrors);
+    assert.deepEqual(configRules({}), { sources: [], excludes: [], mirrors: [] });
+  });
+
+  test('a flag overrides its own field of the file, and leaves the others', () => {
+    const file = configRules(JSON.parse(TEMPLATE_FILE).testSiblings);
+    const flags = parseArgs(['--source', 'lib/*.mjs=.spec.mjs'], '/repo');
+    const merged = resolveRules(flags, file);
+    assert.deepEqual(merged.sources.map(({ glob }) => glob), ['lib/*.mjs']);
+    assert.deepEqual(merged.excludes, file.excludes);
+    assert.deepEqual(merged.mirrors, file.mirrors);
+    assert.deepEqual(resolveRules(flags, null), flags);
+    const { code, error } = run(['lib/a.mjs', 'scripts/b.sh'], ['--source', 'lib/*.mjs=.spec.mjs', '--exclude', 'scripts/'], withFile(TEMPLATE_FILE));
+    assert.equal(code, 1);
+    assert.deepEqual(error, ['lib/a.mjs has no test of its own: add lib/a.spec.mjs', 'test siblings: 1 problem(s)']);
+  });
+
+  test('no rules in the flags or the file is a usage error', () => {
+    assert.deepEqual(run(TREE, []).error, ['test siblings: name the source files with --source GLOB=SUFFIX, or with "testSiblings.sources" in dev-config.json']);
+    assert.equal(run(TREE, [], withFile('{"docs":{}}')).code, 1);
+  });
+
+  test('an exclude in the file that matches nothing fails, as the flag does', () => {
+    const file = JSON.stringify({ testSiblings: { sources: { '**/*.mjs': ['.test.mjs'] }, exclude: ['gone/**'] } });
+    assert.deepEqual(run(['a.mjs', 'a.test.mjs'], [], withFile(file)).error, ['exclude gone/** matches no file; drop it', 'test siblings: 1 problem(s)']);
+  });
+
+  for (const [what, file, reason] of [
+    ['invalid JSON', '{', /^test siblings: dev-config\.json: not valid JSON: /],
+    ['an unknown key', '{"testSiblings":{"excludes":[]}}', /unknown key "testSiblings\.excludes"/],
+    ['a single-file exclude', '{"testSiblings":{"exclude":["src/hard.ts"]}}', /"testSiblings\.exclude" entry src\/hard\.ts names one file, which is an allowlist entry/],
+    ['sources that are not an object', '{"testSiblings":{"sources":["a"]}}', /"testSiblings\.sources" must be an object of glob to test suffixes/],
+    ['sources that are null', '{"testSiblings":{"sources":null}}', /"testSiblings\.sources" must be an object/],
+    ['a suffix list that is not a list', '{"testSiblings":{"sources":{"a/*":".test.mjs"}}}', /"testSiblings\.sources\.a\/\*" must be a list of non-empty strings/],
+    ['an empty suffix list', '{"testSiblings":{"sources":{"a/*":[]}}}', /must list test suffixes that start with a dot/],
+    ['a suffix without its dot', '{"testSiblings":{"sources":{"a/*":["test.mjs"]}}}', /must list test suffixes that start with a dot/],
+    ['an exclude that is not a list', '{"testSiblings":{"exclude":"a/**"}}', /"testSiblings\.exclude" must be a list of non-empty strings/],
+    ['a mirror that is not a map', '{"testSiblings":{"mirror":["src/app/"]}}', /"testSiblings\.mirror" must be an object of non-empty strings/],
+    ['a mirror between files', '{"testSiblings":{"mirror":{"src/app":"src/__tests__/app/"}}}', /maps a directory to a directory, each ending in a slash/],
+  ]) {
+    test(`a file with ${what} exits 2 with the reason`, () => {
+      const { code, error, roots } = run(TREE, [], withFile(file));
+      assert.equal(code, 2);
+      assert.equal(error.length, 1);
+      assert.match(error[0], reason);
+      assert.deepEqual(roots, [], 'nothing is listed once the file is wrong');
+    });
+  }
+
+  test('the file is read from --root', () => {
+    const read = [];
+    main(['--root', 'app'], { cwd: '/w', listFiles: () => [], read: (file) => (read.push(file), null), log: () => {}, error: () => {} });
+    assert.deepEqual(read, ['/w/app/dev-config.json']);
+  });
+});
+
 const dirs = [];
 after(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
@@ -239,4 +322,8 @@ test('as a command it lists the tracked and the untracked files git does not ign
   const ok = spawnSync(process.execPath, [BIN, '--source', '**/*.mjs=.test.mjs'], { cwd: root, encoding: 'utf8', env });
   assert.equal(ok.status, 0, ok.stderr);
   assert.equal(ok.stdout, 'test siblings ok (2 source files)\n');
+  writeFileSync(path.join(root, 'dev-config.json'), JSON.stringify({ testSiblings: { sources: { '**/*.mjs': ['.test.mjs'] } } }));
+  const fromFile = spawnSync(process.execPath, [BIN], { cwd: root, encoding: 'utf8', env });
+  assert.equal(fromFile.status, 0, fromFile.stderr);
+  assert.equal(fromFile.stdout, 'test siblings ok (2 source files)\n');
 });

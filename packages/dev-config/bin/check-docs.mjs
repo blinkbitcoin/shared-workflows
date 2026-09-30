@@ -21,6 +21,18 @@
 //   5. check-diagrams, over every diagram under CI (EVENT_NAME set) and the
 //      changed ones on a laptop.
 //
+// The architecture paths and the target-name exceptions are the repository's
+// own rules, so they usually live in its `dev-config.json` and the make recipe
+// is the bare call:
+//
+//   "docs": {
+//     "architecture": ["app.config.ts", "plugins/", "scripts/", "Makefile"],
+//     "allowTargetNames": { "gen-graphql": "GraphQL is what it generates" }
+//   }
+//
+// Any --architecture replaces `architecture`, and any --allow-target-name
+// replaces `allowTargetNames`. A file that is there and wrong exits 2.
+//
 // The environment CI sets: EVENT_NAME, BASE_REF and PR_AUTHOR. A pull request
 // is compared with origin/BASE_REF, a push with HEAD~1 (on the default branch
 // origin/NAME *is* HEAD), and a laptop with origin/NAME (--default-branch,
@@ -34,6 +46,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ConfigError, CONFIG_FILE, readSection, stringList, stringMap } from '../lib/config.mjs';
 import { isProgram } from '../lib/is-program.mjs';
 import { readAtRef, readWorkingCopy, structuralManifests } from '../lib/manifest-structural.mjs';
 import { documentedTargets, expandIncludes } from '../lib/makefile.mjs';
@@ -59,6 +72,25 @@ export function parseArgs(argv, cwd) {
     }
   }
   return options;
+}
+
+/**
+ * The options with the `docs` section of the configuration file under each
+ * field no flag set, or a ConfigError naming what is wrong with the section.
+ */
+export function withConfig(options, section) {
+  if (section === null) return options;
+  const architecture = section.architecture === undefined ? [] : stringList(section.architecture, 'docs.architecture');
+  const allowed = section.allowTargetNames === undefined ? {} : stringMap(section.allowTargetNames, 'docs.allowTargetNames');
+  for (const target of Object.keys(allowed)) {
+    if (!/^[a-zA-Z0-9_.-]+$/.test(target)) throw new ConfigError(`${CONFIG_FILE}: "docs.allowTargetNames" names "${target}", which is not a make target`);
+  }
+  return {
+    ...options,
+    architecture: options.architecture.length > 0 ? options.architecture : architecture,
+    allowTargetNames:
+      options.allowTargetNames.length > 0 ? options.allowTargetNames : Object.entries(allowed).map(([target, reason]) => `${target}=${reason}`),
+  };
 }
 
 /**
@@ -165,6 +197,12 @@ export function main(
   } catch (e) {
     error(`docs check: ${e.message}`);
     return 1;
+  }
+  try {
+    options = withConfig(options, readSection(options.root, 'docs', read));
+  } catch (e) {
+    error(`docs check: ${e.message}`);
+    return 2;
   }
   const { root, agents: agentsName } = options;
   const inRoot = { cwd: root, env };

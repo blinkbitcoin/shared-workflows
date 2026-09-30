@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { freshness, main, parseArgs, runGit, runProgram, tableProblems } from './bin/check-docs.mjs';
+import { freshness, main, parseArgs, runGit, runProgram, tableProblems, withConfig } from './bin/check-docs.mjs';
 
 const BIN = fileURLToPath(new URL('./bin/check-docs.mjs', import.meta.url));
 let work;
@@ -519,6 +519,62 @@ describe('3-5. the dev-config programs', () => {
     assert.equal(runProgram('make-help', [], { cwd: fx.repo, env: process.env, stdio: 'ignore' }), 0);
     assert.equal(runProgram('make-help', ['--nope'], { cwd: fx.repo, env: process.env, stdio: 'ignore' }), 1);
   });
+});
+
+describe('dev-config.json', () => {
+  // The template's rules as its dev-config.json will hold them.
+  const FILE = JSON.stringify({
+    docs: {
+      architecture: ['app.config.ts', 'plugins/', 'modules/', 'src/graphql/', 'scripts/', 'Makefile'],
+      allowTargetNames: { 'gen-graphql': 'GraphQL is what it generates, the typed documents, not the tool that does it' },
+    },
+    testSiblings: {},
+  });
+
+  test('with no flags the rules come from the file, and do what the flags did', () => {
+    const fx = feature({ 'scripts/new.sh': 'echo\n' });
+    write(fx.repo, { 'dev-config.json': FILE });
+    const fromFile = run(fx, { argv: [] });
+    assertPassed(fromFile);
+    assert.deepEqual(advised(fromFile.stderr), ['scripts/new.sh']);
+    assert.deepEqual(fromFile.programs, PROGRAMS);
+  });
+
+  test('a flag overrides its own field of the file, and leaves the other', () => {
+    const fx = feature({ 'scripts/new.sh': 'echo\n', 'lib/a.mjs': '' });
+    write(fx.repo, { 'dev-config.json': FILE });
+    const result = run(fx, { argv: ['--architecture', 'lib/'] });
+    assert.deepEqual(advised(result.stderr), ['lib/a.mjs']);
+    assert.deepEqual(result.programs, PROGRAMS);
+    const allow = run(fx, { argv: ['--allow-target-name', 'x=y'] });
+    assert.deepEqual(advised(allow.stderr), ['scripts/new.sh']);
+    assert.equal(allow.programs[0], 'check-make-target-names --allow x=y');
+  });
+
+  test('withConfig leaves the options alone when there is no section, and reads an empty one as no rules', () => {
+    const options = parseArgs([], '/w');
+    assert.equal(withConfig(options, null), options);
+    assert.deepEqual(withConfig(options, {}), options);
+  });
+
+  for (const [what, file, reason] of [
+    ['invalid JSON', '{', /^docs check: dev-config\.json: not valid JSON: /],
+    ['an unknown key', '{"docs":{"paths":[]}}', /^docs check: dev-config\.json: unknown key "docs\.paths"/],
+    ['architecture that is not a list', '{"docs":{"architecture":"scripts/"}}', /"docs\.architecture" must be a list of non-empty strings/],
+    ['exceptions that are a list', '{"docs":{"allowTargetNames":["gen-graphql=x"]}}', /"docs\.allowTargetNames" must be an object of non-empty strings/],
+    ['an exception with no reason', '{"docs":{"allowTargetNames":{"gen-graphql":""}}}', /"docs\.allowTargetNames" must be an object of non-empty strings/],
+    ['an exception that is not a target', '{"docs":{"allowTargetNames":{"gen graphql":"x"}}}', /"docs\.allowTargetNames" names "gen graphql", which is not a make target/],
+  ]) {
+    test(`a file with ${what} exits 2 with the reason, before any check runs`, () => {
+      const fx = tree();
+      write(fx.repo, { 'dev-config.json': file });
+      const result = run(fx, { argv: [] });
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, reason);
+      assert.deepEqual(result.git, []);
+      assert.deepEqual(result.programs, []);
+    });
+  }
 });
 
 test('parseArgs reads every option, and refuses anything else', () => {

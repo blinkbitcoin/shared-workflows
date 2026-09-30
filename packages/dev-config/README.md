@@ -95,7 +95,7 @@ check-make-target-names [--require-mise]    # a make target named after the tool
 check-workflow-names --group ci=CI ...      # a workflow file or display name outside its group
 check-coverage-empty [summary.json]         # a Jest coverage row with nothing to cover
 check-make-recipes [--allow T=REASON]       # a make recipe with logic in it, not one call to a tested script
-check-test-siblings --source GLOB=SUFFIX    # a source file without a test file of its own
+check-test-siblings [--source GLOB=SUFFIX]  # a source file without a test file of its own
 check-docs [--architecture PREFIX]          # docs freshness, the command table, then three of the above
 check-licenses [--allow SPDX]               # a production dependency under a licence outside the allowlist
 ```
@@ -134,21 +134,26 @@ check-licenses [--allow SPDX]               # a production dependency under a li
   fails on an `--allow` that no longer applies.
 - `check-test-siblings` holds every source file to a test file of its own,
   beside it, so a module reached only through a caller's test fails the day
-  that caller stops calling it.
-  - `--source GLOB=SUFFIX[,SUFFIX]` (repeatable) says which files are sources
-    and what their test is called: the name without its last extension, plus a
-    suffix. The first `--source` a file matches decides.
-  - `--exclude GLOB` takes a class of files out of scope (generated code, test
-    support), and must be a glob or a directory; one naming a single file is
-    refused as the allowlist entry it would be, and one that matches nothing
-    fails.
-  - `--mirror FROM/=TO/` is for a directory whose every file is loaded as
-    something else (expo-router's `src/app/`): its files are tested from the
-    same path under TO, a test under FROM fails, and a test under TO that
-    mirrors nothing fails.
+  that caller stops calling it. Its rules are the `testSiblings` section of
+  [`dev-config.json`](#the-configuration-file), or these flags:
+  - `--source GLOB=SUFFIX[,SUFFIX]` (repeatable; `sources` in the file, glob to
+    a list of suffixes) says which files are sources and what their test is
+    called: the name without its last extension, plus a suffix. The first
+    source a file matches decides.
+  - `--exclude GLOB` (`exclude`) takes a class of files out of scope (generated
+    code, test support), and must be a glob or a directory; one naming a single
+    file is refused as the allowlist entry it would be, in the file too, and
+    one that matches nothing fails.
+  - `--mirror FROM/=TO/` (`mirror`, FROM to TO) is for a directory whose every
+    file is loaded as something else (expo-router's `src/app/`): its files are
+    tested from the same path under TO, a test under FROM fails, and a test
+    under TO that mirrors nothing fails.
   - There is no `--allow`, and passing one fails with the reason. The files are
     the tracked ones plus untracked files git does not ignore.
-- `check-docs` is a docs check in one call. Its steps, in order:
+- `check-docs` is a docs check in one call. Its rules are the `docs` section
+  of [`dev-config.json`](#the-configuration-file) (`architecture`, and
+  `allowTargetNames` as target to reason), or the flags below. Its steps, in
+  order:
   1. An advisory: paths under an `--architecture PREFIX` changed without a
      change under `--docs` (default `docs/`). A package.json counts only for a
      structural change, not a dependency bump; a Dependabot pull request is
@@ -177,6 +182,41 @@ check-licenses [--allow SPDX]               # a production dependency under a li
 make-help [--root DIR]    # every ##-documented target, sorted, includes followed
 ```
 
+### The configuration file
+
+A repository's own rules for these programs live in one file at its root,
+`dev-config.json`, a section per program, so each make recipe is one short
+call and the rules are data a reviewer reads in one place:
+
+```json
+{
+  "testSiblings": {
+    "sources": {
+      "scripts/**/*.{mjs,sh}": [".test.mjs"],
+      "src/**/*.{ts,tsx}": [".test.ts", ".test.tsx"],
+      "plugins/*.ts": [".test.ts", ".test.tsx"],
+      "modules/*/index.ts": [".test.ts", ".test.tsx"]
+    },
+    "exclude": ["src/graphql/generated/**", "src/i18n/locales/**", "src/test/**", "src/__tests__/**", "**/*.d.ts"],
+    "mirror": { "src/app/": "src/__tests__/app/" }
+  },
+  "docs": {
+    "architecture": ["app.config.ts", "plugins/", "modules/", "src/graphql/", "scripts/", "Makefile"],
+    "allowTargetNames": {
+      "gen-graphql": "GraphQL is what it generates, the typed documents, not the tool that does it"
+    }
+  }
+}
+```
+
+That is the template's file. The file is optional, and so is each section.
+A flag overrides its own field: any `--source` replaces `sources`, any
+`--architecture` replaces `architecture`, and so on, and the other fields still
+come from the file. A file that is there and wrong exits 2 with the reason:
+JSON that does not parse, a section or key this version does not know (an
+`excludes` written for `exclude` would otherwise check nothing), a field of the wrong type, or
+a single-file exclude.
+
 ### How the template calls them
 
 Once the template takes the release that ships these, each of its own copies
@@ -185,8 +225,8 @@ becomes one line:
 | Target or script | The call |
 | --- | --- |
 | `make help` | `pnpm exec make-help` |
-| `check-docs` | `pnpm exec check-docs --architecture app.config.ts --architecture plugins/`<br>`--architecture modules/ --architecture src/graphql/ --architecture scripts/`<br>`--architecture Makefile --allow-target-name 'gen-graphql=GraphQL is what it generates'` |
-| `test-scripts` (siblings) | `pnpm exec check-test-siblings --source 'scripts/**/*.{mjs,sh}=.test.mjs'`<br>`--source 'src/**/*.{ts,tsx}=.test.ts,.test.tsx' --source 'plugins/*.ts=.test.ts,.test.tsx'`<br>`--source 'modules/*/index.ts=.test.ts,.test.tsx' --exclude 'src/graphql/generated/**'`<br>`--exclude 'src/i18n/locales/**' --exclude 'src/test/**' --exclude 'src/__tests__/**'`<br>`--exclude '**/*.d.ts' --mirror src/app/=src/__tests__/app/` |
+| `check-docs` | `pnpm exec check-docs` |
+| `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
 | `deps:licenses` | `check-licenses` |
 
 Each deleted copy then has a `no-copy` row in `contract.json`, so it cannot

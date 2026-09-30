@@ -957,7 +957,7 @@
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the test that reimplements it, and run pnpm exec check-test-siblings with your --source, --exclude and --mirror rules from make check instead.",
+      "fix": "Delete the test that reimplements it, put its rules in the testSiblings section of dev-config.json, and run pnpm exec check-test-siblings from make check instead.",
       "guide": "no-copies-of-this-family"
     },
     {
@@ -970,7 +970,7 @@
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "Delete the copies and their tests, and point make check-docs at pnpm exec check-docs, passing your architecture paths as --architecture and each target-name exception as --allow-target-name.",
+      "fix": "Delete the copies and their tests, put your architecture paths and target-name exceptions in the docs section of dev-config.json, and point make check-docs at pnpm exec check-docs.",
       "guide": "no-copies-of-this-family"
     },
     {

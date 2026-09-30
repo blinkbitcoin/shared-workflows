@@ -1,8 +1,21 @@
 #!/usr/bin/env node
 // Every source file has a test file of its own, beside it.
 //
-//   check-test-siblings --source GLOB=SUFFIX[,SUFFIX...] ... [--exclude GLOB ...]
+//   check-test-siblings [--source GLOB=SUFFIX[,SUFFIX...] ...] [--exclude GLOB ...]
 //                       [--mirror FROM=TO ...] [--root DIR]
+//
+// The rules usually live in the repository's `dev-config.json`, so the make
+// recipe is the bare call:
+//
+//   "testSiblings": {
+//     "sources": { "scripts/**/*.{mjs,sh}": [".test.mjs"], "src/**/*.{ts,tsx}": [".test.ts", ".test.tsx"] },
+//     "exclude": ["src/graphql/generated/**", "**/*.d.ts"],
+//     "mirror": { "src/app/": "src/__tests__/app/" }
+//   }
+//
+// A flag overrides its field of the file: any --source replaces `sources`, any
+// --exclude replaces `exclude`, any --mirror replaces `mirror`. A file that is
+// there and wrong exits 2 with the reason.
 //
 // Global coverage can be 100% while a module is reached only through a
 // caller's test, and then nothing fails the day that caller stops calling it.
@@ -33,6 +46,8 @@
 // not ignore, so a new module fails before it is committed.
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import { ConfigError, CONFIG_FILE, readSection, stringList, stringMap } from '../lib/config.mjs';
 import { isProgram } from '../lib/is-program.mjs';
 
 const TEST = /\.test\.[^/]+$/;
@@ -61,13 +76,24 @@ export function globToRegExp(glob) {
 /** Whether `glob` could stand for more than one file: a wildcard, or a directory. */
 const isClass = (glob) => /[*?{]/.test(glob) || glob.endsWith('/');
 
+/** An exclude that names one file, refused: that is an allowlist entry, which this check does not have. */
+function refuseSingleFile(glob, label) {
+  if (!isClass(glob)) {
+    throw new Error(`${label} ${glob} names one file, which is an allowlist entry: give it a test, or exclude the class of files it belongs to with a glob`);
+  }
+}
+
 /** Whether the relative path `file` falls under the --exclude `glob`. */
 function excludedBy(glob, file) {
   if (glob.endsWith('/')) return file.startsWith(glob);
   return globToRegExp(glob).test(file);
 }
 
-/** The arguments, as `{ root, sources: [{ glob, match, suffixes }], excludes, mirrors: [{ from, to }] }`. */
+/**
+ * The arguments, as `{ root, sources: [{ glob, match, suffixes }], excludes,
+ * mirrors: [{ from, to }] }`. A list no flag filled is empty, and the
+ * configuration file then decides it.
+ */
 export function parseArgs(argv, cwd) {
   let root = cwd;
   const sources = [];
@@ -84,9 +110,7 @@ export function parseArgs(argv, cwd) {
       const [glob, suffixes] = value.split('=');
       sources.push({ glob, match: globToRegExp(glob), suffixes: suffixes.split(',') });
     } else if (arg === '--exclude' && value) {
-      if (!isClass(value)) {
-        throw new Error(`--exclude ${value} names one file, which is an allowlist entry: give it a test, or exclude the class of files it belongs to with a glob`);
-      }
+      refuseSingleFile(value, '--exclude');
       excludes.push(value);
     } else if (arg === '--mirror' && /^[^=]+\/=[^=]+\/$/.test(value ?? '')) {
       const [from, to] = value.split('=');
@@ -97,8 +121,50 @@ export function parseArgs(argv, cwd) {
       );
     }
   }
-  if (sources.length === 0) throw new Error('name the source files with at least one --source GLOB=SUFFIX');
   return { root, sources, excludes, mirrors };
+}
+
+/**
+ * The rules of a `testSiblings` section, in the shape parseArgs returns, or a
+ * ConfigError naming what is wrong. The same rules hold as for the flags: a
+ * suffix starts with a dot, a mirror is two directories, and an exclude naming
+ * one file is refused.
+ */
+export function configRules(section) {
+  const fail = (reason) => {
+    throw new ConfigError(`${CONFIG_FILE}: ${reason}`);
+  };
+  const sources = [];
+  if (section.sources !== undefined) {
+    const map = section.sources;
+    if (map === null || typeof map !== 'object' || Array.isArray(map)) fail('"testSiblings.sources" must be an object of glob to test suffixes');
+    for (const [glob, suffixes] of Object.entries(map)) {
+      stringList(suffixes, `testSiblings.sources.${glob}`);
+      if (suffixes.length === 0 || !suffixes.every((suffix) => /^\.[^,=]+$/.test(suffix))) {
+        fail(`"testSiblings.sources.${glob}" must list test suffixes that start with a dot, such as ".test.mjs"`);
+      }
+      sources.push({ glob, match: globToRegExp(glob), suffixes });
+    }
+  }
+  const excludes = section.exclude === undefined ? [] : stringList(section.exclude, 'testSiblings.exclude');
+  for (const glob of excludes) {
+    try {
+      refuseSingleFile(glob, '"testSiblings.exclude" entry');
+    } catch (e) {
+      fail(e.message);
+    }
+  }
+  const mirrors = Object.entries(section.mirror === undefined ? {} : stringMap(section.mirror, 'testSiblings.mirror')).map(([from, to]) => {
+    if (!from.endsWith('/') || !to.endsWith('/')) fail(`"testSiblings.mirror" maps a directory to a directory, each ending in a slash: "${from}": "${to}"`);
+    return { from, to };
+  });
+  return { sources, excludes, mirrors };
+}
+
+/** Each field from the flags when any flag set it, and from the configuration file otherwise. */
+export function resolveRules(flags, fromFile) {
+  const pick = (key) => (flags[key].length > 0 || fromFile === null ? flags[key] : fromFile[key]);
+  return { root: flags.root, sources: pick('sources'), excludes: pick('excludes'), mirrors: pick('mirrors') };
 }
 
 /** The --source rule a file is a source under, or null when it is out of scope. */
@@ -142,10 +208,18 @@ export function problems(files, options) {
     }
   }
   for (const glob of options.excludes) {
-    if (!files.some((file) => excludedBy(glob, file))) found.push(`--exclude ${glob} matches no file; drop it`);
+    if (!files.some((file) => excludedBy(glob, file))) found.push(`exclude ${glob} matches no file; drop it`);
   }
   return { sources, found };
 }
+
+const readOrNull = (file) => {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+};
 
 const gitFiles = (root) =>
   execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
@@ -159,13 +233,25 @@ const gitFiles = (root) =>
 /** Command-line entry; returns the exit code. */
 export function main(
   argv = process.argv.slice(2),
-  { log = console.log, error = console.error, cwd = process.cwd(), listFiles = gitFiles } = {},
+  { log = console.log, error = console.error, cwd = process.cwd(), listFiles = gitFiles, read = readOrNull } = {},
 ) {
-  let options;
+  let flags;
   try {
-    options = parseArgs(argv, cwd);
+    flags = parseArgs(argv, cwd);
   } catch (e) {
     error(`test siblings: ${e.message}`);
+    return 1;
+  }
+  let options;
+  try {
+    const section = readSection(flags.root, 'testSiblings', read);
+    options = resolveRules(flags, section === null ? null : configRules(section));
+  } catch (e) {
+    error(`test siblings: ${e.message}`);
+    return 2;
+  }
+  if (options.sources.length === 0) {
+    error(`test siblings: name the source files with --source GLOB=SUFFIX, or with "testSiblings.sources" in ${CONFIG_FILE}`);
     return 1;
   }
   let files;
