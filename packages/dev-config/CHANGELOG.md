@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.9.0...dev-config-v0.10.0) (2026-09-30)
+
+
+### Features
+
+* **dev-config:** hold every call and package to one shared-workflows commit ([#126](https://github.com/blinkbitcoin/shared-workflows/issues/126)) ([ea3454d](https://github.com/blinkbitcoin/shared-workflows/commit/ea3454d520d730d4a20b87d14786f1020a00128d))
+* **dev-config:** hold every make recipe to one call of a tested script ([#128](https://github.com/blinkbitcoin/shared-workflows/issues/128)) ([bfad6fb](https://github.com/blinkbitcoin/shared-workflows/commit/bfad6fb5d549ebd42f19acd21fb00d36282fc310))
+* **dev-config:** ship the i18n, codegen, secrets and CI lint checks for a laptop ([#127](https://github.com/blinkbitcoin/shared-workflows/issues/127)) ([f142e12](https://github.com/blinkbitcoin/shared-workflows/commit/f142e1249766cd62988062f510f2923dc36fa58f))
+
 ## [0.9.0](https://github.com/blinkbitcoin/shared-workflows/compare/dev-config-v0.8.0...dev-config-v0.9.0) (2026-09-29)
 
 
