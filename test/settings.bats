@@ -36,7 +36,7 @@ path_without_node() {
 console.log(
   JSON.stringify({
     enabled: true,
-    jobs: { deps: true, code: false, policy: true },
+    jobs: { dependencies: true, code: false, policy: true },
     severity: 'high',
     failOn: ['deterministic'],
   }),
@@ -50,7 +50,7 @@ EOF
   local written
   written="$(cat "$GITHUB_OUTPUT")"
   local want
-  for want in 'enabled=true' 'severity=high' 'fail-on=deterministic' 'deps=true' 'code=false' 'policy=true'; do
+  for want in 'enabled=true' 'severity=high' 'fail-on=deterministic' 'dependencies=true' 'code=false' 'policy=true'; do
     grep -qxF "$want" <<<"$written" || fail "no '$want' among the published outputs: $written"
   done
 }
@@ -154,7 +154,7 @@ EOF
   local consumer
   consumer="$(consumer_with unnamed scripts/security/settings.mjs <<'EOF'
 console.log(
-  JSON.stringify({ enabled: true, jobs: { '': true, deps: true }, severity: 'high', failOn: ['deterministic'] }),
+  JSON.stringify({ enabled: true, jobs: { '': true, dependencies: true }, severity: 'high', failOn: ['deterministic'] }),
 );
 EOF
 )"
@@ -162,6 +162,6 @@ EOF
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/outputs"
   run bash "$REPO_ROOT/scripts/security/settings.sh"
   [ "$status" -eq 0 ] || fail "settings.sh failed: $output"
-  grep -qxF 'deps=true' "$GITHUB_OUTPUT" || fail "the named job was not published: $(cat "$GITHUB_OUTPUT")"
+  grep -qxF 'dependencies=true' "$GITHUB_OUTPUT" || fail "the named job was not published: $(cat "$GITHUB_OUTPUT")"
   [ -z "$(grep '^=' "$GITHUB_OUTPUT" || true)" ] || fail "a nameless row reached the outputs: $(cat "$GITHUB_OUTPUT")"
 }

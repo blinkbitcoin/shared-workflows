@@ -978,7 +978,7 @@ lane_step_count() {
       || fail "$i defaults to $(yq -r ".on.workflow_call.inputs.\"$i\".default" "$f"), which adds minutes to every consumer's PR"
   done
   # The cheap one is on by default: it ran in no CI job at all before, while
-  # `make check-deps` ran it locally.
+  # `make check-dependencies` ran it locally.
   [ "$(yq -r '.on.workflow_call.inputs.licenses.default' "$f")" = "true" ] \
     || fail "the licenses check is not on by default"
 }
@@ -1089,7 +1089,7 @@ lane_step_count() {
 # reaches the graph only through the settings job's outputs. The effective setting
 # is the AND of the caller's input and the consumer's policy: a caller may
 # narrow (a pull request has no binaries to scan) and may never widen.
-SECURITY_JOBS="deps code policy sbom bundle mobile binaries review review-codebase"
+SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review review-codebase"
 
 @test "check-security.yml's scanner jobs are the AND of the caller's input and the consumer's policy" {
   command -v yq >/dev/null || skip "yq not installed"
@@ -1329,7 +1329,7 @@ SECURITY_JOBS="deps code policy sbom bundle mobile binaries review review-codeba
 @test "check-security.yml's release-stage inputs default to off" {
   command -v yq >/dev/null || skip "yq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
-  for input in deps code policy; do
+  for input in dependencies code policy; do
     [ "$(yq -r ".on.workflow_call.inputs.$input.default" "$f")" = "true" ] || fail "$input no longer defaults to true"
   done
   for input in sbom bundle mobile binaries review review-codebase review-full-range; do

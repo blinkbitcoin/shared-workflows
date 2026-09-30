@@ -18,7 +18,7 @@ require_cmd jq
 # test/workflow-shape.bats fails when the two disagree.
 name_of() {
   case "$1" in
-    deps) printf 'Dependencies' ;;
+    dependencies) printf 'Dependencies' ;;
     code) printf 'Code' ;;
     policy) printf 'Policy' ;;
     sbom) printf 'Bill of Materials' ;;

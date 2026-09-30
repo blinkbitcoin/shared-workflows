@@ -32,18 +32,18 @@ path_without_node() {
 
 @test "run-job.sh runs the consumer's runner and reports where the SARIF landed" {
   local consumer
-  consumer="$(consumer_with good scripts/security/deps.sh <<'EOF'
+  consumer="$(consumer_with good scripts/security/dependencies.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 out="${SECURITY_DIR:-.security}"
 mkdir -p "$out"
-printf '{"version":"2.1.0","runs":[]}' > "$out/deps.sarif"
+printf '{"version":"2.1.0","runs":[]}' > "$out/dependencies.sarif"
 EOF
 )"
   export GITHUB_WORKSPACE="$consumer"
-  run bash "$REPO_ROOT/scripts/security/run-job.sh" deps
+  run bash "$REPO_ROOT/scripts/security/run-job.sh" dependencies
   [ "$status" -eq 0 ] || fail "run-job.sh failed: $output"
-  [ -s "$consumer/.security/deps.sarif" ] || fail "no SARIF at $consumer/.security/deps.sarif"
+  [ -s "$consumer/.security/dependencies.sarif" ] || fail "no SARIF at $consumer/.security/dependencies.sarif"
 }
 
 @test "run-job.sh fails by name when the consumer ships no runner for the job" {
@@ -73,19 +73,19 @@ EOF
 
 @test "run-job.sh hands back a crashing runner's exit code" {
   local consumer
-  consumer="$(consumer_with crash scripts/security/deps.sh <<'EOF'
+  consumer="$(consumer_with crash scripts/security/dependencies.sh <<'EOF'
 #!/usr/bin/env bash
 echo "osv-scanner: bad config" >&2
 exit 3
 EOF
 )"
   export GITHUB_WORKSPACE="$consumer"
-  run bash "$REPO_ROOT/scripts/security/run-job.sh" deps
+  run bash "$REPO_ROOT/scripts/security/run-job.sh" dependencies
   [ "$status" -eq 3 ] || fail "expected the runner's own exit code 3, got $status: $output"
 }
 
 @test "run-job.sh fails when node is not on the PATH" {
-  run env PATH="$(path_without_node)" "$BASH" "$REPO_ROOT/scripts/security/run-job.sh" deps
+  run env PATH="$(path_without_node)" "$BASH" "$REPO_ROOT/scripts/security/run-job.sh" dependencies
   [ "$status" -eq 1 ] || fail "expected a hard failure, got $status: $output"
   contains "$output" '::error::missing command: node' || fail "the error does not name node: $output"
 }
@@ -115,18 +115,18 @@ EOF
 
 @test "run-job.sh looks for the SARIF in the directory SECURITY_DIR names" {
   local consumer
-  consumer="$(consumer_with elsewhere scripts/security/deps.sh <<'EOF'
+  consumer="$(consumer_with elsewhere scripts/security/dependencies.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [ -d "$SECURITY_DIR" ] || { echo "run-job.sh did not create $SECURITY_DIR" >&2; exit 4; }
-printf '{"version":"2.1.0","runs":[]}' > "$SECURITY_DIR/deps.sarif"
+printf '{"version":"2.1.0","runs":[]}' > "$SECURITY_DIR/dependencies.sarif"
 EOF
 )"
   export GITHUB_WORKSPACE="$consumer"
   export SECURITY_DIR="reports/security"
-  run bash "$REPO_ROOT/scripts/security/run-job.sh" deps
+  run bash "$REPO_ROOT/scripts/security/run-job.sh" dependencies
   [ "$status" -eq 0 ] || fail "run-job.sh failed: $output"
-  [ -s "$consumer/reports/security/deps.sarif" ] || fail "no SARIF at $consumer/reports/security/deps.sarif"
+  [ -s "$consumer/reports/security/dependencies.sarif" ] || fail "no SARIF at $consumer/reports/security/dependencies.sarif"
   [ ! -e "$consumer/.security" ] || fail "the default directory was used although SECURITY_DIR was set"
-  contains "$output" 'deps: reports/security/deps.sarif' || fail "the log does not say where the SARIF landed: $output"
+  contains "$output" 'dependencies: reports/security/dependencies.sarif' || fail "the log does not say where the SARIF landed: $output"
 }

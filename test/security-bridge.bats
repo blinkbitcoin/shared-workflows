@@ -24,10 +24,10 @@ consumer_with() {
 
 @test "the SARIF run-job.sh insists on is the SARIF verdict.sh merges" {
   local consumer
-  consumer="$(consumer_with chain scripts/security/deps.sh <<'EOF'
+  consumer="$(consumer_with chain scripts/security/dependencies.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf '{"version":"2.1.0","runs":[]}' > "${SECURITY_DIR:-.security}/deps.sarif"
+printf '{"version":"2.1.0","runs":[]}' > "${SECURITY_DIR:-.security}/dependencies.sarif"
 EOF
 )"
   consumer_with chain scripts/security/verdict.mjs > /dev/null <<'EOF'
@@ -36,9 +36,9 @@ console.log(`merged: ${readdirSync(process.argv[2]).join(' ')}`);
 EOF
   export GITHUB_WORKSPACE="$consumer"
   export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"
-  run bash "$REPO_ROOT/scripts/security/run-job.sh" deps
+  run bash "$REPO_ROOT/scripts/security/run-job.sh" dependencies
   [ "$status" -eq 0 ] || fail "run-job.sh failed: $output"
   run bash "$REPO_ROOT/scripts/security/verdict.sh"
   [ "$status" -eq 0 ] || fail "verdict.sh failed on what run-job.sh accepted: $output"
-  contains "$output" 'merged: deps.sarif' || fail "the merge did not see the runner's SARIF: $output"
+  contains "$output" 'merged: dependencies.sarif' || fail "the merge did not see the runner's SARIF: $output"
 }

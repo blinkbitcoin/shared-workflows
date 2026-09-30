@@ -100,7 +100,7 @@
   <g>
     <rect x="750" y="59" width="160" height="42" rx="8" fill="#ffffff" stroke="#cfd9e2"/>
     <text x="830" y="77" text-anchor="middle" font-size="12" font-weight="600" fill="#1d1d1d">Green gates</text>
-    <text x="830" y="92" text-anchor="middle" font-size="10.5" fill="#6b7280">types &#183; lint &#183; deps &#183; secrets</text>
+    <text x="830" y="92" text-anchor="middle" font-size="10.5" fill="#6b7280">types &#183; lint &#183; dependencies &#183; secrets</text>
 
     <rect x="750" y="113" width="160" height="42" rx="8" fill="#ffffff" stroke="#cfd9e2"/>
     <text x="830" y="131" text-anchor="middle" font-size="12" font-weight="600" fill="#1d1d1d">Device E2E</text>

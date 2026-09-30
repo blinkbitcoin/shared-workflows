@@ -171,7 +171,7 @@ Every row is a make target; nothing here is run through a package manager.
   branch and read the job's "Set up job" log before merging
   (CONTRIBUTING.md, "Running the release pipeline locally").
 - **Conventional commits with a closed scope enum**
-  (`commitlint.config.mjs`): `actions app-tooling checks ci deps docs e2e lib native ota
+  (`commitlint.config.mjs`): `actions app-tooling checks ci dependencies docs e2e lib native ota
   release self test tooling web workflows`. Squash merges take the PR title as
   the commit message, so `pr-title.yml` lints the title too.
 - **Releases are release-please's job.** `self-release.yml` cuts the version

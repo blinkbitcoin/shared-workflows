@@ -14,7 +14,7 @@ scope enum — see CONTRIBUTING.md.
 
 ## Checklist
 
-- [ ] PR title is a Conventional Commit with a valid scope (`actions app-tooling checks ci deps docs e2e lib native ota release self test tooling web workflows`)
+- [ ] PR title is a Conventional Commit with a valid scope (`actions app-tooling checks ci dependencies docs e2e lib native ota release self test tooling web workflows`)
 - [ ] `make check` passes locally
 - [ ] Every behaviour this PR adds or changes is tested here, error paths and branches included (bats in `test/`, `node:test` for the packages under `packages/` and the Node scripts); the tests are named above
 - [ ] Every script this PR adds or changes has its own test file (`test/<name>.bats` or `test/<name>.test.mjs`) that runs it and covers each exit path

@@ -358,7 +358,7 @@ jobs:
       # repo is the fallback. See scripts/checks/run-consumer-or.sh for why -
       # in short, a gate the consumer defines and a gate CI runs must be the
       # same gate, and for these five they were not.
-  deps:
+  dependencies:
     name: Dependencies
     needs: contract
     if: ${{ !inputs.contract-only }}
@@ -419,7 +419,7 @@ jobs:
         # check:audit, not audit.sh: the template's script also runs its lockfile
         # provenance check, which likewise ran in no CI job.
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:audit' scripts/checks/audit.sh
-      # Cheap, and it ran in no CI job before this: `make check-deps` includes it
+      # Cheap, and it ran in no CI job before this: `make check-dependencies` includes it
       # locally, so a green local gate implied a license check CI never made.
       - name: Licenses
         if: ${{ inputs.licenses }}

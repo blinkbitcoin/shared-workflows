@@ -3,7 +3,7 @@
 #
 # check.yml runs it for a consumer that ships no `check:expo-health` script of
 # its own, and @blinkbitcoin/app-tooling ships it as checks/expo-health.sh, so a
-# consumer's `make check-deps` runs exactly this on a laptop.
+# consumer's `make check-dependencies` runs exactly this on a laptop.
 #
 # `expo install --check` and expo-doctor's version check both demand whatever
 # patch the SDK expects *today*, and Expo publishes patches most weeks. A
