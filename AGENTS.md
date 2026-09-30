@@ -122,17 +122,18 @@ Every row is a make target; nothing here is run through a package manager.
   this from an intermittent release-verification failure; its
   `scripts/shell-locale.test.mjs` is the guard.
 - **Every script has its own test file, and that file runs it and covers
-  each of its exit paths.** `scripts/ci/x.sh` has `test/x.bats`
-  (`test/ci-x.bats` when another script is also called `x`); a Node script
-  `scripts/lib/x.mjs` has `test/x.test.mjs` under `make test-script-modules`'
-  100% gate; a dev-config program `packages/dev-config/bin/x.mjs` has
-  `packages/dev-config/x.test.mjs`. A case in a shared suite (`plumbing.bats`,
-  `fallback-gates.bats`) is welcome on top but is never the script's own test,
-  and a file that only greps the script does not count. Tests live in `test/`
-  rather than beside the script because `scripts/` is what callers check out
-  and shellcheck lints. `test/script-coverage.bats` fails naming every script
-  without one; a script that truly cannot run from a test goes in its
-  `ALLOWED` list with the reason.
+  every branch and exit path. No exceptions, no allowlist.**
+  - **The file:**
+    - `scripts/ci/x.sh` has `test/x.bats` (`test/ci-x.bats` when another script is also called `x`).
+    - A Node script `scripts/lib/x.mjs` has `test/x.test.mjs`, under `make test-script-modules`' 100% gate.
+    - A package's program or module, `packages/<package>/bin/x.mjs` or `lib/x.mjs`, has `packages/<package>/x.test.mjs`.
+    - A package's byte-identical copy of a script is tested by its original's own test plus `test/package-copies.bats`.
+  - **What counts:**
+    - A case in a shared suite (`plumbing.bats`, `fallback-gates.bats`) is welcome on top, but it is never the script's own test.
+    - A file that only greps the script does not count.
+  - **"It needs Xcode" is not an exception.** A script that needs Xcode, a simulator, CocoaPods, Gradle, an emulator, Maestro or a network is run against fakes of those tools on `PATH` that record their calls. `test/app-launch.bats` and `test/native-ios-build.bats` show how. Eight scripts once sat on an allowlist as "cannot run from a test", and every one of them could.
+  - **Where tests live:** in `test/`, not beside the script, because `scripts/` is what callers check out and what shellcheck lints.
+  - **Enforced:** `test/script-coverage.bats` fails naming every script without its own test, and fails if an allowlist comes back.
 - **Every assertion ends in `|| fail "..."`** — bash 3.2 (macOS's
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`
@@ -269,7 +270,7 @@ Every row is a make target; nothing here is run through a package manager.
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test` |
-| That every script has its own test file that runs it, or is allow-listed with a reason | `test/script-coverage.bats` | `make test` |
+| That every script has its own test file that runs it, with no exceptions | `test/script-coverage.bats` | `make test` |
 | `pr-release-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-release-notes.yml`, `scripts/self/check-release-notes-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |
 | The family end to end, against a real consumer | `.github/workflows/self-smoke.yml` | `workflow_dispatch` |
 

@@ -28,26 +28,16 @@
 
 load test_helper
 
-# Scripts that cannot be exercised from a bats suite, with the reason. An entry
-# here is a debt someone chose, not a gap nobody noticed - and a stale entry is
-# itself a failure, so the list cannot outlive what it excuses.
-#
-# The device and build scripts are covered end to end by self-smoke.yml, which
-# runs the whole family against a real consumer on real runners.
-ALLOWED="
-scripts/native/prebuild.sh|runs expo prebuild against a real Expo app
-scripts/native/pods.sh|needs CocoaPods and a prebuilt ios/ directory
-scripts/native/ios-build.sh|needs Xcode and a simulator SDK
-scripts/native/ios-pack.sh|needs a built .app bundle to pack
-scripts/native/android-build.sh|needs a Gradle wrapper and an Android SDK
-scripts/e2e/ios-maestro.sh|needs a booted simulator and the Maestro CLI
-scripts/e2e/android-maestro.sh|needs a running emulator and the Maestro CLI
-scripts/e2e/metro-start.sh|starts a long-lived Metro process in the background
-"
+# There is no allowlist. It used to hold eight scripts "that cannot run from a
+# bats suite" - the native builds, the Maestro runners, Metro - and every one of
+# them could: each now runs against fake xcodebuild, pod, gradlew, maestro and
+# adb on PATH, the way test/app-launch.bats always did. An allowlist is where
+# coverage goes to be forgotten, so the last case below fails if one returns.
 
 # Prints every tracked script, one per line.
 all_scripts() {
-  git -C "$REPO_ROOT" ls-files 'scripts/**/*.sh' 'scripts/**/*.mjs' 'packages/dev-config/bin/*.mjs'
+  git -C "$REPO_ROOT" ls-files 'scripts/**/*.sh' 'scripts/**/*.mjs' 'packages/*/bin/*.mjs' 'packages/*/lib/*.mjs' \
+    'packages/*/**/*.sh' | grep -v '\.test\.mjs$'
 }
 
 # Prints `SCRIPT<TAB>TEST` for every test file that actually runs a script.
@@ -65,8 +55,8 @@ import os, re, subprocess
 
 root = os.environ['REPO_ROOT']
 ls = lambda *p: subprocess.run(['git', '-C', root, 'ls-files', *p], capture_output=True, text=True).stdout.split()
-tests = ls('test/*.bats', 'test/*.test.mjs', 'packages/dev-config/*.test.mjs')
-scripts = ls('scripts/**/*.sh', 'scripts/**/*.mjs', 'packages/dev-config/bin/*.mjs')
+tests = ls('test/*.bats', 'test/*.test.mjs', 'packages/*/*.test.mjs')
+scripts = ls('scripts/**/*.sh', 'scripts/**/*.mjs', 'packages/*/bin/*.mjs', 'packages/*/lib/*.mjs')
 
 RUNNERS = r'(?m)(?:^|[\s;&|(])(?:bash|sh|source|\.|exec|node|run|execFileSync|spawnSync)(?=[\s(])'
 
@@ -100,9 +90,6 @@ for test in tests:
 "
 }
 
-allowed_reason() {
-  printf '%s\n' "$ALLOWED" | awk -F'|' -v s="$1" '$1 == s { print $2 }'
-}
 
 # Prints the test files that may be SCRIPT's own, one per line: the file named
 # after it, or after its area and name when two scripts share a name
@@ -114,7 +101,10 @@ own_tests() {
   file="${script##*/}"
   name="${file%.*}"
   case "$script" in
-    packages/dev-config/bin/*.mjs) printf '%s\n' "packages/dev-config/$name.test.mjs" ;;
+    packages/*/bin/*.mjs | packages/*/lib/*.mjs)
+      area="${script#packages/}"
+      printf '%s\n' "packages/${area%%/*}/$name.test.mjs"
+      ;;
     scripts/*)
       area="${script#scripts/}"
       area="${area%%/*}"
@@ -126,13 +116,25 @@ own_tests() {
   esac
 }
 
-# Prints every script with no own test file that runs it, less the allowlist.
-# $1 is executed_by's output.
+# The original a package's shell script is a byte-identical copy of, from
+# scripts/self/package-copies.sh's ORIGINAL:COPY list; nothing when it is none.
+# A copy is tested through its original's own test, and test/package-copies.bats
+# holds the two identical.
+copy_original() {
+  local script="$1" rel
+  case "$script" in packages/dev-config/*.sh) ;; *) return 0 ;; esac
+  rel="${script#packages/dev-config/}"
+  sed -n "s|^  \(scripts/[^:]*\):$rel\$|\1|p" "$REPO_ROOT/scripts/self/package-copies.sh"
+}
+
+# Prints every script with no own test file that runs it. A package's copy
+# stands for its original. $1 is executed_by's output.
 without_own_test() {
-  local executed="$1" script own
+  local executed="$1" script own original
   while read -r script; do
     [ -n "$script" ] || continue
-    [ -n "$(allowed_reason "$script")" ] && continue
+    original="$(copy_original "$script")"
+    [ -n "$original" ] && script="$original"
     while read -r own; do
       grep -qxF "$script	$own" <<< "$executed" && continue 2
     done <<< "$(own_tests "$script")"
@@ -148,9 +150,10 @@ $(sed 's/^/  /' <<< "$missing")
 
 Give each one its own test file, named after it: scripts/ci/x.sh -> test/x.bats
 (test/ci-x.bats when another script is also called x), scripts/lib/x.mjs ->
-test/x.test.mjs. It has to run the script, not just read it; a case in a
-shared suite does not count. If it truly cannot be run from a test, add it to
-ALLOWED in this file with the reason."
+test/x.test.mjs, packages/<package>/lib/x.mjs -> packages/<package>/x.test.mjs.
+It has to run the script, not just read it; a case in a shared suite does not
+count. There are no exceptions: a script that needs Xcode, a simulator, Gradle
+or a device runs against fakes of them on PATH (see test/app-launch.bats)."
 }
 
 @test "own_tests names the test file after the script, or its area and name" {
@@ -161,6 +164,10 @@ ALLOWED in this file with the reason."
   [ "$out" = "test/env-validate.test.mjs test/lib-env-validate.test.mjs " ] || fail "Node script: $out"
   out="$(own_tests packages/dev-config/bin/check-tool-versions.mjs)"
   [ "$out" = "packages/dev-config/check-tool-versions.test.mjs" ] || fail "dev-config program: $out"
+  out="$(own_tests packages/dev-config/lib/pin.mjs)"
+  [ "$out" = "packages/dev-config/pin.test.mjs" ] || fail "package module: $out"
+  out="$(own_tests packages/expo-tooling/bin/x.mjs)"
+  [ "$out" = "packages/expo-tooling/x.test.mjs" ] || fail "another package's program: $out"
 }
 
 @test "a script run only by a shared suite, or by no test, is named" {
@@ -174,41 +181,10 @@ scripts/ci/d.sh	test/ci-d.bats"
   [ "$missing" = "scripts/ci/b.sh scripts/ci/c.sh " ] || fail "expected b (shared suite) and c (no test): $missing"
 }
 
-@test "an allow-listed script needs no test file of its own" {
-  all_scripts() { printf '%s\n' scripts/native/pods.sh; }
-  [ -z "$(without_own_test "")" ] || fail "an allow-listed script was reported"
-}
-
 @test "a node:test file runs what it imports" {
   local out
   out="$(executed_by | grep -F 'packages/dev-config/bin/check-tool-versions.mjs	packages/dev-config/check-tool-versions.test.mjs' || true)"
   [ -n "$out" ] || fail "an imported program was not counted as run by its test"
-}
-
-@test "every allow-listed script still exists, and still has no own test" {
-  # A list of excuses outliving what it excuses is how an allowlist becomes a
-  # place where coverage goes to be forgotten.
-  local stale="" gone="" script own executed
-  executed="$(executed_by)"
-  while IFS='|' read -r script _; do
-    [ -n "$script" ] || continue
-    [ -f "$REPO_ROOT/$script" ] || gone="$gone $script"
-    while read -r own; do
-      grep -qxF "$script	$own" <<< "$executed" && stale="$stale $script"
-    done <<< "$(own_tests "$script")"
-  done <<< "$(printf '%s\n' "$ALLOWED" | grep '|')"
-  [ -z "$gone" ] || fail "ALLOWED names scripts that no longer exist:$gone"
-  [ -z "$stale" ] || fail "these are allow-listed but now have their own test - remove them from ALLOWED:$stale"
-}
-
-@test "every allow-listed entry gives a reason" {
-  local bad="" entry
-  while IFS= read -r entry; do
-    [ -n "$entry" ] || continue
-    case "$entry" in *'|'*) ;; *) bad="$bad $entry"; continue ;; esac
-    [ -n "${entry#*|}" ] || bad="$bad ${entry%%|*}"
-  done <<< "$(printf '%s\n' "$ALLOWED" | grep .)"
-  [ -z "$bad" ] || fail "allow-listed without a reason:$bad"
 }
 
 @test "the resolver tells running a script from merely naming one" {
@@ -235,4 +211,19 @@ for s in ['scripts/ci/tool-version.sh', 'scripts/ci/free-disk.sh', 'scripts/lib/
   contains "$output" "scripts/lib/versions.sh False" || fail "a dot inside sed -i.bak was counted as sourcing: $output"
   contains "$output" "scripts/lib/build-env.sh False" || fail "a dot inside a quoted file name was counted as sourcing: $output"
   contains "$output" "scripts/lib/common.sh True" || fail "a script sourced with . was not recognised: $output"
+}
+
+@test "a package's copy of a script stands for its original, and a stray one is named" {
+  [ "$(copy_original packages/dev-config/checks/i18n.sh)" = "scripts/checks/i18n.sh" ] || fail "the copy's original was not found"
+  [ "$(copy_original packages/dev-config/zizmor.yml)" = "" ] || fail "a non-script was mapped"
+  all_scripts() { printf '%s\n' packages/dev-config/checks/i18n.sh packages/dev-config/checks/stray.sh; }
+  local missing
+  missing="$(without_own_test "scripts/checks/i18n.sh	test/i18n.bats" | tr '\n' ' ')"
+  [ "$missing" = "packages/dev-config/checks/stray.sh " ] || fail "expected only the stray copy: $missing"
+}
+
+@test "no script is excused: this gate has no allowlist" {
+  # The eight scripts an allowlist here once excused all turned out to be
+  # testable. Bringing one back is a decision for AGENTS.md, not this file.
+  ! grep -qE '^[[:space:]]*[A-Z_]*ALLOW[A-Z_]*=' "$BATS_TEST_FILENAME" || fail "an allowlist is back in $BATS_TEST_FILENAME"
 }

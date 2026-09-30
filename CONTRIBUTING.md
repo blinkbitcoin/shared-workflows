@@ -86,6 +86,8 @@ each of its exit paths:
 | `scripts/ota/export.sh` | `test/ota-export.bats` (`scripts/web/export.sh` already has `test/export.bats`) |
 | `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-script-modules`, 100% gate) |
 | `packages/dev-config/bin/check-tool-versions.mjs` | `packages/dev-config/check-tool-versions.test.mjs` |
+| `packages/dev-config/lib/pin.mjs` | `packages/dev-config/pin.test.mjs` |
+| `packages/dev-config/checks/i18n.sh` (a copy) | the original's `test/i18n.bats`, plus `test/package-copies.bats` |
 
 A case in a shared suite such as `plumbing.bats` or `fallback-gates.bats` is
 fine on top, but it is never the script's own test: when the suite changes,
@@ -95,7 +97,7 @@ the script because `scripts/` is what callers check out and what shellcheck
 lints.
 
 `test/script-coverage.bats` fails naming every script under `scripts/` or
-`packages/dev-config/bin/` without such a file. It started as a check that some
+`packages/` without such a file. It started as a check that some
 test runs each script, which is how sixteen scripts came to have coverage at
 all — three of them in the `setup` action, on the path of every job of every
 workflow — and now asks for the script's own file.
@@ -105,11 +107,16 @@ named only by tests that read their source — a grep for a pattern, an assertio
 about a comment — which reads as coverage in a listing while asserting nothing
 about behaviour.
 
-If a script genuinely cannot run from a bats suite, add it to `ALLOWED` in that
-file **with the reason**. The list is checked both ways: an entry naming a
-script that no longer exists fails, and so does an entry for a script that has
-since gained its own test. An allowlist that outlives what it excuses is where
-coverage goes to be forgotten.
+There is no allowlist and no exception. A script that needs Xcode, a
+simulator, CocoaPods, Gradle, an emulator, Maestro or the network runs against
+fakes of those tools on `PATH` that record how they were called. The fakes
+return what the case needs, and the test asserts the arguments, the outputs and
+every error path. `test/app-launch.bats` and `test/native-ios-build.bats` show
+the pattern.
+
+An allowlist used to excuse eight scripts as "cannot run from a bats suite":
+the native builds, the Maestro runners and Metro. Every one of them could.
+`test/script-coverage.bats` now fails if an allowlist comes back.
 
 `make test-package` holds the Node package at 100% lines, branches and
 functions. Each program's command-line entry is a `main(argv, { ... })` that
