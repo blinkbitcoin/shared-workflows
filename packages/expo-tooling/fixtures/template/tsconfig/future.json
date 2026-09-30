@@ -1,0 +1,17 @@
+{
+  "extends": ["expo/tsconfig.base", "@blinkbitcoin/expo-tooling/tsconfig.base.json"],
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "modules/**/*.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "src/global.d.ts"
+  ],
+  "exclude": ["node_modules", "ios", "android", "dist", ".workflows", "rules", ".claude/worktrees"]
+}

@@ -37,7 +37,7 @@ load test_helper
 # Prints every tracked script, one per line.
 all_scripts() {
   git -C "$REPO_ROOT" ls-files 'scripts/**/*.sh' 'scripts/**/*.mjs' 'packages/*/bin/*.mjs' 'packages/*/lib/*.mjs' \
-    'packages/*/**/*.sh' | grep -v '\.test\.mjs$'
+    'packages/*/jest/**/*.cjs' 'packages/*/**/*.sh' | grep -v '\.test\.mjs$'
 }
 
 # Prints `SCRIPT<TAB>TEST` for every test file that actually runs a script.
@@ -48,7 +48,10 @@ all_scripts() {
 # later invokes, which is how most files here are written. The runner has to
 # be a word of its own, at the start of a line or after a separator: a `.`
 # inside `sed -i.bak` or a quoted `name.mjs` is not `. file`. A node:test file
-# also runs what it imports (`from './bin/x.mjs'`, `from '../scripts/x.mjs'`).
+# also runs what it imports (`from './bin/x.mjs'`, `from '../scripts/x.mjs'`),
+# statically or with `import('./lib/x.mjs')` - a preset test has to register
+# its stand-ins before the preset loads, so it imports it dynamically, at times
+# with a query string for a second instance (`import('./lib/x.mjs?variant')`).
 executed_by() {
   mise exec -- python3 -c "
 import os, re, subprocess
@@ -56,7 +59,7 @@ import os, re, subprocess
 root = os.environ['REPO_ROOT']
 ls = lambda *p: subprocess.run(['git', '-C', root, 'ls-files', *p], capture_output=True, text=True).stdout.split()
 tests = ls('test/*.bats', 'test/*.test.mjs', 'packages/*/*.test.mjs')
-scripts = ls('scripts/**/*.sh', 'scripts/**/*.mjs', 'packages/*/bin/*.mjs', 'packages/*/lib/*.mjs')
+scripts = ls('scripts/**/*.sh', 'scripts/**/*.mjs', 'packages/*/bin/*.mjs', 'packages/*/lib/*.mjs', 'packages/*/jest/**/*.cjs')
 
 RUNNERS = r'(?m)(?:^|[\s;&|(])(?:bash|sh|source|\.|exec|node|run|execFileSync|spawnSync)(?=[\s(])'
 
@@ -65,7 +68,7 @@ for test in tests:
     # Modules a node:test file imports, as paths from the repository root.
     imported = set()
     if test.endswith('.mjs'):
-        for rel in re.findall(r'from\s+[\"\'](\.{1,2}/[^\"\']+)[\"\']', text):
+        for rel in re.findall(r'(?:from\s+|import\(\s*)[\"\'](\.{1,2}/[^\"\'?]+)(?:\?[^\"\']*)?[\"\']', text):
             imported.add(os.path.normpath(os.path.join(os.path.dirname(test), rel)))
     # Variables a test assigns a script path to, and whether it ever runs them.
     aliases = {}
@@ -94,14 +97,16 @@ for test in tests:
 # Prints the test files that may be SCRIPT's own, one per line: the file named
 # after it, or after its area and name when two scripts share a name
 # (scripts/ota/export.sh -> test/export.bats or test/ota-export.bats). A Node
-# script's own test is a node:test file; a dev-config program's sits at the
-# package root, because bin/ is what the package publishes.
+# script's own test is a node:test file; a package's program or module sits at
+# the package root, because bin/, lib/ and jest/ are what the package publishes
+# (packages/expo-tooling/jest/mocks/expo-updates.cjs ->
+# packages/expo-tooling/expo-updates.test.mjs).
 own_tests() {
   local script="$1" file name area
   file="${script##*/}"
   name="${file%.*}"
   case "$script" in
-    packages/*/bin/*.mjs | packages/*/lib/*.mjs)
+    packages/*/bin/*.mjs | packages/*/lib/*.mjs | packages/*/jest/*.cjs)
       area="${script#packages/}"
       printf '%s\n' "packages/${area%%/*}/$name.test.mjs"
       ;;
@@ -168,6 +173,10 @@ or a device runs against fakes of them on PATH (see test/app-launch.bats)."
   [ "$out" = "packages/dev-config/pin.test.mjs" ] || fail "package module: $out"
   out="$(own_tests packages/expo-tooling/bin/x.mjs)"
   [ "$out" = "packages/expo-tooling/x.test.mjs" ] || fail "another package's program: $out"
+  out="$(own_tests packages/expo-tooling/jest/console.cjs)"
+  [ "$out" = "packages/expo-tooling/console.test.mjs" ] || fail "a Jest runtime file: $out"
+  out="$(own_tests packages/expo-tooling/jest/mocks/expo-updates.cjs)"
+  [ "$out" = "packages/expo-tooling/expo-updates.test.mjs" ] || fail "a Jest stand-in one directory deeper: $out"
 }
 
 @test "a script run only by a shared suite, or by no test, is named" {
@@ -185,6 +194,15 @@ scripts/ci/d.sh	test/ci-d.bats"
   local out
   out="$(executed_by | grep -F 'packages/dev-config/bin/check-tool-versions.mjs	packages/dev-config/check-tool-versions.test.mjs' || true)"
   [ -n "$out" ] || fail "an imported program was not counted as run by its test"
+}
+
+@test "a node:test file runs what it imports dynamically, query string or not" {
+  local executed
+  executed="$(executed_by)"
+  grep -qxF 'packages/expo-tooling/lib/eslint.mjs	packages/expo-tooling/eslint.test.mjs' <<< "$executed" \
+    || fail "a module imported with import('./lib/x.mjs') was not counted as run by its test"
+  grep -qxF 'packages/expo-tooling/jest/mocks/expo-updates.cjs	packages/expo-tooling/expo-updates.test.mjs' <<< "$executed" \
+    || fail "a CommonJS Jest stand-in imported by its test was not counted as run"
 }
 
 @test "the resolver tells running a script from merely naming one" {

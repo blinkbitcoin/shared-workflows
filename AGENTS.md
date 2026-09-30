@@ -5,7 +5,8 @@ workflows, composite actions and bash scripts for building, testing and
 releasing React Native (Expo) apps; and the packages a repo installs:
 `packages/dev-config`, published as `@blinkbitcoin/dev-config`, the developer
 tooling that is not React Native specific, and `packages/expo-tooling`
-(`@blinkbitcoin/expo-tooling`), the home of the presets an Expo app extends. Consumers pin `@v0` and call the workflows;
+(`@blinkbitcoin/expo-tooling`), the Jest, ESLint, Biome, Metro, Playwright,
+lefthook, fingerprint, TypeScript and commitlint presets an Expo app extends. Consumers pin `@v0` and call the workflows;
 nothing here is copied into their repos. The published
 contract is [`docs/consumer-guide.md`](docs/consumer-guide.md) — a change to an
 input, output, secret or env var is a change to every app that pins this repo.
@@ -33,7 +34,8 @@ scripts/self/       this repo's own upkeep (check-versions, tag-major, act-smoke
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files)
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
-packages/           dev-config (tooling any repo installs), expo-tooling (the Expo presets)
+packages/           dev-config (tooling any repo installs), expo-tooling (the Expo
+                    presets; fixtures/template/ holds the template's files, before and after)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
                     forensics, runners
 ```
@@ -128,7 +130,7 @@ Every row is a make target; nothing here is run through a package manager.
   - **The file:**
     - `scripts/ci/x.sh` has `test/x.bats` (`test/ci-x.bats` when another script is also called `x`).
     - A Node script `scripts/lib/x.mjs` has `test/x.test.mjs`, under `make test-script-modules`' 100% gate.
-    - A package's program or module, `packages/<package>/bin/x.mjs` or `lib/x.mjs`, has `packages/<package>/x.test.mjs`.
+    - A package's program or module, `packages/<package>/bin/x.mjs` or `lib/x.mjs`, has `packages/<package>/x.test.mjs`; so does a Jest runtime file, `packages/<package>/jest/**/x.cjs`.
     - A package's byte-identical copy of a script is tested by its original's own test plus `test/package-copies.bats`.
   - **What counts:**
     - A case in a shared suite (`plumbing.bats`, `fallback-gates.bats`) is welcome on top, but it is never the script's own test.
@@ -269,6 +271,7 @@ Every row is a make target; nothing here is run through a package manager.
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-act-smoke.yml` via act | `make smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-doctor.bats` | `make test` |
 | Both dev-config programs at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, and each program's flags, messages and exit codes | `packages/dev-config/*.test.mjs` | `make test-package` |
+| Each expo-tooling preset against the template: the template's file as it is and the file it becomes, evaluated under the same stand-ins and compared (lefthook through the real `lefthook dump`); the guide's examples are those files | `packages/expo-tooling/*.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test` |
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test` |

@@ -10,10 +10,107 @@
     "directory": "packages/expo-tooling"
   },
   "files": [
+    "lib",
+    "jest",
+    "biome.json",
+    "lefthook.yml",
+    "tsconfig.base.json",
     "README.md"
   ],
   "exports": {
+    "./jest": {
+      "types": "./lib/jest.d.mts",
+      "default": "./lib/jest.mjs"
+    },
+    "./jest/console": {
+      "types": "./jest/console.d.cts",
+      "default": "./jest/console.cjs"
+    },
+    "./jest/setup-console": "./jest/setup-console.cjs",
+    "./jest/mocks/expo-secure-store": {
+      "types": "./jest/mocks/expo-secure-store.d.cts",
+      "default": "./jest/mocks/expo-secure-store.cjs"
+    },
+    "./jest/mocks/expo-sqlite-kv-store": {
+      "types": "./jest/mocks/expo-sqlite-kv-store.d.cts",
+      "default": "./jest/mocks/expo-sqlite-kv-store.cjs"
+    },
+    "./jest/mocks/expo-updates": {
+      "types": "./jest/mocks/expo-updates.d.cts",
+      "default": "./jest/mocks/expo-updates.cjs"
+    },
+    "./eslint": {
+      "types": "./lib/eslint.d.mts",
+      "default": "./lib/eslint.mjs"
+    },
+    "./metro": {
+      "types": "./lib/metro.d.mts",
+      "default": "./lib/metro.mjs"
+    },
+    "./playwright": {
+      "types": "./lib/playwright.d.mts",
+      "default": "./lib/playwright.mjs"
+    },
+    "./fingerprint": {
+      "types": "./lib/fingerprint.d.mts",
+      "default": "./lib/fingerprint.mjs"
+    },
+    "./commitlint": {
+      "types": "./lib/commitlint.d.mts",
+      "default": "./lib/commitlint.mjs"
+    },
+    "./biome": "./biome.json",
+    "./lefthook.yml": "./lefthook.yml",
+    "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@biomejs/biome": ">=2.5.0",
+    "@commitlint/config-conventional": ">=21.0.0",
+    "@expo/fingerprint": ">=0.20.0",
+    "@playwright/test": ">=1.62.0",
+    "eslint": ">=9.22.0",
+    "eslint-config-expo": ">=57.0.0",
+    "globals": ">=17.0.0",
+    "jest": ">=30.0.0",
+    "jest-expo": ">=57.0.0",
+    "lefthook": ">=2.0.0",
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@biomejs/biome": {
+      "optional": true
+    },
+    "@commitlint/config-conventional": {
+      "optional": true
+    },
+    "@expo/fingerprint": {
+      "optional": true
+    },
+    "@playwright/test": {
+      "optional": true
+    },
+    "eslint": {
+      "optional": true
+    },
+    "eslint-config-expo": {
+      "optional": true
+    },
+    "globals": {
+      "optional": true
+    },
+    "jest": {
+      "optional": true
+    },
+    "jest-expo": {
+      "optional": true
+    },
+    "lefthook": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22.12"

@@ -1,0 +1,13 @@
+# Paths that cannot change the native runtime, so they must not change the
+# fingerprint (and with it the runtimeVersion / OTA compatibility window).
+docs/**
+**/*.md
+.maestro/**
+e2e/**
+coverage/**
+dist/**
+
+# scripts/ is CI and dev tooling only. Note that plugins/ and modules/ are
+# top-level siblings, not children of scripts/ — they DO reach the native
+# projects and are deliberately left fingerprinted.
+scripts/**

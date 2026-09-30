@@ -9,14 +9,14 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->107<!--/count--> scripts · <!--count:tests-->1189<!--/count--> tests · one pinned tag · one npm package</sub>
+<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->107<!--/count--> scripts · <!--count:tests-->1190<!--/count--> tests · one pinned tag · two tooling packages</sub>
 
 </div>
 
 ---
 
 <p align="center">
-  <img src="docs/assets/readme-hero.svg" alt="App repos carry a forty-line ci.yml that calls the reusable GitHub Actions workflows here at the pinned tag @v0: Checks, Unit and E2E on every pull request; Prepare, Build and sign, and Release on the way to a store. Any repo, React Native or not, can install the @blinkbitcoin/dev-config npm package for git hooks, linters and pinned tool versions. Every app gets green gates, device E2E on iOS and Android, signed and verified builds, and store releases." width="960">
+  <img src="docs/assets/readme-hero.svg" alt="App repos carry a forty-line ci.yml that calls the reusable GitHub Actions workflows here at the pinned tag @v0: Checks, Unit and E2E on every pull request; Prepare, Build and sign, and Release on the way to a store. Any repo, React Native or not, can install the @blinkbitcoin/dev-config npm package for git hooks, linters and pinned tool versions, and an Expo app extends the @blinkbitcoin/expo-tooling presets. Every app gets green gates, device E2E on iOS and Android, signed and verified builds, and store releases." width="960">
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
@@ -33,6 +33,10 @@ The same argument applies to the tooling that runs on a laptop — the hooks, th
 linters, the pinned tool versions — so that lives here too, as
 [`@blinkbitcoin/dev-config`](packages/dev-config). The workflows are React
 Native and Expo specific; the package is not, and any repo can install it.
+Its Expo counterpart, [`@blinkbitcoin/expo-tooling`](packages/expo-tooling),
+holds the configuration every Expo app runs — Jest, ESLint, Biome, Metro,
+Playwright, lefthook, fingerprint, TypeScript, commitlint — as presets, so an
+app's own config files keep only its paths and scopes.
 
 ```mermaid
 flowchart LR
@@ -201,9 +205,9 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table, the release notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->126<!--/count--> bats files, <!--count:tests-->1189<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `test/`                | <!--count:bats-files-->126<!--/count--> bats files, <!--count:tests-->1190<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
 | `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, and the contract a consumer is checked against, for repos to install   |
-| `packages/expo-tooling/` | `@blinkbitcoin/expo-tooling` — the home of the presets an Expo app extends, installed like dev-config |
+| `packages/expo-tooling/` | `@blinkbitcoin/expo-tooling` — the Expo presets an app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
 ## The pinned tool versions
