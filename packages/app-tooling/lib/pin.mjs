@@ -89,6 +89,17 @@ export function tarballFor(commit, dir) {
 }
 
 /**
+ * Whether `lockfile` resolves the package in `dir` at `commit`: an importer's
+ * `version:` line naming that tarball, ending there or in the peer suffix pnpm
+ * adds when the package has peer dependencies (`...#path:/packages/x(<hash>)`).
+ * Anything else after the tarball, such as a longer path, is another package.
+ */
+export function locksAt(lockfile, commit, dir) {
+  const tarball = tarballFor(commit, dir).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  return new RegExp(`version: ${tarball}(?:\\([^()\\s]+\\))*\n`).test(lockfile);
+}
+
+/**
  * Every way the consumer disagrees with one pin: the workflow calls themselves,
  * then each of this family's packages in package.json and in the lockfile.
  * `lockfile` is the text of pnpm-lock.yaml, or null when there is none.
@@ -108,7 +119,7 @@ export function pinProblems({ callers, pkg, lockfile }) {
       problems.push(`package.json takes ${dep.name} at ${dep.commit}, but the workflows pin ${pin}: run \`pnpm exec fix-tooling-pin\``);
       continue;
     }
-    if (lockfile !== null && !lockfile.includes(`version: ${tarballFor(pin, dep.dir)}\n`)) {
+    if (lockfile !== null && !locksAt(lockfile, pin, dep.dir)) {
       problems.push(`pnpm-lock.yaml does not resolve ${dep.name} at ${pin}: run \`pnpm exec fix-tooling-pin\``);
     }
   }

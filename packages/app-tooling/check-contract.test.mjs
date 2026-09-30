@@ -672,6 +672,12 @@ test('the one-pin requirement passes when calls, package.json and the lockfile s
   assert.deepEqual(checkRequirement(req('one-pin.one-commit'), c), { status: 'ok', detail: undefined });
 });
 
+test('the one-pin requirement passes on the lockfile entry pnpm writes with a peer suffix', () => {
+  const lock = pinnedLock()['pnpm-lock.yaml'].replace('\n', '(5dfd4c12eb1b14f8f0fa10ac317d7ad0)\n');
+  const c = consumer({ callers: pinnedCaller(), pkg: pinnedPkg(), files: { 'pnpm-lock.yaml': lock } });
+  assert.deepEqual(checkRequirement(req('one-pin.one-commit'), c), { status: 'ok', detail: undefined });
+});
+
 test('the one-pin requirement names a package left behind by a pin bump', () => {
   const old = '2'.repeat(40);
   const c = consumer({ callers: pinnedCaller(), pkg: pinnedPkg(old), files: pinnedLock(old) });
