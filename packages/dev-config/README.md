@@ -81,7 +81,7 @@ family rather than to any repository on the baseline.
 
 ## Repository guards
 
-Six checks for rules a repository on the baseline holds itself to, each a
+Seven checks for rules a repository on the baseline holds itself to, each a
 program and a module (`@blinkbitcoin/dev-config/<name>`) whose functions a
 test can import. The template wrote them first; they live here so the template,
 this repository and the next consumer run the same code.
@@ -93,6 +93,7 @@ check-shell-locale [--min-files N]          # LC_ALL=C cmd instead of env LC_ALL
 check-make-target-names [--require-mise]    # a make target named after the tool it runs
 check-workflow-names --group ci=CI ...      # a workflow file or display name outside its group
 check-coverage-empty [summary.json]         # a Jest coverage row with nothing to cover
+check-make-recipes [--allow T=REASON]       # a make recipe with logic in it, not one call to a tested script
 ```
 
 - `check-docs-tables` measures each `<br>` segment of a cell's visible text,
@@ -118,6 +119,13 @@ check-coverage-empty [summary.json]         # a Jest coverage row with nothing t
   blanks after the slash. `--min-files N` fails a directory with fewer files.
 - `check-coverage-empty` fails on a file with zero statements in a
   `coverage-summary.json`, which reads as 0% while the totals stay at 100%.
+- `check-make-recipes` holds every recipe to one line calling one script or
+  program (`bash X.sh`, `node X.mjs`, `pnpm exec P`, `pnpm [run] S`), or none
+  at all for an aggregate. `&&`, `||`, `;`, a pipe, a redirect, a backtick,
+  `$(shell ...)`, a second line or a `\` continuation is logic, which belongs in a
+  script its own test covers and that CI and a laptop can run without make. It
+  follows `include`s, so a shared `.mk` fragment is held to the same rule, and
+  fails on an `--allow` that no longer applies.
 
 ## One commit of shared-workflows
 
