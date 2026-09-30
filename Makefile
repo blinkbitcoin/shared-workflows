@@ -22,7 +22,7 @@ test: ## bats unit tests for the pure scripts
 check-versions: ## Fail when workflow defaults disagree with scripts/lib/versions.sh
 	$(MISE) bash scripts/self/check-versions.sh
 tool-versions: ## Fail when an installed tool is not the version the baseline pins
-	$(MISE) node packages/dev-config/bin/check-tool-versions.mjs
+	$(MISE) node packages/app-tooling/bin/check-tool-versions.mjs
 # Every package under packages/, at 100% lines, branches and functions. The
 # exclusions are the tests themselves (node's default, which naming any
 # exclusion replaces) and each package's fixtures/: the configuration files a

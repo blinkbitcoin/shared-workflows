@@ -3,7 +3,7 @@
 #
 # scripts/checks/expo-doctor.sh: the Expo project health check this repository
 # runs for a consumer that ships no `deps:check` script of its own, and that
-# @blinkbitcoin/dev-config ships for a consumer's `make check-deps`. SDK drift
+# @blinkbitcoin/app-tooling ships for a consumer's `make check-deps`. SDK drift
 # (`expo install --check`) is reported and never fails the gate; expo-doctor
 # then runs with its own version check off, and its status is the gate's. The
 # doctor is the consumer's pinned devDependency when there is one, and the

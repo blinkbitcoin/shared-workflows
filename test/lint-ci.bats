@@ -161,10 +161,10 @@ scripts() {
   [[ "$output" == *"no tools more and no .github/workflows/"* ]] || fail "output: $output"
 }
 
-@test "run from the dev-config package, a consumer without a zizmor config gets the package's copy of the policy" {
+@test "run from the app-tooling package, a consumer without a zizmor config gets the package's copy of the policy" {
   workflows
-  run bash "$REPO_ROOT/packages/dev-config/ci/lint-ci.sh"
+  run bash "$REPO_ROOT/packages/app-tooling/ci/lint-ci.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  grep zizmor "$MISE_LOG" | grep -qF -- "--config $REPO_ROOT/packages/dev-config/zizmor.yml" \
+  grep zizmor "$MISE_LOG" | grep -qF -- "--config $REPO_ROOT/packages/app-tooling/zizmor.yml" \
     || fail "the package's policy was not passed: $(grep zizmor "$MISE_LOG")"
 }

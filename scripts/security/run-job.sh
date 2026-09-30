@@ -7,7 +7,7 @@
 # scripts/security/<job>.sh does not exist fails here, by name - it never skips
 # quietly, because a pipeline that scans nothing while reporting green is worse
 # than one that is red. When a second, non-template consumer appears, the shared
-# subset moves into @blinkbitcoin/dev-config; a duplicate here would serve
+# subset moves into @blinkbitcoin/app-tooling; a duplicate here would serve
 # nobody today.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"

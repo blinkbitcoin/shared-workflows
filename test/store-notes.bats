@@ -1,12 +1,12 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# store-notes.sh runs @blinkbitcoin/dev-config's store-notes program from this
+# store-notes.sh runs @blinkbitcoin/app-tooling's store-notes program from this
 # checkout in the consumer's directory. Most cases run the real generator, so
 # what reaches the lanes is asserted end to end; the ones about the exact
 # arguments and environment it is handed, or about what happens when it
 # produces nothing, put a fake `node` on PATH that records its call.
-# packages/dev-config/store-notes.test.mjs covers the generator itself.
+# packages/app-tooling/store-notes.test.mjs covers the generator itself.
 load test_helper
 
 setup() {
@@ -94,7 +94,7 @@ SH
 }
 
 @test "a release body's Store notes section is shipped as written, for every locale asked for" {
-  cp "$REPO_ROOT/packages/dev-config/fixtures/store-notes/release-body.md" "$BATS_TEST_TMPDIR/body.md"
+  cp "$REPO_ROOT/packages/app-tooling/fixtures/store-notes/release-body.md" "$BATS_TEST_TMPDIR/body.md"
   RELEASE_BODY_FILE="$BATS_TEST_TMPDIR/body.md" STORE_NOTES_LOCALES='en-US,de-DE' notes
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "running store-notes --from-body --body-section" || fail "the body path did not run: $output"
@@ -118,7 +118,7 @@ SH
   RELEASE_BODY_FILE="$BATS_TEST_TMPDIR/body.md" STORE_NOTES_LOCALES='en,de' notes
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   argv="$(cat "$BATS_TEST_TMPDIR/argv.txt")"
-  contains "$argv" "$REPO_ROOT/packages/dev-config/bin/store-notes.mjs --from-body $BATS_TEST_TMPDIR/body.md --body-section" \
+  contains "$argv" "$REPO_ROOT/packages/app-tooling/bin/store-notes.mjs --from-body $BATS_TEST_TMPDIR/body.md --body-section" \
     || fail "the package's generator was not run on the body: $argv"
   contains "$argv" "--locales en,de" || fail "the locales were not passed as a flag: $argv"
   contains "$argv" "--out $WORKFLOWS_RELEASE_META_DIR" || fail "--out is not the release-meta directory: $argv"

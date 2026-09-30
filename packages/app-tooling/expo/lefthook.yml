@@ -1,0 +1,67 @@
+# The git hooks every Expo app of this family runs. An app pulls them in from
+# its own lefthook.yml:
+#
+#   extends:
+#     - node_modules/@blinkbitcoin/app-tooling/expo/lefthook.yml
+#
+# lefthook merges this file OVER the app's: an app adds hooks and commands of
+# its own, and may add a key a command here does not set (`skip: true` turns
+# one off), but a key set here wins over the app's. Escape hatches:
+# `git commit --no-verify`, `LEFTHOOK=0 git push` for a one-off skip; personal
+# tweaks go in lefthook-local.yml (gitignored), which lefthook applies last.
+
+min_version: 2.0.0
+
+pre-commit:
+  parallel: true
+  # Nothing to check on merge/rebase replays - those commits already passed.
+  skip:
+    - merge
+    - rebase
+  commands:
+    biome:
+      glob: '*.{ts,tsx,js,mjs,json,graphql}'
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
+      # stage_fixed, not `… && git add {staged_files}`: lefthook restages only
+      # the files biome actually rewrote, and does it after its own
+      # partially-staged-file handling rather than by shelling out to git from
+      # inside the command. (Measured on lefthook 2.1.12: both forms leave an
+      # unstaged hunk of a partially staged file alone, because lefthook hides
+      # unstaged changes for the duration of pre-commit either way. The point
+      # of the flag here is that the guarantee comes from lefthook rather than
+      # from that hiding behaviour happening to be on.)
+      stage_fixed: true
+    eslint:
+      glob: 'src/**/*.{ts,tsx}'
+      # --no-warn-ignored: ESLint 9 warns (and --max-warnings=0 then fails the
+      # hook) when a staged path matches an `ignores` pattern, e.g. generated
+      # catalogs.
+      run: pnpm exec eslint --max-warnings=0 --no-warn-ignored {staged_files}
+    typos:
+      # --force-exclude: typos.toml's extend-exclude otherwise only governs
+      # directory traversal, and naming files explicitly on the command line
+      # bypasses it (translated catalogs are full of words that look like
+      # English typos).
+      # mise exec: typos comes from .mise.toml, so a shell without mise
+      # activated (an editor's git integration, a plain terminal) would
+      # otherwise fail the commit with "command not found".
+      run: mise exec -- typos --force-exclude {staged_files}
+    gitleaks:
+      # The staged diff only; `make check-secrets` and CI read the whole history.
+      run: mise exec -- gitleaks git --pre-commit --staged --redact --no-banner .
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}
+pre-push:
+  commands:
+    typecheck:
+      run: pnpm typecheck
+    knip:
+      run: pnpm knip
+    unit:
+      # No `--` before the flags: jest's parser stops at it and reads what
+      # follows as filename patterns, so `--passWithNoTests` became a pattern
+      # matching nothing and every push whose commits touched no test file was
+      # rejected. pnpm 12 forwards trailing arguments to the script without it.
+      run: pnpm test --changedSince=origin/main --passWithNoTests

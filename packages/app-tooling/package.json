@@ -1,0 +1,177 @@
+{
+  "name": "@blinkbitcoin/app-tooling",
+  "version": "0.10.0",
+  "description": "The shared app tooling: the pinned tool table, the checks that enforce it, the contract checker, the CI badge renderer and the store notes generator, and under expo/ the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets an Expo app extends.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blinkbitcoin/shared-workflows.git",
+    "directory": "packages/app-tooling"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "bin",
+    "checks",
+    "ci",
+    "lib",
+    "hooks",
+    "release",
+    "zizmor.yml",
+    "store-notes.prompt.md",
+    "contract.json",
+    "interfaces.json",
+    "versions.json",
+    "expo",
+    "README.md"
+  ],
+  "exports": {
+    "./versions.json": "./versions.json",
+    "./contract.json": "./contract.json",
+    "./interfaces.json": "./interfaces.json",
+    "./check-tool-versions": "./bin/check-tool-versions.mjs",
+    "./check-consumer-contract": "./bin/check-consumer-contract.mjs",
+    "./check-docs-tables": "./bin/check-docs-tables.mjs",
+    "./check-diagrams": "./bin/check-diagrams.mjs",
+    "./check-shell-locale": "./bin/check-shell-locale.mjs",
+    "./check-make-target-names": "./bin/check-make-target-names.mjs",
+    "./check-workflow-names": "./bin/check-workflow-names.mjs",
+    "./check-coverage-empty": "./bin/check-coverage-empty.mjs",
+    "./check-lockfile": "./bin/check-lockfile.mjs",
+    "./fix-tooling-pin": "./bin/fix-tooling-pin.mjs",
+    "./check-make-recipes": "./bin/check-make-recipes.mjs",
+    "./render-badges": "./bin/render-badges.mjs",
+    "./coverage-badge": "./bin/coverage-badge.mjs",
+    "./status-badge": "./bin/status-badge.mjs",
+    "./store-notes": "./bin/store-notes.mjs",
+    "./llm": "./lib/llm.mjs",
+    "./llm-request": "./lib/llm-request.mjs",
+    "./check-test-siblings": "./bin/check-test-siblings.mjs",
+    "./check-ignored-directories": "./bin/check-ignored-directories.mjs",
+    "./check-docs": "./bin/check-docs.mjs",
+    "./check-licenses": "./bin/check-licenses.mjs",
+    "./check-code-scanning": "./bin/check-code-scanning.mjs",
+    "./make-help": "./bin/make-help.mjs",
+    "./expo/jest": {
+      "types": "./expo/jest.d.mts",
+      "default": "./expo/jest.mjs"
+    },
+    "./expo/jest/console": {
+      "types": "./expo/jest/console.d.cts",
+      "default": "./expo/jest/console.cjs"
+    },
+    "./expo/jest/setup-console": "./expo/jest/setup-console.cjs",
+    "./expo/jest/mocks/expo-secure-store": {
+      "types": "./expo/jest/mocks/expo-secure-store.d.cts",
+      "default": "./expo/jest/mocks/expo-secure-store.cjs"
+    },
+    "./expo/jest/mocks/expo-sqlite-kv-store": {
+      "types": "./expo/jest/mocks/expo-sqlite-kv-store.d.cts",
+      "default": "./expo/jest/mocks/expo-sqlite-kv-store.cjs"
+    },
+    "./expo/jest/mocks/expo-updates": {
+      "types": "./expo/jest/mocks/expo-updates.d.cts",
+      "default": "./expo/jest/mocks/expo-updates.cjs"
+    },
+    "./expo/eslint": {
+      "types": "./expo/eslint.d.mts",
+      "default": "./expo/eslint.mjs"
+    },
+    "./expo/metro": {
+      "types": "./expo/metro.d.mts",
+      "default": "./expo/metro.mjs"
+    },
+    "./expo/playwright": {
+      "types": "./expo/playwright.d.mts",
+      "default": "./expo/playwright.mjs"
+    },
+    "./expo/fingerprint": {
+      "types": "./expo/fingerprint.d.mts",
+      "default": "./expo/fingerprint.mjs"
+    },
+    "./expo/commitlint": {
+      "types": "./expo/commitlint.d.mts",
+      "default": "./expo/commitlint.mjs"
+    },
+    "./expo/biome": "./expo/biome.json",
+    "./expo/lefthook.yml": "./expo/lefthook.yml",
+    "./expo/tsconfig.base.json": "./expo/tsconfig.base.json",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "check-tool-versions": "./bin/check-tool-versions.mjs",
+    "check-consumer-contract": "./bin/check-consumer-contract.mjs",
+    "check-docs-tables": "./bin/check-docs-tables.mjs",
+    "check-diagrams": "./bin/check-diagrams.mjs",
+    "check-shell-locale": "./bin/check-shell-locale.mjs",
+    "check-make-target-names": "./bin/check-make-target-names.mjs",
+    "check-workflow-names": "./bin/check-workflow-names.mjs",
+    "check-coverage-empty": "./bin/check-coverage-empty.mjs",
+    "check-lockfile": "./bin/check-lockfile.mjs",
+    "fix-tooling-pin": "./bin/fix-tooling-pin.mjs",
+    "check-make-recipes": "./bin/check-make-recipes.mjs",
+    "render-badges": "./bin/render-badges.mjs",
+    "coverage-badge": "./bin/coverage-badge.mjs",
+    "status-badge": "./bin/status-badge.mjs",
+    "store-notes": "./bin/store-notes.mjs",
+    "check-test-siblings": "./bin/check-test-siblings.mjs",
+    "check-ignored-directories": "./bin/check-ignored-directories.mjs",
+    "check-docs": "./bin/check-docs.mjs",
+    "check-licenses": "./bin/check-licenses.mjs",
+    "check-code-scanning": "./bin/check-code-scanning.mjs",
+    "make-help": "./bin/make-help.mjs"
+  },
+  "peerDependencies": {
+    "@biomejs/biome": ">=2.5.0",
+    "@commitlint/config-conventional": ">=21.0.0",
+    "@expo/fingerprint": ">=0.20.0",
+    "@playwright/test": ">=1.62.0",
+    "eslint": ">=9.22.0",
+    "eslint-config-expo": ">=57.0.0",
+    "globals": ">=17.0.0",
+    "jest": ">=30.0.0",
+    "jest-expo": ">=57.0.0",
+    "lefthook": ">=2.0.0",
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@biomejs/biome": {
+      "optional": true
+    },
+    "@commitlint/config-conventional": {
+      "optional": true
+    },
+    "@expo/fingerprint": {
+      "optional": true
+    },
+    "@playwright/test": {
+      "optional": true
+    },
+    "eslint": {
+      "optional": true
+    },
+    "eslint-config-expo": {
+      "optional": true
+    },
+    "globals": {
+      "optional": true
+    },
+    "jest": {
+      "optional": true
+    },
+    "jest-expo": {
+      "optional": true
+    },
+    "lefthook": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

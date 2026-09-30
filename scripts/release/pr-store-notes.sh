@@ -11,7 +11,7 @@
 # a stale draft never feeds the next one.
 #
 # The notes themselves are the generator's: this hands the stripped body to
-# store-notes.sh as RELEASE_BODY_FILE, which runs @blinkbitcoin/dev-config's
+# store-notes.sh as RELEASE_BODY_FILE, which runs @blinkbitcoin/app-tooling's
 # store-notes program in the consumer's directory and leaves store-notes.txt
 # in $WORKFLOWS_RELEASE_META_DIR. That file is the section.
 #

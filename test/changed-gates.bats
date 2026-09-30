@@ -96,20 +96,25 @@ expect() {
 }
 
 @test "the baseline's versions run tooling and package" {
-  gates_for "packages/dev-config/versions.json"
+  gates_for "packages/app-tooling/versions.json"
   expect false true true
-  gates_for "packages/dev-config/bin/check-tool-versions.mjs"
+  gates_for "packages/app-tooling/bin/check-tool-versions.mjs"
   expect false true true
 }
 
-@test "any other dev-config change runs package alone" {
-  gates_for "packages/dev-config/contract.json"
+@test "any other app-tooling change runs package alone" {
+  gates_for "packages/app-tooling/contract.json"
   expect false false true
 }
 
-@test "an expo-tooling change runs package alone" {
-  # make test-package covers every package under packages/, not only dev-config.
-  gates_for "packages/expo-tooling/lib/jest.mjs"
+@test "an Expo preset change runs package alone" {
+  gates_for "packages/app-tooling/expo/jest.mjs"
+  expect false false true
+}
+
+@test "a change to any other package runs package alone" {
+  # make test-package covers every package under packages/, not only app-tooling.
+  gates_for "packages/another-package/lib/x.mjs"
   expect false false true
 }
 
@@ -152,7 +157,7 @@ expect() {
   git -C "$repo" checkout -q --orphan unrelated
   git -C "$repo" rm -rq --cached .
   rm -f "$repo/a.txt"
-  commit_file "packages/dev-config/x.json"
+  commit_file "packages/app-tooling/x.json"
   head=$(git -C "$repo" rev-parse HEAD)
   cd "$repo" && run bash "$REPO_ROOT/scripts/self/changed-gates.sh" "$base" "$head"
   [ "$status" -eq 0 ] || fail "exited $status: $output"

@@ -10,7 +10,7 @@
 #      Contract job reads to hold that consumer's `make ci` to CI.
 # Everything here reads this repository and test/fixtures/consumer-min only. A
 # real consumer is never checked out: it is held to the contract by its own
-# Contract job (packages/dev-config/bin/check-consumer-contract.mjs), against the
+# Contract job (packages/app-tooling/bin/check-consumer-contract.mjs), against the
 # version of this repository it calls, and fails its own PR when it drifts.
 load test_helper
 
@@ -287,7 +287,7 @@ for (const line of process.env.STEPS.split("\n")) {
   if (req.toggle && !cond.includes(`inputs.${req.toggle.split(":")[1]}`)) out.push(`${script}: contract toggle ${req.toggle} is not what switches the step (${cond.trim()})`);
 }
 console.log(out.join("\n"));
-' "$REPO_ROOT/packages/dev-config/contract.json")"
+' "$REPO_ROOT/packages/app-tooling/contract.json")"
   [ -z "$problems" ] || fail "contract.json disagrees with the workflows:
 $problems"
 }
@@ -301,7 +301,7 @@ const names = new Set(process.env.NAMES.split("\n"));
 console.log(c.requirements
   .filter((r) => ["package-script", "script-or-dep"].includes(r.kind) && ["checks", "unit"].includes(r.profile))
   .filter((r) => !names.has(r.target)).map((r) => r.id).join(" "));
-' "$REPO_ROOT/packages/dev-config/contract.json")"
+' "$REPO_ROOT/packages/app-tooling/contract.json")"
   [ -z "$stale" ] || fail "contract.json requires scripts no checks/unit step runs: $stale"
 }
 
@@ -312,7 +312,7 @@ console.log(c.requirements
   contract="$(node -e '
 const c = require(process.argv[1]);
 console.log(c.requirements.find((r) => r.id === "lane.app-review-env").target.slice().sort().join("\n"));
-' "$REPO_ROOT/packages/dev-config/contract.json")"
+' "$REPO_ROOT/packages/app-tooling/contract.json")"
   [ "$(grep -c . <<<"$declared")" -ge 7 ] || fail "found only '$declared' in publish-store.yml"
   [ "$declared" = "$contract" ] || fail "publish-store.yml passes:
 $declared
@@ -366,7 +366,7 @@ A called workflow cannot widen the caller's token - this run would die as a star
 
 # --- the contract table --------------------------------------------------
 #
-# packages/dev-config/contract.json is what the checker reads and what the
+# packages/app-tooling/contract.json is what the checker reads and what the
 # adoption docs are written from. The guide's own tables are the prose version
 # of the same facts. Two statements of one contract drift; these hold them
 # together in both directions.
@@ -374,7 +374,7 @@ A called workflow cannot widen the caller's token - this run would die as a star
 @test "every consumer script the contract table names appears in the guide's script table" {
   run node -e '
     const fs = require("fs");
-    const contract = require(`${process.env.REPO_ROOT}/packages/dev-config/contract.json`);
+    const contract = require(`${process.env.REPO_ROOT}/packages/app-tooling/contract.json`);
     const guide = fs.readFileSync(process.env.GUIDE, "utf8");
     const table = guide.split("## Script contract")[1] ?? "";
     const missing = contract.requirements
@@ -394,7 +394,7 @@ A called workflow cannot widen the caller's token - this run would die as a star
   run node -e '
     const fs = require("fs");
     const root = process.env.REPO_ROOT;
-    const contract = require(`${root}/packages/dev-config/contract.json`);
+    const contract = require(`${root}/packages/app-tooling/contract.json`);
     const wrong = [];
     for (const req of contract.requirements) {
       if (!req.toggle) continue;
@@ -417,7 +417,7 @@ A called workflow cannot widen the caller's token - this run would die as a star
   run node -e '
     const fs = require("fs");
     const root = process.env.REPO_ROOT;
-    const contract = require(`${root}/packages/dev-config/contract.json`);
+    const contract = require(`${root}/packages/app-tooling/contract.json`);
     const wrong = [];
     for (const req of contract.requirements) {
       if (!req.toggle) continue;
@@ -439,7 +439,7 @@ A called workflow cannot widen the caller's token - this run would die as a star
 @test "every guide anchor the contract table points at exists in the guide" {
   run node -e '
     const fs = require("fs");
-    const contract = require(`${process.env.REPO_ROOT}/packages/dev-config/contract.json`);
+    const contract = require(`${process.env.REPO_ROOT}/packages/app-tooling/contract.json`);
     const guide = fs.readFileSync(process.env.GUIDE, "utf8");
     // GitHub derives an anchor by lowercasing a heading, dropping anything but
     // word characters, spaces and hyphens, then replacing EACH remaining space

@@ -2,14 +2,14 @@
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
 # scripts/ci/contract-check.sh: the Contract job's step in check-code.yml. It
-# finds the dev-config checker beside itself, warns loudly on a contract-only
+# finds the app-tooling checker beside itself, warns loudly on a contract-only
 # run, and hands over to the checker with the consumer root and --skeleton, so
 # the checker's exit code is the step's. Covered: a consumer that meets the
 # contract and one that does not, the skeleton on a failure, the contract-only
 # warning with and without a job summary, a working directory below the
 # workspace, the path through a symlinked .workflows, and both refusals - no
 # node, and no checker beside the script.
-# The checker's own rules are packages/dev-config/check-consumer-contract.test.mjs
+# The checker's own rules are packages/app-tooling/check-consumer-contract.test.mjs
 # and contract-doctor.bats.
 
 load test_helper
@@ -156,7 +156,7 @@ write_failing_consumer() { # <directory>
 
 @test "a checkout without the checker beside the script is refused, naming the path" {
   # The script finds the checker two directories up from itself. A copy of the
-  # script in a tree with no packages/dev-config is a checkout that lost it.
+  # script in a tree with no packages/app-tooling is a checkout that lost it.
   local tree="$BATS_TEST_TMPDIR/tree" ws="$BATS_TEST_TMPDIR/ws"
   mkdir -p "$tree/scripts/ci" "$tree/scripts/lib"
   cp "$SCRIPT" "$tree/scripts/ci/contract-check.sh"
@@ -164,6 +164,6 @@ write_failing_consumer() { # <directory>
   write_passing_consumer "$ws"
   GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." run bash "$tree/scripts/ci/contract-check.sh"
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::contract-check.sh: no checker at $tree/packages/dev-config/bin/check-consumer-contract.mjs" ||
+  contains "$output" "::error::contract-check.sh: no checker at $tree/packages/app-tooling/bin/check-consumer-contract.mjs" ||
     fail "does not name where it looked: $output"
 }

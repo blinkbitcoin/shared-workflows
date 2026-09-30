@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keep the scripts the dev-config package ships byte-identical to the ones the
+# Keep the scripts the app-tooling package ships byte-identical to the ones the
 # workflows run.
 #
 # build-prepare.yml runs scripts/release/resolve-version.sh and build-info.sh,
@@ -21,7 +21,7 @@ source "$(dirname "$0")/../lib/common.sh"
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 # ORIGINAL:COPY, the original relative to the repository root and the copy
-# relative to packages/dev-config.
+# relative to packages/app-tooling.
 copies=(
   scripts/release/resolve-version.sh:release/resolve-version.sh
   scripts/release/build-info.sh:release/build-info.sh
@@ -51,18 +51,18 @@ stale=()
 for pair in "${copies[@]}"; do
   rel="${pair#*:}"
   original="$root/${pair%%:*}"
-  copy="$root/packages/dev-config/$rel"
+  copy="$root/packages/app-tooling/$rel"
   [ -f "$original" ] || die "no $original to copy into the package"
   if [ "$write" = true ]; then
     mkdir -p "$(dirname "$copy")"
     cp -p "$original" "$copy"
   elif ! cmp -s "$original" "$copy"; then
-    stale+=("packages/dev-config/$rel")
+    stale+=("packages/app-tooling/$rel")
   fi
 done
 
 if [ "$write" = true ]; then
-  log "copied ${#copies[@]} files into packages/dev-config"
+  log "copied ${#copies[@]} files into packages/app-tooling"
   exit 0
 fi
 [ "${#stale[@]}" -eq 0 ] || die "the package's copies differ from what the workflows run: ${stale[*]} - run: bash scripts/self/package-copies.sh --write"

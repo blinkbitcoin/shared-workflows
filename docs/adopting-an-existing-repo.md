@@ -14,7 +14,7 @@ workflow you never called.
 ## Start with the report, not this page
 
 ```sh
-npx --package=@blinkbitcoin/dev-config check-consumer-contract --skeleton
+npx --package=@blinkbitcoin/app-tooling check-consumer-contract --skeleton
 ```
 
 That prints what *your* repository is missing, with a fix per finding, and the
@@ -27,7 +27,7 @@ Before you have written a caller it has nothing to infer from, so name the
 workflows you intend to use:
 
 ```sh
-npx --package=@blinkbitcoin/dev-config check-consumer-contract --profile checks,unit
+npx --package=@blinkbitcoin/app-tooling check-consumer-contract --profile checks,unit
 ```
 
 ## The two ways to satisfy a gate
@@ -66,7 +66,7 @@ actually does, and delete the callers you do not want.
 ## What each workflow needs
 
 The definitive version of this table is
-[`packages/dev-config/contract.json`](../packages/dev-config/contract.json), and
+[`packages/app-tooling/contract.json`](../packages/app-tooling/contract.json), and
 the block below is generated from it — the checker, this page and
 [the consumer guide](consumer-guide.md) cannot disagree about what the contract
 is.
@@ -112,29 +112,29 @@ is a warning in the report, not a failure. See
 | `knip.json` | optional — a fallback runs | your own knip gate |
 | `typos.toml` | optional — a fallback runs | your own spell gate |
 | `.gitignore` | optional — a fallback runs | your own working tree |
-| no `scripts/check-coverage-empty.mjs`, `scripts/check-coverage-empty.test.mjs` or `scripts/fixtures/coverage-summary.json` | required | the check-coverage-empty program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/check-diagrams.mjs` or `scripts/check-diagrams.test.mjs` | required | the check-diagrams program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/check-docs-tables.mjs` or `scripts/check-docs-tables.test.mjs` | required | the check-docs-tables program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/make-target-names.test.mjs` | required | the check-make-target-names program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/shell-locale.test.mjs` | required | the check-shell-locale program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/workflow-names.test.mjs` | required | the check-workflow-names program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/release/resolve-version.sh` or `scripts/release/resolve-version.test.mjs` | required | release/resolve-version.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-coverage-empty.mjs`, `scripts/check-coverage-empty.test.mjs` or `scripts/fixtures/coverage-summary.json` | required | the check-coverage-empty program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-diagrams.mjs` or `scripts/check-diagrams.test.mjs` | required | the check-diagrams program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-docs-tables.mjs` or `scripts/check-docs-tables.test.mjs` | required | the check-docs-tables program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/make-target-names.test.mjs` | required | the check-make-target-names program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/shell-locale.test.mjs` | required | the check-shell-locale program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/workflow-names.test.mjs` | required | the check-workflow-names program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/release/resolve-version.sh` or `scripts/release/resolve-version.test.mjs` | required | release/resolve-version.sh, which @blinkbitcoin/app-tooling ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
 | one shared-workflows commit for every call, package and lockfile entry | required | every call and every package of this family, read at one commit: a pin bump that moves the workflows and not the packages runs CI on one commit and a laptop on another |
-| no `scripts/tooling-pin.mjs` or `scripts/tooling-pin.test.mjs` | required | the fix-tooling-pin program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/lib/workflow-calls.mjs`, `scripts/lib/workflow-calls.test.mjs` or `scripts/workflow-contract.test.mjs` | required | check-consumer-contract, which @blinkbitcoin/dev-config ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface |
-| no `scripts/check-lockfile.sh` or `scripts/check-lockfile.test.mjs` | required | the check-lockfile program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/release/build-info.sh`, `scripts/release/build-info.test.mjs` or `scripts/release/shared-copies.test.mjs` | required | release/build-info.sh, which @blinkbitcoin/dev-config ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/check-i18n.sh` or `scripts/check-codegen.sh` | required | checks/i18n.sh and checks/codegen.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs; a copy in your repository is compared with them by nothing and drifts |
-| no `scripts/shellcheck.sh` | required | ci/lint-ci.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs: actionlint, zizmor and shellcheck at the pinned versions |
-| no `scripts/release/notes.mjs`, `scripts/release/notes.test.mjs`, `scripts/release/llm/index.mjs`, `scripts/release/llm/index.test.mjs`, `scripts/release/fixtures/release-body.md`, `scripts/release/fixtures/release-pr-body.md`, `scripts/release/fixtures/anthropic-response.json`, `scripts/release/fixtures/anthropic-invalid-response.json` or `scripts/release/fixtures/openai-response.json` | required | the store-notes program @blinkbitcoin/dev-config ships, which build-prepare.yml and pr-store-notes.yml run through scripts/release/store-notes.sh; a copy in your repository is not run, and drifts |
-| no `scripts/lib/llm/index.mjs`, `scripts/lib/llm/index.test.mjs`, `scripts/lib/llm/anthropic.mjs`, `scripts/lib/llm/anthropic.test.mjs`, `scripts/lib/llm/openai.mjs`, `scripts/lib/llm/openai.test.mjs`, `scripts/lib/llm/request.mjs` or `scripts/lib/llm/request.test.mjs` | required | the provider-portable LLM adapters @blinkbitcoin/dev-config ships (@blinkbitcoin/dev-config/llm and /llm-request), which its store-notes program uses; a copy in your repository is compared with them by nothing and drifts |
-| no `scripts/test-siblings.test.mjs` | required | the check-test-siblings program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/worktree-ignores.test.mjs` | required | the check-ignored-directories program @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/check-docs.sh`, `scripts/check-docs.test.mjs`, `scripts/manifest-structural.mjs` or `scripts/manifest-structural.test.mjs` | required | the check-docs program @blinkbitcoin/dev-config ships, which runs check-make-target-names, check-docs-tables and check-diagrams after its own two checks; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/check-licenses.mjs` or `scripts/check-licenses.test.mjs` | required | the check-licenses program @blinkbitcoin/dev-config ships, with the organisation's licence allowlist; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/codeql-local.sh`, `scripts/codeql-local.test.mjs`, `scripts/codeql-findings.mjs` or `scripts/codeql-findings.test.mjs` | required | the check-code-scanning program @blinkbitcoin/dev-config ships, which reads the same configuration file check-codeql.yml does; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/hooks/install-if-lockfile-changed.sh` or `scripts/hooks/install-if-lockfile-changed.test.mjs` | required | hooks/install-if-lockfile-changed.sh, which @blinkbitcoin/dev-config ships; a copy in your repository is compared with it by nothing and drifts |
-| no `scripts/check-deps.sh` or `scripts/check-deps.test.mjs` | required | checks/expo-doctor.sh, which @blinkbitcoin/dev-config ships and check-code.yml runs when you have no deps:check: advisory SDK drift, then expo-doctor; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/tooling-pin.mjs` or `scripts/tooling-pin.test.mjs` | required | the fix-tooling-pin program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/lib/workflow-calls.mjs`, `scripts/lib/workflow-calls.test.mjs` or `scripts/workflow-contract.test.mjs` | required | check-consumer-contract, which @blinkbitcoin/app-tooling ships: its one-pin row holds the pins and its call rows hold every call to its workflow's interface |
+| no `scripts/check-lockfile.sh` or `scripts/check-lockfile.test.mjs` | required | the check-lockfile program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/release/build-info.sh`, `scripts/release/build-info.test.mjs` or `scripts/release/shared-copies.test.mjs` | required | release/build-info.sh, which @blinkbitcoin/app-tooling ships and build-prepare.yml runs; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-i18n.sh` or `scripts/check-codegen.sh` | required | checks/i18n.sh and checks/codegen.sh, which @blinkbitcoin/app-tooling ships and check-code.yml runs; a copy in your repository is compared with them by nothing and drifts |
+| no `scripts/shellcheck.sh` | required | ci/lint-ci.sh, which @blinkbitcoin/app-tooling ships and check-code.yml runs: actionlint, zizmor and shellcheck at the pinned versions |
+| no `scripts/release/notes.mjs`, `scripts/release/notes.test.mjs`, `scripts/release/llm/index.mjs`, `scripts/release/llm/index.test.mjs`, `scripts/release/fixtures/release-body.md`, `scripts/release/fixtures/release-pr-body.md`, `scripts/release/fixtures/anthropic-response.json`, `scripts/release/fixtures/anthropic-invalid-response.json` or `scripts/release/fixtures/openai-response.json` | required | the store-notes program @blinkbitcoin/app-tooling ships, which build-prepare.yml and pr-store-notes.yml run through scripts/release/store-notes.sh; a copy in your repository is not run, and drifts |
+| no `scripts/lib/llm/index.mjs`, `scripts/lib/llm/index.test.mjs`, `scripts/lib/llm/anthropic.mjs`, `scripts/lib/llm/anthropic.test.mjs`, `scripts/lib/llm/openai.mjs`, `scripts/lib/llm/openai.test.mjs`, `scripts/lib/llm/request.mjs` or `scripts/lib/llm/request.test.mjs` | required | the provider-portable LLM adapters @blinkbitcoin/app-tooling ships (@blinkbitcoin/app-tooling/llm and /llm-request), which its store-notes program uses; a copy in your repository is compared with them by nothing and drifts |
+| no `scripts/test-siblings.test.mjs` | required | the check-test-siblings program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/worktree-ignores.test.mjs` | required | the check-ignored-directories program @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-docs.sh`, `scripts/check-docs.test.mjs`, `scripts/manifest-structural.mjs` or `scripts/manifest-structural.test.mjs` | required | the check-docs program @blinkbitcoin/app-tooling ships, which runs check-make-target-names, check-docs-tables and check-diagrams after its own two checks; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-licenses.mjs` or `scripts/check-licenses.test.mjs` | required | the check-licenses program @blinkbitcoin/app-tooling ships, with the organisation's licence allowlist; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/codeql-local.sh`, `scripts/codeql-local.test.mjs`, `scripts/codeql-findings.mjs` or `scripts/codeql-findings.test.mjs` | required | the check-code-scanning program @blinkbitcoin/app-tooling ships, which reads the same configuration file check-codeql.yml does; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/hooks/install-if-lockfile-changed.sh` or `scripts/hooks/install-if-lockfile-changed.test.mjs` | required | hooks/install-if-lockfile-changed.sh, which @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/check-deps.sh` or `scripts/check-deps.test.mjs` | required | checks/expo-doctor.sh, which @blinkbitcoin/app-tooling ships and check-code.yml runs when you have no deps:check: advisory SDK drift, then expo-doctor; a copy in your repository is compared with it by nothing and drifts |
 
 ### If you call `check-unit.yml`
 
@@ -164,7 +164,7 @@ is a warning in the report, not a failure. See
 
 | What | You need | Why |
 | --- | --- | --- |
-| no `scripts/badges/badge.mjs`, `scripts/badges/badge.test.mjs`, `scripts/badges/coverage-badge.mjs`, `scripts/badges/coverage-badge.test.mjs`, `scripts/badges/render.mjs`, `scripts/badges/render.test.mjs`, `scripts/badges/security-badge.mjs`, `scripts/badges/security-badge.test.mjs`, `scripts/badges/status-badge.mjs` or `scripts/badges/status-badge.test.mjs` | required | the render-badges program @blinkbitcoin/dev-config ships and publish-badges.yml runs; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/badges/badge.mjs`, `scripts/badges/badge.test.mjs`, `scripts/badges/coverage-badge.mjs`, `scripts/badges/coverage-badge.test.mjs`, `scripts/badges/render.mjs`, `scripts/badges/render.test.mjs`, `scripts/badges/security-badge.mjs`, `scripts/badges/security-badge.test.mjs`, `scripts/badges/status-badge.mjs` or `scripts/badges/status-badge.test.mjs` | required | the render-badges program @blinkbitcoin/app-tooling ships and publish-badges.yml runs; a copy in your repository is compared with it by nothing and drifts |
 
 ### If you call `check-codeql.yml`
 
@@ -228,7 +228,7 @@ rest.
 
 ```sh
 # what CI will say
-npx --package=@blinkbitcoin/dev-config check-consumer-contract
+npx --package=@blinkbitcoin/app-tooling check-consumer-contract
 ```
 
 And when you want the real thing rather than a prediction, the

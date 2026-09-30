@@ -18,7 +18,7 @@ name: Store notes
 #
 # `dry-run` with `body-file` runs the whole job - checkout, setup, the store
 # notes generator - against a release-please-shaped body (the consumer's own, or
-# the one this repository keeps in packages/dev-config/fixtures/store-notes/),
+# the one this repository keeps in packages/app-tooling/fixtures/store-notes/),
 # edits no PR and calls no `gh`, and hands the section back as the `section`
 # output. That is what lets a pull request execute this
 # workflow: this repository's own CI does it against the template on every
@@ -69,7 +69,7 @@ on:
         type: string
         default: 'Store notes'
       store-notes-locales:
-        description: "Locales the store notes generator (the store-notes program in @blinkbitcoin/dev-config) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
+        description: "Locales the store notes generator (the store-notes program in @blinkbitcoin/app-tooling) should emit store notes for, as store metadata locale names (en-US, de-DE, pt-BR), not language codes. Empty, the default, lets the generator decide: one per locale directory under the consumer's fastlane/metadata/ios, which are exactly the listings the lanes then look up"
         type: string
         default: ''
       build-env:

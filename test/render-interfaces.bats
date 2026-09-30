@@ -3,19 +3,19 @@
 #
 # scripts/self/render-interfaces.sh: the workflow_call interfaces
 # check-consumer-contract holds a consumer's calls to, rendered into
-# packages/dev-config/interfaces.json. The committed file must be what the
+# packages/app-tooling/interfaces.json. The committed file must be what the
 # script renders today: an input added to a workflow without a re-render would
 # otherwise read to every consumer as an input that does not exist.
 load test_helper
 
-INTERFACES="$REPO_ROOT/packages/dev-config/interfaces.json"
+INTERFACES="$REPO_ROOT/packages/app-tooling/interfaces.json"
 
 @test "the committed interfaces.json is what the workflows render to today" {
   out="$BATS_TEST_TMPDIR/interfaces.json"
   run bash "$REPO_ROOT/scripts/self/render-interfaces.sh" "$out"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   diff -u "$INTERFACES" "$out" \
-    || fail "packages/dev-config/interfaces.json is stale - run: bash scripts/self/render-interfaces.sh"
+    || fail "packages/app-tooling/interfaces.json is stale - run: bash scripts/self/render-interfaces.sh"
   contains "$output" "wrote the interfaces of" || fail "the render was not reported: $output"
 }
 

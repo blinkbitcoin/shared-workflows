@@ -9,14 +9,14 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->109<!--/count--> scripts · <!--count:tests-->1220<!--/count--> tests · one pinned tag · two tooling packages</sub>
+<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->109<!--/count--> scripts · <!--count:tests-->1221<!--/count--> tests · one pinned tag · one tooling package</sub>
 
 </div>
 
 ---
 
 <p align="center">
-  <img src="docs/assets/readme-hero.svg" alt="App repos carry a forty-line ci.yml that calls the reusable GitHub Actions workflows here at the pinned tag @v0: Checks, Unit and E2E on every pull request; Prepare, Build and sign, and Release on the way to a store. Any repo, React Native or not, can install the @blinkbitcoin/dev-config npm package for git hooks, linters and pinned tool versions, and an Expo app extends the @blinkbitcoin/expo-tooling presets. Every app gets green gates, device E2E on iOS and Android, signed and verified builds, and store releases." width="960">
+  <img src="docs/assets/readme-hero.svg" alt="App repos carry a forty-line ci.yml that calls the reusable GitHub Actions workflows here at the pinned tag @v0: Checks, Unit and E2E on every pull request; Prepare, Build and sign, and Release on the way to a store. Any repo, React Native or not, can install the @blinkbitcoin/app-tooling npm package for git hooks, linters and pinned tool versions, and an Expo app extends the Expo presets it carries. Every app gets green gates, device E2E on iOS and Android, signed and verified builds, and store releases." width="960">
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
@@ -31,11 +31,11 @@ naming the workflows it calls; everything those workflows do lives here.
 
 The same argument applies to the tooling that runs on a laptop — the hooks, the
 linters, the pinned tool versions — so that lives here too, as
-[`@blinkbitcoin/dev-config`](packages/dev-config). The workflows are React
+[`@blinkbitcoin/app-tooling`](packages/app-tooling). The workflows are React
 Native and Expo specific; the package is not, and any repo can install it.
-Its Expo counterpart, [`@blinkbitcoin/expo-tooling`](packages/expo-tooling),
-holds the configuration every Expo app runs — Jest, ESLint, Biome, Metro,
-Playwright, lefthook, fingerprint, TypeScript, commitlint — as presets, so an
+Under `expo/` it also holds the configuration every Expo app runs — Jest,
+ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript,
+commitlint — as presets (`@blinkbitcoin/app-tooling/expo/<preset>`), so an
 app's own config files keep only its paths and scopes.
 
 ```mermaid
@@ -188,7 +188,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `self-store-notes.yml` | `Dry run`<br>`Validate` | `pr-store-notes.yml` run for real against the template in a dry run, then its `section` output checked. Called by `self-ci.yml` and `self-release.yml` |
 | `self-smoke.yml`   | `Checks`<br>`Unit`<br>`E2E`       | Runs the family against a real consumer repo. Weekly, and on dispatch                          |
 | `self-act-smoke.yml` | `Prepare`<br>`Build Android` | The Linux release jobs against the template, run on a laptop with act (`make smoke-local`). Dispatch-only, never run on GitHub |
-| `self-release.yml` | `Release PR`<br>`Store notes`<br>`Major tag`<br>`Publish dev-config` | release-please maintains the version PR; on release, the store notes dry run runs from the release commit, then `v0` and `v0.<minor>` move and the npm package publishes |
+| `self-release.yml` | `Release PR`<br>`Store notes`<br>`Major tag`<br>`Publish app-tooling` | release-please maintains the version PR; on release, the store notes dry run runs from the release commit, then `v0` and `v0.<minor>` move and the npm package publishes |
 
 ## Repository layout
 
@@ -206,9 +206,8 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the act smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->128<!--/count--> bats files, <!--count:tests-->1220<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
-| `packages/dev-config/` | `@blinkbitcoin/dev-config` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer and the store notes generator |
-| `packages/expo-tooling/` | `@blinkbitcoin/expo-tooling` — the Expo presets an app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
+| `test/`                | <!--count:bats-files-->128<!--/count--> bats files, <!--count:tests-->1221<!--/count--> tests, plus `fixtures/consumer-min/` — the caller the docs are held to                                 |
+| `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer and the store notes generator; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
 ## The pinned tool versions
@@ -218,16 +217,16 @@ hook and a CI gate have to run the *same* `typos` binary or a commit passes
 locally and fails on the runner — so the versions live in one place and every
 other file is checked against it.
 
-`packages/dev-config/versions.json` is that place, published as
-`@blinkbitcoin/dev-config`. `check-tool-versions` asks each tool its own
+`packages/app-tooling/versions.json` is that place, published as
+`@blinkbitcoin/app-tooling`. `check-tool-versions` asks each tool its own
 version rather than reading a provisioner's config, so it works the same under
 mise here and under a Nix flake elsewhere:
 
 ```sh
 # --package, because the binary lives in a scoped package on GitHub Packages:
 # a bare `npx check-tool-versions` resolves an unrelated name on public npm.
-npx --package=@blinkbitcoin/dev-config check-tool-versions
-npx --package=@blinkbitcoin/dev-config check-tool-versions typos shellcheck
+npx --package=@blinkbitcoin/app-tooling check-tool-versions
+npx --package=@blinkbitcoin/app-tooling check-tool-versions typos shellcheck
 ```
 
 `make check-versions` binds `versions.json` to `scripts/lib/versions.sh` and
@@ -246,7 +245,7 @@ full version instead when every change should be reviewed before it lands —
 
 ## What a consumer provides
 
-Run `npx --package=@blinkbitcoin/dev-config check-consumer-contract` in your
+Run `npx --package=@blinkbitcoin/app-tooling check-consumer-contract` in your
 repo for the list, checked rather than read: it reports every requirement of
 the workflows your callers actually name, with a fix per finding.
 `check-code.yml` runs the same check as its first job, so an adopting repository

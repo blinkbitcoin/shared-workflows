@@ -135,7 +135,7 @@ real_jobs() {
 }
 
 @test "README's own-workflow table names every job of self-release.yml" {
-  # publish-dev-config was missing here - the job that serves the README's own
+  # publish-app-tooling was missing here - the job that serves the README's own
   # "one npm package" claim.
   local table missing="" job
   table="$(sed -n '/^### This repo.s own/,/^## /p' "$REPO_ROOT/README.md")"

@@ -6,11 +6,11 @@ SCRIPT="$REPO_ROOT/scripts/release/release-summary.sh"
 
 @test "the released paths go to the job summary and the log" {
   export GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary"
-  PATHS_RELEASED='[".","packages/dev-config"]' run bash "$SCRIPT"
+  PATHS_RELEASED='[".","packages/app-tooling"]' run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  grep -qxF 'paths released: [".","packages/dev-config"]' "$GITHUB_STEP_SUMMARY" \
+  grep -qxF 'paths released: [".","packages/app-tooling"]' "$GITHUB_STEP_SUMMARY" \
     || fail "summary: $(cat "$GITHUB_STEP_SUMMARY")"
-  contains "$output" 'paths released: [".","packages/dev-config"]' || fail "output: $output"
+  contains "$output" 'paths released: [".","packages/app-tooling"]' || fail "output: $output"
 }
 
 @test "a push that released nothing says none" {

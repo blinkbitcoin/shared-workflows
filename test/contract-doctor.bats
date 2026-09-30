@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
 # The consumer-contract checker, end to end, and the shape of the job that runs
 # it. The unit-level behaviour lives in
-# packages/dev-config/check-consumer-contract.test.mjs (node:test); what is here
+# packages/app-tooling/check-consumer-contract.test.mjs (node:test); what is here
 # is what only a real checkout and the real workflow file can answer. The
 # wrapper the Contract job runs, scripts/ci/contract-check.sh, has its own file:
 # contract-check.bats.
 
 load test_helper
 
-DOCTOR="$REPO_ROOT/packages/dev-config/bin/check-consumer-contract.mjs"
+DOCTOR="$REPO_ROOT/packages/app-tooling/bin/check-consumer-contract.mjs"
 # Exported, not just set: the two workflow-shape cases below read it from
 # node's process.env. Set in the file body so it is there for every case.
 CHECKS="$REPO_ROOT/.github/workflows/check-code.yml"
@@ -202,7 +202,7 @@ JSON
   contains "$output" "known: " || fail "the message does not say what is valid: $output"
 }
 
-@test "every dev-config bin still runs when invoked through a symlink" {
+@test "every app-tooling bin still runs when invoked through a symlink" {
   # A package manager installs a `bin` entry into node_modules/.bin as a link,
   # so `pnpm exec <bin>` - the usage the package README advertises - reaches
   # these files through one. The `am I the program?` guard compared
@@ -212,7 +212,7 @@ JSON
   # one. Both bins now resolve argv[1] first.
   local bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
-  for f in "$REPO_ROOT"/packages/dev-config/bin/*.mjs; do
+  for f in "$REPO_ROOT"/packages/app-tooling/bin/*.mjs; do
     ln -s "$f" "$bin/$(basename "$f" .mjs)"
   done
 
@@ -247,7 +247,7 @@ JSON
     import fs from "node:fs";
     const root = process.env.REPO_ROOT;
     const { PROFILE_TITLE } = await import(`${root}/scripts/self/render-contract-table.mjs`);
-    const contract = JSON.parse(fs.readFileSync(`${root}/packages/dev-config/contract.json`, "utf8"));
+    const contract = JSON.parse(fs.readFileSync(`${root}/packages/app-tooling/contract.json`, "utf8"));
     const doc = fs.readFileSync(`${root}/docs/adopting-an-existing-repo.md`, "utf8");
     const used = new Set(contract.requirements.map((r) => r.profile));
     // A profile names a workflow by its title (`check-code.yml` for checks), not by itself.

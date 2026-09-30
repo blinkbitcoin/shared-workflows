@@ -11,7 +11,7 @@
 # secrets).
 #
 # With separate-pull-requests (this repository's own config: the root package
-# and packages/dev-config), one push can open a release PR per package. The
+# and packages/app-tooling), one push can open a release PR per package. The
 # action's singular `pr` output is only prs[0]; the `prs` output is the JSON
 # array of every PR the run created or updated, so that is what this reads and
 # loops over.

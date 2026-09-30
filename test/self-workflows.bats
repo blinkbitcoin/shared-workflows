@@ -61,11 +61,11 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 
 # The npm package releases on its own cadence: its job keys off paths-released,
 # and a path spelled wrong there would skip the publish rather than fail it.
-@test "self-release.yml publishes dev-config only when that package released" {
-  cond="$(yq -r '.jobs."publish-dev-config".if' "$RELEASE")"
-  [ "$cond" = "\${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/dev-config') }}" ] \
-    || fail "publish-dev-config is not gated on packages/dev-config being released: $cond"
-  [ -f "$REPO_ROOT/packages/dev-config/package.json" ] || fail "packages/dev-config moved; the gate names a path that is gone"
+@test "self-release.yml publishes app-tooling only when that package released" {
+  cond="$(yq -r '.jobs."publish-app-tooling".if' "$RELEASE")"
+  [ "$cond" = "\${{ contains(fromJSON(needs.release-please.outputs.paths-released || '[]'), 'packages/app-tooling') }}" ] \
+    || fail "publish-app-tooling is not gated on packages/app-tooling being released: $cond"
+  [ -f "$REPO_ROOT/packages/app-tooling/package.json" ] || fail "packages/app-tooling moved; the gate names a path that is gone"
 }
 
 # One release PR per package, and both bump adjacent lines of the shared
@@ -101,7 +101,7 @@ SELF_STORE_NOTES="$REPO_ROOT/.github/workflows/self-store-notes.yml"
     || fail "the dry run no longer targets the template"
   [ "$(yq -r '.jobs."dry-run".with.ref' "$SELF_STORE_NOTES")" = "main" ] || fail "the dry run no longer reads the template's main"
   [ "$(yq -r '.jobs."dry-run".with."dry-run"' "$SELF_STORE_NOTES")" = "true" ] || fail "the dry-run input is off - it would edit a PR"
-  [ "$(yq -r '.jobs."dry-run".with."body-file"' "$SELF_STORE_NOTES")" = ".workflows/packages/dev-config/fixtures/store-notes/release-body.md" ] \
+  [ "$(yq -r '.jobs."dry-run".with."body-file"' "$SELF_STORE_NOTES")" = ".workflows/packages/app-tooling/fixtures/store-notes/release-body.md" ] \
     || fail "the dry run reads no body file, so it would need a release PR"
   [ "$(yq -r '.jobs."dry-run".with."pr-number" // ""' "$SELF_STORE_NOTES")" = "" ] || fail "the dry run names a PR"
   [ "$(yq -r '.jobs."dry-run".secrets // "none"' "$SELF_STORE_NOTES")" = "none" ] || fail "the dry run passes secrets"

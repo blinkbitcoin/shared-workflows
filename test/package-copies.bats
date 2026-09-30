@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/self/package-copies.sh: the scripts packages/dev-config ships must be
+# scripts/self/package-copies.sh: the scripts packages/app-tooling ships must be
 # byte-identical to the ones the workflows run, or a consumer's laptop resolves
 # a version, or passes a check, one way and CI another.
 load test_helper
@@ -29,14 +29,14 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 15 files into packages/dev-config" || fail "output: $output"
+  contains "$output" "copied 15 files into packages/app-tooling" || fail "output: $output"
   for rel in release/resolve-version.sh release/build-info.sh checks/i18n.sh checks/codegen.sh checks/secrets.sh \
     checks/run-script.sh checks/expo-doctor.sh ci/lint-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh; do
-    cmp -s "$tree/scripts/$rel" "$tree/packages/dev-config/$rel" || fail "packages/dev-config/$rel is not a copy"
+    cmp -s "$tree/scripts/$rel" "$tree/packages/app-tooling/$rel" || fail "packages/app-tooling/$rel is not a copy"
   done
-  cmp -s "$tree/.github/zizmor.yml" "$tree/packages/dev-config/zizmor.yml" || fail "packages/dev-config/zizmor.yml is not a copy"
-  [ -x "$tree/packages/dev-config/release/resolve-version.sh" ] || [ ! -x "$tree/scripts/release/resolve-version.sh" ] \
+  cmp -s "$tree/.github/zizmor.yml" "$tree/packages/app-tooling/zizmor.yml" || fail "packages/app-tooling/zizmor.yml is not a copy"
+  [ -x "$tree/packages/app-tooling/release/resolve-version.sh" ] || [ ! -x "$tree/scripts/release/resolve-version.sh" ] \
     || fail "the copy lost the original's executable bit"
   run bash "$tree/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "fresh copies did not check clean: $output"
@@ -46,10 +46,10 @@ tree() {
   tree
   bash "$tree/scripts/self/package-copies.sh" --write
   printf '# changed\n' >> "$tree/scripts/release/build-info.sh"
-  rm "$tree/packages/dev-config/lib/common.sh"
+  rm "$tree/packages/app-tooling/lib/common.sh"
   run bash "$tree/scripts/self/package-copies.sh"
   [ "$status" -ne 0 ] || fail "stale copies checked clean: $output"
-  contains "$output" "packages/dev-config/release/build-info.sh packages/dev-config/lib/common.sh" || fail "output: $output"
+  contains "$output" "packages/app-tooling/release/build-info.sh packages/app-tooling/lib/common.sh" || fail "output: $output"
   contains "$output" "run: bash scripts/self/package-copies.sh --write" || fail "the fix was not named: $output"
   not_contains "$output" "resolve-version.sh" || fail "a current copy was reported: $output"
 }
@@ -70,7 +70,7 @@ tree() {
   contains "$output" "usage: package-copies.sh [--write]" || fail "output: $output"
 }
 
-# The copies must run from where a consumer has them: node_modules/.../dev-config,
+# The copies must run from where a consumer has them: node_modules/.../app-tooling,
 # with lib/ beside checks/ and no repository around them.
 packaged_consumer() {
   consumer="$BATS_TEST_TMPDIR/app"
@@ -86,7 +86,7 @@ packaged_consumer() {
   command -v pnpm >/dev/null || skip "pnpm not installed"
   packaged_consumer "true"
   cd "$consumer"
-  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/dev-config/checks/i18n.sh"
+  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/i18n.sh"
   [ "$status" -eq 0 ] || fail "a current consumer failed: $output"
 }
 
@@ -94,7 +94,7 @@ packaged_consumer() {
   command -v pnpm >/dev/null || skip "pnpm not installed"
   packaged_consumer "echo changed >> src/i18n/locales/en.po"
   cd "$consumer"
-  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/dev-config/checks/i18n.sh"
+  run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/i18n.sh"
   [ "$status" -ne 0 ] || fail "stale catalogs passed: $output"
   contains "$output" "run \"pnpm run i18n:extract\" and commit the result" || fail "output: $output"
 }

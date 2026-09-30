@@ -37,7 +37,7 @@ load test_helper
 # Prints every tracked script, one per line.
 all_scripts() {
   git -C "$REPO_ROOT" ls-files 'scripts/**/*.sh' 'scripts/**/*.mjs' 'packages/*/bin/*.mjs' 'packages/*/lib/*.mjs' \
-    'packages/*/jest/**/*.cjs' 'packages/*/**/*.sh' | grep -v '\.test\.mjs$'
+    'packages/*/expo/*.mjs' 'packages/*/expo/jest/**/*.cjs' 'packages/*/**/*.sh' | grep -v '\.test\.mjs$'
 }
 
 # Prints `SCRIPT<TAB>TEST` for every test file that actually runs a script.
@@ -49,9 +49,9 @@ all_scripts() {
 # be a word of its own, at the start of a line or after a separator: a `.`
 # inside `sed -i.bak` or a quoted `name.mjs` is not `. file`. A node:test file
 # also runs what it imports (`from './bin/x.mjs'`, `from '../scripts/x.mjs'`),
-# statically or with `import('./lib/x.mjs')` - a preset test has to register
+# statically or with `import('./expo/x.mjs')` - a preset test has to register
 # its stand-ins before the preset loads, so it imports it dynamically, at times
-# with a query string for a second instance (`import('./lib/x.mjs?variant')`).
+# with a query string for a second instance (`import('./expo/x.mjs?variant')`).
 executed_by() {
   mise exec -- python3 -c "
 import os, re, subprocess
@@ -59,7 +59,7 @@ import os, re, subprocess
 root = os.environ['REPO_ROOT']
 ls = lambda *p: subprocess.run(['git', '-C', root, 'ls-files', *p], capture_output=True, text=True).stdout.split()
 tests = ls('test/*.bats', 'test/*.test.mjs', 'packages/*/*.test.mjs')
-scripts = ls('scripts/**/*.sh', 'scripts/**/*.mjs', 'packages/*/bin/*.mjs', 'packages/*/lib/*.mjs', 'packages/*/jest/**/*.cjs')
+scripts = ls('scripts/**/*.sh', 'scripts/**/*.mjs', 'packages/*/bin/*.mjs', 'packages/*/lib/*.mjs', 'packages/*/expo/*.mjs', 'packages/*/expo/jest/**/*.cjs')
 
 RUNNERS = r'(?m)(?:^|[\s;&|(])(?:bash|sh|source|\.|exec|node|run|execFileSync|spawnSync)(?=[\s(])'
 
@@ -97,16 +97,18 @@ for test in tests:
 # Prints the test files that may be SCRIPT's own, one per line: the file named
 # after it, or after its area and name when two scripts share a name
 # (scripts/ota/export.sh -> test/export.bats or test/ota-export.bats). A Node
-# script's own test is a node:test file; a package's program or module sits at
-# the package root, because bin/, lib/ and jest/ are what the package publishes
-# (packages/expo-tooling/jest/mocks/expo-updates.cjs ->
-# packages/expo-tooling/expo-updates.test.mjs).
+# script's own test is a node:test file; a package's program, module or Expo
+# preset has its test at the package root, because bin/, lib/ and expo/ are
+# what the package publishes (packages/app-tooling/expo/eslint.mjs ->
+# packages/app-tooling/eslint.test.mjs, and a Jest runtime file one directory
+# deeper, packages/app-tooling/expo/jest/mocks/expo-updates.cjs ->
+# packages/app-tooling/expo-updates.test.mjs).
 own_tests() {
   local script="$1" file name area
   file="${script##*/}"
   name="${file%.*}"
   case "$script" in
-    packages/*/bin/*.mjs | packages/*/lib/*.mjs | packages/*/jest/*.cjs)
+    packages/*/bin/*.mjs | packages/*/lib/*.mjs | packages/*/expo/*.mjs | packages/*/expo/jest/*.cjs)
       area="${script#packages/}"
       printf '%s\n' "packages/${area%%/*}/$name.test.mjs"
       ;;
@@ -127,8 +129,8 @@ own_tests() {
 # holds the two identical.
 copy_original() {
   local script="$1" rel
-  case "$script" in packages/dev-config/*.sh) ;; *) return 0 ;; esac
-  rel="${script#packages/dev-config/}"
+  case "$script" in packages/app-tooling/*.sh) ;; *) return 0 ;; esac
+  rel="${script#packages/app-tooling/}"
   sed -n "s|^  \(scripts/[^:]*\):$rel\$|\1|p" "$REPO_ROOT/scripts/self/package-copies.sh"
 }
 
@@ -155,7 +157,7 @@ $(sed 's/^/  /' <<< "$missing")
 
 Give each one its own test file, named after it: scripts/ci/x.sh -> test/x.bats
 (test/ci-x.bats when another script is also called x), scripts/lib/x.mjs ->
-test/x.test.mjs, packages/<package>/lib/x.mjs -> packages/<package>/x.test.mjs.
+test/x.test.mjs, packages/<package>/lib/x.mjs or expo/x.mjs -> packages/<package>/x.test.mjs.
 It has to run the script, not just read it; a case in a shared suite does not
 count. There are no exceptions: a script that needs Xcode, a simulator, Gradle
 or a device runs against fakes of them on PATH (see test/app-launch.bats)."
@@ -167,16 +169,18 @@ or a device runs against fakes of them on PATH (see test/app-launch.bats)."
   [ "$out" = "test/export.bats test/ota-export.bats " ] || fail "bash script: $out"
   out="$(own_tests scripts/lib/env-validate.mjs | tr '\n' ' ')"
   [ "$out" = "test/env-validate.test.mjs test/lib-env-validate.test.mjs " ] || fail "Node script: $out"
-  out="$(own_tests packages/dev-config/bin/check-tool-versions.mjs)"
-  [ "$out" = "packages/dev-config/check-tool-versions.test.mjs" ] || fail "dev-config program: $out"
-  out="$(own_tests packages/dev-config/lib/pin.mjs)"
-  [ "$out" = "packages/dev-config/pin.test.mjs" ] || fail "package module: $out"
-  out="$(own_tests packages/expo-tooling/bin/x.mjs)"
-  [ "$out" = "packages/expo-tooling/x.test.mjs" ] || fail "another package's program: $out"
-  out="$(own_tests packages/expo-tooling/jest/console.cjs)"
-  [ "$out" = "packages/expo-tooling/console.test.mjs" ] || fail "a Jest runtime file: $out"
-  out="$(own_tests packages/expo-tooling/jest/mocks/expo-updates.cjs)"
-  [ "$out" = "packages/expo-tooling/expo-updates.test.mjs" ] || fail "a Jest stand-in one directory deeper: $out"
+  out="$(own_tests packages/app-tooling/bin/check-tool-versions.mjs)"
+  [ "$out" = "packages/app-tooling/check-tool-versions.test.mjs" ] || fail "app-tooling program: $out"
+  out="$(own_tests packages/app-tooling/lib/pin.mjs)"
+  [ "$out" = "packages/app-tooling/pin.test.mjs" ] || fail "package module: $out"
+  out="$(own_tests packages/other/bin/x.mjs)"
+  [ "$out" = "packages/other/x.test.mjs" ] || fail "another package's program: $out"
+  out="$(own_tests packages/app-tooling/expo/eslint.mjs)"
+  [ "$out" = "packages/app-tooling/eslint.test.mjs" ] || fail "an Expo preset: $out"
+  out="$(own_tests packages/app-tooling/expo/jest/console.cjs)"
+  [ "$out" = "packages/app-tooling/console.test.mjs" ] || fail "a Jest runtime file: $out"
+  out="$(own_tests packages/app-tooling/expo/jest/mocks/expo-updates.cjs)"
+  [ "$out" = "packages/app-tooling/expo-updates.test.mjs" ] || fail "a Jest stand-in one directory deeper: $out"
 }
 
 @test "a script run only by a shared suite, or by no test, is named" {
@@ -192,16 +196,16 @@ scripts/ci/d.sh	test/ci-d.bats"
 
 @test "a node:test file runs what it imports" {
   local out
-  out="$(executed_by | grep -F 'packages/dev-config/bin/check-tool-versions.mjs	packages/dev-config/check-tool-versions.test.mjs' || true)"
+  out="$(executed_by | grep -F 'packages/app-tooling/bin/check-tool-versions.mjs	packages/app-tooling/check-tool-versions.test.mjs' || true)"
   [ -n "$out" ] || fail "an imported program was not counted as run by its test"
 }
 
 @test "a node:test file runs what it imports dynamically, query string or not" {
   local executed
   executed="$(executed_by)"
-  grep -qxF 'packages/expo-tooling/lib/eslint.mjs	packages/expo-tooling/eslint.test.mjs' <<< "$executed" \
-    || fail "a module imported with import('./lib/x.mjs') was not counted as run by its test"
-  grep -qxF 'packages/expo-tooling/jest/mocks/expo-updates.cjs	packages/expo-tooling/expo-updates.test.mjs' <<< "$executed" \
+  grep -qxF 'packages/app-tooling/expo/eslint.mjs	packages/app-tooling/eslint.test.mjs' <<< "$executed" \
+    || fail "a module imported with import('./expo/x.mjs') was not counted as run by its test"
+  grep -qxF 'packages/app-tooling/expo/jest/mocks/expo-updates.cjs	packages/app-tooling/expo-updates.test.mjs' <<< "$executed" \
     || fail "a CommonJS Jest stand-in imported by its test was not counted as run"
 }
 
@@ -232,12 +236,12 @@ for s in ['scripts/ci/tool-version.sh', 'scripts/ci/free-disk.sh', 'scripts/lib/
 }
 
 @test "a package's copy of a script stands for its original, and a stray one is named" {
-  [ "$(copy_original packages/dev-config/checks/i18n.sh)" = "scripts/checks/i18n.sh" ] || fail "the copy's original was not found"
-  [ "$(copy_original packages/dev-config/zizmor.yml)" = "" ] || fail "a non-script was mapped"
-  all_scripts() { printf '%s\n' packages/dev-config/checks/i18n.sh packages/dev-config/checks/stray.sh; }
+  [ "$(copy_original packages/app-tooling/checks/i18n.sh)" = "scripts/checks/i18n.sh" ] || fail "the copy's original was not found"
+  [ "$(copy_original packages/app-tooling/zizmor.yml)" = "" ] || fail "a non-script was mapped"
+  all_scripts() { printf '%s\n' packages/app-tooling/checks/i18n.sh packages/app-tooling/checks/stray.sh; }
   local missing
   missing="$(without_own_test "scripts/checks/i18n.sh	test/i18n.bats" | tr '\n' ' ')"
-  [ "$missing" = "packages/dev-config/checks/stray.sh " ] || fail "expected only the stray copy: $missing"
+  [ "$missing" = "packages/app-tooling/checks/stray.sh " ] || fail "expected only the stray copy: $missing"
 }
 
 @test "no script is excused: this gate has no allowlist" {
