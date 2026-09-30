@@ -2425,6 +2425,369 @@ Jest joined the list the day this repo grew its first test files. The lesson
 generalises: anything this repo adds under a path a consumer's tooling globs is
 a change to the consumer contract, even though no input or output moved.
 
+## expo-tooling presets
+
+[`@blinkbitcoin/expo-tooling`](../packages/expo-tooling) holds the
+configuration every Expo app of this family runs, so an app's own files keep
+only what is genuinely its own. It is installed like dev-config, a git
+dependency at the workflows pin, and `fix-tooling-pin` moves it with the rest:
+
+```json
+"@blinkbitcoin/expo-tooling": "github:blinkbitcoin/shared-workflows#<sha>&path:/packages/expo-tooling"
+```
+
+Every tool a preset names is an optional peer dependency the app already has;
+nothing is bundled. Below is what each of the template's configuration files
+becomes. Each file shown is `packages/expo-tooling/fixtures/template/<tool>/future.*`,
+and that preset's test evaluates it next to a byte-for-byte copy of the
+template's file as it was (`today.*`) and compares what the two produce, so the
+switch is behaviour-neutral by test, not by reading. `package.test.mjs` fails
+when an example here stops being the tested file.
+
+| Template file | Becomes | What changed |
+| --- | --- | --- |
+| `jest.config.ts` | `createJestConfig({ ... })` with the app's paths | Also deletes `src/test/console.ts`, its test, `src/test/setup.plugins.ts` and `src/test/mocks/` |
+| `eslint.config.mjs` | `createEslintConfig({ ignores, nodeFiles })` | Nothing else |
+| `biome.json` | `extends` the base, keeps its restricted imports and own overrides | Nothing else |
+| `metro.config.js` | `withSharedMetroConfig(getDefaultConfig(__dirname))` | Nothing else |
+| `playwright.config.ts` | `defineConfig(createPlaywrightConfig())` | Nothing else |
+| `lefthook.yml` | `extends:` the shared hooks, keeps `post-merge` and `post-checkout` | Nothing else |
+| `fingerprint.config.js` | `createFingerprintConfig()` | Deletes `.fingerprintignore` |
+| `tsconfig.json` | `extends` Expo's base and this one, keeps its paths | Nothing else |
+| `commitlint.config.mjs` | `extends` the base, keeps the scope list | Nothing else |
+
+What the template runs is unchanged, and was checked on the template itself as
+well as by the tests: with every file below in place, the Jest suite passed at
+100% coverage in both projects, the console guard failed a noisy test in each
+project and `allowConsole` still allowed a line, `tsc --showConfig` printed the
+same configuration and file list, `biome check` read the same files with the
+same findings, `eslint --print-config` gave the same rules for an app file, a
+Node file and the mock server, `commitlint --print-config` the same rules,
+`playwright test --list` the same tests, and `@expo/fingerprint` the same hash.
+
+### Jest
+
+```ts
+import { createJestConfig } from '@blinkbitcoin/expo-tooling/jest';
+
+// Everything generic - the two projects, the worktree ignores, the transforms,
+// the console guard, the Expo stand-ins and the 100% thresholds - is the
+// preset's. This file holds this app's paths.
+export default createJestConfig({
+  setupFiles: ['<rootDir>/src/test/env.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/test/setup.ts'],
+  moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+  // Each entry is a claim that the file has no behaviour a test could assert.
+  coveragePathIgnorePatterns: [
+    // Jest setup files run before instrumentation, so they report 0%.
+    '<rootDir>/src/test/(env|setup)\\.ts$',
+    // Generated: GraphQL codegen output and the compiled Lingui catalogs.
+    '<rootDir>/src/graphql/generated/',
+    '<rootDir>/src/i18n/locales/',
+    // Zero-statement route re-exports, each pinned by its own test.
+    '<rootDir>/src/app/\\(tabs\\)/(index|settings)\\.tsx$',
+    '<rootDir>/src/app/\\+native-intent\\.tsx$',
+    // The requireNativeModule bindings; modules/*/index.ts is the tested wrapper.
+    '<rootDir>/modules/[^/]+/src/',
+  ],
+});
+```
+
+The console guard (`src/test/console.ts`) and the three native stand-ins
+(`src/test/mocks/`) move into the package. `createJestConfig` appends the
+guard's setup file to both projects, after the app's own, so its `afterEach`
+still runs last; the app's `src/test/setup.ts` stops calling
+`installConsoleGuard`, and `src/test/setup.plugins.ts`, which did nothing else,
+is deleted. A test that allows a line imports `allowConsole` from
+`@blinkbitcoin/expo-tooling/jest/console`; one that reads a stand-in's store
+imports it from `@blinkbitcoin/expo-tooling/jest/mocks/<name>` (typed, and the
+same module instance Jest maps the native module to). `consoleGuard: false`
+leaves the guard out, for an adopting repository whose suites are not silent
+yet; `transformPackages` and `testPathIgnorePatterns` extend the generic lists,
+and `collectCoverageFrom` replaces the generic one.
+
+### ESLint
+
+```js
+// ESLint owns only React and Expo semantic rules; Biome owns the rest. The
+// preset holds the split (see docs/quality.md); this file holds this app's paths.
+import { createEslintConfig } from '@blinkbitcoin/expo-tooling/eslint';
+
+export default createEslintConfig({
+  ignores: ['src/graphql/generated/**', 'src/i18n/locales/**/messages.ts'],
+  nodeFiles: ['mocks/server.ts'],
+});
+```
+
+The preset imports `eslint/config`, `eslint-config-expo/flat.js` and `globals`
+itself; they resolve to the app's copies. Ignore globs are order-free (none is
+negated), and the blocks carry names for `eslint --inspect-config`.
+
+### Biome
+
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
+  "extends": ["@blinkbitcoin/expo-tooling/biome"],
+  "files": {
+    "includes": ["!src/graphql/generated", "!src/i18n/locales/**/messages.ts", "!**/*.po"]
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "expo-secure-store": "Use the typed wrapper in src/lib/secure-store.ts",
+              "expo-sqlite/kv-store": "Use src/lib/storage.ts"
+            }
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/lib/logger.ts"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      "includes": ["src/lib/secure-store.ts", "src/lib/storage.ts"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["src/app/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "expo-secure-store": "Use the typed wrapper in src/lib/secure-store.ts",
+                  "expo-sqlite/kv-store": "Use src/lib/storage.ts"
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@apollo/client",
+                      "@apollo/client/**",
+                      "@/graphql/**",
+                      "@/services/**",
+                      "@/lib/**",
+                      "../graphql/**",
+                      "../services/**",
+                      "../lib/**",
+                      "../../graphql/**",
+                      "../../services/**",
+                      "../../lib/**",
+                      "../../../graphql/**",
+                      "../../../services/**",
+                      "../../../lib/**"
+                    ],
+                    "message": "Route files only compose screens from src/features and src/components; data access, services and lib wrappers belong behind a feature or component. (src/app/_layout.tsx and src/app/+native-intent.tsx are exempt.)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/app/_layout.tsx", "src/app/+native-intent.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "expo-secure-store": "Use the typed wrapper in src/lib/secure-store.ts",
+                  "expo-sqlite/kv-store": "Use src/lib/storage.ts"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+How Biome 2 applies an `extends` from a package, measured with Biome 2.5.11:
+
+- **`files.includes` in the base resolves against the project root**, the
+  directory of the app's `biome.json`, not against `node_modules`. The base's
+  `"!**/ios"` excludes the app's `ios/`.
+- **Arrays are concatenated, the base's entries first**: `files.includes` and
+  `overrides` alike. So the app lists only its extra exclusions, each starting
+  with `!`, and never `**` again: a second `**` after the base's exclusions puts
+  every excluded path back (Biome's `noBiomeFirstException` rule flags it).
+- **Objects merge key by key**, the app's file winning. The app's
+  `linter.rules.style.noRestrictedImports` sits beside the base's
+  `useImportType` rather than replacing the `style` group.
+
+The base's tooling override (`noConsole` off for `scripts/**`, `plugins/**`,
+`mocks/**`, `*.config.*`, `codegen.ts`) therefore comes before the app's
+overrides instead of after them, which changes nothing while no app override
+names a tooling path. The base pins no `$schema`; the app's file does.
+
+### Metro
+
+```js
+// Expo's default Metro config, plus the shared worktree block and web fixes.
+const { getDefaultConfig } = require('expo/metro-config');
+const { withSharedMetroConfig } = require('@blinkbitcoin/expo-tooling/metro');
+
+module.exports = withSharedMetroConfig(getDefaultConfig(__dirname));
+```
+
+`withSharedMetroConfig` changes the configuration it is given and returns it:
+the worktree block, anchored to `config.projectRoot`, and, unless
+`{ web: false }`, the `wasm` asset extension and the web-only `tslib`
+resolution. An app with no web target passes `{ web: false }` rather than
+deleting lines.
+
+### Playwright
+
+```ts
+// WEB ONLY
+// The web suite against the exported site and the mock API. Ports and base
+// path come from the environment `make test-e2e-web` exports.
+import { createPlaywrightConfig } from '@blinkbitcoin/expo-tooling/playwright';
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig(createPlaywrightConfig());
+```
+
+`createPlaywrightConfig` reads `WEB_PREVIEW_PORT`, `EXPO_PUBLIC_API_URL` and
+`EXPO_PUBLIC_BASE_URL` from `process.env` (or an `env` option) and fails naming
+the variable that is missing, as before. `testDir`, `mockApiCommand` and
+`previewCommand` override the template's defaults.
+
+### lefthook
+
+```yaml
+# Git hooks. Installed by `pnpm install` (prepare script). The shared hooks
+# come from @blinkbitcoin/expo-tooling; this file adds this app's own.
+extends:
+  - node_modules/@blinkbitcoin/expo-tooling/lefthook.yml
+
+# Both hooks pass git's own arguments straight through: the script works out
+# which two revisions to compare (lefthook's `{1}` templating expanded inside
+# `HEAD@{1}`, which made git reject `HEAD@0` on every merge).
+post-merge:
+  commands:
+    install:
+      run: bash scripts/hooks/install-if-lockfile-changed.sh post-merge {1}
+post-checkout:
+  commands:
+    install:
+      run: bash scripts/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}
+```
+
+lefthook merges an `extends` file **over** the app's own: an app adds hooks and
+commands, and may add a key a shared command does not set (`skip: true` turns
+one off), but a key the shared file sets wins. `lefthook-local.yml` is still
+applied last. The path goes through `node_modules`, so the hooks exist once the
+app has installed its dependencies, which is also when `prepare` installs them.
+
+### Fingerprint
+
+```js
+// Fingerprint (runtimeVersion policy "fingerprint") inputs: the shared source
+// skips and ignore paths. Replaces .fingerprintignore as well. Guarded by
+// scripts/release/fingerprint.test.mjs.
+const { createFingerprintConfig } = require('@blinkbitcoin/expo-tooling/fingerprint');
+
+module.exports = createFingerprintConfig();
+```
+
+`.fingerprintignore` is deleted: `@expo/fingerprint` appends that file's lines
+to the configuration's `ignorePaths`, so the preset's list is the same set and
+the file has nothing left to say. `ignorePaths` adds an app's own.
+`@expo/fingerprint` swallows a configuration file that fails to load and falls
+back to its defaults, so the app's own test that loads `fingerprint.config.js`
+for real stays.
+
+### TypeScript
+
+```json
+{
+  "extends": ["expo/tsconfig.base", "@blinkbitcoin/expo-tooling/tsconfig.base.json"],
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "modules/**/*.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "src/global.d.ts"
+  ],
+  "exclude": ["node_modules", "ios", "android", "dist", ".workflows", "rules", ".claude/worktrees"]
+}
+```
+
+A path in a `tsconfig.json` resolves against the file that declares it. Were
+`include`, `exclude`, `baseUrl` or `paths` in the base, they would point into
+`node_modules/@blinkbitcoin/expo-tooling/`, so they stay in the app, and so
+does `ignoreDeprecations`, whose value depends on the app's TypeScript. The
+`extends` array (TypeScript 5.0 and later) is applied in order, then the app's
+own options.
+
+### commitlint
+
+```js
+// Conventional Commits with a closed scope list. PR titles are linted with
+// the same config in CI because squash merges take the title as the message.
+export default {
+  extends: ['@blinkbitcoin/expo-tooling/commitlint'],
+  rules: {
+    'scope-enum': [
+      2,
+      'always',
+      [
+        'app',
+        'ui',
+        'i18n',
+        'graphql',
+        'native',
+        'plugins',
+        'config',
+        'tooling',
+        'ci',
+        'release',
+        'deps',
+        'deps-dev',
+        'docs',
+        'e2e',
+        'web',
+      ],
+    ],
+  },
+};
+```
+
+commitlint resolves a base's own `extends` from the base's directory, which is
+why `@commitlint/config-conventional` is a peer dependency: pnpm links the
+app's copy into this package.
+
+### What the template's own checks need
+
+A few of the template's tests read these files and follow the switch in the
+same pull request: `scripts/worktree-ignores.test.mjs` (the worktree entries
+now come from the presets), `scripts/release/fingerprint.test.mjs` (the ignore
+list moves from `.fingerprintignore` to the configuration), `scripts/init.test.mjs`
+(a web-less app passes `{ web: false }` to `withSharedMetroConfig` rather than
+losing the resolver lines), and `knip.json`, which names `jest.config.ts`.
+
 ## Gotchas encoded
 
 Hard-won CI/E2E lessons (mostly from `blinkbitcoin/esign`), and exactly where

@@ -87,6 +87,7 @@ each of its exit paths:
 | `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-script-modules`, 100% gate) |
 | `packages/dev-config/bin/check-tool-versions.mjs` | `packages/dev-config/check-tool-versions.test.mjs` |
 | `packages/dev-config/lib/pin.mjs` | `packages/dev-config/pin.test.mjs` |
+| `packages/expo-tooling/jest/mocks/expo-updates.cjs` | `packages/expo-tooling/expo-updates.test.mjs` |
 | `packages/dev-config/checks/i18n.sh` (a copy) | the original's `test/i18n.bats`, plus `test/package-copies.bats` |
 
 A case in a shared suite such as `plumbing.bats` or `fallback-gates.bats` is
@@ -241,6 +242,12 @@ job" log on GitHub before merging.
 - **A tool version bump** moves `scripts/lib/versions.sh` *and* the mirrors in
   `.mise.toml` and the workflow defaults; `make check-versions` is what fails
   otherwise.
+- **A change to an expo-tooling preset** keeps its test green: the test
+  evaluates the template's file as it was and the file it becomes
+  (`packages/expo-tooling/fixtures/template/<tool>/`), and the change has to
+  keep producing the template's configuration, or say in the PR what the
+  template has to change with it. The consumer guide shows each `future.*`
+  file, and `package.test.mjs` fails until both move together.
 - **A new `##`-documented make target** needs a row in the `AGENTS.md` command
   table, and vice versa — `test/docs-contract.bats` checks both directions.
 

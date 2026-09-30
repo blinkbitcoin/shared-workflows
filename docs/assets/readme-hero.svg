@@ -84,10 +84,10 @@
     <rect x="550" y="176" width="88" height="30" rx="8" fill="#f6f8fa" stroke="#e6ebef"/>
     <text x="594" y="195" text-anchor="middle" font-size="12" font-weight="600" fill="#1d1d1d">Release</text>
 
-    <!-- dev-config -->
+    <!-- dev-config and expo-tooling -->
     <rect x="322" y="218" width="316" height="40" rx="8" fill="#fff9e5" stroke="#ffbe0b"/>
-    <text x="480" y="235" text-anchor="middle" font-size="12" font-weight="600" fill="#1d1d1d">@blinkbitcoin/dev-config</text>
-    <text x="480" y="250" text-anchor="middle" font-size="10.5" fill="#6b7280">git hooks &#183; linters &#183; pinned tool versions &#183; one npm package</text>
+    <text x="480" y="235" text-anchor="middle" font-size="12" font-weight="600" fill="#1d1d1d">@blinkbitcoin/dev-config + expo-tooling</text>
+    <text x="480" y="250" text-anchor="middle" font-size="10.5" fill="#6b7280">git hooks &#183; linters &#183; pinned tool versions &#183; Expo presets</text>
   </g>
 
   <!-- outcome arrows -->

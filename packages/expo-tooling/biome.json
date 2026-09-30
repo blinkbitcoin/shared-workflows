@@ -1,0 +1,54 @@
+{
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!**/ios",
+      "!**/android",
+      "!**/.expo",
+      "!**/dist",
+      "!**/coverage",
+      "!**/.workflows",
+      "!!.claude/worktrees",
+      "!rules"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "useEditorconfig": true
+  },
+  "javascript": {
+    "formatter": { "quoteStyle": "single", "semicolons": "always", "trailingCommas": "all" }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": { "source": { "organizeImports": "on" } }
+  },
+  "linter": {
+    "enabled": true,
+    "domains": { "react": "recommended", "test": "recommended" },
+    "rules": {
+      "preset": "recommended",
+      "suspicious": { "noConsole": "error" },
+      "style": {
+        "useImportType": "error",
+        "noNonNullAssertion": "error"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "useExhaustiveDependencies": "off",
+        "useHookAtTopLevel": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["scripts/**", "plugins/**", "mocks/**", "*.config.*", "codegen.ts"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    }
+  ]
+}
