@@ -3,11 +3,12 @@
 # workflows run.
 #
 # build-prepare.yml runs scripts/release/resolve-version.sh and build-info.sh,
-# and check.yml runs scripts/checks/{generated,secrets}.sh and
-# scripts/ci/check-ci.sh. A consumer runs the same ones on a laptop (`make
+# check.yml runs scripts/checks/{generated,secrets}.sh and
+# scripts/ci/check-ci.sh, and check-security.yml runs the scanners under
+# scripts/security/. A consumer runs the same ones on a laptop (`make
 # version`, `make check`), where it has the package and not this repository.
 # The package therefore carries them, with the libraries they source, at the
-# same relative paths (release/, checks/ and ci/ beside lib/, as under
+# same relative paths (release/, checks/, ci/ and security/ beside lib/, as under
 # scripts/), so each copy runs unchanged. check-ci.sh's default zizmor policy,
 # .github/zizmor.yml here, rides along as zizmor.yml at the package root. Copies inside one repository,
 # held identical on every commit by test/package-copies.bats, cannot drift the
@@ -36,6 +37,17 @@ copies=(
   scripts/lib/release-env.sh:lib/release-env.sh
   scripts/lib/git-clean.sh:lib/git-clean.sh
   scripts/lib/versions.sh:lib/versions.sh
+  scripts/security/scan.sh:security/scan.sh
+  scripts/security/dependencies.sh:security/dependencies.sh
+  scripts/security/code.sh:security/code.sh
+  scripts/security/policy.sh:security/policy.sh
+  scripts/security/sbom.sh:security/sbom.sh
+  scripts/security/bundle.sh:security/bundle.sh
+  scripts/security/mobile.sh:security/mobile.sh
+  scripts/security/binaries.sh:security/binaries.sh
+  scripts/security/review.sh:security/review.sh
+  scripts/security/review-codebase.sh:security/review-codebase.sh
+  scripts/security/lib/runner.sh:security/lib/runner.sh
   .github/zizmor.yml:zizmor.yml
 )
 

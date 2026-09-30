@@ -1,13 +1,14 @@
 name: Check security
-# The consumer's security scanners, one job each so a red run names the scanner,
-# and one verdict that merges their SARIF and applies the threshold.
+# The security scanners, one job each so a red run names the scanner, and one
+# verdict that merges their SARIF and applies the threshold.
 #
-# Every scanner, the settings resolver and the merge live in the CONSUMER, under
-# scripts/security/. `make check-security` runs the same files, so a green
-# laptop and a green pipeline are the same claim. This workflow owns only what
-# exists in CI: the job graph, the permissions, the artifact passing, the upload
-# to code scanning and the step summary. It carries no fallback runner - a job
-# that is switched on but whose runner is missing fails loudly, by name.
+# Every scanner, the settings resolver and the merge live HERE: the runners
+# under scripts/security/, the modules they call in packages/app-tooling/lib/.
+# @blinkbitcoin/app-tooling ships the same files, and its `check-security`
+# command runs them on a laptop, so a green laptop and a green pipeline are the
+# same claim. A consumer ships no scanner code: it keeps its
+# security-settings.json (optional; a missing file is the defaults) and the
+# files that settings name (Semgrep rules, a .mobsf).
 #
 # A scanner runs where what it reads exists, so a caller turns on the stage it
 # is: a pull request allows dependencies, code, policy and review; the release pull
@@ -43,57 +44,57 @@ on:
         default: 'v1'
       dependencies:
         description: >-
-          Allow the dependency scanner (the consumer's `check-security-dependencies`).
+          Allow the dependency scanner (`check-security dependencies`).
           A switch, not a setting: whether it actually runs is this AND the
           consumer's security-settings.json, so a caller may narrow and never widen.
         type: boolean
         default: true
       code:
-        description: Allow the source scanner (the consumer's `check-security-code`); the effective setting is this and security-settings.json together
+        description: Allow the source scanner (`check-security code`); the effective setting is this and security-settings.json together
         type: boolean
         default: true
       policy:
-        description: Allow the install-policy scanner (the consumer's `check-security-policy`); the effective setting is this and security-settings.json together
+        description: Allow the install-policy scanner (`check-security policy`); the effective setting is this and security-settings.json together
         type: boolean
         default: true
       sbom:
         description: >-
-          Allow the bill of materials (the consumer's `check-security-sbom`, a
+          Allow the bill of materials (`check-security sbom`, a
           CycloneDX SBOM from the lockfile, kept as the security-sbom artifact).
           Off by default: it belongs to the production stage.
         type: boolean
         default: false
       bundle:
         description: >-
-          Allow the bundle scanner (the consumer's `check-security-bundle`: exports
+          Allow the bundle scanner (`check-security bundle`: exports
           the JavaScript bundle and reads what it gives away). Minutes, so off by
           default; the release pull request and the production dispatch turn it on.
         type: boolean
         default: false
       mobile:
         description: >-
-          Allow the native project scanner (the consumer's `check-security-mobile`:
+          Allow the native project scanner (`check-security mobile`:
           mobsfscan over a fresh prebuild). Off by default: production stage.
         type: boolean
         default: false
       binaries:
         description: >-
-          Allow the MASTG checks over the release's built binaries (the consumer's
-          `check-security-binaries`). Needs release-tag. Off by default: binaries
+          Allow the MASTG checks over the release's built binaries (`check-security
+          binaries`). Needs release-tag. Off by default: binaries
           only exist once a release is built.
         type: boolean
         default: false
       review:
         description: >-
-          Allow the LLM security review of the change (the consumer's
-          `check-security-review`). The consumer's settings keep it off until a
+          Allow the LLM security review of the change (`check-security
+          review`). The default settings keep it off until a
           provider and a key are configured; with no key it reports skipped.
         type: boolean
         default: false
       review-codebase:
         description: >-
-          Allow the LLM security review of the whole codebase, with OpenAnt (the consumer's
-          `check-security-review-codebase`). Minutes and tokens, so the release pull
+          Allow the LLM security review of the whole codebase, with OpenAnt
+          (`check-security review-codebase`). Minutes and tokens, so the release pull
           request is the stage that turns it on.
         type: boolean
         default: false
@@ -101,7 +102,7 @@ on:
         description: >-
           Review everything since the last release tag rather than the pull
           request's own diff - what the release pull request asks for. A switch,
-          like the job inputs: the tag itself is found by the consumer's script.
+          like the job inputs: the tag itself is found by the review runner.
         type: boolean
         default: false
       release-tag:
@@ -152,9 +153,10 @@ permissions:
   contents: read
 jobs:
   # A job-level `if:` cannot read a file, and security-settings.json is a file in
-  # the consumer. So the settings are resolved once, here, by the consumer's own
-  # settings.mjs - not by a second implementation of the same resolution order -
-  # and published as outputs the other jobs' `if:` expressions can read.
+  # the consumer. So the settings are resolved once, here, by the same resolver
+  # every runner uses (security-settings.mjs) - not by a second implementation
+  # of the same resolution order - and published as outputs the other jobs'
+  # `if:` expressions can read.
   settings:
     name: Settings
     runs-on: ${{ inputs.linux-runner }}
@@ -187,29 +189,23 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in environment-variables changes what settings.mjs resolves, what a runner does
+      # twin in environment-variables changes what the resolver returns, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
       - name: Publish environment-variables
         env:
           WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash ".workflows/scripts/release/build-env.sh"
       # Setup here, unlike check.yml's contract job, which deliberately runs
-      # on the runner image's own node. settings.mjs guards its command-line entry
-      # with `import.meta.main`, which is undefined before Node 24: an older node
-      # would run the file, print nothing and exit 0, and empty output read as
-      # "nothing enabled" would switch the whole gate off in silence. The
-      # consumer's .mise.toml pin is what makes that impossible.
+      # on the runner image's own node: the consumer's .mise.toml pin is the
+      # node every job in this workflow runs the resolver with, so all of them
+      # resolve the same settings.
       #
-      # install: 'true' - every job in this workflow reads node_modules. The
-      # consumer's settings.mjs takes the LLM effort levels from
-      # @blinkbitcoin/app-tooling/llm (the contract's no-copy.llm row deleted
-      # its own copy), and every job runs it: this one directly, each scanner
-      # through its runner's sec_enabled, the verdict through verdict.mjs. The
-      # review's review.mjs imports the LLM adapters from the same package. So
-      # a job that skipped the install would die on ERR_MODULE_NOT_FOUND before
-      # it scanned anything. The install is the setup action's own, from the
-      # frozen lockfile. Quoted, because the composite action's inputs are
-      # strings.
+      # install: 'true' in every job, one shape for all of them: the bundle
+      # and mobile runners call the consumer's expo out of node_modules, and
+      # the install is the setup action's own, from the frozen lockfile. The
+      # runners and modules themselves come from the .workflows checkout and
+      # import nothing from it. Quoted, because the composite action's inputs
+      # are strings.
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
@@ -242,7 +238,7 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in environment-variables changes what settings.mjs resolves, what a runner does
+      # twin in environment-variables changes what the resolver returns, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
       - name: Publish environment-variables
         env:
@@ -291,7 +287,7 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in environment-variables changes what settings.mjs resolves, what a runner does
+      # twin in environment-variables changes what the resolver returns, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
       - name: Publish environment-variables
         env:
@@ -302,7 +298,7 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           install: 'true'
-      # The longest of the three: the consumer's code.sh fetches its registry
+      # The longest of the three: code.sh fetches its Semgrep registry
       # packs on every invocation, so this step can hang on the Semgrep registry
       # rather than on anything in the repository. A bound of its own, so the
       # log names the step instead of the job.
@@ -341,7 +337,7 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in environment-variables changes what settings.mjs resolves, what a runner does
+      # twin in environment-variables changes what the resolver returns, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
       - name: Publish environment-variables
         env:
@@ -418,9 +414,8 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/sbom.cdx.json
           if-no-files-found: error
           retention-days: 90
-  # Every job here installs (see the settings job), and these two would need it
-  # even without settings.mjs: expo export and expo prebuild both run from
-  # node_modules.
+  # Every job here installs (see the settings job); these two are the reason:
+  # expo export and expo prebuild both run from the consumer's node_modules.
   bundle:
     name: Bundle
     needs: settings
@@ -509,7 +504,7 @@ jobs:
           retention-days: 7
   # The release's own assets, not a rebuild: what the stores receive is what is
   # checked. binaries-fetch.sh puts them in a directory and hands its path to
-  # the consumer's runner through SECURITY_BINARIES_DIR.
+  # the binaries runner through SECURITY_BINARIES_DIR.
   binaries:
     name: Binaries
     needs: settings
@@ -597,12 +592,12 @@ jobs:
         timeout-minutes: 20
         env:
           SECURITY_JOB: review
-          # Empty outside a pull request; the consumer's script then falls back to
+          # Empty outside a pull request; the reviewer then falls back to
           # the last release tag (review-full-range) or the merge base with main.
           SECURITY_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
           SECURITY_REVIEW_FULL_RANGE: ${{ inputs.review-full-range }}
-          # The keys reach this one step and nothing else in the job: a
-          # consumer script is the only reader, and a fork's run has neither.
+          # The keys reach this one step and nothing else in the job: the
+          # runner is the only reader, and a fork's run has neither.
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
@@ -614,7 +609,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/review.sarif
           if-no-files-found: error
           retention-days: 7
-  # OpenAnt is built from the commit the consumer's review-codebase.sh pins, into a
+  # OpenAnt is built from the commit review-codebase.sh pins, into a
   # cache keyed on that file, so moving the pin is what rebuilds it.
   review-codebase:
     name: Review codebase
@@ -651,14 +646,14 @@ jobs:
           path: |
             ~/.cache/openant
             ~/.openant/venv
-          key: openant-${{ runner.os }}-${{ hashFiles(format('{0}/scripts/security/review-codebase.sh', inputs.working-directory)) }}
+          key: openant-${{ runner.os }}-${{ hashFiles('.workflows/scripts/security/review-codebase.sh') }}
       - name: Scan with OpenAnt
         id: scan
         timeout-minutes: 50
         env:
           SECURITY_JOB: review-codebase
-          # The keys reach this one step and nothing else in the job: a
-          # consumer script is the only reader, and a fork's run has neither.
+          # The keys reach this one step and nothing else in the job: the
+          # runner is the only reader, and a fork's run has neither.
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
@@ -704,7 +699,7 @@ jobs:
           path: .workflows
           persist-credentials: false
       # Before Setup and before any consumer script, in every job: a SECURITY_*
-      # twin in environment-variables changes what settings.mjs resolves, what a runner does
+      # twin in environment-variables changes what the resolver returns, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
       - name: Publish environment-variables
         env:

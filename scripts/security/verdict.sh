@@ -2,22 +2,19 @@
 # Merge the scanners' SARIF into one verdict, and put that verdict where it will
 # be read: the step log and the run summary.
 #
-# The merge, the threshold and the exit code are the consumer's verdict.mjs -
-# the same file `make check-security` runs - so a green laptop and a green
-# pipeline are the same claim. This wrapper decides only where the answer is
+# The merge, the threshold and the exit code are
+# packages/app-tooling/lib/security-verdict.mjs - the same module
+# `check-security` runs on a laptop - so a green laptop and a green pipeline are
+# the same claim. This wrapper decides only where the answer is
 # written, and hands the exit code back untouched.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd node
 
+# Resolved before the cd below: $0 may be a relative path.
+merger="$(cd "$(dirname "$0")/../../packages/app-tooling/lib" && pwd -P)/security-verdict.mjs"
 root="$(consumer_root)"
 cd "$root"
-
-merger='scripts/security/verdict.mjs'
-[ -f "$merger" ] || die_fix \
-  "check-security.yml reached its verdict job, but this repository has no $merger" \
-  "add scripts/security/verdict.mjs as the template ships it, or stop calling check-security.yml" \
-  "check-securityyml"
 
 out="${SECURITY_DIR:-.security}"
 count=0

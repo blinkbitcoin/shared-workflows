@@ -1,0 +1,67 @@
+{
+  "$comment": "The security scanning settings, every key at its built-in default. Copy this file to your repository's root as security-settings.json and change what you need; a missing file means these defaults. Every key has an environment twin that wins over the file: SECURITY_ENABLED, SECURITY_SEVERITY, SECURITY_FAIL_ON, SECURITY_<JOB> for each job's switch, SECURITY_<JOB>_<KEY> for its options (androidPermissions -> SECURITY_BINARIES_ANDROID_PERMISSIONS) and SECURITY_LLM_<KEY> for the llm block. An invalid value fails the run.",
+  "enabled": true,
+  "severity": "high",
+  "failOn": [
+    "deterministic"
+  ],
+  "jobs": {
+    "dependencies": {
+      "enabled": true
+    },
+    "code": {
+      "enabled": true,
+      "$rules": "The repository's own Semgrep rule files or directories, added to the community TypeScript, secrets and OWASP packs. Each path must exist.",
+      "rules": []
+    },
+    "policy": {
+      "enabled": true
+    },
+    "sbom": {
+      "enabled": true
+    },
+    "bundle": {
+      "enabled": true,
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "$hosts": "Hosts the exported bundle may name over https. Empty turns the check off; once listed, any other host is a low-severity note, so a new third-party endpoint is seen in review.",
+      "hosts": [],
+      "$cleartextHosts": "Hosts an http:// URL in the bundle may name without a finding (MASTG-TEST-0233/0321). Add a host only with the reason it is never fetched by the shipped app.",
+      "cleartextHosts": [
+        "localhost",
+        "127.0.0.1"
+      ]
+    },
+    "mobile": {
+      "enabled": true
+    },
+    "binaries": {
+      "enabled": true,
+      "$androidPermissions": "Dangerous Android permissions the app is allowed to request (MASTG-TEST-0254), e.g. android.permission.CAMERA.",
+      "androidPermissions": [],
+      "$exportedComponents": "Exported activities, services and receivers allowed without a permission (MASTG-TEST-0364..0366), by class name.",
+      "exportedComponents": [],
+      "$atsExceptionDomains": "Domains allowed an App Transport Security exception for insecure HTTP (MASTG-TEST-0322).",
+      "atsExceptionDomains": []
+    },
+    "review": {
+      "$comment": "Off by default: it sends the diff to the configured LLM provider. Needs llm.provider, llm.model and the provider's API key.",
+      "enabled": false,
+      "maxDiffBytes": 200000
+    },
+    "review-codebase": {
+      "$comment": "Off by default: it sends the codebase to the configured LLM provider and costs minutes and tokens. Runs on the release pull request only.",
+      "enabled": false,
+      "limit": 0,
+      "verify": false
+    }
+  },
+  "llm": {
+    "$comment": "Shared by review and review-codebase. provider is openai (any OpenAI-compatible endpoint through OPENAI_BASE_URL) or anthropic; effort is none (a model with no reasoning switch), low, medium, high or max.",
+    "provider": "",
+    "model": "",
+    "effort": "max"
+  }
+}

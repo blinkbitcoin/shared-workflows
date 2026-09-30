@@ -1,7 +1,7 @@
 // The provider-portable half of every LLM call this family makes: which
 // adapter a provider name means, which key it needs, and the two settings that
 // travel beside the model. The store-notes rewrite (store-notes-rewrite.mjs)
-// and a consumer's own callers, such as the template's security reviewer, all
+// the security reviewer (security-review.mjs) and a consumer's own callers all
 // come through here (`@blinkbitcoin/app-tooling/llm`), so a provider that works
 // for one works for the others.
 import * as anthropic from './llm-anthropic.mjs';
