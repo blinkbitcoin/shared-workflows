@@ -107,6 +107,12 @@ expect() {
   expect false false true
 }
 
+@test "an expo-tooling change runs package alone" {
+  # make test-package covers every package under packages/, not only dev-config.
+  gates_for "packages/expo-tooling/lib/jest.mjs"
+  expect false false true
+}
+
 @test "what changes how every gate runs runs every gate" {
   for path in Makefile .mise.toml .github/workflows/self-ci.yml .github/workflows/self-checks.yml \
     .github/workflows/self-unit.yml scripts/self/changed-gates.sh scripts/lib/common.sh \

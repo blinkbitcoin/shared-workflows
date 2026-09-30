@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "simple",
-  "$comment": "separate-pull-requests, so each release PR names its own version. With both packages in one PR release-please cannot fit two versions in one title and falls back to `chore: release main` - the repo went from `chore(main): release 0.2.1` to a title saying nothing. They also release on genuinely independent cadences: the moving v0 tag that every consumer pins, and an npm package. One PR each keeps those decisions separate. always-update, because two PRs share one manifest: both bump adjacent lines of .release-please-manifest.json, so merging one leaves the other conflicting. Without it release-please rebuilds an open PR only when its release notes change, and a release of the other package does not change them - #55 on 2026-09-23 and #76 on 2026-09-24 sat conflicting until rebased by hand. With it every push to main rebuilds each open release PR on that main. The cost: a force push to every release PR per push to main, which re-runs its CI and dismisses an approval given before that push.",
+  "$comment": "separate-pull-requests, so each release PR names its own version. With several packages in one PR release-please cannot fit their versions in one title and falls back to `chore: release main` - the repo went from `chore(main): release 0.2.1` to a title saying nothing. They also release on genuinely independent cadences: the moving v0 tag that every consumer pins, and the tooling packages. One PR each keeps those decisions separate. always-update, because the PRs share one manifest: each bumps an adjacent line of .release-please-manifest.json, so merging one leaves the others conflicting. Without it release-please rebuilds an open PR only when its release notes change, and a release of the other package does not change them - #55 on 2026-09-23 and #76 on 2026-09-24 sat conflicting until rebased by hand. With it every push to main rebuilds each open release PR on that main. The cost: a force push to every release PR per push to main, which re-runs its CI and dismisses an approval given before that push.",
   "separate-pull-requests": true,
   "always-update": true,
   "packages": {
@@ -25,6 +25,22 @@
       "release-type": "node",
       "package-name": "@blinkbitcoin/dev-config",
       "component": "dev-config",
+      "bump-minor-pre-major": true,
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "ci", "section": "CI", "hidden": true },
+        { "type": "docs", "section": "Documentation", "hidden": true },
+        { "type": "chore", "section": "Miscellaneous", "hidden": true },
+        { "type": "refactor", "section": "Refactoring", "hidden": true },
+        { "type": "test", "section": "Tests", "hidden": true }
+      ]
+    },
+    "packages/expo-tooling": {
+      "release-type": "node",
+      "package-name": "@blinkbitcoin/expo-tooling",
+      "component": "expo-tooling",
       "bump-minor-pre-major": true,
       "changelog-sections": [
         { "type": "feat", "section": "Features" },

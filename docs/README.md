@@ -32,5 +32,6 @@ rest explain the parts of it that surprise people.
 | `SECURITY.md` | Private reporting, the threat model and the secrets policy |
 | `README.md` | What this repo is, the caller to copy, the workflow table, pinning, and what it needs from you |
 | `packages/dev-config/README.md` | `@blinkbitcoin/dev-config` — the pinned tool table, `check-tool-versions`, and `check-consumer-contract` |
+| `packages/expo-tooling/README.md` | `@blinkbitcoin/expo-tooling` — the presets an Expo app extends, and how it is installed |
 | `scripts/e2e/README.md` | How the E2E scripts fit together on a runner |
 | `docs/superpowers/` | The specs and plans this repo was built from. History, not a guide |

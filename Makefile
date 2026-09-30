@@ -23,15 +23,17 @@ check-versions: ## Fail when workflow defaults disagree with scripts/lib/version
 	$(MISE) bash scripts/self/check-versions.sh
 tool-versions: ## Fail when an installed tool is not the version the baseline pins
 	$(MISE) node packages/dev-config/bin/check-tool-versions.mjs
-# Thresholds set at the measured baseline, so they ratchet rather than fail on
-# arrival. They are a floor against regression, not a claim that the rest is
-# untested: the uncovered ranges are the CLI entry points, which test/*.bats
-# exercises by running the binaries. Raise these when a change covers more;
-# never lower them to make a change fit.
-test-package: ## node:test for packages/dev-config, with coverage thresholds
+# Every package under packages/, at 100% lines, branches and functions. The
+# exclusions are the tests themselves (node's default, which naming any
+# exclusion replaces) and each package's fixtures/: the configuration files a
+# preset test evaluates as the consumer has them and the stand-ins for the
+# consumer's tools, not code of the package. Never lower a threshold or widen
+# an exclusion to make a change fit.
+test-package: ## node:test for every package under packages/, with the 100% coverage gate
 	$(MISE) node --test --experimental-test-coverage \
 		--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \
-		"packages/dev-config/**/*.test.mjs"
+		--test-coverage-exclude='**/*.test.mjs' --test-coverage-exclude='packages/*/fixtures/**' \
+		"packages/*/**/*.test.mjs"
 # The Node scripts under scripts/ each have their own node:test file under
 # test/, and the gate is 100% of lines, branches and functions over them.
 test-script-modules: ## node:test for the Node scripts under scripts/, with the 100% coverage gate
