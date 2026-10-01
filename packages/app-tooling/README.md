@@ -497,6 +497,9 @@ row).
 
 - **Locales:** `--locales a,b`, else `$STORE_NOTES_LOCALES`, else the locale
   directories under `fastlane/metadata/ios`, else `en-US`.
+  `--fastlane-directory DIR` reads them from `DIR/metadata/ios` instead, for an
+  app whose Fastfile is not in `fastlane/` (the workflows pass their
+  `fastlane-directory` input).
 - **LLM pass:** optional, with `STORE_NOTES_LLM_PROVIDER` (`anthropic` or
   `openai`), `STORE_NOTES_LLM_MODEL`, `STORE_NOTES_LLM_EFFORT`,
   `STORE_NOTES_LLM_EXTRA_PARAMS`, `OPENAI_BASE_URL` and the provider's API
@@ -587,8 +590,12 @@ bash $e2e/android-maestro.sh [maestro arguments] # install the debug APK, revers
   an app exports its own before calling these.
 - **Metro you started yourself** writes no `metro.log`; when it answers on its
   port, `app-launch.sh` launches without waiting for the bundle receipt.
-- **The app id and URL scheme** come from `expo config` (`pnpm`, `yq`), unless
-  `WORKFLOWS_APP_ID` is set. `ios-simulator.sh pick` needs `jq`.
+- **The app id and URL scheme** come from the app's native stack, unless
+  `WORKFLOWS_APP_ID` is set: `lib/native-stack.sh` asks `lib/native-stack.mjs`
+  (`node`, `git`) and runs `native/expo/app-config.sh` (`expo config`, so `pnpm`
+  and `yq`) or `native/bare/app-config.sh` (the committed `ios/` and
+  `android/`). A bare app passes `WORKFLOWS_DEV_CLIENT=false` and is launched
+  plainly. `ios-simulator.sh pick` needs `jq`.
 - **Every variable** is in the environment table of `scripts/e2e/README.md` in
   shared-workflows.
 

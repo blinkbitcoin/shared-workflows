@@ -10,7 +10,7 @@ load test_helper
 setup() {
   STUB="$BATS_TEST_TMPDIR/bin"
   ROOT="$BATS_TEST_TMPDIR/app"
-  mkdir -p "$STUB" "$ROOT"
+  mkdir -p "$STUB" "$ROOT/fastlane"
   export WORKFLOWS_TEST_LOG="$BATS_TEST_TMPDIR/lane.log"
   : > "$WORKFLOWS_TEST_LOG"
   cat > "$STUB/fastlane" <<'SH'
@@ -21,11 +21,14 @@ for v in WORKFLOWS_OUTPUT_DIR BUILD_INFO_FILE STORE_NOTES_FILE STORE_NOTES_JSON 
   printf '%s=%s\n' "$v" "${!v-}" >> "$WORKFLOWS_TEST_LOG"
 done
 printf 'argc: %s\n' "$#" >> "$WORKFLOWS_TEST_LOG"
+printf 'cwd: %s\n' "$PWD" >> "$WORKFLOWS_TEST_LOG"
+printf 'fastlane-directory: %s\n' "${WORKFLOWS_FASTLANE_DIRECTORY-unset}" >> "$WORKFLOWS_TEST_LOG"
 exit 0
 SH
   cat > "$STUB/bundle" <<'SH'
 #!/usr/bin/env bash
 printf 'bundle: %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
+printf 'gemfile: %s\n' "${BUNDLE_GEMFILE-unset}" >> "$WORKFLOWS_TEST_LOG"
 shift 2  # `exec fastlane`
 exec fastlane "$@"
 SH
@@ -34,7 +37,7 @@ SH
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR" WORKING_DIRECTORY=app
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   mkdir -p "$RUNNER_TEMP"
-  unset GITHUB_ENV LANE_ARGS BUILD_INFO_FILE STORE_NOTES_FILE STORE_NOTES_JSON
+  unset GITHUB_ENV LANE_ARGS BUILD_INFO_FILE STORE_NOTES_FILE STORE_NOTES_JSON WORKFLOWS_FASTLANE_DIRECTORY
 }
 
 lane() { run bash "$REPO_ROOT/scripts/release/fastlane.sh" "$@"; }
@@ -119,4 +122,67 @@ lane() { run bash "$REPO_ROOT/scripts/release/fastlane.sh" "$@"; }
   lane ios build
   [ "$status" -ne 0 ] || fail "succeeded without fastlane: $output"
   contains "$output" "missing command: fastlane" || fail "unexpected message: $output"
+}
+
+# --- the fastlane directory ---------------------------------------------------
+#
+# fastlane has no option or variable that names its directory: it looks for
+# ./fastlane or ./.fastlane under its working directory (FastlaneFolder.path).
+# So the lane runs from the directory that contains the fastlane directory.
+
+@test "by default the lane runs from the consumer root, beside fastlane/, which the lanes are told" {
+  : > "$ROOT/Gemfile"
+  lane ios build
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  root="$(cd "$ROOT" && pwd -P)"
+  grep -qx "cwd: $root" "$WORKFLOWS_TEST_LOG" || fail "not run from the root: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -qx "gemfile: $root/Gemfile" "$WORKFLOWS_TEST_LOG" || fail "the Gemfile was not named: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -qx "fastlane-directory: fastlane" "$WORKFLOWS_TEST_LOG" || fail "the lanes were not told: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "a fastlane directory deeper in the repository runs from its parent, with the root's Gemfile" {
+  mkdir -p "$ROOT/mobile/fastlane"
+  : > "$ROOT/Gemfile"
+  WORKFLOWS_FASTLANE_DIRECTORY=mobile/fastlane/ lane android build
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  root="$(cd "$ROOT" && pwd -P)"
+  grep -qx "cwd: $root/mobile" "$WORKFLOWS_TEST_LOG" || fail "not run beside mobile/fastlane: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -qx "gemfile: $root/Gemfile" "$WORKFLOWS_TEST_LOG" || fail "the root Gemfile was not used: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -qx "fastlane-directory: mobile/fastlane" "$WORKFLOWS_TEST_LOG" || fail "the lanes were not told: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "running fastlane from $root/mobile (fastlane-directory: mobile/fastlane)" || fail "output: $output"
+}
+
+@test "a Gemfile beside the fastlane directory wins over the root's, and a hidden .fastlane is accepted" {
+  mkdir -p "$ROOT/mobile/.fastlane"
+  : > "$ROOT/Gemfile"
+  : > "$ROOT/mobile/Gemfile"
+  WORKFLOWS_FASTLANE_DIRECTORY=mobile/.fastlane lane ios build
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  root="$(cd "$ROOT" && pwd -P)"
+  grep -qx "gemfile: $root/mobile/Gemfile" "$WORKFLOWS_TEST_LOG" || fail "the nearer Gemfile lost: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "a directory fastlane would not find by its name is refused, with the fix" {
+  mkdir -p "$ROOT/lanes"
+  WORKFLOWS_FASTLANE_DIRECTORY=lanes lane ios build
+  [ "$status" -ne 0 ] || fail "accepted a directory fastlane cannot find: $output"
+  contains "$output" "fastlane only finds a directory named fastlane or .fastlane" || fail "output: $output"
+  contains "$output" "rename the directory to fastlane" || fail "no fix: $output"
+  [ ! -s "$WORKFLOWS_TEST_LOG" ] || fail "ran a lane anyway: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "a fastlane directory outside the consumer is refused" {
+  for dir in /etc/fastlane ../fastlane mobile/../../fastlane ..; do
+    WORKFLOWS_FASTLANE_DIRECTORY="$dir" lane ios build
+    [ "$status" -ne 0 ] || fail "accepted $dir: $output"
+    contains "$output" "which is not a directory inside the consumer" || fail "$dir: $output"
+  done
+  [ ! -s "$WORKFLOWS_TEST_LOG" ] || fail "ran a lane anyway: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "a fastlane directory that does not exist is named" {
+  rmdir "$ROOT/fastlane"
+  lane ios build
+  [ "$status" -ne 0 ] || fail "ran without a fastlane directory: $output"
+  contains "$output" "no fastlane/ in $(cd "$ROOT" && pwd -P) (the fastlane-directory input)" || fail "output: $output"
 }

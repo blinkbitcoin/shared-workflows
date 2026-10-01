@@ -10,9 +10,8 @@
 # each override, publishing once and not over an earlier step's value, no
 # GITHUB_ENV at all, the platform from an argument or from WORKFLOWS_PLATFORM and
 # its refusal, and every path through workflows_fingerprint: a value passed down,
-# JSON and bare-hash output, a failing CLI, output with no hash or JSON that does
-# not parse, no npx, no node,
-# and a working directory that does not exist.
+# the dispatch to each native stack's fingerprint.sh, a stack that fails, an
+# invalid stack input, and a working directory that does not exist.
 
 load test_helper
 
@@ -192,55 +191,6 @@ android-passed" ] || fail "the passed-down values were not used: $output"
   [ ! -s "$CALLS" ] || fail "the CLI ran anyway: $(cat "$CALLS")"
 }
 
-@test "the CLI runs in the consumer root from the consumer's own bin, and its JSON hash is read" {
-  stub_npx
-  # The iOS value must not answer for Android.
-  WORKFLOWS_FINGERPRINT_IOS=ios-passed WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":"abc123","sources":[]}' \
-    run release_env 'workflows_fingerprint android'
-  [ "$status" -eq 0 ] || fail "exited $status: $output"
-  [ "$output" = "abc123" ] || fail "the hash was not read out of the JSON: $output"
-  run cat "$CALLS"
-  [ "$output" = "$(cd "$CONSUMER" && pwd -P)|--no fingerprint fingerprint:generate --platform android" ] \
-    || fail "wrong directory or arguments: $output"
-}
-
-@test "the platform for the fingerprint may come from WORKFLOWS_PLATFORM" {
-  stub_npx
-  WORKFLOWS_PLATFORM=ios WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":"fromenv"}' run release_env 'workflows_fingerprint'
-  [ "$output" = "fromenv" ] || fail "exited $status: $output"
-  run cat "$CALLS"
-  contains "$output" "--platform ios" || fail "the platform was not passed on: $output"
-}
-
-@test "a bare hash from an older CLI is read with its whitespace removed" {
-  stub_npx
-  WORKFLOWS_TEST_FINGERPRINT_OUTPUT=$'  bare111\n\n' run release_env 'workflows_fingerprint ios'
-  [ "$status" -eq 0 ] || fail "exited $status: $output"
-  [ "$output" = "bare111" ] || fail "the bare hash was not read: $output"
-}
-
-@test "a failing fingerprint CLI is fatal and points at the missing devDependency" {
-  stub_npx
-  WORKFLOWS_TEST_FINGERPRINT_STATUS=1 run release_env 'workflows_fingerprint ios'
-  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::fingerprint:generate failed for ios" || fail "unexpected message: $output"
-  contains "$output" "@expo/fingerprint a devDependency" || fail "does not say what is likely missing: $output"
-}
-
-@test "JSON output with no hash in it is fatal" {
-  stub_npx
-  WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"sources":[]}' run release_env 'workflows_fingerprint android'
-  [ "$status" -eq 1 ] || fail "an empty hash must not be returned: $output"
-  contains "$output" "::error::could not read a fingerprint hash for android" || fail "unexpected message: $output"
-}
-
-@test "empty output from the CLI is fatal" {
-  stub_npx
-  WORKFLOWS_TEST_FINGERPRINT_OUTPUT=$' \n' run release_env 'workflows_fingerprint ios'
-  [ "$status" -eq 1 ] || fail "an empty hash must not be returned: $output"
-  contains "$output" "::error::could not read a fingerprint hash for ios" || fail "unexpected message: $output"
-}
-
 @test "an unknown platform stops the fingerprint before the CLI runs" {
   stub_npx
   run release_env 'workflows_fingerprint windows'
@@ -249,9 +199,6 @@ android-passed" ] || fail "the passed-down values were not used: $output"
   [ ! -s "$CALLS" ] || fail "the CLI ran anyway: $(cat "$CALLS")"
 }
 
-# Every caller reads the fingerprint through `$(...)`, where `set -e` does not
-# reach: a failed step inside it used to be ignored, and the CLI then ran with
-# an empty platform or from whatever directory the step started in.
 @test "read through \$(...), an unknown platform still stops before the CLI runs" {
   stub_npx
   run release_env 'fp="$(workflows_fingerprint windows)"; echo "reached with fp=$fp"'
@@ -270,37 +217,61 @@ android-passed" ] || fail "the passed-down values were not used: $output"
   [ ! -s "$CALLS" ] || fail "the CLI ran from the wrong directory: $(cat "$CALLS")"
 }
 
-@test "no npx on PATH names the missing command" {
-  PATH="$(bare_path)" run release_env 'workflows_fingerprint ios'
-  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::missing command: npx" || fail "does not name the missing command: $output"
-}
-
-@test "JSON output with no node on PATH names the missing command" {
-  stub_npx
-  WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":"abc123"}' PATH="$(bare_path npx)" run release_env 'workflows_fingerprint ios'
-  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
-  contains "$output" "::error::missing command: node" || fail "does not name the missing command: $output"
-}
-
-@test "JSON output that does not parse is fatal, not a stack trace" {
-  stub_npx
-  WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":' run release_env 'workflows_fingerprint ios'
-  [ "$status" -eq 1 ] || fail "a hash out of broken JSON must not be returned: $output"
-  contains "$output" "::error::could not read a fingerprint hash for ios" || fail "unexpected message: $output"
-  not_contains "$output" "SyntaxError" || fail "node's stack trace leaked: $output"
-}
-
-@test "a hash that is not a string reads as no hash" {
-  stub_npx
-  WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":42}' run release_env 'workflows_fingerprint ios'
-  [ "$status" -eq 1 ] || fail "a non-string hash must not be returned: $output"
-  contains "$output" "::error::could not read a fingerprint hash for ios" || fail "unexpected message: $output"
-}
-
 @test "a working directory that does not exist stops the fingerprint before the CLI runs" {
   stub_npx
   WORKING_DIRECTORY="no-such-directory" run release_env 'workflows_fingerprint ios'
   [ "$status" -ne 0 ] || fail "a fingerprint of the wrong directory must not be returned: $output"
   [ ! -s "$CALLS" ] || fail "the CLI ran anyway: $(cat "$CALLS")"
+}
+
+# The stack decides how: native-stack.sh runs scripts/native/<stack>/fingerprint.sh.
+# Each stack's own cases are in native-expo-fingerprint.bats and
+# native-bare-fingerprint.bats; these pin the dispatch.
+@test "the Expo stack's fingerprint is @expo/fingerprint's, run in the consumer root" {
+  stub_npx
+  WORKFLOWS_NATIVE_STACK_INPUT=expo WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":"abc123","sources":[]}' \
+    run release_env 'workflows_fingerprint android 2>/dev/null'
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "abc123" ] || fail "the hash was not read out of the JSON: $output"
+  run cat "$CALLS"
+  [ "$output" = "$(cd "$CONSUMER" && pwd -P)|--no fingerprint fingerprint:generate --platform android" ] \
+    || fail "wrong directory or arguments: $output"
+}
+
+@test "the bare stack's fingerprint is a sha256 over the committed tree, with no CLI" {
+  stub_npx
+  git -C "$CONSUMER" init -q
+  mkdir -p "$CONSUMER/ios"
+  printf 'pod\n' > "$CONSUMER/ios/Podfile"
+  printf "lockfileVersion: '9.0'\n" > "$CONSUMER/pnpm-lock.yaml"
+  git -C "$CONSUMER" add -A
+  WORKFLOWS_NATIVE_STACK_INPUT=bare run release_env 'workflows_fingerprint ios 2>/dev/null'
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [[ "$output" =~ ^[0-9a-f]{64}$ ]] || fail "not a sha256: $output"
+  [ ! -s "$CALLS" ] || fail "the Expo CLI ran for a bare app: $(cat "$CALLS")"
+}
+
+@test "the platform for the fingerprint may come from WORKFLOWS_PLATFORM" {
+  stub_npx
+  WORKFLOWS_NATIVE_STACK_INPUT=expo WORKFLOWS_PLATFORM=ios WORKFLOWS_TEST_FINGERPRINT_OUTPUT='{"hash":"fromenv"}' \
+    run release_env 'workflows_fingerprint 2>/dev/null'
+  [ "$output" = "fromenv" ] || fail "exited $status: $output"
+  run cat "$CALLS"
+  contains "$output" "--platform ios" || fail "the platform was not passed on: $output"
+}
+
+@test "a stack that cannot fingerprint fails the caller, with its own reason above" {
+  stub_npx
+  WORKFLOWS_NATIVE_STACK_INPUT=expo WORKFLOWS_TEST_FINGERPRINT_STATUS=1 \
+    run release_env 'fp="$(workflows_fingerprint ios)"; echo "reached with fp=$fp"'
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" "fingerprint:generate failed for ios" || fail "the stack's reason is missing: $output"
+  contains "$output" "::error::could not compute the ios fingerprint" || fail "unexpected message: $output"
+  not_contains "$output" "reached with" || fail "the caller carried on: $output"
+}
+
+@test "an invalid native-stack input fails the fingerprint" {
+  WORKFLOWS_NATIVE_STACK_INPUT=flutter run release_env 'workflows_fingerprint ios'
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" 'native-stack is "flutter"' || fail "unexpected message: $output"
 }

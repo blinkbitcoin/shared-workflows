@@ -26,6 +26,18 @@ on:
         description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
         type: string
         default: 'v1'
+      native-stack:
+        description: >-
+          The app's native stack: expo (ios/ and android/ are expo prebuild
+          output) or bare (ios/ and android/ are committed source). Empty, the
+          default, detects it: expo when package.json depends on expo and git
+          does not track ios/, bare otherwise
+        type: string
+        default: ''
+      native-extra-globs:
+        description: Extra space-separated consumer-relative shell globs whose file contents are folded into the bare native stack's fingerprint (the Expo stack's fingerprint is @expo/fingerprint's and reads its own configuration)
+        type: string
+        default: ''
       build-number-offset:
         description: Added to the first-parent commit count to form the build number; raise it, never lower it (stores reject a build number that goes backwards)
         type: number
@@ -62,6 +74,13 @@ on:
         description: Artifact name carrying build-info.json, store-notes.json, store-notes.txt and release-notes.md to the later jobs
         type: string
         default: 'build-info'
+      fastlane-directory:
+        description: >-
+          The directory holding the Fastfile and the store metadata, relative to
+          working-directory. fastlane only finds a directory named fastlane or
+          .fastlane, so it may move (mobile/fastlane) but not be renamed
+        type: string
+        default: 'fastlane'
       environment-variables:
         description: 'Flat JSON object of non-secret build environment variables published before prebuild, the lanes and the scripts (e.g. {"OTA_ENABLED":"true","EXPO_UPDATES_URL":"https://..."}). Keys must be UPPER_SNAKE and anything that reads as a credential is refused - this is a workflow input, so GitHub neither masks nor hides it'
         type: string
@@ -84,10 +103,10 @@ on:
         description: 'Resolved build number (first-parent commit count + build-number-offset)'
         value: ${{ jobs.prepare.outputs.build-number }}
       fingerprint-ios:
-        description: '@expo/fingerprint hash of the iOS native layer'
+        description: 'Native fingerprint of the iOS layer (@expo/fingerprint for the Expo stack, a sha256 over the tracked ios/ files for the bare stack)'
         value: ${{ jobs.prepare.outputs.fingerprint-ios }}
       fingerprint-android:
-        description: '@expo/fingerprint hash of the Android native layer'
+        description: 'Native fingerprint of the Android layer (@expo/fingerprint for the Expo stack, a sha256 over the tracked android/ files for the bare stack)'
         value: ${{ jobs.prepare.outputs.fingerprint-android }}
       sha:
         description: 'Commit the release was prepared from (the release-tag commit when release-tag is set, else github.sha)'
@@ -120,6 +139,9 @@ jobs:
     # says so next to this workflow's inputs.
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
+      NATIVE_EXTRA_GLOBS: ${{ inputs.native-extra-globs }}
+      WORKFLOWS_FASTLANE_DIRECTORY: ${{ inputs.fastlane-directory }}
       WORKFLOWS_STAGE: ${{ inputs.stage }}
     outputs:
       version: ${{ steps.version.outputs.version }}

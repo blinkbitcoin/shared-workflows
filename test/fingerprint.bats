@@ -27,6 +27,8 @@ setup() {
   export GITHUB_OUTPUT GITHUB_ENV
   STUB="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$STUB"
+  # The Expo stack unless a case says otherwise: the fake CLI is @expo/fingerprint's.
+  export WORKFLOWS_NATIVE_STACK_INPUT=expo
 }
 
 # A fake `npx` standing in for the consumer's @expo/fingerprint bin. It answers
@@ -133,4 +135,18 @@ SH
   # And the record it writes is keyed the way the gate looks it up.
   run grep -cE '^\s+fingerprint: \{' "$REPO_ROOT/scripts/release/build-info.sh"
   [ "$output" -gt 0 ] || fail "build-info.sh no longer writes a fingerprint block"
+}
+
+# A bare app has no @expo/fingerprint: its two hashes come from the committed
+# native projects, and land in the same outputs and environment names.
+@test "the bare fixture's two fingerprints land in the same outputs, and differ" {
+  unset WORKFLOWS_NATIVE_STACK_INPUT
+  GITHUB_WORKSPACE="$FIXTURES" WORKING_DIRECTORY=consumer-bare run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  ios="$(sed -n 's/^fingerprint-ios=//p' "$GITHUB_OUTPUT")"
+  android="$(sed -n 's/^fingerprint-android=//p' "$GITHUB_OUTPUT")"
+  [[ "$ios" =~ ^[0-9a-f]{64}$ ]] || fail "fingerprint-ios: $ios"
+  [[ "$android" =~ ^[0-9a-f]{64}$ ]] || fail "fingerprint-android: $android"
+  [ "$ios" != "$android" ] || fail "both platforms hashed alike"
+  grep -qx "FINGERPRINT_IOS=$ios" "$GITHUB_ENV" || fail "FINGERPRINT_IOS: $(cat "$GITHUB_ENV")"
 }

@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
-# Regenerate the native project for one platform from app.config.* + config
-# plugins. `--clean` on purpose: CI must never build on top of a stale ios/ or
-# android/ tree restored from a cache. `--no-install` because dependencies are
-# already installed by the workflow (and pods are pods.sh's job).
+# Make ios/ or android/ ready to build, the way the consumer's native stack
+# does it: the Expo stack regenerates the tree with `expo prebuild`, the bare
+# stack checks that the committed tree is there. scripts/lib/native-stack.sh
+# decides which, and runs scripts/native/<stack>/prebuild.sh.
+#
+# Kept at this path, a thin dispatcher, rather than removed: the workflows, the
+# docs and every consumer's local notes call `scripts/native/prebuild.sh`, and
+# the stack is decided in one place either way.
 # Usage: prebuild.sh <ios|android>
 set -euo pipefail
-source "$(dirname "$0")/../lib/common.sh"
-source "$(dirname "$0")/../lib/e2e-env.sh"
-
-platform="$(workflows_platform "${1:-}")"
-require_cmd pnpm
-root="$(consumer_root)"
-cd "$root"
-
-group "expo prebuild ($platform)"
-CI=1 EXPO_NO_GIT_STATUS=1 pnpm exec expo prebuild --platform "$platform" --clean --no-install
-endgroup
+exec bash "$(dirname "$0")/../lib/native-stack.sh" prebuild "$@"

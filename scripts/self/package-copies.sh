@@ -6,10 +6,13 @@
 # check.yml runs scripts/checks/{generated,secrets}.sh and
 # scripts/ci/check-ci.sh, and check-security.yml runs the scanners under
 # scripts/security/; a consumer's verify lanes run scripts/release/verify-*.sh
-# and its machine setup scripts/setup/. A consumer runs the same ones on a laptop (`make
+# and its machine setup scripts/setup/. The E2E runners and build-info.sh ask the
+# consumer's native stack for its identifiers and fingerprint, so
+# lib/native-stack.sh and each stack's app-config and fingerprint entry points
+# (native/expo/, native/bare/) ride along too. A consumer runs the same ones on a laptop (`make
 # version`, `make check`), where it has the package and not this repository.
 # The package therefore carries them, with the libraries they source, at the
-# same relative paths (release/, checks/, ci/, security/ and setup/ beside lib/, as under
+# same relative paths (release/, checks/, ci/, security/, setup/ and native/ beside lib/, as under
 # scripts/), so each copy runs unchanged. check-ci.sh's default zizmor policy,
 # .github/zizmor.yml here, rides along as zizmor.yml at the package root. Copies inside one repository,
 # held identical on every commit by test/package-copies.bats, cannot drift the
@@ -66,6 +69,11 @@ copies=(
   scripts/e2e/maestro-bound.sh:e2e/maestro-bound.sh
   scripts/lib/e2e-env.sh:lib/e2e-env.sh
   scripts/lib/expo-config.sh:lib/expo-config.sh
+  scripts/lib/native-stack.sh:lib/native-stack.sh
+  scripts/native/expo/app-config.sh:native/expo/app-config.sh
+  scripts/native/expo/fingerprint.sh:native/expo/fingerprint.sh
+  scripts/native/bare/app-config.sh:native/bare/app-config.sh
+  scripts/native/bare/fingerprint.sh:native/bare/fingerprint.sh
   .github/zizmor.yml:zizmor.yml
 )
 

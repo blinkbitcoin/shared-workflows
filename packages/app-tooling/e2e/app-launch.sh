@@ -2,7 +2,11 @@
 # Bring the app to the foreground and prove Metro actually served it. A
 # dev-client build is launched through its deep link with the Metro URL baked
 # in: launching the app plainly lands on the dev-client launcher screen, where
-# every flow would then have to tap through a list of servers.
+# every flow would then have to tap through a list of servers. With dev-client
+# off - a Release build, or a bare React Native app, which has no dev-client
+# launcher at all - the app is launched plainly and loads its bundle itself.
+# Nothing here needs expo: the identifiers come from the native stack's
+# app-config (scripts/lib/native-stack.sh).
 # Needs: app installed, Metro running (metro-wait.sh).
 # Usage: app-launch.sh <ios|android>
 set -euo pipefail
@@ -62,10 +66,20 @@ if [ "$needs_metro" = true ]; then
   fi
 fi
 
+# The deep link needs the app's URL scheme. A bare app may declare none, and
+# then there is no dev-client to open either: say so, not "open ://...".
+dev_client_scheme() {
+  local scheme
+  scheme="$(workflows_scheme)" || return
+  [ -n "$scheme" ] || die_fix "dev-client is on, but the app declares no URL scheme to deep-link the dev client through" \
+    "pass dev-client: false (a bare React Native app has no dev-client launcher), or declare the scheme" "expo-or-bare"
+  printf '%s\n' "$scheme"
+}
+
 if [ "$platform" = ios ]; then
   udid="$(workflows_sim_udid)"
   if [ "$WORKFLOWS_DEV_CLIENT" = "true" ]; then
-    scheme="$(workflows_scheme)"
+    scheme="$(dev_client_scheme)"
     url="$scheme://expo-development-client/?url=http%3A%2F%2Flocalhost%3A$WORKFLOWS_METRO_PORT"
     # iOS asks "Open in <app>?" for a URL arriving from elsewhere, and on a
     # simulator that has never been asked - every fresh runner - the prompt sits
@@ -85,7 +99,7 @@ if [ "$platform" = ios ]; then
   fi
 else
   if [ "$WORKFLOWS_DEV_CLIENT" = "true" ]; then
-    scheme="$(workflows_scheme)"
+    scheme="$(dev_client_scheme)"
     # 10.0.2.2 is the emulator's alias for the host loopback; `adb reverse`
     # covers the app's own localhost traffic but not this launch URL.
     adb shell am start -a android.intent.action.VIEW \
@@ -116,8 +130,9 @@ fi
 
 for i in $(seq 1 60); do
   # "iOS Bundled 1479ms .../entry.js" is what Expo's Metro logs per request;
-  # older RN CLI Metro logs "Bundling"/a raw ".bundle" URL instead.
-  if tail -n "+$before" "$metro_log" | grep -qE 'Bundled|Bundling|\.bundle'; then
+  # the React Native CLI's Metro logs "BUNDLE  ./index.js", and older ones
+  # "Bundling" or a raw ".bundle" URL.
+  if tail -n "+$before" "$metro_log" | grep -qE 'Bundled|Bundling|BUNDLE|\.bundle'; then
     log "Metro served a bundle after $((i * 2))s - app is up"
     exit 0
   fi

@@ -2,6 +2,10 @@
 # Hash of every input the native (Xcode/Gradle) build consumes in an Expo prebuild app:
 # the lockfile-resolved versions of runtime dependencies + native-adjacent development dependencies, plus the
 # config/plugin/module/patch files. A jest/eslint bump does not change it.
+# For the bare native stack (scripts/lib/native-stack.sh) the committed ios/ and
+# android/ projects are build input too, so every file git tracks under them is
+# folded in as well; without that an edit to a bare app's Podfile or
+# build.gradle would restore the previous build from the cache.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 root="${1:-$(consumer_root)}"
@@ -45,6 +49,30 @@ if [ -n "${NATIVE_EXTRA_GLOBS:-}" ]; then
     done
   done | sort -u)
 fi
+# The bare stack's committed native projects, one "sha256  path" line per file.
+# A tracked file deleted in the working tree is listed as such rather than
+# failing the hash.
+native=""
+stack="$(GITHUB_WORKSPACE="$root" WORKING_DIRECTORY=. bash "$(dirname "$0")/../lib/native-stack.sh")" ||
+  die "could not resolve the native stack of $root"
+if [ "$stack" = bare ]; then
+  tracked="$(git -C "$root" ls-files -- ios android)" || die "git could not list ios/ and android/ in $root"
+  present=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ -f "$root/$f" ]; then
+      present="$present$f
+"
+    else
+      native="${native}deleted  $f
+"
+    fi
+  done <<< "$tracked"
+  if [ -n "$present" ]; then
+    native="$(cd "$root" && printf '%s' "$present" | tr '\n' '\0' | xargs -0 shasum -a 256)
+$native"
+  fi
+fi
 {
   printf '%s\n' "$deps" "$devs"
   # Word-splitting $files/$dirs/$extra here assumes consumer paths contain no
@@ -52,4 +80,6 @@ fi
   # Expo app tree); switch to `while IFS= read -r f` if that ever changes.
   for f in $files $dirs $extra; do printf '%s ' "$f"; shasum -a 256 "$root/$f" | cut -c1-64; done
   printf 'extra=%s\n' "${NATIVE_EXTRA_GLOBS:-}"
+  # Nothing at all for the Expo stack, so its keys stay exactly what they were.
+  [ -z "$native" ] || printf 'native=%s\n%s' "$stack" "$native"
 } | shasum -a 256 | cut -c1-16

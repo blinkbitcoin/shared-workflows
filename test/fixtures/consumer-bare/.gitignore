@@ -1,0 +1,9 @@
+# The git half of the `.workflows/` ignore list in docs/consumer-guide.md.
+/.workflows
+node_modules/
+# Build output inside the committed native projects. ios/ and android/
+# themselves are source in a bare app, and stay tracked.
+ios/Pods/
+ios/build/
+android/.gradle/
+android/app/build/

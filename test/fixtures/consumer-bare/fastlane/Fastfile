@@ -1,0 +1,12 @@
+# The bare fixture's lanes, at the root fastlane/ the workflows look for by
+# default (the fastlane-directory input moves it). The lane names are the
+# contract scripts/release/fastlane.sh documents; their bodies are the app's.
+platform :ios do
+  lane(:build) {}
+  lane(:verify) {}
+end
+
+platform :android do
+  lane(:build) {}
+  lane(:verify) {}
+end

@@ -1,0 +1,45 @@
+name: CD / Internal
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cd-internal
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Prepare
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-prepare.yml@v0
+    permissions:
+      contents: read
+      actions: read
+    with:
+      native-stack: bare
+      require-green-workflow: ci.yml
+  ios:
+    name: iOS
+    needs: prepare
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-ios.yml@v0
+    with:
+      native-stack: bare
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      # Unsigned until the store credentials exist; then pass them as secrets.
+      ios-signing-enabled: false
+  android:
+    name: Android
+    needs: prepare
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-android.yml@v0
+    with:
+      native-stack: bare
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      android-signing-enabled: false

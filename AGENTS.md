@@ -2,7 +2,7 @@
 
 The shared engineering baseline, in two halves. Reusable GitHub Actions
 workflows, composite actions and bash scripts for building, testing and
-releasing React Native (Expo) apps; and the one package a repo installs,
+releasing React Native apps, Expo or bare; and the one package a repo installs,
 `packages/app-tooling`, published as `@blinkbitcoin/app-tooling`: the
 developer tooling that is not React Native specific at its top level, and
 under `expo/` the Jest, ESLint, Biome, Metro, Playwright, lefthook,
@@ -23,7 +23,8 @@ below drift apart.
 scripts/checks/     the check.yml steps (audit, commits, expo-health and expo-only, generated, secrets)
 scripts/ci/         shared CI plumbing (changed-class, check-ci, pnpm-install, tool-version, gh-pages badges)
 scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
-scripts/native/     prebuild, pods, iOS/Android builds and packaging
+scripts/native/     prebuild, pods, iOS/Android builds and packaging; expo/ and bare/ hold
+                    each native stack's prebuild, app-config, metro-start and fingerprint
 scripts/ota/        expo-updates export, fingerprint gate, publish, smoke
 scripts/release/    version and store notes resolution, fastlane invocation, release assets,
                     the artifact verifiers (verify-ios, verify-android; lib/verify-common.sh),
@@ -38,8 +39,9 @@ scripts/self/       this repo's own upkeep (check-version-pins, tag-major, smoke
                     package-copies, render-contract-table, check-store-notes-section,
                     changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
-                    changed-files)
-test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
+                    changed-files) and native-stack, the dispatch to scripts/native/<stack>/
+test/               the bats suite + fixtures/ (consumer-min, the Expo caller the guide is held to;
+                    consumer-bare, a bare React Native app; both kept byte-identical to the guide)
 packages/           app-tooling (tooling any repo installs; expo/ holds the Expo presets,
                     security/ the scanner copies and lib/security-*.mjs their modules,
                     lib/native-stack.mjs the Expo-or-bare rule every part applies,

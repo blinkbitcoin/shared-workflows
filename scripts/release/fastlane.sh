@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run one fastlane lane in the consumer root.
+# Run one fastlane lane for the consumer.
 #
 # Usage: fastlane.sh PLATFORM LANE [key:value ...]
 #   fastlane.sh ios build
@@ -24,6 +24,16 @@
 # one silently resolves one directory too deep and the lane reads (or writes)
 # the wrong file. Every path variable is absolutised here rather than at each
 # call site, so a caller cannot get it wrong.
+#
+# WORKFLOWS_FASTLANE_DIRECTORY (the `fastlane-directory` input, default
+# `fastlane`) is where the Fastfile lives, relative to the consumer root. fastlane
+# itself takes no option or variable naming that directory: FastlaneFolder.path
+# (fastlane_core/lib/fastlane_core/fastlane_folder.rb) looks for ./fastlane/ or
+# ./.fastlane/ under the working directory, and nothing else. So the lane runs
+# from the directory that *contains* it, and the directory has to be called
+# fastlane or .fastlane - mobile/fastlane works, mobile/lanes cannot. The
+# variable is exported resolved, so a verify lane's verify-ios.sh or
+# verify-android.sh reads the store metadata from the same directory.
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/release-env.sh"
@@ -42,6 +52,26 @@ set -- "${args[@]+"${args[@]}"}"
 
 root="$(consumer_root)"
 cd "$root"
+
+fastlane_directory="${WORKFLOWS_FASTLANE_DIRECTORY:-fastlane}"
+fastlane_directory="${fastlane_directory%/}"
+case "$fastlane_directory" in
+  /* | .. | ../* | */.. | */../*)
+    die_fix "fastlane-directory is '$fastlane_directory', which is not a directory inside the consumer" \
+      "pass a path relative to working-directory, such as fastlane or mobile/fastlane" "expo-or-bare"
+    ;;
+esac
+case "${fastlane_directory##*/}" in
+  fastlane | .fastlane) ;;
+  *)
+    die_fix "fastlane-directory is '$fastlane_directory', but fastlane only finds a directory named fastlane or .fastlane" \
+      "rename the directory to fastlane (it may sit anywhere in the repository, such as mobile/fastlane)" "expo-or-bare"
+    ;;
+esac
+[ -d "$root/$fastlane_directory" ] || die_fix "no $fastlane_directory/ in $root (the fastlane-directory input)" \
+  "pass the directory that holds your Fastfile as fastlane-directory, relative to working-directory" "expo-or-bare"
+lane_root="$(cd "$root/$fastlane_directory/.." && pwd -P)"
+export WORKFLOWS_FASTLANE_DIRECTORY="$fastlane_directory"
 
 # absolutise VAR... - rewrite each set variable to an absolute path, resolving a
 # relative one against the consumer root.
@@ -64,15 +94,23 @@ export WORKFLOWS_OUTPUT_DIR
 absolutise WORKFLOWS_OUTPUT_DIR BUILD_INFO_FILE STORE_NOTES_FILE STORE_NOTES_JSON \
   ANDROID_UPLOAD_KEYSTORE_PATH PLAY_SERVICE_ACCOUNT_JSON_PATH ASC_KEY_P8_PATH BUNDLETOOL_JAR
 
+# The Gemfile beside the fastlane directory wins over the consumer root's.
+# Named explicitly: bundler would otherwise search upwards from the lane's
+# directory and could find a different one.
+gemfile="$root/Gemfile"
+[ ! -f "$lane_root/Gemfile" ] || gemfile="$lane_root/Gemfile"
+
 group "fastlane $platform $lane"
-if [ -f "$root/Gemfile" ] && command -v bundle >/dev/null 2>&1; then
-  bundle exec fastlane "$platform" "$lane" "$@"
+log "running fastlane from $lane_root (fastlane-directory: $fastlane_directory)"
+cd "$lane_root"
+if [ -f "$gemfile" ] && command -v bundle >/dev/null 2>&1; then
+  BUNDLE_GEMFILE="$gemfile" bundle exec fastlane "$platform" "$lane" "$@"
 else
   # No Gemfile means the consumer is not pinning fastlane; a global fastlane is
   # then the only thing that can run, and its absence must be an explicit error
   # rather than a confusing "command not found" in the middle of a release.
   require_cmd fastlane
-  log "no Gemfile in $root - running the fastlane on PATH (unpinned)"
+  log "no Gemfile in $lane_root or $root - running the fastlane on PATH (unpinned)"
   fastlane "$platform" "$lane" "$@"
 fi
 endgroup

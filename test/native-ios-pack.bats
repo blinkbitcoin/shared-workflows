@@ -7,6 +7,8 @@ load test_helper
 
 setup() {
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR/app" WORKING_DIRECTORY=.
+  # The Expo stack: these cases read the Expo configuration's identifiers.
+  export WORKFLOWS_NATIVE_STACK_INPUT=expo
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out"
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/github_output"
   export EXPO_CONFIG_JSON="$BATS_TEST_TMPDIR/none.json"

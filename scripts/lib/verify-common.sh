@@ -660,18 +660,23 @@ vc_cert_placeholder_verdict() { # <sha256 of the pem>
 # Store metadata still carrying the template's prose. The hard gate lives in
 # the fastlane `release_production` lanes (`assert_metadata_ready!`); here it is
 # a warning, so a beta build is not blocked by copy nobody has written yet.
+# The metadata lives under the fastlane directory: WORKFLOWS_FASTLANE_DIRECTORY
+# (the `fastlane-directory` input, which fastlane.sh exports to the lanes),
+# `fastlane` when unset.
 VC_METADATA_PLACEHOLDER='Replace this text'
 
 vc_metadata_placeholder_verdict() { # <repo root>
-  local dir="$1/fastlane/metadata" offenders rc=0 err
+  local metadata="${WORKFLOWS_FASTLANE_DIRECTORY:-fastlane}"
+  metadata="${metadata%/}/metadata"
+  local dir="$1/$metadata" offenders rc=0 err
   if [ ! -d "$dir" ]; then
-    printf 'skip no fastlane/metadata tree at %s\n' "$dir"
+    printf 'skip no %s tree at %s\n' "$metadata" "$dir"
     return 0
   fi
   err="$(mktemp)"
   offenders="$(grep -rl -e "$VC_METADATA_PLACEHOLDER" "$dir" 2>"$err")" || rc=$?
   if [ "$rc" -ge 2 ]; then
-    printf 'FAIL could not scan fastlane/metadata: %s\n' "$(tr '\n' ' ' <"$err" 2>/dev/null || true)"
+    printf 'FAIL could not scan %s: %s\n' "$metadata" "$(tr '\n' ' ' <"$err" 2>/dev/null || true)"
     rm -f "$err"
     return 0
   fi
@@ -680,7 +685,7 @@ vc_metadata_placeholder_verdict() { # <repo root>
     printf 'warn store metadata still has template placeholder text: %s\n' \
       "$(printf '%s\n' "$offenders" | sed "s#^$1/##" | sort | paste -sd' ' - || true)"
   else
-    printf 'ok no placeholder text in fastlane/metadata\n'
+    printf 'ok no placeholder text in %s\n' "$metadata"
   fi
 }
 

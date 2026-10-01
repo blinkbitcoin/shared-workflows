@@ -30,6 +30,11 @@ waits on a dependency install. It folds together:
    `fastlane/*.rb android/keystores/*`. No recursive `**` (these scripts run
    under macOS's bash 3.2, which has no `globstar`). The glob *string* itself is
    folded in too, so changing the patterns also invalidates the caches.
+4. On the **bare** native stack only (`scripts/lib/native-stack.sh`), a
+   `shasum -a 256` of every file git tracks under `ios/` and `android/`: a bare
+   app's native projects are committed source, so an edit to its `Podfile` or
+   `build.gradle` must not restore the previous build. Nothing is added for an
+   Expo app, whose keys stay as they were.
 
 ## Keys
 
@@ -70,4 +75,5 @@ Notes:
   bats rule above does not reach it.
 - The iOS app cache carries the generated `ios/*.xcworkspace` alongside the
   built `.app` because `scripts/native/ios-pack.sh` resolves the Xcode scheme
-  from the workspace, and on a cache hit no `expo prebuild` has run.
+  from the workspace, and on a cache hit no `expo prebuild` has run. (A bare
+  app's workspace is committed; restoring it over itself changes nothing.)

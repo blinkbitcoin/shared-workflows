@@ -96,7 +96,10 @@ for test in tests:
 
 # Prints the test files that may be SCRIPT's own, one per line: the file named
 # after it, or after its area and name when two scripts share a name
-# (scripts/ota/export.sh -> test/export.bats or test/ota-export.bats). A Node
+# (scripts/ota/export.sh -> test/export.bats or test/ota-export.bats), or,
+# for a script one directory deeper, after its whole path under scripts/
+# (scripts/native/bare/prebuild.sh -> test/native-bare-prebuild.bats, beside
+# scripts/native/expo/prebuild.sh -> test/native-expo-prebuild.bats). A Node
 # script's own test is a node:test file; a package's program, module or Expo
 # preset has its test at the package root, because bin/, lib/ and expo/ are
 # what the package publishes (packages/app-tooling/expo/eslint.mjs ->
@@ -104,7 +107,7 @@ for test in tests:
 # deeper, packages/app-tooling/expo/jest/mocks/expo-updates.cjs ->
 # packages/app-tooling/expo-updates.test.mjs).
 own_tests() {
-  local script="$1" file name area
+  local script="$1" file name area path
   file="${script##*/}"
   name="${file%.*}"
   case "$script" in
@@ -118,6 +121,16 @@ own_tests() {
       case "$file" in
         *.mjs) printf '%s\n' "test/$name.test.mjs" "test/$area-$name.test.mjs" ;;
         *) printf '%s\n' "test/$name.bats" "test/$area-$name.bats" ;;
+      esac
+      case "${script#scripts/}" in
+        */*/*)
+          path="${script#scripts/}"
+          path="${path%.*}"
+          case "$file" in
+            *.mjs) printf '%s\n' "test/${path//\//-}.test.mjs" ;;
+            *) printf '%s\n' "test/${path//\//-}.bats" ;;
+          esac
+          ;;
       esac
       ;;
   esac
@@ -175,6 +188,10 @@ or a device runs against fakes of them on PATH (see test/app-launch.bats)."
   [ "$out" = "packages/app-tooling/pin.test.mjs" ] || fail "package module: $out"
   out="$(own_tests packages/other/bin/x.mjs)"
   [ "$out" = "packages/other/x.test.mjs" ] || fail "another package's program: $out"
+  out="$(own_tests scripts/native/bare/prebuild.sh | tr '\n' ' ')"
+  [ "$out" = "test/prebuild.bats test/native-prebuild.bats test/native-bare-prebuild.bats " ] || fail "a script one directory deeper: $out"
+  out="$(own_tests scripts/self/lib/x.mjs | tr '\n' ' ')"
+  [ "$out" = "test/x.test.mjs test/self-x.test.mjs test/self-lib-x.test.mjs " ] || fail "a Node script one directory deeper: $out"
   out="$(own_tests packages/app-tooling/expo/eslint.mjs)"
   [ "$out" = "packages/app-tooling/eslint.test.mjs" ] || fail "an Expo preset: $out"
   out="$(own_tests packages/app-tooling/expo/jest/console.cjs)"

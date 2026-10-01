@@ -18,6 +18,7 @@ GUIDE="$REPO_ROOT/docs/consumer-guide.md"
 # Exported: the contract-table cases at the bottom read it from node's process.env.
 export GUIDE
 CONSUMER="$FIXTURES/consumer-min"
+BARE="$FIXTURES/consumer-bare"
 
 require_consumer() {
   [ -f "$CONSUMER/package.json" ] || fail "no package.json in the fixture consumer at $CONSUMER"
@@ -107,6 +108,57 @@ guide_yaml_block() {
   done
 }
 
+# The bare consumer's callers are the guide's "Expo or bare" examples, held the
+# same way: what a bare app copies is what the fixture is.
+@test "the guide's bare caller examples match the bare fixture's workflow files byte for byte" {
+  for spec in ci:15 cd-internal:16; do
+    wf="${spec%:*}"
+    n="${spec##*:}"
+    file="$BARE/.github/workflows/$wf.yml"
+    [ -f "$file" ] || fail "missing bare fixture caller $file"
+    diff -u "$file" <(guide_yaml_block "$n") \
+      || fail "the guide's bare $wf.yml example has drifted from $file"
+  done
+}
+
+# The point of the fixture: every call it makes to a workflow that takes
+# native-stack names the bare stack, and its E2E launches plainly.
+@test "the bare fixture passes native-stack: bare to every workflow it calls that takes it, and dev-client: false" {
+  command -v yq >/dev/null || skip "yq not installed"
+  calls=0
+  for f in "$BARE"/.github/workflows/*.yml; do
+    while IFS=$'\t' read -r job called; do
+      [ -n "$called" ] || continue
+      wf="$(basename "${called%@*}" .yml)"
+      [ "$(yq -r '.on.workflow_call.inputs | has("native-stack")' "$REPO_ROOT/.github/workflows/$wf.yml")" = true ] || continue
+      calls=$((calls + 1))
+      [ "$(yq -r ".jobs.\"$job\".with.\"native-stack\"" "$f")" = bare ] \
+        || fail "$(basename "$f") job '$job' calls $wf.yml without native-stack: bare"
+    done < <(yq -r '.jobs | to_entries[] | select(.value.uses != null) | .key + "\t" + .value.uses' "$f")
+  done
+  [ "$calls" -ge 5 ] || fail "found only $calls calls that take native-stack - has the fixture changed shape?"
+  [ "$(yq -r '.jobs.e2e.with."dev-client"' "$BARE/.github/workflows/ci.yml")" = false ] \
+    || fail "the bare fixture's E2E still asks for the dev-client deep link"
+}
+
+# Held to the script table where it applies: every script the guide marks yes,
+# except the ones only an Expo app (check:expo-health, check:prebuild), a web
+# build (build:web, test:e2e:web) or the generated gate's fallback (gen:i18n,
+# gen:graphql) is asked for - its callers turn none of those on.
+@test "every script the guide marks yes that a bare app's callers run exists in the bare fixture" {
+  wanted="$(guide_table_yes_scripts | grep -vxE 'check:expo-health|check:prebuild|build:web|test:e2e:web|gen:i18n|gen:graphql')"
+  [ "$(grep -c . <<<"$wanted")" -ge 10 ] || fail "parsed only '$wanted' from the guide's script-contract table"
+  scripts="$(CONSUMER="$BARE" consumer_scripts)"
+  missing=()
+  while read -r name; do
+    [ -n "$name" ] || continue
+    grep -qxF "$name" <<<"$scripts" || missing+=("$name")
+  done <<<"$wanted"
+  [ "${#missing[@]}" -eq 0 ] || fail "the bare fixture has no such script: ${missing[*]}"
+  run node -e 'const p=require(process.argv[1]);process.exit((p.dependencies||{}).expo||(p.devDependencies||{}).expo?1:0)' "$BARE/package.json"
+  [ "$status" -eq 0 ] || fail "the bare fixture depends on expo"
+}
+
 # Everything from `on:` up to the next top-level key.
 on_block() {
   awk '/^on:/ { inside = 1; print; next }
@@ -119,12 +171,13 @@ on_block() {
 # classifier, the exact defect PR 3 removed. The fixture is the guide's example
 # byte for byte (above), so asserting it here asserts what consumers copy.
 @test "the fixture's ci.yml triggers carry no paths-ignore" {
-  file="$FIXTURES/consumer-min/.github/workflows/ci.yml"
-  block="$(on_block "$file")"
-  [ "$(grep -c . <<<"$block")" -ge 5 ] \
-    || fail "read no trigger block from $file - the parser or the file shape changed"
-  ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
-    || fail "$file's triggers carry a paths-ignore, a second docs rule beside check.yml's classifier"
+  for file in "$FIXTURES/consumer-min/.github/workflows/ci.yml" "$BARE/.github/workflows/ci.yml"; do
+    block="$(on_block "$file")"
+    [ "$(grep -c . <<<"$block")" -ge 5 ] \
+      || fail "read no trigger block from $file - the parser or the file shape changed"
+    ! grep -qE '^[[:space:]]*paths-ignore:' <<<"$block" \
+      || fail "$file's triggers carry a paths-ignore, a second docs rule beside check.yml's classifier"
+  done
 }
 
 # The example runs iOS on pushes to main and keeps it off PRs unless one carries
@@ -347,7 +400,7 @@ callee_permissions() {
 
 @test "every fixture caller grants the write permissions its callee needs" {
   command -v yq >/dev/null || skip "yq not installed"
-  for f in "$FIXTURES"/consumer-min/.github/workflows/*.yml; do
+  for f in "$FIXTURES"/consumer-min/.github/workflows/*.yml "$BARE"/.github/workflows/*.yml; do
     while IFS=$'\t' read -r job called; do
       [ -n "$called" ] || continue
       # Only this family's reusable workflows; an action reference is not one.
