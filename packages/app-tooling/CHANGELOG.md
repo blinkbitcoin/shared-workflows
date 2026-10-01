@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.6.2...app-tooling-v0.7.0) (2026-10-01)
+
+
+### Features
+
+* **app-tooling:** ship check-skills, the runner for every skill's offline tests ([#179](https://github.com/blinkbitcoin/shared-workflows/issues/179)) ([5a20ec8](https://github.com/blinkbitcoin/shared-workflows/commit/5a20ec803a270d73b323ccf884b8986f642a9bb0))
+
 ## [0.6.2](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.6.1...app-tooling-v0.6.2) (2026-10-01)
 
 
