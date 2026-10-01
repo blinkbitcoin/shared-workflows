@@ -75,6 +75,18 @@ describe('publish-internal.yml', () => {
     assert.equal(internal.concurrency, undefined);
   });
 
+  test('prepare reserves the build tag at push time, with the permission that needs', () => {
+    // GitHub refuses GITHUB_TOKEN a new tag on a commit whose workflow files
+    // differ from the default branch's tip, and an hour after the push that is
+    // often the case. The caller grants contents: write; the pipeline asks for it.
+    const prepare = internal.jobs.prepare;
+    assert.equal(prepare.with['reserve-tag'], true);
+    assert.equal(prepare.with.stage, 'internal');
+    assert.equal(prepare.permissions.contents, 'write');
+    assert.equal(prepare.permissions.actions, 'read');
+    assert.equal(prepare.with['require-green-workflow'], '${{ inputs.green-workflow }}');
+  });
+
   test('a failed prepare, which includes a red green gate, stops everything', () => {
     const results = run(internal, { inputs: { ...stores, 'ota-enabled': true }, outcome: { prepare: 'failure' } });
     assert.deepEqual(ran(results), ['prepare']);
