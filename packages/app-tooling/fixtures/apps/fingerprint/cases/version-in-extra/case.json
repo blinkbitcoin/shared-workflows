@@ -1,0 +1,7 @@
+{
+  "passes": false,
+  "output": [
+    "the ios fingerprint moved when APP_VERSION and APP_BUILD_NUMBER changed",
+    "the android fingerprint moved when APP_VERSION and APP_BUILD_NUMBER changed"
+  ]
+}

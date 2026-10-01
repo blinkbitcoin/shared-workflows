@@ -119,6 +119,14 @@ on:
         description: Run the consumer's check:licenses script (the dependency license policy)
         type: boolean
         default: true
+      app-suites:
+        description: >-
+          Run the consumer's test:app script: the app suites @blinkbitcoin/app-tooling
+          ships, which run this family's code against the app's own files (the
+          fingerprint a release must not move, and more as they move upstream).
+          Off by default until the template and the terminal app run them.
+        type: boolean
+        default: false
       prebuild:
         description: >-
           Run the consumer's check:prebuild script (prebuild both platforms into
@@ -457,6 +465,40 @@ jobs:
         if: ${{ inputs.licenses }}
         env:
           SCRIPT_NAME: 'check:licenses'
+        run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
+  # The behavioural half of the contract job: the app suites run the shared
+  # code against the app's own files. A job of its own, so a failing suite
+  # reads as `App suites` in the checks list, and skipped outright when off.
+  app-suites:
+    name: App suites
+    needs: contract
+    if: ${{ !inputs.contract-only && inputs.app-suites }}
+    runs-on: ${{ inputs.linux-runner }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.consumer-token || github.token }}
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      - name: Setup
+        uses: ./.workflows/.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      # Also gated here, though the job is skipped while the input is off: the
+      # step's own `if:` is what ties the script to its input in contract.json.
+      - name: App suites
+        if: ${{ inputs.app-suites }}
+        env:
+          SCRIPT_NAME: 'test:app'
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-script.sh" "$SCRIPT_NAME"
       # The expensive gate, off by default. A prebuild of both platforms is
       # minutes, so it is opt-in for the consumers that decide the coverage is

@@ -1,0 +1,6 @@
+{
+  "passes": false,
+  "output": [
+    "fingerprint.config.js does not load, and @expo/fingerprint would silently use its defaults"
+  ]
+}

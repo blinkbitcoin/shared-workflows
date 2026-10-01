@@ -1,0 +1,9 @@
+# Paths that cannot change the native runtime.
+docs/**
+**/*.md
+.maestro/**
+e2e/**
+coverage/**
+dist/**
+
+scripts/**

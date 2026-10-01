@@ -1,0 +1,7 @@
+{
+  "passes": false,
+  "output": [
+    "the fingerprint does not ignore scripts/\\*\\*",
+    "fail 1\\b"
+  ]
+}

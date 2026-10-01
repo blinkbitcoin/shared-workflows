@@ -1,0 +1,7 @@
+{
+  "passes": false,
+  "output": [
+    "sourceSkips is \\[\"ExpoConfigVersions\"\\], not",
+    "fail 1\\b"
+  ]
+}

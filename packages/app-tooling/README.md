@@ -121,6 +121,47 @@ reads as empty and a `!= 'false'` gate on it quietly runs every time.
 Unlike `check-tool-versions`, this one is specific to the React Native workflow
 family rather than to any repository on the baseline.
 
+## `test-app`
+
+```sh
+test-app                    # every app suite that applies to this repository
+test-app --list             # which would run, and why each other one would not
+test-app --suite fingerprint
+test-app --root ../my-app
+```
+
+`check-contract` asks whether what the workflows need is there. The app
+suites ask whether it works: they are tests that live here, read the app's
+own files, and run this family's code against them. Without them, every app
+generated from the template carries its own copies of those tests, and
+nothing compares the copies with each other or with the code they test.
+
+Each suite is a `node:test` file under `suites/`, registered in
+`suites/index.mjs` with the native stacks it applies to and the files it
+needs. `test-app` finds the app the way `check-contract` does (the callers'
+`working-directory`, the same stack rule), prints `run <suite>` or
+`skip <suite>: <reason>` for each one, and runs the rest in one `node --test`
+with `APP_ROOT` set to the app. Its exit status is node's. A suite is turned
+off only in `app-tooling.json`, and only with a reason, which is printed on
+every run:
+
+```json
+{ "appSuites": { "skip": { "fingerprint": "OTA is not used by this app" } } }
+```
+
+| Suite | Stacks | Needs | What it proves |
+| --- | --- | --- | --- |
+| `fingerprint` | expo | `fingerprint.config.js` | `@expo/fingerprint` resolves from the app; the configuration loads (the library<br>swallows one that throws) and keeps `createFingerprintConfig()`'s source skips and ignore paths;<br>and a release's `APP_VERSION` / `APP_BUILD_NUMBER` move neither the iOS nor the Android hash |
+
+A suite is a test, so no coverage number vouches for it. `suites.test.mjs`
+runs each one against the fixture apps under `fixtures/apps/<suite>/`: one in
+the template's shape that it must pass, and one broken in each way it guards
+against, which it must fail, naming the problem. A suite with nothing it
+fails on fails that test.
+
+`check.yml` runs the app's `test:app` script in its `App suites` job when the
+caller passes `app-suites: true`.
+
 ## Repository guards
 
 Twelve checks for rules a repository on the baseline holds itself to, each a
@@ -302,6 +343,7 @@ becomes one line:
 | `check-ignored-directories` | `pnpm exec check-ignored-directories` |
 | `check:licenses` | `check-licenses` |
 | `check-skills` | `pnpm exec check-skills` |
+| `test:app` | `test-app` |
 | `check:generated` | `bash node_modules/@blinkbitcoin/app-tooling/checks/generated.sh` |
 | `check-code-scanning` | `pnpm exec check-code-scanning` |
 | `check:expo-health` | `bash node_modules/@blinkbitcoin/app-tooling/checks/expo-health.sh` |

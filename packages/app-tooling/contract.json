@@ -221,6 +221,18 @@
       "guide": "script-contract"
     },
     {
+      "id": "package-script.test-app",
+      "kind": "package-script",
+      "target": "test:app",
+      "profile": "checks",
+      "neededBy": "check.yml (app-suites)",
+      "toggle": "check.yml:app-suites",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "Add a \"test:app\" script that runs test-app from @blinkbitcoin/app-tooling, or leave app-suites off.",
+      "guide": "the-app-suites"
+    },
+    {
       "id": "package-script.check-release",
       "kind": "package-script",
       "target": "check:release",
@@ -969,6 +981,19 @@
       "defaultOn": true,
       "severity": "required",
       "fix": "Delete the copy, and point make check-skills (and check-release, if it runs the skill tests) at pnpm exec check-skills.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
+      "id": "no-copy.fingerprint-test",
+      "kind": "no-copy",
+      "label": "no copy of the fingerprint test",
+      "target": ["scripts/release/fingerprint.test.mjs"],
+      "profile": "checks",
+      "neededBy": "test-app's fingerprint suite, which @blinkbitcoin/app-tooling ships and checks both platforms; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy, set the test:app script to test-app, pass app-suites: true to check.yml, and make fingerprint.config.js export createFingerprintConfig().",
       "guide": "no-copies-of-this-family"
     },
     {

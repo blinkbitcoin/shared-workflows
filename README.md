@@ -142,6 +142,7 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | `Generated`    | The i18n catalogs and the GraphQL documents match the sources they come from |
 | `Docs`         | Doc freshness, command tables, table widths, mermaid blocks parse            |
 | `Dependencies` | Expo SDK drift, vulnerability audit, lockfile provenance, licenses           |
+| `App suites`   | The shared app suites against the app's own files (off until `app-suites: true`) |
 | `Prebuild`     | Both platforms prebuild, and the config plugins emit what they claim         |
 | `Release`      | Ruby syntax, fastlane lane parse, lane unit tests                            |
 | `CI`           | actionlint, shellcheck and zizmor over the CI code                           |

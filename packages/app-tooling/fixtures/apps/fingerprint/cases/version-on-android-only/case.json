@@ -1,0 +1,8 @@
+{
+  "passes": false,
+  "output": [
+    "the android fingerprint moved",
+    "✔ a version bump does not move the ios fingerprint",
+    "fail 1\\b"
+  ]
+}

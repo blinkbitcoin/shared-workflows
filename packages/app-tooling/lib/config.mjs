@@ -5,7 +5,8 @@
 //
 //   {
 //     "testSiblings": { "sources": {...}, "exclude": [...], "mirror": {...} },
-//     "docs": { "architecture": [...], "allowTargetNames": {...} }
+//     "docs": { "architecture": [...], "allowTargetNames": {...} },
+//     "appSuites": { "skip": {...} }
 //   }
 //
 // The file is optional; a missing one reads as no section. One that is there
@@ -21,6 +22,7 @@ export const CONFIG_FILE = 'app-tooling.json';
 export const SECTIONS = {
   testSiblings: ['sources', 'exclude', 'mirror'],
   docs: ['architecture', 'allowTargetNames'],
+  appSuites: ['skip'],
 };
 
 /** A configuration file that is there and wrong; a program exits 2 on one. */

@@ -673,6 +673,10 @@
           "type": "boolean",
           "required": false
         },
+        "app-suites": {
+          "type": "boolean",
+          "required": false
+        },
         "prebuild": {
           "type": "boolean",
           "required": false

@@ -49,7 +49,7 @@ check-tool-versions: ## Fail when an installed tool is not the version the basel
 test-package: ## node:test for every package under packages/, with the 100% coverage gate
 	$(MISE) node --test --experimental-test-coverage \
 		--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \
-		--test-coverage-exclude='**/*.test.mjs' --test-coverage-exclude='packages/*/fixtures/**' \
+		--test-coverage-exclude='**/*.test.mjs' --test-coverage-exclude='**/*.suite.mjs' --test-coverage-exclude='packages/*/fixtures/**' \
 		"packages/*/**/*.test.mjs"
 # The Node scripts under scripts/ each have their own node:test file under
 # test/, and the gate is 100% of lines, branches and functions over them.

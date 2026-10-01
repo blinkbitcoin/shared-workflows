@@ -99,6 +99,7 @@ is a warning in the report, not a failure. See
 | `check:secrets` | optional — a fallback runs | check.yml (secrets) |
 | `check:generated` | optional — a fallback runs | check.yml (generated) |
 | `check:prebuild` | only if you set `prebuild: true` | check.yml (prebuild) |
+| `test:app` | only if you set `app-suites: true` | check.yml (app-suites) |
 | `check:release` | only if you set `release: true` | check.yml (release) |
 | `@commitlint/cli` | optional — a fallback runs | check.yml (commits), pr-title.yml |
 | `Gemfile` | only if you set `release: true` | check.yml (release) via bundler-cache, and scripts/release/fastlane.sh |
@@ -133,6 +134,7 @@ is a warning in the report, not a failure. See
 | no `scripts/check-licenses.mjs` or `scripts/check-licenses.test.mjs` | required | the check-licenses program @blinkbitcoin/app-tooling ships, with the organisation's license allowlist; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/codeql-local.sh`, `scripts/codeql-local.test.mjs`, `scripts/codeql-findings.mjs` or `scripts/codeql-findings.test.mjs` | required | the check-code-scanning program @blinkbitcoin/app-tooling ships, which reads the same configuration file check-code-scanning.yml does; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/check-skills.sh` | required | the check-skills program @blinkbitcoin/app-tooling ships, which runs every .claude/skills/*/tests/run.sh; a copy in your repository is compared with it by nothing and drifts |
+| no `scripts/release/fingerprint.test.mjs` | required | test-app's fingerprint suite, which @blinkbitcoin/app-tooling ships and checks both platforms; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/hooks/install-if-lockfile-changed.sh` or `scripts/hooks/install-if-lockfile-changed.test.mjs` | required | hooks/install-if-lockfile-changed.sh, which @blinkbitcoin/app-tooling ships; a copy in your repository is compared with it by nothing and drifts |
 | no `scripts/check-deps.sh` or `scripts/check-deps.test.mjs` | required | checks/expo-health.sh, which @blinkbitcoin/app-tooling ships and check.yml runs when you have no check:expo-health: advisory SDK drift, then expo-doctor; a copy in your repository is compared with it by nothing and drifts |
 
