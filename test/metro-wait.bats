@@ -40,6 +40,8 @@ SH
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out"
   mkdir -p "$WORKFLOWS_OUT"
   unset GITHUB_ENV
+  # The Expo stack unless a case says otherwise: the manifest is Expo's.
+  export WORKFLOWS_NATIVE_STACK_INPUT=expo
 }
 
 wait_for_metro() { run bash "$REPO_ROOT/scripts/e2e/metro-wait.sh" "$@"; }
@@ -110,4 +112,21 @@ prewarmed() { grep '^curl ' "$WORKFLOWS_TEST_LOG" | tail -1; }
   wait_for_metro
   [ "$status" -ne 0 ] || fail "accepted an empty platform: $output"
   contains "$output" "platform must be ios or android" || fail "unexpected message: $output"
+}
+
+# A bare app's Metro serves no Expo manifest and its app asks for index.bundle,
+# so that is what is warmed - never the manifest, never Expo's virtual entry.
+@test "the bare stack prewarms index.bundle, without asking for a manifest" {
+  GITHUB_WORKSPACE="$FIXTURES" WORKING_DIRECTORY=consumer-bare WORKFLOWS_NATIVE_STACK_INPUT='' wait_for_metro android
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$output" "native stack: bare" || fail "the stack was not detected: $output"
+  contains "$(prewarmed)" "http://localhost:8081/index.bundle?platform=android&dev=true&lazy=true&minify=false" || fail "prewarmed: $(prewarmed)"
+  not_contains "$(cat "$WORKFLOWS_TEST_LOG")" "expo-platform" || fail "asked for an Expo manifest: $(cat "$WORKFLOWS_TEST_LOG")"
+  not_contains "$output" "::warning::" || fail "warned about a manifest a bare Metro never serves: $output"
+}
+
+@test "an invalid native-stack input fails before the prewarm" {
+  WORKFLOWS_NATIVE_STACK_INPUT=web wait_for_metro ios
+  [ "$status" -ne 0 ] || fail "accepted web: $output"
+  contains "$output" "could not resolve the native stack" || fail "output: $output"
 }

@@ -31,6 +31,10 @@
           "type": "string",
           "required": false
         },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
         "environment": {
           "type": "string",
           "required": false
@@ -95,6 +99,10 @@
           "type": "string",
           "required": false
         },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
         "environment-variables": {
           "type": "string",
           "required": false
@@ -145,6 +153,10 @@
           "required": false
         },
         "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "native-stack": {
           "type": "string",
           "required": false
         },
@@ -204,6 +216,10 @@
           "type": "string",
           "required": false
         },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
         "environment-variables": {
           "type": "string",
           "required": false
@@ -260,6 +276,14 @@
           "type": "string",
           "required": false
         },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
+        "native-extra-globs": {
+          "type": "string",
+          "required": false
+        },
         "build-number-offset": {
           "type": "number",
           "required": false
@@ -293,6 +317,10 @@
           "required": false
         },
         "build-info-artifact": {
+          "type": "string",
+          "required": false
+        },
+        "fastlane-directory": {
           "type": "string",
           "required": false
         },
@@ -802,6 +830,10 @@
           "type": "string",
           "required": false
         },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
         "environment-variables": {
           "type": "string",
           "required": false
@@ -1210,6 +1242,10 @@
           "type": "string",
           "required": true
         },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
         "ruby-enabled": {
           "type": "boolean",
           "required": false
@@ -1313,6 +1349,10 @@
           "required": false
         },
         "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "native-stack": {
           "type": "string",
           "required": false
         },

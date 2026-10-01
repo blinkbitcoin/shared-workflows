@@ -33,6 +33,14 @@ on:
         description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
         type: string
         default: 'v1'
+      native-stack:
+        description: >-
+          The app's native stack: expo (ios/ and android/ are expo prebuild
+          output) or bare (ios/ and android/ are committed source). Empty, the
+          default, detects it: expo when package.json depends on expo and git
+          does not track ios/, bare otherwise
+        type: string
+        default: ''
       environment:
         description: GitHub Environment whose secrets/approvals gate this build (empty means no environment)
         type: string
@@ -106,6 +114,13 @@ on:
         description: Expected sha256 of the bundletool jar; empty skips verification (Google publishes no checksum file, so this is opt-in)
         type: string
         default: ''
+      fastlane-directory:
+        description: >-
+          The directory holding the Fastfile and the store metadata, relative to
+          working-directory. fastlane only finds a directory named fastlane or
+          .fastlane, so it may move (mobile/fastlane) but not be renamed
+        type: string
+        default: 'fastlane'
       environment-variables:
         description: 'Flat JSON object of non-secret build environment variables published before prebuild, the lanes and the scripts (e.g. {"OTA_ENABLED":"true","EXPO_UPDATES_URL":"https://..."}). Keys must be UPPER_SNAKE and anything that reads as a credential is refused - this is a workflow input, so GitHub neither masks nor hides it'
         type: string
@@ -139,6 +154,8 @@ jobs:
     environment: ${{ inputs.environment }}
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
+      WORKFLOWS_FASTLANE_DIRECTORY: ${{ inputs.fastlane-directory }}
       WORKFLOWS_STAGE: ${{ inputs.stage }}
       APP_VERSION: ${{ inputs.version }}
       APP_BUILD_NUMBER: ${{ inputs.build-number }}

@@ -15,7 +15,9 @@
 # one still under its old name, release-notes.prompt.md, is not read, and the
 # run says so too.
 #
-# Env: STORE_NOTES_LOCALES (empty: the generator picks the locales), RELEASE_BODY_FILE (a release body, from the
+# Env: STORE_NOTES_LOCALES (empty: the generator picks the locales),
+# WORKFLOWS_FASTLANE_DIRECTORY (the `fastlane-directory` input: where the
+# metadata/ios the generator reads the locales from lives; fastlane when empty), RELEASE_BODY_FILE (a release body, from the
 # release-body-file input or fetched by release-body.sh; switches the generator
 # to --from-body --body-section).
 # Usage: gen-store-notes.sh
@@ -38,8 +40,9 @@ cd "$root"
 # default filled in here used to win over that, so an app with de-DE metadata
 # got en-US-only notes from CI and both locales from the same command on a
 # laptop.
-locale_args=()
-[ -z "${STORE_NOTES_LOCALES:-}" ] || locale_args=(--locales "$STORE_NOTES_LOCALES")
+generator_args=()
+[ -z "${STORE_NOTES_LOCALES:-}" ] || generator_args=(--locales "$STORE_NOTES_LOCALES")
+generator_args+=(--fastlane-directory "${WORKFLOWS_FASTLANE_DIRECTORY:-fastlane}")
 
 group "store notes"
 require_cmd node
@@ -56,12 +59,12 @@ if [ -n "${RELEASE_BODY_FILE:-}" ] && [ -f "$RELEASE_BODY_FILE" ]; then
   log "running gen-store-notes --from-body --body-section"
   STORE_NOTES_LOCALES="${STORE_NOTES_LOCALES:-}" \
     node "$generator" --from-body "$RELEASE_BODY_FILE" --body-section \
-    "${locale_args[@]+"${locale_args[@]}"}" --out "$WORKFLOWS_RELEASE_META_DIR"
+    "${generator_args[@]}" --out "$WORKFLOWS_RELEASE_META_DIR"
 else
   log "running gen-store-notes --from-commits"
   STORE_NOTES_LOCALES="${STORE_NOTES_LOCALES:-}" \
     node "$generator" --from-commits \
-    "${locale_args[@]+"${locale_args[@]}"}" --out "$WORKFLOWS_RELEASE_META_DIR"
+    "${generator_args[@]}" --out "$WORKFLOWS_RELEASE_META_DIR"
 fi
 
 # Assert the two files the store lanes need rather than trusting the

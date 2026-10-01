@@ -34,6 +34,9 @@ STUB
   chmod +x "$bin/curl"
   PATH="$bin:$PATH"
   export PATH
+  # The Expo stack unless a case says otherwise: these cases were written for
+  # it, and a run from this checkout would otherwise detect the bare stack.
+  export WORKFLOWS_NATIVE_STACK_INPUT=expo
 }
 
 launch() { run bash "$REPO_ROOT/scripts/e2e/app-launch.sh" "$@"; }
@@ -116,4 +119,51 @@ launch() { run bash "$REPO_ROOT/scripts/e2e/app-launch.sh" "$@"; }
     run "$BATS_TEST_TMPDIR/nocurl/bash" "$REPO_ROOT/scripts/e2e/app-launch.sh" ios
   [ "$status" -ne 0 ] || fail "a missing metro.log passed without curl; output: $output"
   contains "$output" "no Metro answering on port 8081" || fail "output: $output"
+}
+
+# --- the bare native stack ---------------------------------------------------
+#
+# A bare React Native app has no dev-client launcher and no expo: it is
+# launched plainly, its identifiers come from the committed native projects,
+# and the React Native CLI's Metro logs its receipt as "BUNDLE".
+
+@test "a bare app is launched plainly on iOS, and the CLI Metro's BUNDLE line is the receipt" {
+  printf 'metro started\n' > "$WORKFLOWS_OUT/metro.log"
+  ( sleep 1; printf ' BUNDLE  ./index.js\n' >> "$WORKFLOWS_OUT/metro.log" ) &
+  WORKFLOWS_NATIVE_STACK_INPUT=bare WORKFLOWS_IOS_CONFIGURATION=Debug WORKFLOWS_DEV_CLIENT=false launch ios
+  wait
+  [ "$status" -eq 0 ] || fail "status $status; output: $output"
+  contains "$output" "app is up" || fail "output: $output"
+  grep -q 'xcrun simctl launch SIM-UDID com.example.app' "$CALLS" || fail "not a plain launch: $(cat "$CALLS")"
+  not_contains "$(cat "$CALLS")" "openurl" || fail "a deep link was opened: $(cat "$CALLS")"
+}
+
+@test "the bare fixture's Android app is launched by its applicationId, with no expo anywhere" {
+  unset WORKFLOWS_APP_ID WORKFLOWS_NATIVE_STACK_INPUT
+  printf 'metro started\n' > "$WORKFLOWS_OUT/metro.log"
+  ( sleep 1; printf ' BUNDLE  ./index.js\n' >> "$WORKFLOWS_OUT/metro.log" ) &
+  GITHUB_WORKSPACE="$FIXTURES/consumer-bare" WORKING_DIRECTORY=. WORKFLOWS_DEV_CLIENT=false launch android
+  wait
+  [ "$status" -eq 0 ] || fail "status $status; output: $output"
+  contains "$output" "launching com.example.bare on android (dev-client=false)" || fail "output: $output"
+  grep -q 'adb shell am start -n com.example.bare/.MainActivity' "$CALLS" || fail "not a plain launch: $(cat "$CALLS")"
+}
+
+@test "dev-client on for an app with no URL scheme fails with the fix, before any launch" {
+  METRO_STATUS=packager-status:running WORKFLOWS_NATIVE_STACK_INPUT=bare \
+    GITHUB_WORKSPACE="$FIXTURES/consumer-bare" WORKING_DIRECTORY=. WORKFLOWS_DEV_CLIENT=true launch android
+  [ "$status" -ne 0 ] || fail "launched with no scheme; output: $output"
+  contains "$output" "dev-client is on, but the app declares no URL scheme" || fail "output: $output"
+  contains "$output" "pass dev-client: false" || fail "no fix: $output"
+  not_contains "$(cat "$CALLS")" "adb" || fail "launched anyway: $(cat "$CALLS")"
+}
+
+@test "dev-client on for a bare app that declares a scheme opens the deep link with it" {
+  app="$BATS_TEST_TMPDIR/app"
+  mkdir -p "$app/android/app/src/main"
+  printf '<manifest><data android:scheme="bareapp"/></manifest>\n' > "$app/android/app/src/main/AndroidManifest.xml"
+  METRO_STATUS=packager-status:running WORKFLOWS_NATIVE_STACK_INPUT=bare \
+    GITHUB_WORKSPACE="$app" WORKING_DIRECTORY=. WORKFLOWS_DEV_CLIENT=true launch ios
+  [ "$status" -eq 0 ] || fail "status $status; output: $output"
+  grep -q 'xcrun simctl openurl SIM-UDID bareapp://expo-development-client/' "$CALLS" || fail "$(cat "$CALLS")"
 }

@@ -221,9 +221,40 @@ The rows above marked for one stack are skipped on the other. A bare app is
 held to the `ios/` and `android/` it commits instead of an Expo config, skips
 the `expo-health` gate, and is scanned by `check-security.yml` from those
 projects and `react-native bundle`. `test-e2e.yml` and the release workflows
-prebuild an Expo app and read `expo config --json` for the app name, scheme,
-bundle identifier and package; a bare app can call them only at a version whose
-table in the consumer guide lists a `native-stack` input for that workflow.
+build either stack: see the next section.
+
+## A bare React Native app
+
+A React Native app that is not an Expo app — `ios/` and `android/` committed,
+no `expo` dependency, `react-native start` for Metro, no dev client — can call
+every workflow here, `test-e2e.yml` and the release workflows included. What it
+needs:
+
+- **pnpm and mise.** The same as an Expo app: a `.mise.toml` pinning node and
+  pnpm (and Ruby, Java for Android), and a `pnpm-lock.yaml` at the root. The
+  workflows read the lockfile before any install.
+- **Its native projects committed.** `ios/` with a single `*.xcworkspace` and
+  `android/` with `android/app/build.gradle` (or `.kts`). Nothing is generated:
+  the prebuild step only checks they are there and tracked, and fails with the
+  fix when they are not. Keep `ios/Pods/` and the build directories ignored.
+- **Literal identifiers, or the inputs.** The bundle identifier comes from
+  `xcodebuild -showBuildSettings` (or the `project.pbxproj`), the application id
+  from `applicationId` in `build.gradle`, the URL scheme from `Info.plist` or the
+  manifest. Where a workflow takes `ios-bundle-id`, `android-package` or
+  `ios-scheme`, those win.
+- **`native-stack: bare`** on the native callers. Detection gets it right
+  without (no `expo` dependency), but naming it keeps the app on the bare path
+  if it later adds an Expo module.
+- **`dev-client: false`** on `test-e2e.yml`: there is no dev-client launcher,
+  so the app is launched plainly and loads `index.bundle` from Metro.
+- **A `fastlane/` at the root**, or the `fastlane-directory` input pointing at
+  one deeper in the repository (it must be named `fastlane`).
+
+The fingerprint `build-prepare.yml` records is then a sha256 over the tracked
+native files and the lockfile rather than `@expo/fingerprint`'s, under the same
+names. The per-stack table and caller examples are in the consumer guide's
+[Expo or bare](consumer-guide.md#expo-or-bare); `test/fixtures/consumer-bare/`
+in this repository is the smallest such app the tests run against.
 
 ## Check it before you push
 

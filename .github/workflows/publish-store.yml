@@ -104,6 +104,13 @@ on:
         description: Application id passed to the lane as ANDROID_PACKAGE. All five contract variables are required on every lane - the consumer's Fastfile asserts them in `before_all`, for both platforms, and rejects empty ones
         type: string
         required: true
+      fastlane-directory:
+        description: >-
+          The directory holding the Fastfile and the store metadata, relative to
+          working-directory. fastlane only finds a directory named fastlane or
+          .fastlane, so it may move (mobile/fastlane) but not be renamed
+        type: string
+        default: 'fastlane'
       ruby-enabled:
         description: Install Ruby via ruby/setup-ruby (leave on unless the consumer has no Gemfile)
         type: boolean
@@ -194,6 +201,7 @@ jobs:
     environment: ${{ inputs.environment }}
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      WORKFLOWS_FASTLANE_DIRECTORY: ${{ inputs.fastlane-directory }}
       APP_VERSION: ${{ inputs.version }}
       APP_BUILD_NUMBER: ${{ inputs.build-number }}
       IOS_BUNDLE_ID: ${{ inputs.ios-bundle-id }}

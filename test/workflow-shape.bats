@@ -179,7 +179,7 @@ setup() {
 # down with it, and neither gate may read an empty output as "skip".
 @test "the fixture caller gates unit and e2e on their classes, and e2e survives a skipped unit" {
   command -v yq >/dev/null || skip "yq not installed"
-  f="$FIXTURES/consumer-min/.github/workflows/ci.yml"
+  for f in "$FIXTURES/consumer-min/.github/workflows/ci.yml" "$FIXTURES/consumer-bare/.github/workflows/ci.yml"; do
   unit=$(yq -r '.jobs.unit.if' "$f")
   contains "$unit" "needs.checks.outputs.unit-changed != 'false'" || fail "unit's gate: $unit"
   e2e=$(yq -r '.jobs.e2e.if' "$f")
@@ -188,7 +188,8 @@ setup() {
     "needs.checks.result == 'success'" \
     "contains(fromJSON('[\"success\", \"skipped\"]'), needs.unit.result)" \
     "needs.checks.outputs.e2e-changed != 'false'"; do
-    contains "$e2e" "$needle" || fail "e2e's gate no longer contains [$needle]: $e2e"
+    contains "$e2e" "$needle" || fail "$f: e2e's gate no longer contains [$needle]: $e2e"
+  done
   done
 }
 
@@ -1392,4 +1393,58 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   step='.jobs.generated.steps[] | select(.name == "Generated")'
   [ "$(yq -r "$step | .env.I18N_PATHS" "$f")" = '${{ inputs.i18n-paths }}' ] || fail "I18N_PATHS is not the input"
   [ "$(yq -r "$step | .env.GRAPHQL_PATHS" "$f")" = '${{ inputs.graphql-paths }}' ] || fail "GRAPHQL_PATHS is not the input"
+}
+
+# The native pipeline: every workflow that runs a native step takes native-stack,
+# empty by default, and puts it in the environment of every job, where
+# scripts/lib/native-stack.sh reads it as WORKFLOWS_NATIVE_STACK_INPUT - the
+# native-key action's cache hash and the scripts alike.
+@test "every native workflow takes native-stack, empty by default, and hands it to every job" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local wf f jobs job
+  for wf in test-e2e build-ios build-android build-prepare; do
+    f="$REPO_ROOT/.github/workflows/$wf.yml"
+    [ "$(yq -r '.on.workflow_call.inputs."native-stack".type' "$f")" = "string" ] || fail "$wf.yml: native-stack is not a string input"
+    [ "$(yq -r '.on.workflow_call.inputs."native-stack".default' "$f")" = "" ] || fail "$wf.yml: native-stack does not default to empty"
+    jobs="$(yq -r '.jobs | keys | .[]' "$f")"
+    [ -n "$jobs" ] || fail "$wf.yml: read no jobs"
+    for job in $jobs; do
+      [ "$(yq -r ".jobs.\"$job\".env.WORKFLOWS_NATIVE_STACK_INPUT" "$f")" = '${{ inputs.native-stack }}' ] \
+        || fail "$wf.yml job '$job' does not put native-stack in WORKFLOWS_NATIVE_STACK_INPUT"
+    done
+  done
+}
+
+# build-prepare computes the fingerprint, and the bare stack's folds in the
+# native-extra-globs matches - the same globs test-e2e.yml and build-ios.yml
+# fold into the cache key.
+@test "build-prepare hands native-extra-globs to the fingerprint as NATIVE_EXTRA_GLOBS" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/build-prepare.yml"
+  [ "$(yq -r '.on.workflow_call.inputs."native-extra-globs".default' "$f")" = "" ] || fail "native-extra-globs does not default to empty"
+  [ "$(yq -r '.jobs.prepare.env.NATIVE_EXTRA_GLOBS' "$f")" = '${{ inputs.native-extra-globs }}' ] || fail "NATIVE_EXTRA_GLOBS is not the input"
+}
+
+# Every workflow that runs a lane or reads the store metadata takes
+# fastlane-directory, defaulting to fastlane, and every job of it exports
+# WORKFLOWS_FASTLANE_DIRECTORY: fastlane.sh, the verify lanes and the store
+# notes generator all read it there.
+@test "every lane and store-notes workflow takes fastlane-directory, fastlane by default, and hands it to its jobs" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local wf f job lanes
+  for wf in build-ios build-android publish-store build-prepare pr-store-notes; do
+    f="$REPO_ROOT/.github/workflows/$wf.yml"
+    [ "$(yq -r '.on.workflow_call.inputs."fastlane-directory".type' "$f")" = "string" ] || fail "$wf.yml: fastlane-directory is not a string input"
+    [ "$(yq -r '.on.workflow_call.inputs."fastlane-directory".default' "$f")" = "fastlane" ] || fail "$wf.yml: fastlane-directory does not default to fastlane"
+    for job in $(yq -r '.jobs | keys | .[]' "$f"); do
+      [ "$(yq -r ".jobs.\"$job\".env.WORKFLOWS_FASTLANE_DIRECTORY" "$f")" = '${{ inputs.fastlane-directory }}' ] \
+        || fail "$wf.yml job '$job' does not export WORKFLOWS_FASTLANE_DIRECTORY"
+    done
+  done
+  # And nothing that runs a lane is left out of that list.
+  for f in "${WORKFLOWS[@]}"; do
+    lanes="$(yq -r '[.jobs[].steps[]? | select((.run? // "") | test("release/(fastlane|gen-store-notes|pr-store-notes).sh"))] | length' "$f")"
+    [ "$lanes" -eq 0 ] || [ "$(yq -r '.on.workflow_call.inputs | has("fastlane-directory")' "$f")" = true ] \
+      || fail "$(basename "$f") runs a lane or the store notes but takes no fastlane-directory"
+  done
 }

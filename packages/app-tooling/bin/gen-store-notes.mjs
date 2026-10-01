@@ -401,6 +401,8 @@ is set; ./store-notes.prompt.md is added to its prompt when present.
   --body-section        also take a verbatim "## Store notes" section from the body
   --locales a,b         locales to emit (default: $STORE_NOTES_LOCALES, else
                         the locale directories under fastlane/metadata/ios)
+  --fastlane-directory D  the app's fastlane directory, relative to the working
+                        directory, whose metadata/ios names the locales (default: fastlane)
   --include-changelog   append the full changelog (also $STORE_NOTES_INCLUDE_CHANGELOG)
   --out DIR|-           write store-notes.json + store-notes.txt into DIR, or - for stdout
   --help                this text
@@ -424,6 +426,7 @@ export function parseArgs(argv) {
     out: '',
     includeChangelog: process.env.STORE_NOTES_INCLUDE_CHANGELOG === 'true',
     bodySection: false,
+    fastlaneDirectory: 'fastlane',
   };
   const sources = [];
   for (let i = 0; i < argv.length; i += 1) {
@@ -445,6 +448,7 @@ export function parseArgs(argv) {
     else if (arg === '--out') options.out = next();
     else if (arg === '--include-changelog') options.includeChangelog = true;
     else if (arg === '--body-section') options.bodySection = true;
+    else if (arg === '--fastlane-directory') options.fastlaneDirectory = next();
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (sources.length > 1) {
@@ -515,7 +519,9 @@ export function fetchBody({ tag, pr }, { cwd = process.cwd(), exec = execFileSyn
  *   2. `$STORE_NOTES_LOCALES` — what the reusable `build-prepare` workflow exports for
  *      its `store-notes-locales` input. Reading it here is what makes that input do
  *      something; it was plumbed through and silently ignored.
- *   3. the locale directories under `cwd`'s fastlane/metadata/ios, which are
+ *   3. the locale directories under `cwd`'s fastlane/metadata/ios (or
+ *      `options.fastlaneDirectory`'s metadata/ios, for an app whose Fastfile
+ *      lives elsewhere: the `fastlane-directory` workflow input), which are
  *      the ones the lanes then look up in store-notes.json.
  *
  * A caller that sets `store-notes-locales` must therefore use the *metadata* locale
@@ -528,7 +534,10 @@ export function resolveLocales(options, env = process.env, cwd = process.cwd()) 
     .split(',')
     .map((locale) => locale.trim())
     .filter(Boolean);
-  return fromEnv.length ? fromEnv : discoverLocales(path.resolve(cwd, IOS_METADATA_DIR));
+  const metadata = options.fastlaneDirectory
+    ? path.join(options.fastlaneDirectory, 'metadata', 'ios')
+    : IOS_METADATA_DIR;
+  return fromEnv.length ? fromEnv : discoverLocales(path.resolve(cwd, metadata));
 }
 
 /**

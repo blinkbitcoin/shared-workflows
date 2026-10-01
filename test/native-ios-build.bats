@@ -9,6 +9,8 @@ load test_helper
 
 setup() {
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR/app" WORKING_DIRECTORY=.
+  # The Expo stack: these cases read the Expo configuration's identifiers.
+  export WORKFLOWS_NATIVE_STACK_INPUT=expo
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out"
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/github_output"
   export EXPO_CONFIG_JSON="$BATS_TEST_TMPDIR/none.json"
@@ -34,7 +36,9 @@ STUB
 printf 'sudo %s\n' "$*" >> "$CALLS"
 STUB
   chmod +x "$bin/xcodebuild" "$bin/sudo"
-  export PATH="$bin:/usr/bin:/bin"
+  # node for the stack resolver (packages/app-tooling/lib/native-stack.mjs),
+  # which a runner always has; nothing else from this machine.
+  export PATH="$bin:$(dirname "$(command -v node)"):/usr/bin:/bin"
 }
 
 formatter() {

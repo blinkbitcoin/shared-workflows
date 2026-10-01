@@ -3,7 +3,9 @@
 # so the first app launch does not race a cold transform of the whole graph.
 # The URL comes from the dev server's own manifest rather than being built here
 # (see the prewarm block below); the fallback is Expo's virtual entry, not
-# index.bundle, because expo-router apps have no physical entry file.
+# index.bundle, because expo-router apps have no physical entry file. A bare
+# app's Metro (`react-native start`) serves no manifest, and its app asks for
+# index.bundle, so that is what is warmed for the bare native stack.
 # Usage: metro-wait.sh <ios|android>
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
@@ -69,11 +71,17 @@ manifest_bundle_path() {
 }
 
 group "prewarming the $platform bundle"
+stack="$(bash "$WORKFLOWS_LIB_DIR/native-stack.sh")" || die "could not resolve the native stack"
 # The URL Expo built before the manifest existed. Kept as the fallback so a
 # non-dev-client app, a jq-less machine or an unexpected manifest shape still
 # gets a warm graph - just not necessarily the app's own.
 fallback="/.expo/.virtual-metro-entry.bundle?platform=$platform&dev=true&hot=false&lazy=true&transform.engine=hermes"
-if path="$(manifest_bundle_path)"; then
+if [ "$stack" = bare ]; then
+  # What a bare React Native app's AppDelegate / MainApplication requests in
+  # Debug: the physical index.js entry, with the CLI's default transform options.
+  path="/index.bundle?platform=$platform&dev=true&lazy=true&minify=false&inlineSourceMap=false&modulesOnly=false&runModule=true"
+  log "prewarming the bare app's entry: $path"
+elif path="$(manifest_bundle_path)"; then
   log "prewarming the manifest's launchAsset: $path"
 else
   printf '::warning::could not read launchAsset.url from the %s manifest; prewarming the hand-built bundle URL, which may warm a different graph than the app requests\n' "$platform"

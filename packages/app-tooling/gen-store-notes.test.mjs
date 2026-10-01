@@ -468,6 +468,22 @@ test('a flag without a value, and two sources at once, both fail loudly', () => 
   assert.deepEqual(parseArgs(['--from-commits', 'v1..HEAD']).range, 'v1..HEAD');
   assert.equal(parseArgs(['--from-commits']).range, '');
   assert.equal(parseArgs(['--from-commits', '--include-changelog']).includeChangelog, true);
+  assert.equal(parseArgs(['--from-commits']).fastlaneDirectory, 'fastlane');
+  assert.equal(parseArgs(['--from-commits', '--fastlane-directory', 'mobile/fastlane']).fastlaneDirectory, 'mobile/fastlane');
+  assert.throws(() => parseArgs(['--from-commits', '--fastlane-directory']), /--fastlane-directory needs a value/);
+});
+
+test('the locales are discovered under the fastlane directory the caller names', () => {
+  // A bare app may keep its Fastfile in mobile/fastlane (the fastlane-directory
+  // workflow input); its metadata/ios is then the one that names the locales.
+  const cwd = tempDir();
+  mkdirSync(path.join(cwd, 'mobile', 'fastlane', 'metadata', 'ios', 'de-DE'), { recursive: true });
+  mkdirSync(path.join(cwd, 'fastlane', 'metadata', 'ios', 'sv-SE'), { recursive: true });
+  const none = { locales: [] };
+  assert.deepEqual(resolveLocales({ ...none, fastlaneDirectory: 'mobile/fastlane' }, {}, cwd), ['de-DE']);
+  assert.deepEqual(resolveLocales({ ...none, fastlaneDirectory: 'fastlane' }, {}, cwd), ['sv-SE']);
+  // Without the option (a caller that builds options itself), fastlane/ is read.
+  assert.deepEqual(resolveLocales(none, {}, cwd), ['sv-SE']);
 });
 
 test('locales come from the ios metadata directories, ignoring the non-locales', () => {

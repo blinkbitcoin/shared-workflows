@@ -33,6 +33,14 @@ on:
         description: Native cache key prefix; bump to invalidate every native cache at once
         type: string
         default: 'v1'
+      native-stack:
+        description: >-
+          The app's native stack: expo (ios/ and android/ are expo prebuild
+          output) or bare (ios/ and android/ are committed source). Empty, the
+          default, detects it: expo when package.json depends on expo and git
+          does not track ios/, bare otherwise
+        type: string
+        default: ''
       native-extra-globs:
         description: Extra space-separated consumer-relative shell globs whose file contents are folded into the native dependency hash
         type: string
@@ -78,7 +86,7 @@ on:
         type: number
         default: 10
       dev-client:
-        description: Launch through the expo-development-client deep link and start Metro with --dev-client
+        description: Launch through the expo-development-client deep link and start Metro with --dev-client. A bare React Native app has no dev-client launcher, so it passes false and is launched plainly
         type: boolean
         default: true
       ios-configuration:
@@ -139,6 +147,7 @@ jobs:
     timeout-minutes: 60
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
       WORKFLOWS_XCODE: ${{ inputs.xcode-version }}
       WORKFLOWS_IOS_CONFIGURATION: ${{ inputs.ios-configuration }}
     steps:
@@ -260,6 +269,7 @@ jobs:
     timeout-minutes: 60
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
       WORKFLOWS_IOS_CONFIGURATION: ${{ inputs.ios-configuration }}
       # A Release build has no dev launcher to deep-link into, so it launches
       # directly whatever `dev-client` says. The non-empty value MUST sit in the
@@ -366,6 +376,7 @@ jobs:
     timeout-minutes: 40
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
     steps:
       - name: Checkout consumer
         uses: actions/checkout@v7
@@ -442,6 +453,7 @@ jobs:
     timeout-minutes: 60
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
       WORKFLOWS_DEV_CLIENT: ${{ inputs.dev-client }}
       WORKFLOWS_MAESTRO_FLOWS: ${{ inputs.flows }}
       WORKFLOWS_MAESTRO_INCLUDE_TAGS: ${{ inputs.include-tags }}

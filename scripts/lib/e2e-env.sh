@@ -42,7 +42,7 @@ gh_env_once WORKFLOWS_OUT "$WORKFLOWS_OUT"
 gh_env_once WORKFLOWS_RUN_START "$WORKFLOWS_RUN_START"
 
 # Directory holding scripts/lib, resolved from this file so callers in any
-# subdirectory (scripts/native, scripts/e2e) find expo-config.sh.
+# subdirectory (scripts/native, scripts/e2e) find native-stack.sh.
 WORKFLOWS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export WORKFLOWS_LIB_DIR
 
@@ -55,12 +55,17 @@ workflows_platform() {
   esac
 }
 
-workflows_expo_config() { bash "$WORKFLOWS_LIB_DIR/expo-config.sh" "$1"; }
+# workflows_app_config KEY -> one identifier of the app, from the consumer's
+# native stack: scripts/native/<stack>/app-config.sh, chosen by native-stack.sh.
+# KEY is ios-bundle-id, android-package, scheme (the URL scheme) or ios-scheme
+# (the Xcode scheme). The Expo stack reads `expo config`; the bare stack reads
+# the committed native projects.
+workflows_app_config() { bash "$WORKFLOWS_LIB_DIR/native-stack.sh" app-config "$1"; }
 
 # workflows_app_id PLATFORM -> the application id under test. WORKFLOWS_APP_ID wins; the
-# default comes straight from the resolved Expo config, which already carries
-# any variant suffix (the template's app.config.ts appends `.dev` itself), so
-# nothing is appended here.
+# default comes from the stack's app-config. For Expo that is the resolved
+# config, which already carries any variant suffix (the template's
+# app.config.ts appends `.dev` itself), so nothing is appended here.
 workflows_app_id() {
   if [ -n "${WORKFLOWS_APP_ID:-}" ]; then printf '%s\n' "$WORKFLOWS_APP_ID"; return 0; fi
   # Read on its own line: a failing `$(...)` in a `case` word never stops the
@@ -68,35 +73,36 @@ workflows_app_id() {
   local platform
   platform="$(workflows_platform "${1:-}")" || return
   case "$platform" in
-    ios) workflows_expo_config ios.bundleIdentifier ;;
-    android) workflows_expo_config android.package ;;
+    ios) workflows_app_config ios-bundle-id ;;
+    android) workflows_app_config android-package ;;
   esac
 }
 
-workflows_scheme() { workflows_expo_config scheme; }
+# workflows_scheme -> the app's URL scheme (empty for a bare app that has none).
+workflows_scheme() { workflows_app_config scheme; }
 
-# workflows_ios_scheme -> the Xcode scheme/target name. Derived from the Expo config
-# (`name` stripped of non-alphanumerics, which is what prebuild generates) but
-# validated against the workspace prebuild actually wrote: the workspace name is
-# authoritative, a disagreement is only a warning so the build still runs.
-workflows_ios_scheme() {
-  local root ws ws_name cfg_name
-  # Read through `$(...)` by its callers, where `set -e` does not reach.
-  root="$(consumer_root)" || die "the consumer's working directory does not exist: ${GITHUB_WORKSPACE:-$PWD}/${WORKING_DIRECTORY:-.}"
-  ws="$(find "$root/ios" -maxdepth 1 -name '*.xcworkspace' 2>/dev/null | head -1)"
-  [ -n "$ws" ] || die "no ios/*.xcworkspace in $root - run prebuild.sh ios and pods.sh first"
-  ws_name="$(basename "$ws" .xcworkspace)"
-  # The workspace name is what we return, always. The Expo config is only a
-  # cross-check, and asking for it runs `pnpm exec expo config` - which on a
-  # cache hit means installing the whole dependency tree (~80s) to produce a
-  # warning that changes nothing. Best-effort: when the config is not already
-  # available, skip the comparison rather than make every caller pay for it.
-  if cfg_name="$(workflows_expo_config ios.scheme-name 2>/dev/null)" &&
-    [ -n "$cfg_name" ] && [ "$ws_name" != "$cfg_name" ]; then
-    printf '::warning::expo-config scheme-name (%s) disagrees with the generated workspace (%s); using the workspace name\n' \
-      "$cfg_name" "$ws_name" >&2
-  fi
-  printf '%s\n' "$ws_name"
+# workflows_ios_scheme -> the Xcode scheme/target name: the ios/*.xcworkspace
+# name, for both stacks (the Expo stack cross-checks it against the config).
+workflows_ios_scheme() { workflows_app_config ios-scheme; }
+
+# workflows_metro_background COMMAND [ARG...] - start Metro in the background,
+# the one contract both stacks' metro-start.sh share. nohup + a pid file so the
+# process survives the step that started it (each GitHub Actions step is its
+# own shell) and can be killed deterministically at the end of the job; CI=1 so
+# neither CLI waits on an interactive prompt.
+# Log: $WORKFLOWS_OUT/metro.log  Pid: $WORKFLOWS_OUT/metro.pid
+workflows_metro_background() {
+  local pid
+  # Job control on: the background job then leads its own process group, so
+  # `kill -TERM -$(cat metro.pid)` takes the whole tree down. Killing the pid
+  # alone only reaps the pnpm wrapper and leaves node holding the port.
+  set -m
+  CI=1 nohup "$@" > "$WORKFLOWS_OUT/metro.log" 2>&1 &
+  pid=$!
+  set +m
+  printf '%s\n' "$pid" > "$WORKFLOWS_OUT/metro.pid"
+  log "Metro starting (pid $pid, port $WORKFLOWS_METRO_PORT, log $WORKFLOWS_OUT/metro.log)"
+  log "stop it with: kill -TERM -$pid"
 }
 
 # workflows_driver_startup_timeout DEFAULT_MS -> the MAESTRO_DRIVER_STARTUP_TIMEOUT
@@ -119,8 +125,8 @@ workflows_driver_startup_timeout() {
 }
 
 # workflows_ios_unified_log_predicate -> the `log stream --predicate` that
-# ios-simulator.sh records next to the video. The app id (from the Expo config,
-# or WORKFLOWS_APP_ID) and its URL scheme narrow the firehose to the lines that
+# ios-simulator.sh records next to the video. The app id (from the stack's
+# app-config, or WORKFLOWS_APP_ID) and its URL scheme narrow the firehose to the lines that
 # explain a deep link: SpringBoard presenting/dismissing the "Open in <app>?"
 # alert, the app's scene being deactivated behind it, and FrontBoard handing
 # the UIOpenURLAction to the app.

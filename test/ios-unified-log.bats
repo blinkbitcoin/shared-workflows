@@ -12,6 +12,8 @@ load test_helper
 
 setup() {
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out"
+  # The Expo stack: these cases read the Expo configuration's identifiers.
+  export WORKFLOWS_NATIVE_STACK_INPUT=expo
   export GITHUB_ENV="$BATS_TEST_TMPDIR/ghenv"
   : > "$GITHUB_ENV"
   mkdir -p "$WORKFLOWS_OUT"

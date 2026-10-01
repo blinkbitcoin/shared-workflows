@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "Minimal bare React Native consumer fixture: no expo dependency, and ios/",
+    "and android/ committed as source, so scripts/lib/native-stack.sh resolves",
+    "it to the bare stack. Shaped after blink-terminal-app once it moves to",
+    "pnpm, mise and a root fastlane/. Every script the family calls is present",
+    "as a no-op, except the Expo-only ones (check:expo-health, check:prebuild),",
+    "the web ones and the generators, which its callers do not run."
+  ],
+  "name": "consumer-bare-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "react": "19.1.1",
+    "react-native": "0.85.2"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "^20.0.0",
+    "knip": "^6.34.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "react-native start",
+    "check:types": "node -e 0",
+    "check:lint": "node -e 0",
+    "fix:lint": "node -e 0",
+    "fix:format": "node -e 0",
+    "check:format": "node -e 0",
+    "check:unused": "node -e 0",
+    "check:spell": "node -e 0",
+    "check:docs": "node -e 0",
+    "check:generated": "node -e 0",
+    "test": "node -e 0",
+    "test:coverage": "node -e 0",
+    "test:scripts": "node -e 0",
+    "test:e2e:ios": "node -e 0",
+    "test:e2e:android": "node -e 0",
+    "check:audit": "node -e 0",
+    "check:licenses": "node -e 0",
+    "check:ci": "node -e 0",
+    "check:secrets": "node -e 0"
+  }
+}

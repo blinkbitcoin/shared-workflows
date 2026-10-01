@@ -13,7 +13,7 @@ for someone running these scripts directly.
 
 Two families, one env contract:
 
-- `scripts/native/*` turns a checkout into a runnable app (`prebuild.sh`, `pods.sh`, `ios-build.sh`, `ios-pack.sh`, `android-build.sh`).
+- `scripts/native/*` turns a checkout into a runnable app (`prebuild.sh`, `pods.sh`, `ios-build.sh`, `ios-pack.sh`, `android-build.sh`). What differs between an Expo app and a bare React Native app lives under `scripts/native/expo/` and `scripts/native/bare/`, four entry points each (`prebuild.sh`, `app-config.sh`, `metro-start.sh`, `fingerprint.sh`); `scripts/lib/native-stack.sh` resolves the consumer's stack (`WORKFLOWS_NATIVE_STACK_INPUT`, the workflows' `native-stack` input, else detected) and runs the right one. `prebuild.sh` and `metro-start.sh` here are thin dispatchers to it.
 - `scripts/e2e/*` drives a device and the Maestro suite (`metro-start.sh`, `metro-wait.sh`, `ios-simulator.sh`, `android-emulator.sh`, `app-launch.sh`, `maestro-bound.sh`, `ios-maestro.sh`, `android-maestro.sh`, `collect-forensics.sh`), plus three that the workflows call around them: `env-publish.sh`, `run-hook.sh` (the consumer's setup/teardown hooks) and `step-timeout.sh` (the step bound derived from `suite-timeout-minutes`).
 
 All of them run from the repo that hosts these scripts and act on the *consumer*
@@ -21,9 +21,9 @@ checkout resolved by `consumer_root` (`$GITHUB_WORKSPACE/$WORKING_DIRECTORY`).
 
 ## Prerequisites
 
-On the machine running these scripts: `bash`, `pnpm`, `curl`, `jq`
-(`ios-simulator.sh pick` parses `simctl list -j`), `yq` (via
-`scripts/lib/expo-config.sh`), and `maestro` on `PATH` or in `~/.maestro/bin`
+On the machine running these scripts: `bash`, `node` and `git` (the stack
+resolver), `pnpm`, `curl`, `jq` (`ios-simulator.sh pick` parses `simctl list -j`),
+`yq` on the Expo stack (via `scripts/lib/expo-config.sh`), and `maestro` on `PATH` or in `~/.maestro/bin`
 (`scripts/ci/maestro-install.sh` puts it there). Platform-specific: `xcodebuild`
 + `xcrun` and CocoaPods (`pod`, or `bundle` when the consumer has a `Gemfile`)
 for iOS; `adb` and a JDK for Android. Optional: `xcbeautify` or `xcpretty` to
@@ -36,8 +36,9 @@ pure-bash fallback).
 | --- | --- | --- |
 | `WORKFLOWS_PLATFORM` | (none) | `ios` or `android`, used when a script is called without its positional platform argument. |
 | `WORKFLOWS_XCODE` | (none) | Xcode version; `ios-build.sh` runs `sudo xcode-select -s /Applications/Xcode_$WORKFLOWS_XCODE.app` when set. |
-| `WORKFLOWS_APP_ID` | `expo config` → `ios.bundleIdentifier` / `android.package` | Application id under test. The Expo config already carries any variant suffix, so nothing is appended. |
-| `WORKFLOWS_DEV_CLIENT` | `true` | Launch through the `expo-development-client` deep link and start Metro with `--dev-client`. Set `false` for a standalone build. |
+| `WORKFLOWS_NATIVE_STACK_INPUT` | (detect) | `expo` or `bare`; empty detects the stack (`scripts/lib/native-stack.sh`). |
+| `WORKFLOWS_APP_ID` | the stack's `app-config.sh`: `expo config` → `ios.bundleIdentifier` / `android.package`, or the bare app's `PRODUCT_BUNDLE_IDENTIFIER` / `applicationId` | Application id under test. The Expo config already carries any variant suffix, so nothing is appended. |
+| `WORKFLOWS_DEV_CLIENT` | `true` | Launch through the `expo-development-client` deep link and start Metro with `--dev-client`. Set `false` for a standalone build, and for a bare app (no dev-client launcher). |
 | `WORKFLOWS_MAESTRO_FLOWS` | `.maestro` | Flows directory, consumer-relative. `config.yaml` inside it is passed as `--config` when present. |
 | `WORKFLOWS_MAESTRO_INCLUDE_TAGS` | (none) | Passed as `--include-tags` only when set; the consumer's `config.yaml` normally carries `includeTags` already. |
 | `WORKFLOWS_MAESTRO_EXCLUDE_TAGS` | (none) | Passed as `--exclude-tags` only when set. |
@@ -66,8 +67,8 @@ id the flows' `${APP_ID}` never matches.
 iOS:
 
 ```
-prebuild.sh ios → pods.sh → ios-build.sh → ios-pack.sh
-ios-simulator.sh pick → metro-start.sh → ios-simulator.sh wait
+prebuild.sh ios (expo prebuild | the committed ios/ checked) → pods.sh → ios-build.sh → ios-pack.sh
+ios-simulator.sh pick → metro-start.sh (expo start | react-native start) → ios-simulator.sh wait
   → ios-simulator.sh install "$WORKFLOWS_OUT/<scheme>.app.tar"
   → metro-wait.sh ios → app-launch.sh ios → ios-maestro.sh
   → collect-forensics.sh ios
@@ -78,8 +79,8 @@ Android (`android-maestro.sh` is the single-line entry for
 steps itself):
 
 ```
-prebuild.sh android → android-build.sh
-metro-start.sh → metro-wait.sh android
+prebuild.sh android (expo prebuild | the committed android/ checked) → android-build.sh
+metro-start.sh (expo start | react-native start) → metro-wait.sh android
   → android-maestro.sh   # prepare, record, launch, suite, forensics
 ```
 
@@ -88,7 +89,8 @@ metro-start.sh → metro-wait.sh android
 `@blinkbitcoin/app-tooling` ships copies of `ios-maestro.sh`,
 `android-maestro.sh`, `app-launch.sh`, `ios-simulator.sh`,
 `android-emulator.sh`, `collect-forensics.sh` and `maestro-bound.sh` under
-`e2e/` (with `lib/e2e-env.sh` and `lib/expo-config.sh`), so an app runs the
+`e2e/` (with `lib/e2e-env.sh`, `lib/expo-config.sh`, `lib/native-stack.sh` and
+each stack's `native/<stack>/app-config.sh`), so an app runs the
 suite on a laptop with the scripts CI runs, from its own root:
 `ios-simulator.sh pick`, `app-launch.sh ios`, `ios-maestro.sh` on iOS, and
 `android-maestro.sh` on Android. Two things differ from CI and are handled
@@ -117,11 +119,12 @@ here rather than in each app:
   `transform.routerRoot` or `unstable_transformProfile` warms a second graph
   and the first real launch still builds from cold. Without `jq`, or when the
   manifest cannot be read, it falls back to the hand-built URL behind a
-  `::warning::`. Evidence it worked: one `Bundled` line in `metro.log` for the
+  `::warning::`. A bare app's Metro serves no manifest, so on the bare stack it
+  prewarms `index.bundle` for the platform directly. Evidence it worked: one `Bundled` line in `metro.log` for the
   prewarm, and a first launch served in tens of milliseconds.
 - Stop Metro with `kill -TERM -"$(cat "$WORKFLOWS_OUT/metro.pid")"` (note the leading
   `-`: the pid is a process-group id). Killing the pid alone reaps the pnpm
   wrapper and leaves node holding the port.
-- The Xcode scheme comes from `expo-config.sh ios.scheme-name` but is validated
-  against the generated `ios/*.xcworkspace`; the workspace wins and a mismatch
-  prints a `::warning::`.
+- The Xcode scheme is the `ios/*.xcworkspace` name. On the Expo stack it is
+  cross-checked against `expo-config.sh ios.scheme-name`, and a mismatch prints
+  a `::warning::`; on the bare stack there must be exactly one workspace.

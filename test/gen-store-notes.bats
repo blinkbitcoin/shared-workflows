@@ -112,6 +112,30 @@ SH
     || fail "the app's metadata locales were not used: $(meta store-notes.json)"
 }
 
+# A bare app may keep its Fastfile somewhere other than fastlane/ (the
+# fastlane-directory input); its metadata/ios is then the one the lanes read,
+# so it is the one that names the locales.
+@test "with a fastlane directory named, the locales come from that directory's metadata" {
+  mkdir -p "$ROOT/mobile/fastlane/metadata/ios/de-DE" "$ROOT/fastlane/metadata/ios/sv-SE"
+  commit "feat: a feature"
+  WORKFLOWS_FASTLANE_DIRECTORY=mobile/fastlane notes
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(json 'Object.keys(notes).sort().join()')" = "de-DE" ] \
+    || fail "the named directory's locales were not used: $(meta store-notes.json)"
+}
+
+@test "the fastlane directory reaches the generator as a flag, fastlane when unset" {
+  fake_node
+  notes
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$(cat "$BATS_TEST_TMPDIR/argv.txt")" "--fastlane-directory fastlane --out" \
+    || fail "the default fastlane directory was not passed: $(cat "$BATS_TEST_TMPDIR/argv.txt")"
+  WORKFLOWS_FASTLANE_DIRECTORY=mobile/fastlane notes
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$(cat "$BATS_TEST_TMPDIR/argv.txt")" "--fastlane-directory mobile/fastlane --out" \
+    || fail "the named fastlane directory was not passed: $(cat "$BATS_TEST_TMPDIR/argv.txt")"
+}
+
 @test "the locales are handed over as a flag and in the environment, and a release body with --body-section" {
   fake_node
   printf 'the release body\n' > "$BATS_TEST_TMPDIR/body.md"

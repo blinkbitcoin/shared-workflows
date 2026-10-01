@@ -1,0 +1,7 @@
+# Tool versions for the bare consumer fixture. pnpm and mise are required of a
+# bare app too: the workflows install the toolchain from this file.
+[tools]
+node = "24"
+pnpm = "12"
+java = "temurin-17"
+ruby = "3.3"

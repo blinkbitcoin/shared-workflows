@@ -9,16 +9,18 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (42 files)" || fail "output: $output"
+  contains "$output" "package copies ok (47 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
 tree() {
   tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release" "$tree/scripts/checks" "$tree/scripts/ci" "$tree/scripts/hooks" \
-    "$tree/scripts/security/lib" "$tree/scripts/setup" "$tree/scripts/e2e" "$tree/.github"
+    "$tree/scripts/security/lib" "$tree/scripts/setup" "$tree/scripts/e2e" "$tree/scripts/native/expo" "$tree/scripts/native/bare" "$tree/.github"
   cp "$REPO_ROOT/scripts/self/package-copies.sh" "$tree/scripts/self/"
-  cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions,e2e-env,expo-config}.sh "$tree/scripts/lib/"
+  cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions,e2e-env,expo-config,native-stack}.sh "$tree/scripts/lib/"
+  cp "$REPO_ROOT"/scripts/native/expo/{app-config,fingerprint}.sh "$tree/scripts/native/expo/"
+  cp "$REPO_ROOT"/scripts/native/bare/{app-config,fingerprint}.sh "$tree/scripts/native/bare/"
   cp "$REPO_ROOT"/scripts/release/{resolve-version,build-info,verify-ios,verify-android}.sh "$tree/scripts/release/"
   cp "$REPO_ROOT/scripts/lib/verify-common.sh" "$tree/scripts/lib/"
   cp "$REPO_ROOT"/scripts/setup/{all,toolchain,android,ios,lib}.sh "$tree/scripts/setup/"
@@ -35,14 +37,15 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 42 files into packages/app-tooling" || fail "output: $output"
+  contains "$output" "copied 47 files into packages/app-tooling" || fail "output: $output"
   for rel in release/resolve-version.sh release/build-info.sh checks/generated.sh checks/secrets.sh \
     checks/run-script.sh checks/expo-health.sh ci/check-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh security/scan.sh security/code.sh \
     security/review-codebase.sh security/lib/runner.sh release/verify-ios.sh release/verify-android.sh \
     lib/verify-common.sh setup/all.sh setup/lib.sh e2e/ios-maestro.sh e2e/android-maestro.sh e2e/app-launch.sh \
     e2e/ios-simulator.sh e2e/android-emulator.sh e2e/collect-forensics.sh e2e/maestro-bound.sh lib/e2e-env.sh \
-    lib/expo-config.sh; do
+    lib/expo-config.sh lib/native-stack.sh native/expo/app-config.sh native/expo/fingerprint.sh \
+    native/bare/app-config.sh native/bare/fingerprint.sh; do
     cmp -s "$tree/scripts/$rel" "$tree/packages/app-tooling/$rel" || fail "packages/app-tooling/$rel is not a copy"
   done
   cmp -s "$tree/.github/zizmor.yml" "$tree/packages/app-tooling/zizmor.yml" || fail "packages/app-tooling/zizmor.yml is not a copy"
@@ -116,6 +119,9 @@ packaged_e2e_consumer() {
   consumer="$BATS_TEST_TMPDIR/app"
   mkdir -p "$consumer/.maestro" "$consumer/android/app/build/outputs/apk/debug" "$BATS_TEST_TMPDIR/bin"
   printf 'apk\n' > "$consumer/android/app/build/outputs/apk/debug/app-debug.apk"
+  # An Expo app, detected by the package's own copy of the resolver, which then
+  # runs the package's native/expo/app-config.sh.
+  printf '{"dependencies":{"expo":"57.0.0"}}\n' > "$consumer/package.json"
   export CALLS="$BATS_TEST_TMPDIR/calls" WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" HOME="$BATS_TEST_TMPDIR/home"
   export EXPO_CONFIG_JSON="$BATS_TEST_TMPDIR/expo.json"
   printf '{"scheme":"exampleapp","ios":{"bundleIdentifier":"com.example.app"},"android":{"package":"com.example.app"}}\n' > "$EXPO_CONFIG_JSON"
@@ -147,6 +153,19 @@ STUB
   contains "$calls" "-e APP_ID=com.example.app" || fail "calls: $calls"
   contains "$calls" "--include-tags smoke" || fail "calls: $calls"
   contains "$output" "Android: Maestro ran 1 flow(s)" || fail "output: $output"
+  contains "$output" "native stack: expo (expo is a dependency" || fail "the package's resolver did not decide: $output"
+}
+
+@test "the packaged Android suite launches a bare consumer by its applicationId, from the package alone" {
+  packaged_e2e_consumer
+  printf '{"dependencies":{"react-native":"0.85.2"}}\n' > "$consumer/package.json"
+  printf 'android {\n  defaultConfig {\n    applicationId "com.example.bare"\n  }\n}\n' > "$consumer/android/app/build.gradle"
+  cd "$consumer"
+  WORKFLOWS_DEV_CLIENT=false run bash "$REPO_ROOT/packages/app-tooling/e2e/android-maestro.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  calls="$(cat "$CALLS")"
+  contains "$calls" "am start -n com.example.bare/.MainActivity" || fail "calls: $calls"
+  contains "$calls" "-e APP_ID=com.example.bare" || fail "calls: $calls"
 }
 
 @test "the packaged iOS steps pick, launch and run the suite from the package against a consumer" {

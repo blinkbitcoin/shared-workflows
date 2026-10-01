@@ -18,6 +18,7 @@
     "ci",
     "e2e",
     "lib",
+    "native",
     "hooks",
     "release",
     "security",

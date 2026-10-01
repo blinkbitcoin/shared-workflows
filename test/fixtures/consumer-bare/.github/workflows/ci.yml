@@ -1,0 +1,42 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  checks:
+    name: Checks
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0
+    with:
+      # The contract rows and the Expo health gate follow the stack; the gate
+      # passes with a notice on a bare app.
+      native-stack: bare
+  unit:
+    name: Unit
+    needs: checks
+    if: ${{ needs.checks.outputs.unit-changed != 'false' }}
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0
+  e2e:
+    name: E2E
+    needs: [checks, unit]
+    if: >-
+      !cancelled() &&
+      needs.checks.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.unit.result) &&
+      needs.checks.outputs.e2e-changed != 'false'
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-e2e.yml@v0
+    with:
+      # Detected anyway (no expo dependency, ios/ committed); saying it keeps
+      # an app that later adds an expo package on the bare path.
+      native-stack: bare
+      # No dev-client launcher in a bare app: it is launched plainly and loads
+      # index.bundle from the `react-native start` Metro.
+      dev-client: false
+      ios: ${{ (github.event_name != 'pull_request' && vars.E2E_IOS == 'true') || contains(github.event.pull_request.labels.*.name, 'e2e:ios') }}

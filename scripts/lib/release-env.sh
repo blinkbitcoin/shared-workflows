@@ -25,6 +25,10 @@ gh_env_once WORKFLOWS_RELEASE_META_DIR "$WORKFLOWS_RELEASE_META_DIR"
 gh_env_once WORKFLOWS_OTA_DIR "$WORKFLOWS_OTA_DIR"
 gh_env_once WORKFLOWS_ASSETS_DIR "$WORKFLOWS_ASSETS_DIR"
 
+# This directory, absolute: a script that cd's into the consumer before asking
+# for a fingerprint must still find native-stack.sh beside this file.
+WORKFLOWS_RELEASE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # workflows_release_platform [ARG] -> ios|android
 workflows_release_platform() {
   local p="${1:-${WORKFLOWS_PLATFORM:-}}"
@@ -34,7 +38,9 @@ workflows_release_platform() {
   esac
 }
 
-# workflows_fingerprint PLATFORM -> the @expo/fingerprint hash for that platform.
+# workflows_fingerprint PLATFORM -> the native fingerprint for that platform:
+# the hash of everything a store build of it depends on natively, so an OTA
+# update or a release can tell whether two commits need different binaries.
 #
 # WORKFLOWS_FINGERPRINT_IOS / WORKFLOWS_FINGERPRINT_ANDROID short-circuit the computation. That is not only a
 # test seam: a job that already computed the fingerprint in an earlier step
@@ -42,17 +48,12 @@ workflows_release_platform() {
 # possibly *different* run - fingerprint input includes node_modules, so the
 # same commit can hash differently after an unrelated install.
 #
-# The CLI is @expo/fingerprint's `fingerprint` bin (verified against the
-# installed version): `fingerprint fingerprint:generate --platform ios`, run in
-# the consumer root so the consumer's fingerprint.config.js is picked up
-# automatically. It prints a JSON object carrying `.hash`; a bare-hash output
-# from an older version is still accepted.
-#
-# `npx --no`, not `npx --yes`: the bin must come from the consumer's own
-# devDependency. `--yes` would happily install some unrelated npm package
-# called "fingerprint" and hash the app with it.
+# Otherwise the consumer's native stack computes it: native-stack.sh runs
+# scripts/native/<stack>/fingerprint.sh, which prints one hash on stdout -
+# @expo/fingerprint's for the Expo stack, a sha256 over the tracked native
+# files for the bare stack. build-info.json keeps the same field names either way.
 workflows_fingerprint() {
-  local platform override out root
+  local platform override out
   # Every caller reads this through `$(...)`, where `set -e` does not reach, so
   # each step that can fail says `|| return` itself; without it an unknown
   # platform, or a working directory that does not exist, ran the CLI anyway.
@@ -63,22 +64,8 @@ workflows_fingerprint() {
   esac
   if [ -n "$override" ]; then printf '%s\n' "$override"; return 0; fi
 
-  require_cmd npx
-  root="$(consumer_root)" || die "the consumer's working directory does not exist: ${GITHUB_WORKSPACE:-$PWD}/${WORKING_DIRECTORY:-.}"
-  out="$(cd "$root" && npx --no fingerprint fingerprint:generate --platform "$platform")" ||
-    die "fingerprint:generate failed for $platform (is @expo/fingerprint a devDependency of the consumer?)"
-  case "$out" in
-    *'{'*)
-      # node, not yq: app-tooling ships this library to laptops that run
-      # build-info.sh --standalone, where node is always present and yq may not be.
-      # Output that does not parse reads as no hash, which the check below reports.
-      require_cmd node
-      out="$(printf '%s' "$out" | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c}).on("end",()=>{let h="";try{h=JSON.parse(s).hash}catch{}process.stdout.write(typeof h==="string"?h:"")})')"
-      ;;
-    *)
-      out="$(printf '%s\n' "$out" | tr -d '[:space:]')"
-      ;;
-  esac
-  [ -n "$out" ] || die "could not read a fingerprint hash for $platform out of fingerprint:generate's output"
+  # Each stack's script fails rather than print an empty hash.
+  out="$(bash "$WORKFLOWS_RELEASE_LIB_DIR/native-stack.sh" fingerprint "$platform")" ||
+    die "could not compute the $platform fingerprint (the error above says why)"
   printf '%s\n' "$out"
 }

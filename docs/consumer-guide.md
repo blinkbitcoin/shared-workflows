@@ -870,6 +870,7 @@ No outputs. Secrets: `consumer-token` (optional).
 | `native-cache-version` | `v1` | Bump to invalidate every native cache at once |
 | `default-branch` | `refs/heads/main` | Fully qualified ref of the branch allowed to **write** the Gradle cache; every other ref reads it. Set it if your default branch is not `main`, or the cache is never written and every run pays a cold Gradle |
 | `native-extra-globs` | `''` | Space-separated consumer-relative shell globs whose file contents join the native dependency hash (see [`docs/cache-keys.md`](cache-keys.md)) |
+| `native-stack` | `''` (detect) | `expo` or `bare`, for every job: prebuild, the identifiers, Metro, the prewarm, the launch and the cache key follow it — see [Expo or bare](#expo-or-bare). A bare app also passes `dev-client: false` |
 | `ios` | `false` | Run the iOS build + simulator suite. Default is off because macOS bills at 10x on a private repo; on a public repo it is free, so turn it on |
 | `android` | `true` | Run the Android build + emulator suite |
 | `xcode-version` | `''` | Xcode version to select (folded into the iOS cache key) |
@@ -879,7 +880,7 @@ No outputs. Secrets: `consumer-token` (optional).
 | `flows` | `.maestro` | Flows directory, consumer-relative |
 | `include-tags` / `exclude-tags` | `''` | Passed to Maestro when non-empty |
 | `suite-timeout-minutes` | `10` | Per-attempt bound; the step's own timeout is this plus 5 |
-| `dev-client` | `true` | Launch via the `expo-development-client` deep link, Metro `--dev-client` |
+| `dev-client` | `true` | Launch via the `expo-development-client` deep link, Metro `--dev-client`. A bare React Native app has no dev-client launcher: pass `false`, and it is launched plainly |
 | `ios-configuration` | `Debug` | Xcode configuration for the iOS E2E app.<br>`Release` embeds the JS bundle and leaves the dev launcher out, so the app runs on `simctl launch` alone -<br>no Metro, no deep link, no iOS "Open in <app>?" prompt. Forces `dev-client` off for the iOS jobs;<br>Android is unaffected. Changes the cache key, so the two configurations never share a build |
 | `environment-variables` | `{}` | Flat JSON object of non-secret variables exported before the iOS prebuild, so the bundle embeds them.<br>A `Release` build resolves `.env.production` at build time and an exported variable wins over the dotenv file -<br>this is how you point an E2E build at a mock API. Folded into the iOS cache key, so two values never share a build |
 | `e2e-setup-script` / `e2e-teardown-script` | `''` | Consumer-relative hook scripts (setup: missing file is fatal; teardown: always runs) |
@@ -1426,7 +1427,10 @@ writes `build-info.json` and the store notes, and uploads them as the
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | The consumer checkout uses `fetch-depth: 0` — version resolution reads `v*` tags and counts first-parent commits, and both are empty in a shallow clone |
 | `build-number-offset` | `1000` | Added to the first-parent commit count. Raise it, never lower it: App Store Connect and Play both permanently reject a build number that goes backwards |
+| `native-stack` | `''` (detect) | `expo` or `bare`: which fingerprint the two `fingerprint-*` outputs and `build-info.json` carry — see [Expo or bare](#expo-or-bare) |
+| `native-extra-globs` | `''` | Space-separated consumer-relative globs whose file contents join the **bare** stack's fingerprint, as they join the cache key in `test-e2e.yml` and `build-ios.yml`. The Expo fingerprint reads `fingerprint.config.js` instead |
 | `store-notes-locales` | `''` | Locales handed to the [store notes](#store-notes) generator, and passed to it as `--locales`. **Store metadata locale names, not language codes** — App Store Connect and Play key their listings on the full form (`en-US`, `de-DE`, `pt-BR`); a bare `en` matches no listing. Empty lets the generator decide: one per locale directory under your `fastlane/metadata/ios` |
+| `fastlane-directory` | `fastlane` | Where the store metadata lives, relative to `working-directory`: the generator reads the locales from its `metadata/ios` |
 | `stage` | `internal` | Written to `build-info.json`'s `stage` |
 | `release-body-file` | `''` | Consumer-relative file holding a release body; switches note generation to `--from-body` |
 | `release-tag` | `''` | Existing release tag whose **body** becomes the store notes, fetched with `gh release view`. It also becomes the checked-out ref and the gated/stamped commit — see [Preparing from a release tag](#preparing-from-a-release-tag) |
@@ -1436,7 +1440,8 @@ writes `build-info.json` and the store notes, and uploads them as the
 | `require-green-dispatch` | `false` | With `require-green-workflow`: when the gated workflow has **no** run for the target sha, or its newest run was **cancelled** or **failed**, dispatch it once at `release-tag` and wait for that run instead of failing. Self-healing for a release whose internal build was lost (concurrency-group eviction, a flaky runner): the beta no longer waits for a human to dispatch by hand. A dispatched run that also fails is fatal; `skipped` is never dispatched. Needs `release-tag` and **`actions: write`** on the calling job. A promotion that still gives up is what [`publish-retry.yml`](#publish-retryyml) re-runs
 | `build-info-artifact` | `build-info` | Artifact name for `build-info.json`, `store-notes.json`, `store-notes.txt`, `release-notes.md` |
 
-Outputs: `version`, `build-number`, `fingerprint-ios`, `fingerprint-android`, `sha` (the commit
+Outputs: `version`, `build-number`, `fingerprint-ios`, `fingerprint-android` (each stack's own
+fingerprint, under the same names), `sha` (the commit
 the release was prepared from). Secrets: `consumer-token`, `ANTHROPIC_API_KEY`
 and `OPENAI_API_KEY` (all optional — the two API keys are only needed when the
 [store notes](#store-notes) are drafted with an LLM; the provider, model and
@@ -1466,16 +1471,19 @@ base URL are non-secret and belong in `environment-variables`).
 ### `build-ios.yml`
 
 Prebuild → pods → `fastlane ios build` → `fastlane ios verify`, on
-`macos-runner`.
+`macos-runner`. The prebuild is the native stack's: `expo prebuild` for an Expo
+app, a check of the committed `ios/` for a bare one.
 
 | Input | Default | Meaning |
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | `macos-runner` is the one that matters here |
 | `native-extra-globs` | `''` | Extra globs folded into the native dependency hash (see [`docs/cache-keys.md`](cache-keys.md)) |
+| `native-stack` | `''` (detect) | `expo` or `bare`: `expo prebuild`, or a check that the committed `ios/` is there and tracked — see [Expo or bare](#expo-or-bare) |
 | `xcode-version` | `''` | Sets `DEVELOPER_DIR` to `/Applications/Xcode_<v>.app/Contents/Developer` and is folded into the Pods cache key |
 | `environment` | `''` | GitHub Environment gating the build (secrets + approvals); empty means none |
 | `version` / `build-number` | **required** | `APP_VERSION` / `APP_BUILD_NUMBER`; wire them to `build-prepare`'s outputs |
 | `stage` | `internal` | Passed through as `WORKFLOWS_STAGE` |
+| `fastlane-directory` | `fastlane` | The directory holding the Fastfile and the store metadata, relative to `working-directory`. It may sit deeper (`mobile/fastlane`) but must be named `fastlane` or `.fastlane`, the only names fastlane finds — see [Expo or bare](#expo-or-bare) |
 | `ios-bundle-id` / `ios-scheme` / `android-package` | **required** | `IOS_BUNDLE_ID` / `IOS_SCHEME` / `ANDROID_PACKAGE`. All three are required **on the iOS build too** — see [The five Fastfile contract variables](#the-five-fastfile-contract-variables) |
 | `ios-signing-enabled` | `true` | Sign the build and export an `.ipa`. **Off** archives without signing instead:<br>it still compiles and still runs the verify gate, but needs no Apple account and produces no `.ipa`,<br>so the `ios-ipa` upload is skipped too. This is the state a repository is in before its certificates exist |
 | `verify` | `true` | Run the `ios verify` lane after `build`. Works in either signing mode —<br>the lane verifies the `.app` inside the archive when there is no `.ipa`, with the signature check reported as `skip` |
@@ -1490,15 +1498,17 @@ No outputs. Secrets (all optional): `consumer-token`, `MATCH_PASSWORD`,
 ### `build-android.yml`
 
 Prebuild → `fastlane android build` → `fastlane android verify`, on
-`linux-runner`.
+`linux-runner`. The prebuild is the native stack's, as in `build-ios.yml`.
 
 | Input | Default | Meaning |
 | --- | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | — |
 | `default-branch` | `refs/heads/main` | Fully qualified ref of the branch allowed to **write** the Gradle cache; every other ref reads it. Set it if your default branch is not `main`, or the cache is never written and every run pays a cold Gradle |
+| `native-stack` | `''` (detect) | `expo` or `bare`: `expo prebuild`, or a check that the committed `android/` is there and tracked — see [Expo or bare](#expo-or-bare) |
 | `environment` | `''` | GitHub Environment gating the build |
 | `version` / `build-number` | **required** | `APP_VERSION` / `APP_BUILD_NUMBER` |
 | `stage` | `internal` | `WORKFLOWS_STAGE` |
+| `fastlane-directory` | `fastlane` | The directory holding the Fastfile and the store metadata, relative to `working-directory`. It may sit deeper (`mobile/fastlane`) but must be named `fastlane` or `.fastlane`, the only names fastlane finds — see [Expo or bare](#expo-or-bare) |
 | `android-package` / `ios-bundle-id` / `ios-scheme` | **required** | `ANDROID_PACKAGE` / `IOS_BUNDLE_ID` / `IOS_SCHEME`. The two iOS ids are required **on the Android build too** — see [The five Fastfile contract variables](#the-five-fastfile-contract-variables) |
 | `android-signing-enabled` | `true` | Sign with the upload keystore. **Off** falls back to the debug keystore,<br>which still produces the `.aab`, the universal `.apk` and the mapping file and needs no Play credentials.<br>Nothing signed that way can be uploaded to a store. The state a repository is in before its keystore exists |
 | `verify` | `true` | Run the `android verify` lane after `build`. Works in either signing mode —<br>the signature check reports `skip` when `ANDROID_UPLOAD_CERT_SHA256` is unset |
@@ -1536,6 +1546,7 @@ uploads, promotions, staged rollouts, halts.
 | `release-tag` | `''` | The release `release-assets` come from; required when `release-assets` is set |
 | `version` / `build-number` | **required** | `APP_VERSION` / `APP_BUILD_NUMBER` |
 | `ios-bundle-id` / `ios-scheme` / `android-package` | **required** | All three on every lane, both platforms — see [The five Fastfile contract variables](#the-five-fastfile-contract-variables) |
+| `fastlane-directory` | `fastlane` | The directory holding the Fastfile and the store metadata, relative to `working-directory`. It may sit deeper (`mobile/fastlane`) but must be named `fastlane` or `.fastlane`, the only names fastlane finds — see [Expo or bare](#expo-or-bare) |
 | `ruby-enabled` | `true` | Install Ruby (leave on unless the consumer has no Gemfile) |
 | `timeout-minutes` | `45` | Raise it for a lane that waits on App Store Connect processing |
 
@@ -1793,6 +1804,7 @@ never regenerate what was reviewed.
 | `body-file` | `''` | Path, relative to `working-directory`, of a release-please-shaped PR body to generate from instead of fetching the PR's. With `dry-run` the job needs no PR and calls no `gh`; without it, and with a `pr-number`, the edit writes this file's body plus the section to that PR |
 | `section-title` | `Store notes` | Heading of the block. Must equal the `append-title` the release workflows use for the same section, so a later `publish-github-release.yml` `append` replaces the block in place |
 | `store-notes-locales` | `''` | Locales handed to the [store notes](#store-notes) generator; store metadata locale names, not language codes. Empty lets the generator decide |
+| `fastlane-directory` | `fastlane` | Where the store metadata lives, relative to `working-directory`: the generator reads the locales from its `metadata/ios` |
 | `environment-variables` | `{}` | Non-secret environment for the generator: `STORE_NOTES_LLM_PROVIDER`, `STORE_NOTES_LLM_MODEL`, `STORE_NOTES_LLM_EFFORT`,<br>`STORE_NOTES_LLM_EXTRA_PARAMS`, `OPENAI_BASE_URL`, `STORE_NOTES_INCLUDE_CHANGELOG` - see [`environment-variables`](#environment-variables) |
 
 Output: `section`, the rendered section as a multi-line string - the begin
@@ -2172,12 +2184,15 @@ fingerprint is the runtime version the update is served under, so an empty
 check asks for). A caller no longer carries the fingerprint from a job of its
 own; one that passes `runtime-version` still wins.
 
-Fingerprints are computed with the consumer's own `@expo/fingerprint`
+On the Expo stack, fingerprints are computed with the consumer's own `@expo/fingerprint`
 devDependency: `npx --no fingerprint fingerprint:generate --platform <ios|android>`
 run in the consumer root, so the consumer's `fingerprint.config.js` is picked
 up automatically. `--no` (not `--yes`) is deliberate — the bin must come from
 the consumer's lockfile, never from whatever npm package happens to be named
-`fingerprint`.
+`fingerprint`. On the bare stack the fingerprint is a sha256 over the files git
+tracks under `ios/` (or `android/`), `pnpm-lock.yaml` and the `native-extra-globs`
+matches (`scripts/native/bare/fingerprint.sh`), in the same fields — see
+[Expo or bare](#expo-or-bare).
 
 ### Release secrets and how they reach the lanes
 
@@ -2585,9 +2600,10 @@ bash $e2e/android-maestro.sh [maestro arguments]   # installs the debug APK, rev
   the junit report, Maestro's debug output and, on Android, the recording and
   forensics. `android-maestro.sh` also quiets the emulator (animations off),
   as CI does.
-- **Tools:** `maestro`, `jq` (`ios-simulator.sh pick`) and `yq` with `pnpm`
-  (the app id and scheme come from `expo config`, unless `WORKFLOWS_APP_ID`
-  is set).
+- **Tools:** `maestro`, `jq` (`ios-simulator.sh pick`) and `node` (the
+  stack resolver). The app id and scheme come from the native stack (see
+  [Expo or bare](#expo-or-bare)) unless `WORKFLOWS_APP_ID` is set: `yq` with
+  `pnpm` for `expo config`, nothing more for a bare app.
 
 A copy of the runners in your repository is a `no-copy.e2e-suite` failure in
 the [contract check](#no-copies-of-this-family).
@@ -2612,6 +2628,137 @@ term from the example's `ios:` expression.
 (`vars.MACOS_RUNNER || 'macos-26'`), falling back to `macos-26` —
 `MACOS_RUNNER` is a convention documented here and in `docs/runners.md`,
 not an input any workflow defaults on its own.
+
+## Expo or bare
+
+The native workflows — `test-e2e.yml`, `build-prepare.yml`, `build-ios.yml` and
+`build-android.yml` — build either kind of app. Each takes a `native-stack`
+input, and resolves it by the rule in
+[Expo or bare React Native](#expo-or-bare-react-native): the input when it is
+set (`expo` or `bare`; anything else fails), else `expo` when `package.json`
+depends on `expo` and git tracks no `ios/`, else `bare`. The rule is one module,
+`packages/app-tooling/lib/native-stack.mjs`; every native step asks it through
+`scripts/lib/native-stack.sh`, which then runs that stack's own script under
+`scripts/native/expo/` or `scripts/native/bare/`. The step's log names the
+stack and why. Leave the input empty when detection is right; pass it when it
+is not, or to keep an app on its path whatever its dependencies say later.
+
+| Step | `expo` | `bare` |
+| --- | --- | --- |
+| Prebuild (`prebuild.sh`) | `expo prebuild --clean --no-install` for the platform | Nothing is generated; fails, with the fix,<br>unless `ios/` or `android/` is there and tracked by git |
+| Identifiers (`app-config.sh`) | `expo config`: `ios.bundleIdentifier`, `android.package`, `scheme`,<br>and the Xcode scheme from the generated `ios/*.xcworkspace` | The committed projects: `xcodebuild -showBuildSettings -json`, else the `project.pbxproj`;<br>`applicationId` in `android/app/build.gradle(.kts)`; the URL scheme from `Info.plist`<br>or the `AndroidManifest.xml` (empty when there is none); the single `ios/*.xcworkspace`.<br>The `ios-bundle-id`, `android-package` and `ios-scheme` inputs win where a workflow has them |
+| Metro (`metro-start.sh`) | `expo start --port N`, `--dev-client` when `dev-client` is on | `react-native start --port N`; the same log, pid and process group |
+| Bundle prewarm (`metro-wait.sh`) | The manifest's `launchAsset` | `index.bundle` for the platform |
+| Launch (`app-launch.sh`) | The `expo-development-client` deep link, or a plain launch | A plain launch: pass `dev-client: false`, as a bare app has no dev-client launcher |
+| Fingerprint (`fingerprint.sh`) | `@expo/fingerprint` | sha256 over the tracked `ios/` (or `android/`) files, `pnpm-lock.yaml`<br>and the `native-extra-globs` matches; the same `fingerprint-ios` / `fingerprint-android` outputs<br>and `build-info.json` fields |
+| Native cache key (`native-hash.sh`) | Lockfile versions and the config, plugin and patch files | The same, plus every tracked file under `ios/` and `android/` |
+
+Both stacks need pnpm and mise: the workflows install the toolchain from your
+`.mise.toml` and read `pnpm-lock.yaml` before any install. The lanes run from a
+root `fastlane/` by default; a Fastfile elsewhere is the `fastlane-directory`
+input, which `build-ios.yml`, `build-android.yml`, `publish-store.yml`,
+`build-prepare.yml` and `pr-store-notes.yml` take. fastlane itself only finds a
+directory named `fastlane` (or `.fastlane`) beside its working directory, so the
+lanes run from the directory that contains it: `mobile/fastlane` works,
+`mobile/lanes` is refused with the fix. The store notes and the verify lanes'
+metadata check read `<fastlane-directory>/metadata` too.
+
+A bare app's callers, as `test/fixtures/consumer-bare/` holds them:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  checks:
+    name: Checks
+    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0
+    with:
+      # The contract rows and the Expo health gate follow the stack; the gate
+      # passes with a notice on a bare app.
+      native-stack: bare
+  unit:
+    name: Unit
+    needs: checks
+    if: ${{ needs.checks.outputs.unit-changed != 'false' }}
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0
+  e2e:
+    name: E2E
+    needs: [checks, unit]
+    if: >-
+      !cancelled() &&
+      needs.checks.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.unit.result) &&
+      needs.checks.outputs.e2e-changed != 'false'
+    uses: blinkbitcoin/shared-workflows/.github/workflows/test-e2e.yml@v0
+    with:
+      # Detected anyway (no expo dependency, ios/ committed); saying it keeps
+      # an app that later adds an expo package on the bare path.
+      native-stack: bare
+      # No dev-client launcher in a bare app: it is launched plainly and loads
+      # index.bundle from the `react-native start` Metro.
+      dev-client: false
+      ios: ${{ (github.event_name != 'pull_request' && vars.E2E_IOS == 'true') || contains(github.event.pull_request.labels.*.name, 'e2e:ios') }}
+```
+
+```yaml
+# .github/workflows/cd-internal.yml
+name: CD / Internal
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cd-internal
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Prepare
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-prepare.yml@v0
+    permissions:
+      contents: read
+      actions: read
+    with:
+      native-stack: bare
+      require-green-workflow: ci.yml
+  ios:
+    name: iOS
+    needs: prepare
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-ios.yml@v0
+    with:
+      native-stack: bare
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      # Unsigned until the store credentials exist; then pass them as secrets.
+      ios-signing-enabled: false
+  android:
+    name: Android
+    needs: prepare
+    uses: blinkbitcoin/shared-workflows/.github/workflows/build-android.yml@v0
+    with:
+      native-stack: bare
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      android-signing-enabled: false
+```
 
 ## `.workflows/` ignore list for consumers
 
