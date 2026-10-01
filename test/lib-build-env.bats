@@ -7,7 +7,7 @@
 # publishing and counting the keys, exiting the caller when node is missing or
 # the validator rejects the input - with no scratch file left behind either way.
 #
-# The key rules themselves live in scripts/lib/env-validate.mjs and are asserted
+# The key rules themselves live in packages/app-tooling/lib/env-validate.mjs and are asserted
 # through the release script in test/build-env.bats (that file is
 # scripts/release/build-env.sh's own test) and test/env-json.bats.
 load test_helper

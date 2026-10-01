@@ -184,5 +184,5 @@ test('as a command it lists the real suites for the repository it is pointed at'
   const root = repository(t, { 'package.json': '{}' });
   const result = spawnSync(process.execPath, [BIN, '--root', root, '--list'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout, 'skip fingerprint: a bare app (it is for expo)\n');
+  assert.equal(result.stdout, 'skip fingerprint: a bare app (it is for expo)\nskip store-notes: no store-notes.prompt.md\n');
 });

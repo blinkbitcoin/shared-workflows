@@ -639,7 +639,7 @@ flowchart LR
   secrets["secrets:"]
   buildenv["environment-variables input"]
   envjson["environment-variables input"]
-  validate["scripts/lib/env-validate.mjs"]
+  validate["packages/app-tooling/lib/env-validate.mjs"]
   refused(["step fails, nothing published"])
   laneenv["the job's environment"]
   files["files at mode 600<br/>under the runner's temp directory"]
@@ -2075,12 +2075,20 @@ The same rules apply to `publish-store.yml`'s `environment-variables` input
 reach a fastlane lane, whose own option names (`track`, `lane`) are lower-case.
 
 "The same rules" is now one implementation rather than a promise:
-`scripts/lib/env-validate.mjs` is called by both, and the case difference above
+`packages/app-tooling/lib/env-validate.mjs` is called by both, and the case difference above
 is the only thing it parameterises. It used to be a promise, and the two had
 drifted — `environment-variables` had no credential-name refusal at all, so a key like
 `SENTRY_AUTH_TOKEN` was published into `$GITHUB_ENV` from an input GitHub does
 not mask. Keys are upper-cased before the credential and reserved-name rules are
 applied, so `sentry_auth_token` is refused exactly as `SENTRY_AUTH_TOKEN` is.
+
+The [contract check](#the-contract-check) applies the same validator to every
+`environment-variables` value your callers write out (a block or a quoted
+literal), before anything runs: each `${{ toJSON(...) }}` is rendered as a JSON
+string and every other expression as a bare word. So an unquoted
+`"A":${{ vars.A }}`, a quoted `"${{ toJSON(vars.A) }}"` (which would arrive
+double-encoded), a trailing comma or a credential-shaped key is reported on the
+pull request that adds it, not by the release that would have failed on it.
 
 So `STORE_NOTES_LLM_PROVIDER` / `STORE_NOTES_LLM_MODEL` /
 `STORE_NOTES_LLM_EFFORT` / `STORE_NOTES_LLM_EXTRA_PARAMS` /

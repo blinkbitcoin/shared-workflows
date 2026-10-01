@@ -13,7 +13,7 @@
 # Each gate and library now has a test file of its own, named after it, that
 # covers every exit path: test/audit.bats, test/codegen.bats, test/i18n.bats,
 # test/expo-health.bats, test/pnpm-install.bats, test/release-env.bats and
-# test/env-validate.test.mjs. The cases that started here moved there unchanged
+# packages/app-tooling/env-validate.test.mjs. The cases that started here moved there unchanged
 # (env-validate's as a node:test case). The binary's case stays below.
 
 load test_helper

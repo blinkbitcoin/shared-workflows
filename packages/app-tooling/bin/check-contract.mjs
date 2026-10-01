@@ -28,6 +28,7 @@
 import { appendFileSync, existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateEnvJson } from '../lib/env-validate.mjs';
 import { expandIncludes } from '../lib/makefile.mjs';
 import { isTracked, resolveNativeStack } from '../lib/native-stack.mjs';
 import { pinProblems } from '../lib/pin.mjs';
@@ -323,9 +324,10 @@ const isBlank = (raw) => raw.trim() === '' || raw.trim().startsWith('#');
  * The keys of the mapping that starts after line `at`, as `Map(name -> raw value)`:
  * the lines at the first indent deeper than `parent`, up to the first line at
  * `parent` or shallower. Deeper lines are a value's own continuation (a block
- * scalar, a nested mapping) and are not keys of this one.
+ * scalar, a nested mapping) and are not keys of this one. A key whose value is
+ * a block scalar also gets its text in `blocks`, when one is passed.
  */
-function childKeys(lines, at, parent) {
+function childKeys(lines, at, parent, blocks = null) {
   const keys = new Map();
   let child = null;
   for (let i = at + 1; i < lines.length; i++) {
@@ -336,9 +338,29 @@ function childKeys(lines, at, parent) {
     child ??= indent;
     if (indent !== child) continue;
     const pair = KEY_LINE.exec(raw);
-    if (pair) keys.set(pair[1], pair[2].trim());
+    if (!pair) continue;
+    const value = pair[2].trim();
+    keys.set(pair[1], value);
+    if (blocks && /^[|>][-+0-9]*$/.test(value)) blocks.set(pair[1], blockText(lines, i, indent, value[0]));
   }
   return keys;
+}
+
+/**
+ * The text of the block scalar whose header is on line `at`: every following
+ * line deeper than `parent`, blank ones included, up to the first that is not.
+ * A literal block (`|`) keeps its line breaks; a folded one (`>`) joins its
+ * lines with spaces, which is all a one-paragraph JSON object needs.
+ */
+function blockText(lines, at, parent, style) {
+  const body = [];
+  for (let i = at + 1; i < lines.length; i++) {
+    const raw = lines[i];
+    if (raw.trim() !== '' && indentOf(raw) <= parent) break;
+    body.push(raw.trim());
+  }
+  while (body.length > 0 && body.at(-1) === '') body.pop();
+  return style === '|' ? body.join('\n') : body.filter((line) => line !== '').join(' ');
 }
 
 /**
@@ -379,7 +401,9 @@ export function callerCalls(callers) {
       if (indent === jobIndent) {
         finish();
         const job = /^\s*([A-Za-z0-9_-]+):\s*$/.exec(raw);
-        current = job ? { file: name, job: job[1], workflow: null, with: new Map(), secrets: new Set(), unreadable: false } : null;
+        current = job
+          ? { file: name, job: job[1], workflow: null, with: new Map(), blocks: new Map(), secrets: new Set(), unreadable: false }
+          : null;
         propIndent = null;
         continue;
       }
@@ -396,7 +420,7 @@ export function callerCalls(callers) {
       const value = pair[2].replace(/(^|\s+)#.*$/, '').trim();
       if (pair[1] === 'secrets' && value === 'inherit') current.secrets = null;
       else if (value === '' || value === '{}') {
-        const keys = childKeys(lines, i, indent);
+        const keys = childKeys(lines, i, indent, pair[1] === 'with' ? current.blocks : null);
         if (pair[1] === 'with') current.with = keys;
         else current.secrets = new Set(keys.keys());
       } else current.unreadable = true;
@@ -427,6 +451,49 @@ export function scalarType(raw) {
  * main, after the change merged - and a renamed output is worse: it reads as
  * empty, so a `!= 'false'` gate on it quietly runs every time.
  */
+/**
+ * What is wrong with an `environment-variables` value as build-env.sh will
+ * read it, rendered here before any run: every `${{ toJSON(...) }}` stands for
+ * a JSON string and every other `${{ ... }}` for a bare word, so a value that
+ * only parses for some variable values fails now rather than on a release. The
+ * rules are lib/env-validate.mjs's, the ones build-env.sh applies;
+ * `allowLowerCase` is env-json.sh's one difference, for the keys
+ * publish-store.yml hands a fastlane lane.
+ */
+export function environmentVariablesProblems(text, { allowLowerCase = false } = {}) {
+  if (/["']\s*\$\{\{\s*toJSON\(/.test(text)) {
+    return ['environment-variables quotes a ${{ toJSON(...) }}, which is a JSON string already: drop the quotes around it'];
+  }
+  const rendered = text.replace(/\$\{\{\s*toJSON\([\s\S]*?\)\s*\}\}/g, '"x"').replace(/\$\{\{[\s\S]*?\}\}/g, 'x');
+  try {
+    validateEnvJson(rendered, 'environment-variables', { allowLowerCase });
+    return [];
+  } catch (e) {
+    return [e.message.replace(/^::error::/, '')];
+  }
+}
+
+/**
+ * The text of an environment-variables value this check can read: a block
+ * scalar's, or a quoted literal's. Null for anything else, an expression above
+ * all, which only the run can resolve.
+ */
+export function environmentVariablesText(raw, block) {
+  if (block !== undefined) return block;
+  if (/^'.*'$/.test(raw)) return raw.slice(1, -1).replaceAll("''", "'");
+  if (/^".*"$/.test(raw)) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** The workflows whose environment-variables may hold lower-case keys (scripts/release/env-json.sh). */
+export const LOWER_CASE_ENVIRONMENT = ['publish-store.yml'];
+
 export function callProblems(call, face) {
   if (!face) return [`shared-workflows publishes no reusable ${call.workflow} at this version`];
   const problems = [];
@@ -439,6 +506,11 @@ export function callProblems(call, face) {
     const type = scalarType(raw);
     if (type !== 'unknown' && type !== input.type) {
       problems.push(`passes ${name} as a ${type} (${raw}), but ${call.workflow} declares it a ${input.type}`);
+    }
+    if (name === 'environment-variables') {
+      const text = environmentVariablesText(raw, call.blocks?.get(name));
+      const allowLowerCase = LOWER_CASE_ENVIRONMENT.includes(call.workflow);
+      if (text !== null) for (const problem of environmentVariablesProblems(text, { allowLowerCase })) problems.push(problem);
     }
   }
   for (const [name, input] of Object.entries(face.inputs)) {

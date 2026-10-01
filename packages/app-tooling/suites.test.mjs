@@ -7,7 +7,7 @@
 // A fixture is `base/`, with one `cases/<case>/` laid over it, and `modules/`
 // as its node_modules unless the case's case.json sets `"modules": false`.
 // case.json says whether the suite passes and lists patterns its output must
-// match.
+// match; its `removes` lists paths of `base/` the case does not have.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -32,6 +32,7 @@ const fixtureApp = (t, suite, name, spec) => {
   cpSync(path.join(FIXTURES, suite, 'base'), app, { recursive: true });
   cpSync(path.join(FIXTURES, suite, 'cases', name), app, { recursive: true });
   rmSync(path.join(app, 'case.json'));
+  for (const removed of spec.removes ?? []) rmSync(path.join(app, removed), { recursive: true });
   const modules = path.join(FIXTURES, suite, 'modules');
   if (spec.modules !== false && existsSync(modules)) cpSync(modules, path.join(app, 'node_modules'), { recursive: true });
   return app;

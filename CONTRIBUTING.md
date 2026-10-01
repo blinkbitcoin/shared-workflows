@@ -84,7 +84,7 @@ each of its exit paths:
 | --- | --- |
 | `scripts/ci/check-ci.sh` | `test/check-ci.bats` |
 | `scripts/ota/export.sh` | `test/ota-export.bats` (`scripts/web/export.sh` already has `test/export.bats`) |
-| `scripts/lib/env-validate.mjs` | `test/env-validate.test.mjs` (`make test-scripts`, 100% gate) |
+| `packages/app-tooling/lib/env-validate.mjs` | `packages/app-tooling/env-validate.test.mjs` (`make test-package`, 100% gate) |
 | `packages/app-tooling/bin/check-tool-versions.mjs` | `packages/app-tooling/check-tool-versions.test.mjs` |
 | `packages/app-tooling/lib/pin.mjs` | `packages/app-tooling/pin.test.mjs` |
 | `packages/app-tooling/expo/eslint.mjs` (an Expo preset) | `packages/app-tooling/eslint.test.mjs` |

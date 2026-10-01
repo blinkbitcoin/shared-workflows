@@ -16,4 +16,9 @@ export const SUITES = {
     stacks: ['expo'],
     needs: ['fingerprint.config.js'],
   },
+  'store-notes': {
+    file: 'store-notes.suite.mjs',
+    stacks: ['expo', 'bare'],
+    needs: ['store-notes.prompt.md'],
+  },
 };
