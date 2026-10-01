@@ -111,7 +111,7 @@ guide_yaml_block() {
 # The bare consumer's callers are the guide's "Expo or bare" examples, held the
 # same way: what a bare app copies is what the fixture is.
 @test "the guide's bare caller examples match the bare fixture's workflow files byte for byte" {
-  for spec in ci:15 cd-internal:16; do
+  for spec in ci:19 cd-internal:20; do
     wf="${spec%:*}"
     n="${spec##*:}"
     file="$BARE/.github/workflows/$wf.yml"
@@ -233,7 +233,8 @@ on_block() {
   missing=()
   for wf in check test-unit test-e2e build-web publish-badges pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release \
+    publish-internal publish-beta publish-production publish-store-listing; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     [ -n "$section" ] || fail "no '### \`$wf.yml\`' section in docs/consumer-guide.md"
@@ -258,7 +259,8 @@ on_block() {
   phantom=()
   for wf in check test-unit test-e2e build-web publish-badges pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release \
+    publish-internal publish-beta publish-production publish-store-listing; do
     file="$REPO_ROOT/.github/workflows/$wf.yml"
     section="$(guide_section "$wf.yml")"
     inputs="$(yq -r '.on.workflow_call.inputs | keys | .[]' "$file")"

@@ -7,6 +7,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   activeProfiles,
+  RELEASE_WORKFLOWS,
   callerCalls,
   callerInputs,
   callersUse,
@@ -111,7 +112,7 @@ test('every requirement declares the fields the report depends on', () => {
     assert.ok(r.neededBy, `${r.id}: needs to say what wants it`);
     assert.equal(typeof r.defaultOn, 'boolean', `${r.id}: defaultOn must be a boolean`);
     assert.ok(r.stack === undefined || ['expo', 'bare'].includes(r.stack), `${r.id}: stack must be expo or bare`);
-    assert.ok(r.workflow === undefined || /^[a-z-]+\.yml$/.test(r.workflow), `${r.id}: workflow must be a workflow file`);
+    assert.ok(r.workflow === undefined || [r.workflow].flat().every((name) => /^[a-z-]+\.yml$/.test(name)), `${r.id}: workflow must be a workflow file, or a list of them`);
     assert.ok(r.toggleValue === undefined || (r.toggleValue === 'script-name' && r.toggle), `${r.id}: toggleValue is script-name, on a toggle`);
   }
 });
@@ -882,8 +883,12 @@ test('each reusable workflow a repository calls switches on its own profile', ()
   assert.deepEqual(profileOf('build-web.yml'), ['web']);
   assert.deepEqual(profileOf('publish-badges.yml'), ['badges']);
   assert.deepEqual(profileOf('check-code-scanning.yml'), ['code-scanning']);
-  for (const workflow of ['build-prepare.yml', 'build-ios.yml', 'build-android.yml', 'publish-store.yml', 'publish-ota.yml']) {
+  for (const workflow of RELEASE_WORKFLOWS) {
     assert.deepEqual(profileOf(workflow), ['release'], workflow);
+  }
+  // The pipelines are release callers too: a repository that calls only them never names a leaf.
+  for (const pipeline of ['publish-internal.yml', 'publish-beta.yml', 'publish-production.yml', 'publish-store-listing.yml']) {
+    assert.ok(RELEASE_WORKFLOWS.includes(pipeline), pipeline);
   }
 });
 
@@ -1493,12 +1498,23 @@ test('a release row naming a workflow applies only when that workflow is called'
   const callers = { 'cd.yml': caller('build-android.yml') };
   const results = check(readContract(), consumer({ callers, stack: BARE_STACK, tracked: ['android'] }));
   const ios = results.find((r) => r.req.id === 'tracked-dir.ios-build');
-  assert.deepEqual([ios.level, ios.reason], ['skip', 'build-ios.yml is not called from this repository']);
+  assert.deepEqual([ios.level, ios.reason], ['skip', 'build-ios.yml or publish-internal.yml is not called from this repository']);
   assert.equal(results.find((r) => r.req.id === 'tracked-dir.android-build').level, 'ok');
   const untracked = check(readContract(), consumer({ callers: { 'cd.yml': caller('build-ios.yml') }, stack: BARE_STACK }));
   assert.equal(untracked.find((r) => r.req.id === 'tracked-dir.ios-build').level, 'fail');
   // On the Expo stack the native projects are generated, so neither is asked for.
   assert.equal(check(readContract(), consumer({ callers })).find((r) => r.req.id === 'tracked-dir.android-build').level, 'skip');
+});
+
+test('a release row naming a leaf and its pipeline applies to a caller of either', () => {
+  const callers = { 'cd.yml': caller('publish-internal.yml') };
+  const results = check(readContract(), consumer({ callers, stack: BARE_STACK, tracked: ['android'] }));
+  assert.equal(results.find((r) => r.req.id === 'tracked-dir.android-build').level, 'ok');
+  const ios = results.find((r) => r.req.id === 'tracked-dir.ios-build');
+  assert.deepEqual([ios.level, ios.reason], ['fail', 'git tracks nothing under ios/']);
+  // A caller of the beta pipeline builds nothing, so neither project is asked for.
+  const beta = check(readContract(), consumer({ callers: { 'cd.yml': caller('publish-beta.yml') }, stack: BARE_STACK }));
+  assert.equal(beta.find((r) => r.req.id === 'tracked-dir.ios-build').level, 'skip');
 });
 
 test('the default io asks git which directories it tracks', () => {
