@@ -27,6 +27,7 @@ setup() {
 #!/usr/bin/env bash
 printf 'adb %s\n' "$*" >> "$CALLS"
 case "$*" in
+  *"resolve-activity"*) printf '%s/.MainActivity\n' "${!#}" ;;
   *"am start"*) echo "Bundled 1 modules" >> "$WORKFLOWS_OUT/metro.log" ;;
   *screenrecord*) exit 1 ;;
 esac
