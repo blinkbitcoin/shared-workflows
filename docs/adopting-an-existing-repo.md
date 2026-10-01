@@ -140,7 +140,7 @@ is a warning in the report, not a failure. See
 | What | You need | Why |
 | --- | --- | --- |
 | `test:coverage` | required, or pass `coverage: false` | test-unit.yml (coverage-script) |
-| `test:scripts` | required | test-unit.yml (scripts-script) |
+| `test:scripts` | required, or pass `scripts-script: ''` | test-unit.yml (scripts-script) |
 | `jest.config.ts` | optional — a fallback runs | test-unit.yml, which runs your test script over the whole tree |
 
 ### If you call `test-e2e.yml`

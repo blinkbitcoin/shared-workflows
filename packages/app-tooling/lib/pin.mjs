@@ -89,14 +89,33 @@ export function tarballFor(commit, dir) {
 }
 
 /**
+ * Whether `suffix` is the peer suffix pnpm writes after a package's version:
+ * nothing, or parenthesised groups that may nest, such as a hash
+ * (`(<hash>)`) or the peers themselves
+ * (`(eslint@8.57.1(supports-color@8.1.1))(typescript@5.9.3)`). Each round
+ * folds the innermost groups into a NUL placeholder until only placeholders
+ * remain; an empty group, whitespace or anything outside a group is refused.
+ */
+function isPeerSuffix(suffix) {
+  let rest = suffix;
+  for (let previous; previous !== rest; ) {
+    previous = rest;
+    rest = rest.replace(/\([^()\s]+\)/g, '\0');
+  }
+  return /^\0*$/.test(rest);
+}
+
+/**
  * Whether `lockfile` resolves the package in `dir` at `commit`: an importer's
  * `version:` line naming that tarball, ending there or in the peer suffix pnpm
- * adds when the package has peer dependencies (`...#path:/packages/x(<hash>)`).
- * Anything else after the tarball, such as a longer path, is another package.
+ * adds when the package has peer dependencies (`...#path:/packages/x(<hash>)`,
+ * or the peers themselves, nested, when pnpm does not hash them). Anything else
+ * after the tarball, such as a longer path, is another package.
  */
 export function locksAt(lockfile, commit, dir) {
   const tarball = tarballFor(commit, dir).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-  return new RegExp(`version: ${tarball}(?:\\([^()\\s]+\\))*\n`).test(lockfile);
+  const lines = lockfile.matchAll(new RegExp(`version: ${tarball}(\\S*)\n`, 'g'));
+  return [...lines].some(([, suffix]) => isPeerSuffix(suffix));
 }
 
 /**

@@ -44,6 +44,7 @@ export function need(req) {
 
 function needOnEitherStack(req) {
   if (req.severity === 'degrades') return 'optional — a fallback runs';
+  if (req.toggleValue === 'script-name') return `required, or pass \`${req.toggle.split(':')[1]}: ''\``;
   if (req.toggle && req.defaultOn) return `required, or pass \`${req.toggle.split(':')[1]}: false\``;
   if (req.toggle) return `only if you set \`${req.toggle.split(':')[1]}: true\``;
   return 'required';
