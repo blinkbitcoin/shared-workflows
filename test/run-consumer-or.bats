@@ -134,8 +134,11 @@ run_it() {
     "check:secrets|scripts/checks/secrets.sh"; do
     name="${pair%%|*}"
     fallback="${pair##*|}"
+    # expo-only.sh is the seam behind a stack check: it execs run-consumer-or.sh
+    # with the same two arguments on the Expo stack (test/expo-only.bats).
     grep -qF "run-consumer-or.sh' '$name' $fallback" "$f" ||
       grep -qF "run-consumer-or.sh\" '$name' $fallback" "$f" ||
+      grep -qF "expo-only.sh\" '$name' $fallback" "$f" ||
       fail "check.yml does not route $name through run-consumer-or.sh with fallback $fallback"
     [ -f "$REPO_ROOT/$fallback" ] || fail "the fallback $fallback does not exist"
   done

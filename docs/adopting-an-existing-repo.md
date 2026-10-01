@@ -93,7 +93,7 @@ is a warning in the report, not a failure. See
 | `check:spell` | required, or pass `spell: false` | check.yml (spell) |
 | `check:docs` | required, or pass `docs: false` | check.yml (docs) |
 | `check:licenses` | required, or pass `licenses: false` | check.yml (licenses) |
-| `check:expo-health` | optional — a fallback runs | check.yml (expo-health) |
+| `check:expo-health` | optional — a fallback runs (Expo apps only) | check.yml (expo-health) |
 | `check:audit` | optional — a fallback runs | check.yml (audit) |
 | `check:ci` | optional — a fallback runs | check.yml (ci) |
 | `check:secrets` | optional — a fallback runs | check.yml (secrets) |
@@ -147,8 +147,10 @@ is a warning in the report, not a failure. See
 
 | What | You need | Why |
 | --- | --- | --- |
-| `app.config.ts`, `app.config.js`, `app.config.cjs` or `app.json` | required | test-e2e.yml and every build workflow, through scripts/lib/expo-config.sh |
+| `app.config.ts`, `app.config.js`, `app.config.cjs` or `app.json` | required (Expo apps only) | test-e2e.yml and every build workflow, through scripts/lib/expo-config.sh |
 | `.maestro` | required | test-e2e.yml (flows) |
+| `ios`, committed to git | only if you set `ios: true` (bare React Native apps only) | test-e2e.yml's iOS build, on the bare stack |
+| `android`, committed to git | required, or pass `android: false` (bare React Native apps only) | test-e2e.yml's Android build, on the bare stack |
 | `test-e2e.yml:e2e-setup-script` and `test-e2e.yml:e2e-teardown-script` | required | test-e2e.yml, through scripts/e2e/run-hook.sh |
 | no `scripts/e2e/maestro-ios.sh` or `scripts/e2e/maestro-android.sh` | required | the Maestro suite runners test-e2e.yml runs (scripts/e2e/ios-maestro.sh and android-maestro.sh, with app-launch.sh and ios-simulator.sh) and @blinkbitcoin/app-tooling ships under e2e/; a local copy launches and runs the flows its own way and drifts from what CI runs |
 
@@ -188,7 +190,9 @@ is a warning in the report, not a failure. See
 | the `ios:build`, `ios:verify`, `android:build` and `android:verify` lanes | required | build-ios.yml, build-android.yml |
 | lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_NOTES` and `APP_REVIEW_PHONE` | required | publish-store.yml, which passes exactly these as secrets |
 | no `scripts/release/verify-ios.sh`, `scripts/release/verify-android.sh`, `scripts/release/lib/verify-common.sh` or `scripts/release/verify.test.mjs` | required | the release verifiers @blinkbitcoin/app-tooling ships as release/verify-ios.sh and release/verify-android.sh (with lib/verify-common.sh), which your verify lanes run; a copy in your repository is compared with them by nothing and drifts |
-| `@expo/fingerprint` | required | build-prepare.yml and publish-ota.yml, through scripts/lib/release-env.sh |
+| `@expo/fingerprint` | required (Expo apps only) | build-prepare.yml and publish-ota.yml, through scripts/lib/release-env.sh |
+| `ios`, committed to git | required (bare React Native apps only, when you call `build-ios.yml`) | build-ios.yml, on the bare stack |
+| `android`, committed to git | required (bare React Native apps only, when you call `build-android.yml`) | build-android.yml, on the bare stack |
 
 <!-- contract-table:end -->
 
@@ -208,11 +212,18 @@ our files is the usual first symptom. The
 entries; the report checks all seven, and skips the ones whose config file you
 do not have.
 
-**Expo.** `test-e2e.yml` and every release workflow prebuild an Expo app and read
-`expo config --json` for the app name, scheme, bundle identifier and package.
-They are Expo-specific in a way `check.yml` and `test-unit.yml` are not. A React
-Native app that is not an Expo app can use the first two and should not call the
-rest.
+**Expo or bare React Native.** The report judges your repository as one
+native stack and says which on its first line: `expo` when `package.json` lists
+`expo` and git tracks no `ios/`, `bare` otherwise, or whatever your callers'
+`native-stack` input says
+([Expo or bare React Native](consumer-guide.md#expo-or-bare-react-native)).
+The rows above marked for one stack are skipped on the other. A bare app is
+held to the `ios/` and `android/` it commits instead of an Expo config, skips
+the `expo-health` gate, and is scanned by `check-security.yml` from those
+projects and `react-native bundle`. `test-e2e.yml` and the release workflows
+prebuild an Expo app and read `expo config --json` for the app name, scheme,
+bundle identifier and package; a bare app can call them only at a version whose
+table in the consumer guide lists a `native-stack` input for that workflow.
 
 ## Check it before you push
 

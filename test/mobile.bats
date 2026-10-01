@@ -1,7 +1,9 @@
 #!/usr/bin/env bats
-# scripts/security/mobile.sh - makes a fresh Expo prebuild in a temporary copy
-# of the consumer and runs mobsfscan over its android/ and ios/, with the
-# consumer's .mobsf when there is one. A fake expo (through SECURITY_EXPO_BIN,
+# scripts/security/mobile.sh - on the Expo stack, makes a fresh Expo prebuild
+# in a temporary copy of the consumer and runs mobsfscan over its android/ and
+# ios/; on the bare stack, runs mobsfscan over the android/ and ios/ the
+# consumer commits, where they are. Either way with the consumer's .mobsf when
+# there is one. A fake expo (through SECURITY_EXPO_BIN,
 # or at the default node_modules/.bin/expo) and a fake mobsfscan on PATH stand
 # in for the real tools and record their calls.
 #
@@ -10,6 +12,9 @@
 # (nonzero); a mobsfscan that crashes (1, its output shown); a .mobsf mobsfscan
 # could not read (1); and a scan (0), with and without a .mobsf, with an
 # absolute and a relative expo, and with an empty CI unset before expo sees it.
+# Bare: both committed projects scanned in place with no expo and no copy, one
+# project alone, neither (1), and no dependencies needed even under CI. The
+# stack: NATIVE_STACK over the repository, and an invalid one (1).
 #
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 load test_helper
@@ -34,6 +39,15 @@ setup() {
   : > "$CALLS"
   PATH="$bin:$PATH"
   export PATH
+  unset NATIVE_STACK
+  # An Expo app unless a case says otherwise: expo is a dependency, and git
+  # tracks no ios/ (this is not a git repository at all).
+  printf '{"name":"app","dependencies":{"expo":"~57.0.0"}}\n' > "$app/package.json"
+}
+
+# A bare React Native app: no expo dependency, its native projects committed.
+bare_app() {
+  printf '{"name":"app","dependencies":{"react-native":"0.85.0"}}\n' > "$app/package.json"
 }
 
 # A fake expo: records its arguments, where it ran, what it saw of CI and
@@ -77,7 +91,7 @@ while [ $# -gt 0 ]; do [ "$1" = -o ] && printf %s "{\"version\":\"2.1.0\",\"runs
 bare_path() {
   local dir="$BATS_TEST_TMPDIR/bare" tool found
   mkdir -p "$dir"
-  for tool in bash env node mkdir grep dirname basename sed cat find sort head tail mktemp rm rsync ln pwd; do
+  for tool in bash env node git mkdir grep dirname basename sed cat find sort head tail mktemp rm rsync ln pwd; do
     found="$(command -v "$tool" || true)"
     [ -z "$found" ] || ln -sf "$found" "$dir/$tool"
   done
@@ -225,4 +239,73 @@ mobile() { run bash "$REPO_ROOT/scripts/security/mobile.sh"; }
   [ "$status" -eq 1 ] || fail "a missing expo passed under CI with $status: $output"
   contains "$output" 'the mobile job needs dependencies installed, and under CI that is a failure' || fail "the error: $output"
   [ ! -e "$SECURITY_DIR/mobile.sarif" ] || fail "CI wrote a skipped SARIF instead of failing"
+}
+
+# --- the bare stack ---------------------------------------------------------
+
+@test "a bare app's committed android/ and ios/ are scanned where they are, with no prebuild" {
+  bare_app
+  printf 'ignore-rules: []\n' > "$app/.mobsf"
+  fake_mobsfscan
+  export SECURITY_EXPO_BIN
+  SECURITY_EXPO_BIN="$(fake_expo)"
+  mobile
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  contains "$output" 'native stack: bare (expo is not a dependency in package.json)' || fail "the stack is not logged: $output"
+  ! grep -q '^expo' "$CALLS" || fail "a bare app was prebuilt: $(cat "$CALLS")"
+  grep -qx "mobsfscan --sarif --no-fail -c $app/.mobsf -o $SECURITY_DIR/mobile.sarif android ios" "$CALLS" \
+    || fail "mobsfscan args: $(cat "$CALLS")"
+  grep -qx "mobsfscan-cwd $app" "$CALLS" || fail "mobsfscan did not scan the working tree: $(cat "$CALLS")"
+  [ "$(driver "$SECURITY_DIR/mobile.sarif")" = mobsfscan ] || fail "mobsfscan's SARIF is not the one written"
+}
+
+@test "a bare app with one native project scans that one" {
+  bare_app
+  rm -rf "$app/ios"
+  fake_mobsfscan
+  mobile
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  grep -qx "mobsfscan --sarif --no-fail -o $SECURITY_DIR/mobile.sarif android" "$CALLS" || fail "mobsfscan args: $(cat "$CALLS")"
+}
+
+@test "a bare app with neither native project fails, saying what it looked for" {
+  bare_app
+  rm -rf "$app/ios" "$app/android"
+  fake_mobsfscan
+  mobile
+  [ "$status" -eq 1 ] || fail "nothing to scan passed with $status: $output"
+  contains "$output" 'the bare stack scans the android/ and ios/ the repository commits, and this one has neither' || fail "the error: $output"
+  ! grep -q '^mobsfscan ' "$CALLS" || fail "mobsfscan ran with nothing to scan"
+}
+
+@test "a bare app needs no installed dependencies, even under CI" {
+  bare_app
+  fake_mobsfscan
+  export SECURITY_EXPO_BIN="$BATS_TEST_TMPDIR/missing-expo" CI=true
+  mobile
+  [ "$status" -eq 0 ] || fail "a bare app needed expo under CI: $output"
+  grep -q '^mobsfscan ' "$CALLS" || fail "mobsfscan did not run: $(cat "$CALLS")"
+}
+
+@test "NATIVE_STACK decides over the repository, either way" {
+  fake_mobsfscan
+  export SECURITY_EXPO_BIN
+  SECURITY_EXPO_BIN="$(fake_expo)"
+  NATIVE_STACK=bare mobile
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  ! grep -q '^expo' "$CALLS" || fail "native-stack: bare was prebuilt: $(cat "$CALLS")"
+  : > "$CALLS"
+  bare_app
+  NATIVE_STACK=expo mobile
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  grep -qx 'expo prebuild --platform all --clean --no-install' "$CALLS" || fail "native-stack: expo was not prebuilt: $(cat "$CALLS")"
+}
+
+@test "a NATIVE_STACK that is not a stack fails the run instead of picking one" {
+  fake_mobsfscan
+  export NATIVE_STACK=native
+  mobile
+  [ "$status" -eq 1 ] || fail "an invalid stack passed with $status: $output"
+  contains "$output" '::error::native-stack is "native"' || fail "the resolver's error is not shown: $output"
+  ! grep -q '^mobsfscan ' "$CALLS" || fail "mobsfscan ran on an invalid stack"
 }

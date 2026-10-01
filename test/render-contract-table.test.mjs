@@ -97,6 +97,23 @@ test('a requirement with no toggle and no fallback reads as required', () => {
   assert.equal(need({ severity: 'required', toggle: null }), 'required');
 });
 
+test('a row for one native stack says which, after what to do', () => {
+  assert.equal(need({ severity: 'degrades', stack: 'expo' }), 'optional — a fallback runs (Expo apps only)');
+  assert.equal(need({ severity: 'required', toggle: null, stack: 'bare' }), 'required (bare React Native apps only)');
+});
+
+test('a row narrower than its profile names the workflow it waits for', () => {
+  assert.equal(
+    need({ severity: 'required', toggle: null, stack: 'bare', workflow: 'build-ios.yml' }),
+    'required (bare React Native apps only, when you call `build-ios.yml`)',
+  );
+  assert.equal(need({ severity: 'required', toggle: null, workflow: 'build-ios.yml' }), 'required (when you call `build-ios.yml`)');
+});
+
+test('a native project directory reads as committed to git', () => {
+  assert.equal(targetOf({ kind: 'tracked-dir', target: 'ios' }), '`ios`, committed to git');
+});
+
 test('one target reads as itself, whether or not it came as a list', () => {
   assert.equal(targetOf({ kind: 'package-script', target: 'check:types' }), '`check:types`');
   assert.equal(targetOf({ kind: 'package-script', target: ['check:types'] }), '`check:types`');

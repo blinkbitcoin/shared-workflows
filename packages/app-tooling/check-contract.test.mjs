@@ -14,6 +14,7 @@ import {
   check,
   checkCalls,
   checkRequirement,
+  ciScripts,
   defaultIo,
   formatResult,
   isProgram,
@@ -28,14 +29,23 @@ import {
   readMiseTools,
   scalarType,
   skeleton,
+  stackInput,
+  stackLine,
   summaryTable,
   toggleOn,
 } from './bin/check-contract.mjs';
 
 // A consumer, as the checks see one. No temp directories: `io` is the only way
 // any check reaches a disk, so a fixture is an object literal.
-function consumer({ files = {}, dirs = [], pkg = {}, callers = {} } = {}) {
+// `stack` is the resolved native stack; the fixtures are the Expo template's
+// shape unless a case says otherwise. `tracked` lists the directories git tracks.
+const EXPO_STACK = { stack: 'expo', reason: 'expo is a dependency and git tracks no ios/' };
+const BARE_STACK = { stack: 'bare', reason: 'expo is not a dependency in package.json' };
+// What the program prints first for a temporary directory with no expo dependency.
+const BARE_LINE = 'native stack: bare (expo is not a dependency in package.json)';
+function consumer({ files = {}, dirs = [], pkg = {}, callers = {}, stack = EXPO_STACK, tracked = [] } = {}) {
   const io = {
+    tracked: (_root, dir) => tracked.includes(dir),
     read: (file) => (file in files ? files[file] : null),
     exists: (file) => file in files || dirs.includes(file),
     isNonEmptyDir: (dir) => dirs.includes(dir),
@@ -58,6 +68,7 @@ function consumer({ files = {}, dirs = [], pkg = {}, callers = {} } = {}) {
     callers: callerList,
     uses: callersUse(callerList),
     inputs: callerInputs(callerList),
+    stack,
   };
 }
 
@@ -81,6 +92,7 @@ test('every requirement declares the fields the report depends on', () => {
     'lane-environment',
     'no-copy',
     'one-pin',
+    'tracked-dir',
   ]);
   const profiles = new Set(readContract().profiles);
   for (const r of readContract().requirements) {
@@ -91,6 +103,8 @@ test('every requirement declares the fields the report depends on', () => {
     assert.ok(r.guide, `${r.id}: needs a guide anchor`);
     assert.ok(r.neededBy, `${r.id}: needs to say what wants it`);
     assert.equal(typeof r.defaultOn, 'boolean', `${r.id}: defaultOn must be a boolean`);
+    assert.ok(r.stack === undefined || ['expo', 'bare'].includes(r.stack), `${r.id}: stack must be expo or bare`);
+    assert.ok(r.workflow === undefined || /^[a-z-]+\.yml$/.test(r.workflow), `${r.id}: workflow must be a workflow file`);
   }
 });
 
@@ -803,17 +817,20 @@ test('the Makefile reader visits a prerequisite shared by two targets once, and 
 // --- the command line ----------------------------------------------------------
 
 test('arguments default to the working directory, every profile and the text report', () => {
-  assert.deepEqual(parseArgs([], '/work'), { root: '/work', profiles: null, json: false, skeleton: false });
+  assert.deepEqual(parseArgs([], '/work'), { root: '/work', profiles: null, json: false, skeleton: false, nativeStack: '' });
   assert.equal(parseArgs([]).root, process.cwd());
 });
 
 test('every flag is read', () => {
-  assert.deepEqual(parseArgs(['--root', '/app', '--profile', 'checks, unit,,', '--json', '--skeleton'], '/work'), {
+  assert.deepEqual(parseArgs(['--root', '/app', '--profile', 'checks, unit,,', '--json', '--skeleton', '--native-stack', 'bare'], '/work'), {
     root: '/app',
     profiles: ['checks', 'unit'],
     json: true,
     skeleton: true,
+    nativeStack: 'bare',
   });
+  // A trailing --native-stack with no value is the empty input: detect it.
+  assert.equal(parseArgs(['--native-stack'], '/work').nativeStack, '');
 });
 
 test('an unknown argument is refused by name', () => {
@@ -852,7 +869,7 @@ test('a consumer meeting every requirement exits 0 and says so', () => {
   const root = tree({ 'package.json': JSON.stringify({ scripts: {} }) });
   assert.deepEqual(runMain(['--root', root, '--profile', 'badges']), {
     code: 0,
-    stdout: 'ok    no copy of gen-badges\n\nEvery requirement of the workflows this repository calls is satisfied.\n',
+    stdout: 'native stack: bare (expo is not a dependency in package.json)\nok    no copy of gen-badges\n\nEvery requirement of the workflows this repository calls is satisfied.\n',
     stderr: '',
   });
 });
@@ -862,7 +879,7 @@ test('the root defaults to the working directory the program was given', () => {
   const root = tree({ 'package.json': '{}', 'scripts/badges/render.mjs': '' });
   const { code, stdout } = runMain(['--profile', 'badges'], { cwd: root });
   assert.equal(code, 1);
-  assert.match(stdout, /^FAIL {2}no copy of gen-badges: scripts\/badges\/render\.mjs is a copy of what this family ships\./);
+  assert.match(stdout, /^native stack: bare \(expo is not a dependency in package\.json\)\nFAIL {2}no copy of gen-badges: scripts\/badges\/render\.mjs is a copy of what this family ships\./);
 });
 
 // publish-badges.yml renders with the package's gen-badges now, so calling
@@ -882,7 +899,7 @@ test('a degraded-only consumer exits 0 and counts what degraded', () => {
   assert.equal(stderr, '');
   const codeql = check(readContract(), readConsumer(tree()), { profiles: ['code-scanning'] }).find((r) => r.req.id === 'file.code-scanning-configuration');
   assert.equal(codeql.level, 'warn');
-  assert.equal(stdout, `${formatResult(codeql)}\n\n1 degraded. See ${GUIDE}\n`);
+  assert.equal(stdout, `${BARE_LINE}\n${formatResult(codeql)}\n\n1 degraded. See ${GUIDE}\n`);
 });
 
 test('a consumer missing required items exits 1, lists each finding and counts both kinds', () => {
@@ -893,7 +910,7 @@ test('a consumer missing required items exits 1, lists each finding and counts b
   const warnings = results.filter((r) => r.level === 'warn').length;
   assert.equal(code, 1);
   const expected = results.filter((r) => r.level !== 'skip').map((r) => `${formatResult(r)}\n`).join('');
-  assert.equal(stdout, `${expected}\n${failures} blocked, ${warnings} degraded. See ${GUIDE}\n`);
+  assert.equal(stdout, `${BARE_LINE}\n${expected}\n${failures} blocked, ${warnings} degraded. See ${GUIDE}\n`);
   assert.equal(stderr, `::error::consumer contract: ${failures} requirement(s) of the workflows this repository calls are not met\n`);
 });
 
@@ -935,7 +952,8 @@ test('the job summary is appended to GITHUB_STEP_SUMMARY when it is set', () => 
   const root = tree({ '.github/workflows/ci.yml': CHECKS_CALLER, 'summary.md': 'before\n' });
   const summary = path.join(root, 'summary.md');
   runMain(['--root', root], { env: { GITHUB_STEP_SUMMARY: summary } });
-  assert.equal(readFileSync(summary, 'utf8'), `before\n${summaryTable(check(readContract(), readConsumer(root)))}\n`);
+  const consumerRead = readConsumer(root);
+  assert.equal(readFileSync(summary, 'utf8'), `before\n${summaryTable(check(readContract(), consumerRead), consumerRead.stack)}\n`);
 });
 
 test('no job summary is written without GITHUB_STEP_SUMMARY', () => {
@@ -1198,4 +1216,158 @@ test('the program fails on a call that does not fit, and --json carries the call
   assert.match(stdout, /FAIL {2}cd\.yml: store -> publish-store\.yml: does not pass version, which publish-store\.yml requires/);
   const json = JSON.parse(runMain(['--root', root, '--profile', 'badges', '--json']).stdout);
   assert.ok(json.some((r) => r.id === 'calls.interface' && r.level === 'fail'), JSON.stringify(json));
+});
+
+// --- the native stack: Expo or bare React Native ------------------------------
+
+const ids = (results, level) => results.filter((r) => r.level === level).map((r) => r.req.id);
+const caller = (workflow, withBlock = '') =>
+  `jobs:\n  job:\n    uses: blinkbitcoin/shared-workflows/.github/workflows/${workflow}@v0\n${withBlock ? `    with:\n${withBlock}` : ''}`;
+
+test('the contract tags exactly the Expo rows expo, and the committed-project rows bare', () => {
+  const tagged = (stack) => readContract().requirements.filter((r) => r.stack === stack).map((r) => r.id);
+  // Not check:prebuild: CI runs the consumer's own script whenever prebuild is
+  // on, whatever the stack, so make ci must reach it on either.
+  assert.deepEqual(tagged('expo'), [
+    'package-script.check-expo-health',
+    'file.expo-configuration',
+    'package-dep.fingerprint',
+  ]);
+  assert.deepEqual(tagged('bare'), ['tracked-dir.ios-e2e', 'tracked-dir.android-e2e', 'tracked-dir.ios-build', 'tracked-dir.android-build']);
+  for (const r of readContract().requirements.filter((x) => x.kind === 'tracked-dir')) {
+    assert.ok(['ios', 'android'].includes(r.target), `${r.id}: a native project directory`);
+  }
+});
+
+test('the callers pass no stack when none of them passes a literal native-stack', () => {
+  assert.equal(stackInput(new Map()), '');
+  assert.equal(stackInput(new Map([['check.yml:types', 'bare']])), '');
+  assert.equal(stackInput(new Map([['check.yml:native-stack', '']])), '');
+  assert.equal(stackInput(new Map([['check.yml:native-stack', '${{ vars.NATIVE_STACK }}']])), '');
+});
+
+test('the callers\' native-stack is the one literal they agree on', () => {
+  assert.equal(stackInput(new Map([['check.yml:native-stack', 'bare']])), 'bare');
+  assert.equal(
+    stackInput(new Map([['check.yml:native-stack', 'bare'], ['test-e2e.yml:native-stack', 'bare'], ['build-ios.yml:native-stack', '${{ vars.X }}']])),
+    'bare',
+  );
+});
+
+test('callers passing two different stacks is an error naming each and where', () => {
+  assert.throws(() => stackInput(new Map([['check.yml:native-stack', 'bare'], ['test-e2e.yml:native-stack', 'expo'], ['build-ios.yml:native-stack', 'bare']])), {
+    message:
+      '::error::the callers pass different native-stack inputs: bare (check.yml, build-ios.yml), expo (test-e2e.yml). A repository is one stack: pass the same value to every workflow that takes it',
+  });
+});
+
+test('a consumer read from disk carries its stack, detected from package.json and git', () => {
+  const expo = JSON.stringify({ devDependencies: { expo: '~57.0.0' } });
+  assert.deepEqual(readConsumer(tree({ 'package.json': expo })).stack, { stack: 'expo', reason: 'expo is a dependency and git tracks no ios/' });
+  assert.equal(readConsumer(tree({ 'package.json': '{}' })).stack.stack, 'bare');
+  assert.equal(readConsumer(tree()).stack.stack, 'bare');
+  const tracked = { ...defaultIo, tracked: (_root, dir) => dir === 'ios' };
+  assert.equal(readConsumer(tree({ 'package.json': expo }), tracked).stack.stack, 'bare');
+});
+
+test('the callers\' input, then --native-stack, decide over the repository, and then git is not asked', () => {
+  const io = { ...defaultIo, tracked: () => assert.fail('git was asked although an input decides') };
+  const expo = JSON.stringify({ dependencies: { expo: '1' } });
+  const root = tree({ 'package.json': expo, '.github/workflows/ci.yml': caller('check.yml', '      native-stack: bare\n') });
+  assert.deepEqual(readConsumer(root, io).stack, { stack: 'bare', reason: 'the native-stack input' });
+  assert.equal(readConsumer(root, io, { nativeStack: 'expo' }).stack.stack, 'expo');
+  assert.equal(readConsumer(tree({ 'package.json': '{}' }), io, { nativeStack: ' bare ' }).stack.stack, 'bare');
+});
+
+test('an Expo-only row is skipped on the bare stack, saying which stack and why', () => {
+  const callers = { 'ci.yml': caller('check.yml') };
+  const health = check(readContract(), consumer({ callers, stack: BARE_STACK })).find((r) => r.req.id === 'package-script.check-expo-health');
+  assert.deepEqual([health.level, health.reason], ['skip', 'only the expo stack needs it, and this repository is bare (expo is not a dependency in package.json)']);
+  // The same caller on the Expo stack is held to it.
+  assert.equal(check(readContract(), consumer({ callers })).find((r) => r.req.id === 'package-script.check-expo-health').level, 'warn');
+});
+
+test('the e2e and release Expo rows apply on the Expo stack only', () => {
+  const callers = { 'ci.yml': caller('test-e2e.yml'), 'cd.yml': caller('build-prepare.yml') };
+  const expo = check(readContract(), consumer({ callers }));
+  assert.ok(ids(expo, 'fail').includes('file.expo-configuration'));
+  assert.ok(ids(expo, 'fail').includes('package-dep.fingerprint'));
+  const bare = check(readContract(), consumer({ callers, stack: BARE_STACK }));
+  assert.ok(ids(bare, 'skip').includes('file.expo-configuration'));
+  assert.ok(ids(bare, 'skip').includes('package-dep.fingerprint'));
+});
+
+test('a bare app must track the ios/ and android/ its callers build, and only those', () => {
+  const e2e = { 'ci.yml': caller('test-e2e.yml') };
+  // test-e2e.yml builds Android by default and iOS only when asked.
+  const androidOnly = check(readContract(), consumer({ callers: e2e, stack: BARE_STACK }));
+  const android = androidOnly.find((r) => r.req.id === 'tracked-dir.android-e2e');
+  assert.deepEqual([android.level, android.reason], ['fail', 'git tracks nothing under android/']);
+  assert.equal(androidOnly.find((r) => r.req.id === 'tracked-dir.ios-e2e').reason, 'test-e2e.yml:ios is off');
+  const both = { 'ci.yml': caller('test-e2e.yml', '      ios: true\n') };
+  assert.deepEqual(ids(check(readContract(), consumer({ callers: both, stack: BARE_STACK, tracked: ['ios', 'android'] })), 'ok').filter((id) => id.startsWith('tracked-dir.')), [
+    'tracked-dir.ios-e2e',
+    'tracked-dir.android-e2e',
+  ]);
+});
+
+test('a release row naming a workflow applies only when that workflow is called', () => {
+  const callers = { 'cd.yml': caller('build-android.yml') };
+  const results = check(readContract(), consumer({ callers, stack: BARE_STACK, tracked: ['android'] }));
+  const ios = results.find((r) => r.req.id === 'tracked-dir.ios-build');
+  assert.deepEqual([ios.level, ios.reason], ['skip', 'build-ios.yml is not called from this repository']);
+  assert.equal(results.find((r) => r.req.id === 'tracked-dir.android-build').level, 'ok');
+  const untracked = check(readContract(), consumer({ callers: { 'cd.yml': caller('build-ios.yml') }, stack: BARE_STACK }));
+  assert.equal(untracked.find((r) => r.req.id === 'tracked-dir.ios-build').level, 'fail');
+  // On the Expo stack the native projects are generated, so neither is asked for.
+  assert.equal(check(readContract(), consumer({ callers })).find((r) => r.req.id === 'tracked-dir.android-build').level, 'skip');
+});
+
+test('the default io asks git which directories it tracks', () => {
+  assert.equal(defaultIo.tracked(tree({ 'ios/Podfile': '' }), 'ios'), false);
+});
+
+test('an Expo-only gate script CI skips on the bare stack is not a script make ci must reach', () => {
+  const contract = readContract();
+  const uses = new Set(['check.yml']);
+  assert.ok(ciScripts(contract, uses, new Map(), null).on.has('check:expo-health'));
+  assert.ok(ciScripts(contract, uses, new Map(), null, 'expo').on.has('check:expo-health'));
+  assert.ok(!ciScripts(contract, uses, new Map(), null, 'bare').on.has('check:expo-health'));
+  assert.ok(ciScripts(contract, uses, new Map(), null, 'bare').on.has('check:types'));
+});
+
+test('the report, the job summary and the skeleton each name the stack they judged', () => {
+  assert.equal(stackLine(BARE_STACK), 'native stack: bare (expo is not a dependency in package.json)');
+  assert.match(summaryTable([], EXPO_STACK), /^## Consumer contract\n\nNative stack: \*\*expo\*\* \(expo is a dependency and git tracks no ios\/\)\.\n\nEvery requirement/);
+  assert.doesNotMatch(summaryTable([]), /Native stack/);
+  assert.match(skeleton([], BARE_STACK), /^Judged as the bare stack \(expo is not a dependency in package\.json\)\. If this repository is expo, pass native-stack: expo to the workflows that take it\.\n/);
+  assert.match(skeleton([], EXPO_STACK), /If this repository is bare, pass native-stack: bare/);
+  assert.equal(skeleton([]), '');
+});
+
+test('the program prints the stack first, takes --native-stack, and puts the stack in the skeleton', () => {
+  const root = tree({ '.github/workflows/ci.yml': CHECKS_CALLER });
+  const { stdout } = runMain(['--root', root, '--native-stack', 'expo', '--skeleton']);
+  assert.match(stdout, /^native stack: expo \(the native-stack input\)\n/);
+  assert.match(stdout, /\nJudged as the expo stack \(the native-stack input\)\./);
+  // On expo the Expo health script is asked for; on the detected bare stack it is not.
+  assert.match(stdout, /^warn {2}check:expo-health: /m);
+  assert.doesNotMatch(runMain(['--root', root]).stdout, /check:expo-health/);
+});
+
+test('callers disagreeing on the stack is one error line and exit 1', () => {
+  const root = tree({
+    '.github/workflows/ci.yml': caller('check.yml', '      native-stack: bare\n'),
+    '.github/workflows/e2e.yml': caller('test-e2e.yml', '      native-stack: expo\n'),
+  });
+  const { code, stdout, stderr } = runMain(['--root', root]);
+  assert.equal(code, 1);
+  assert.equal(stdout, '');
+  assert.match(stderr, /^::error::the callers pass different native-stack inputs: bare \(check\.yml\), expo \(test-e2e\.yml\)\.[^\n]*\n$/);
+});
+
+test('a --native-stack that is not a stack is one error line and exit 1', () => {
+  const { code, stderr } = runMain(['--root', tree(), '--native-stack', 'native']);
+  assert.equal(code, 1);
+  assert.match(stderr, /^::error::native-stack is "native": /);
 });

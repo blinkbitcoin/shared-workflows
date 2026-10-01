@@ -189,6 +189,21 @@ run gen:graphql" ] || fail "expected 'pnpm run gen:i18n' then 'pnpm run gen:grap
   [ "$status" -eq 0 ] || fail "a change outside the configured GraphQL path must not fail the gate: $output"
 }
 
+@test "an empty I18N_PATHS or GRAPHQL_PATHS is the default, as check.yml passes an unset input" {
+  # check.yml sets both from i18n-paths and graphql-paths, which default to ''.
+  git_consumer
+  stub_pnpm_writing src/i18n/locales/en/messages.po
+  I18N_PATHS="" GRAPHQL_PATHS="" run bash "$SCRIPT"
+  [ "$status" -eq 1 ] || fail "an empty I18N_PATHS must check the default path: $output"
+  contains "$output" "changes in: src/i18n/locales" || fail "the default path is not named: $output"
+
+  git_consumer '{"scripts":{"gen:graphql":"true"}}'
+  stub_pnpm_writing src/graphql/generated/graphql.ts
+  GRAPHQL_PATHS="" run bash "$SCRIPT"
+  [ "$status" -eq 1 ] || fail "an empty GRAPHQL_PATHS must check the default path: $output"
+  contains "$output" "changes in: src/graphql/generated" || fail "the default GraphQL path is not named: $output"
+}
+
 @test "the paths take several space-separated entries and check each" {
   git_consumer
   stub_pnpm_writing app/locales/fr.po

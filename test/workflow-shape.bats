@@ -1354,3 +1354,42 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
     [ "$(yq -r ".on.workflow_call.inputs.\"$input\".type" "$f")" = "boolean" ] || fail "$input is not a boolean switch"
   done
 }
+
+# The native stack: one input, empty by default, read by exactly the steps whose
+# behaviour depends on it, each through NATIVE_STACK.
+@test "check.yml and check-security.yml take native-stack, empty by default, and hand it to the steps that read it" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local f where
+  for f in check check-security; do
+    f="$REPO_ROOT/.github/workflows/$f.yml"
+    [ "$(yq -r '.on.workflow_call.inputs."native-stack".type' "$f")" = "string" ] || fail "$f: native-stack is not a string input"
+    [ "$(yq -r '.on.workflow_call.inputs."native-stack".default' "$f")" = "" ] || fail "$f: native-stack does not default to empty"
+  done
+  where="$(yq -r '[.jobs | to_entries[] | .key as $job | .value.steps[]? | select(.env.NATIVE_STACK) | $job + ":" + .name + "=" + .env.NATIVE_STACK] | join(",")' "$REPO_ROOT/.github/workflows/check.yml")"
+  [ "$where" = 'contract:Check the consumer contract=${{ inputs.native-stack }},dependencies:Expo health=${{ inputs.native-stack }}' ] \
+    || fail "check.yml hands NATIVE_STACK to '$where'"
+  where="$(yq -r '[.jobs | to_entries[] | .key as $job | .value.steps[]? | select(.env.NATIVE_STACK) | $job + ":" + .id + "=" + .env.NATIVE_STACK] | join(",")' "$REPO_ROOT/.github/workflows/check-security.yml")"
+  [ "$where" = 'bundle:scan=${{ inputs.native-stack }},mobile:scan=${{ inputs.native-stack }}' ] \
+    || fail "check-security.yml hands NATIVE_STACK to '$where'"
+}
+
+@test "check.yml's Expo health gate keeps its input on and runs through expo-only.sh" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check.yml"
+  [ "$(yq -r '.on.workflow_call.inputs."expo-health".default' "$f")" = "true" ] || fail "expo-health no longer defaults to true"
+  run="$(yq -r '.jobs.dependencies.steps[] | select(.name == "Expo health") | .run' "$f")"
+  [ "$run" = "bash \"\$WORKFLOWS_DIR/scripts/checks/expo-only.sh\" 'check:expo-health' scripts/checks/expo-health.sh" ] \
+    || fail "the Expo health step runs '$run', not the stack-aware wrapper"
+}
+
+@test "check.yml hands i18n-paths and graphql-paths, empty by default, to the generated gate" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check.yml"
+  for input in i18n-paths graphql-paths; do
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\".type" "$f")" = "string" ] || fail "$input is not a string input"
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\".default" "$f")" = "" ] || fail "$input does not default to empty"
+  done
+  step='.jobs.generated.steps[] | select(.name == "Generated")'
+  [ "$(yq -r "$step | .env.I18N_PATHS" "$f")" = '${{ inputs.i18n-paths }}' ] || fail "I18N_PATHS is not the input"
+  [ "$(yq -r "$step | .env.GRAPHQL_PATHS" "$f")" = '${{ inputs.graphql-paths }}' ] || fail "GRAPHQL_PATHS is not the input"
+}

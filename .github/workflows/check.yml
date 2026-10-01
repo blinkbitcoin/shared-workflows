@@ -26,6 +26,14 @@ on:
         description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
         type: string
         default: 'v1'
+      native-stack:
+        description: >-
+          The app's native stack, expo or bare (React Native with committed ios/
+          and android/). Empty detects it: expo when package.json lists expo and
+          git tracks no ios/, bare otherwise. Decides which contract rows apply
+          and whether the expo-health gate runs
+        type: string
+        default: ''
       types:
         description: Run the consumer's check:types script (the type check)
         type: boolean
@@ -57,8 +65,23 @@ on:
           uncommitted changes
         type: boolean
         default: false
+      i18n-paths:
+        description: >-
+          Space-separated pathspecs gen:i18n writes, for the generated gate's
+          fallback (empty: src/i18n/locales)
+        type: string
+        default: ''
+      graphql-paths:
+        description: >-
+          Space-separated pathspecs gen:graphql writes, for the generated gate's
+          fallback (empty: src/graphql/generated)
+        type: string
+        default: ''
       expo-health:
-        description: Run the consumer's check:expo-health script, or report Expo SDK drift as a warning and then run Expo's own health check
+        description: >-
+          Run the consumer's check:expo-health script, or report Expo SDK drift
+          as a warning and then run Expo's own health check. Expo stack only: on
+          a bare app the step passes with a notice
         type: boolean
         default: true
       audit:
@@ -234,6 +257,7 @@ jobs:
         env:
           WORKING_DIRECTORY: ${{ inputs.working-directory }}
           WORKFLOWS_CONTRACT_ONLY: ${{ inputs.contract-only }}
+          NATIVE_STACK: ${{ inputs.native-stack }}
         run: bash ".workflows/scripts/ci/check-contract.sh"
   code:
     name: Code
@@ -315,6 +339,9 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
       - name: Generated
         if: ${{ inputs.generated }}
+        env:
+          I18N_PATHS: ${{ inputs.i18n-paths }}
+          GRAPHQL_PATHS: ${{ inputs.graphql-paths }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:generated' scripts/checks/generated.sh
       # The Expo health check, not expo-doctor alone: the template's script
       # reports SDK drift (`expo install --check`) as a warning and then runs
@@ -382,9 +409,14 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+      # expo-only.sh resolves the stack first and passes with a notice on a bare
+      # app, which has no Expo SDK to drift from: the input stays on by default
+      # without turning a bare consumer's Dependencies job red.
       - name: Expo health
         if: ${{ inputs.expo-health }}
-        run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:expo-health' scripts/checks/expo-health.sh
+        env:
+          NATIVE_STACK: ${{ inputs.native-stack }}
+        run: bash "$WORKFLOWS_DIR/scripts/checks/expo-only.sh" 'check:expo-health' scripts/checks/expo-health.sh
       # The audit is one registry request (the advisories/bulk endpoint), and
       # that endpoint is the family's known staller: esign measured 5s-102s for
       # identical payloads on a healthy day. So the step gets a bound of its

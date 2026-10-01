@@ -87,6 +87,24 @@ sec_setting() {
   printf '%s' "$value"
 }
 
+# The consumer's native stack, expo or bare, by the rule every part of this
+# family applies (lib/native-stack.mjs): NATIVE_STACK - check-security.yml's
+# native-stack input - when set, else expo when package.json lists expo and git
+# tracks no ios/, else bare.
+#
+#   stack="$(sec_native_stack)"      # on a line of its own, so a failure stops the runner
+#
+# An invalid NATIVE_STACK fails the run, the same rule as sec_enabled: a typo
+# must never quietly pick a stack.
+sec_native_stack() {
+  local value
+  if ! value="$(node "$SECURITY_LIB/native-stack.mjs" --root . --input "${NATIVE_STACK:-}")"; then
+    echo "native-stack.mjs could not resolve the native stack (see the error above); that fails the run" >&2
+    exit 1
+  fi
+  printf '%s' "$value"
+}
+
 # The newest Android SDK build-tools copy of a tool (aapt2, apksigner), or the
 # one on PATH. Prints an absolute path, or fails when there is none.
 sec_android_build_tool() {

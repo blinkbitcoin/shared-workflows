@@ -20,7 +20,7 @@ below drift apart.
 ```
 .github/workflows/  the reusable workflows (workflow_call) + this repo's self-* CI
 .github/actions/    composite actions (setup, maestro, forensics, free-disk, native-key)
-scripts/checks/     the check.yml steps (audit, commits, expo-health, generated, secrets)
+scripts/checks/     the check.yml steps (audit, commits, expo-health and expo-only, generated, secrets)
 scripts/ci/         shared CI plumbing (changed-class, check-ci, pnpm-install, tool-version, gh-pages badges)
 scripts/e2e/        simulators, emulators, Metro, Maestro, forensics collection
 scripts/native/     prebuild, pods, iOS/Android builds and packaging
@@ -42,6 +42,7 @@ scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
 test/               the bats suite + fixtures/ (consumer callers, kept byte-identical)
 packages/           app-tooling (tooling any repo installs; expo/ holds the Expo presets,
                     security/ the scanner copies and lib/security-*.mjs their modules,
+                    lib/native-stack.mjs the Expo-or-bare rule every part applies,
                     e2e/ the Maestro suite runner copies, bin/serve-dist.mjs the web preview,
                     fixtures/template/ the template's files, before and after)
 docs/               consumer-guide, adopting-an-existing-repo, cache-keys,

@@ -137,7 +137,7 @@ flowchart LR
   subgraph app["your repository"]
     pr["a push or a PR"]
     caller["ci.yml calls check.yml@v0"]
-    tree["package.json, Makefile, .mise.toml,<br/>the callers' with: toggles, fastlane/"]
+    tree["package.json, Makefile, .mise.toml,<br/>the callers' with: toggles, fastlane/,<br/>whether git tracks ios/ and android/"]
   end
   subgraph run["your Checks run"]
     contract["Contract job"]
@@ -184,7 +184,41 @@ degraded and never blocks, with the reason saying so.
 It runs **before** the `setup` action, which is the point: a missing `.mise.toml`
 or `pnpm-lock.yaml` is exactly the kind of thing that otherwise surfaces as
 `missing command: pnpm`, several steps away from its cause. So it uses nothing
-but the runner's own node — no pnpm, no installed dependencies.
+but the runner's own node — no pnpm, no installed dependencies — and git, to
+see which directories your repository tracks.
+
+### Expo or bare React Native
+
+The family serves two kinds of app, and some requirements belong to one of
+them only. An **Expo** app generates `ios/` and `android/` with a prebuild and
+never commits them; a **bare** React Native app commits them as source. Which
+one your repository is, its *native stack*, is resolved the same way
+everywhere — the contract check, `check.yml`'s `expo-health` gate, the
+`bundle` and `mobile` scanners and the native build workflows:
+
+1. the `native-stack` input, when your callers pass one (`expo` or `bare`);
+2. otherwise `expo`, when `package.json` lists `expo` in `dependencies` or
+   `devDependencies` **and** git tracks nothing under `ios/` (it is absent, or
+   gitignored);
+3. otherwise `bare`.
+
+The report's first line says which it found and why — `native stack: bare (expo
+is not a dependency in package.json)` — and so do the job summary and the
+`--skeleton` output. A row of `contract.json` may carry `"stack": "expo"` or
+`"stack": "bare"`. Rows without it apply to both; a row for the other stack is
+reported as skipped, with the reason, the way a gate you switched off is.
+
+| Stack | Rows only it is held to |
+| --- | --- |
+| `expo` | `check:expo-health` (the `expo-health` gate), an Expo config (`app.config.*` or `app.json`) for `test-e2e.yml` and the builds, `@expo/fingerprint` for the release |
+| `bare` | `ios/` committed to git when `test-e2e.yml` builds iOS (`ios: true`) or you call `build-ios.yml`; `android/` committed when `test-e2e.yml` builds Android (its default) or you call `build-android.yml` |
+
+The checker reads `native-stack` from your callers' `with:` blocks, and
+`check.yml` also hands its own input to the check, which covers a value wired
+to an expression. Two callers passing different literal values is an error: a
+repository is one stack. Pass the input when the detection is wrong for you,
+such as a bare app that keeps `expo` as a dependency for its modules but
+commits no `ios/` yet.
 
 ### Running it yourself
 
@@ -200,7 +234,8 @@ pnpm exec check-contract --skeleton   # ...and the package.json and
 
 `--json` gives the same findings machine-readably. `--profile checks,unit`
 overrides the workflows it infers from your callers, which is what to use before
-you have written a caller at all.
+you have written a caller at all. `--native-stack expo` or `--native-stack bare`
+overrides the stack, as the input does.
 
 ### Trying it against a real run
 
@@ -700,14 +735,17 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `linux-runner` | `ubuntu-latest` | Runner for every job in this workflow |
 | `macos-runner` | `macos-26` | Unused here |
 | `native-cache-version` | `v1` | Unused here |
+| `native-stack` | `''` (detect) | The app's native stack: `expo`, or `bare` for React Native with committed `ios/` and `android/`. Empty detects it — see [Expo or bare React Native](#expo-or-bare-react-native). Decides which contract rows apply and whether `expo-health` runs |
 | `types` | `true` | Run `check:types` |
 | `lint` | `true` | Run `check:lint` |
 | `format` | `true` | Run `check:format` |
 | `unused` | `true` | Run `check:unused` |
 | `spell` | `true` | Run `check:spell` |
 | `docs` | `true` | Run `check:docs` with `EVENT_NAME`, `BASE_REF` and `PR_AUTHOR` in the environment — the consumer's docs gate (freshness heuristic, command table, table widths, diagram parsing). `PR_AUTHOR` is what lets the consumer exempt a bot's dependency bump from a "docs not updated" warning |
-| `generated` | `false` | Run the consumer's `check:generated`, or, when it ships none, `gen:i18n` and `gen:graphql` (whichever it has) + a clean-tree assertion |
-| `expo-health` | `true` | Run the consumer's `check:expo-health`, or `scripts/checks/expo-health.sh` when it ships none: `expo install --check` as a warning, then `expo-doctor` with its version check off |
+| `generated` | `false` | Run the consumer's `check:generated`, or, when it ships none, `gen:i18n` and `gen:graphql` (whichever it has) + a clean-tree assertion over the paths below |
+| `i18n-paths` | `''` (`src/i18n/locales`) | Space-separated pathspecs `gen:i18n` writes, which the `generated` fallback asserts are clean. Empty keeps the default. Unused when the consumer ships `check:generated` |
+| `graphql-paths` | `''` (`src/graphql/generated`) | Space-separated pathspecs `gen:graphql` writes, as `i18n-paths` (a bare app's codegen may write `app/graphql/generated.ts`) |
+| `expo-health` | `true` | Run the consumer's `check:expo-health`, or `scripts/checks/expo-health.sh` when it ships none: `expo install --check` as a warning, then `expo-doctor` with its version check off. **Expo stack only**: on a bare app the step passes with a notice naming the stack, so the default needs no change |
 | `audit` | `true` | Run the consumer's `check:audit`, or `pnpm audit --prod` at `audit-level` when it ships none |
 | `audit-level` | `high` | Minimum severity that fails the audit |
 | `audit-soft-on-pr` | `true` | Make a failing audit advisory on a `pull_request` (`continue-on-error`). It stays blocking on `push`, `release` and `workflow_dispatch`. Set `false` to block PRs too |
@@ -1153,7 +1191,8 @@ failure in the contract check.
 **Every job installs your dependencies** (the `setup` action's
 `pnpm install --frozen-lockfile`). The runners themselves come from the
 `.workflows/` checkout and need only node, but the `Bundle` and `Mobile`
-scanners call your `expo` out of `node_modules`, and one job shape for all of
+scanners call your `expo` (or, on a bare React Native app, your `react-native`)
+out of `node_modules`, and one job shape for all of
 them keeps the node every job resolves the settings with the same.
 
 **What decides whether a scanner runs.** Two things, together. The input below is
@@ -1177,8 +1216,9 @@ that scans nothing while reporting green is worse than one that is red.
 | `code` | Allow the source scanner (`check-security code`, Semgrep's TypeScript, secrets and OWASP packs plus your `jobs.code.rules`). Default `true` |
 | `policy` | Allow the install-policy scanner (`check-security policy`, your `pnpm-workspace.yaml` install policy). Default `true` |
 | `sbom` | Allow the bill of materials (`check-security sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
-| `bundle` | Allow the bundle scanner (`check-security bundle`: exports the bundle with your `expo` and reads it). Default `false` |
-| `mobile` | Allow the native project scanner (`check-security mobile`: mobsfscan over a fresh Expo prebuild). Default `false` |
+| `native-stack` | `expo` or `bare`, for the two scanners below. Default empty: detected, as in [Expo or bare React Native](#expo-or-bare-react-native) |
+| `bundle` | Allow the bundle scanner (`check-security bundle`), which reads what the JavaScript bundle gives away. Expo: `expo export` of every platform in `bundle.platforms`.<br>Bare: `react-native bundle` per platform, `--dev false`, minified only where the platform does not build with Hermes, as its release does. Default `false` |
+| `mobile` | Allow the native project scanner (`check-security mobile`, mobsfscan). Expo: over a fresh prebuild in a temporary copy, never the working tree's `ios/` and `android/`.<br>Bare: over the committed `ios/` and `android/`, in place, with no prebuild and no installed dependencies needed. Default `false` |
 | `binaries` | Allow the MASTG checks over the release's built binaries (`check-security binaries`). Needs `release-tag`. Default `false` |
 | `review` | Allow the LLM review of the change (`check-security review`). Gets full history and, on a pull request, its base. Default `false` |
 | `review-codebase` | Allow the LLM security review of the whole codebase, with OpenAnt (`check-security review-codebase`). The build is cached, keyed on the OpenAnt commit `scripts/security/review-codebase.sh` pins. Default `false` |
