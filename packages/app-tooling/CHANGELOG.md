@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.5.0...app-tooling-v0.6.0) (2026-10-01)
+
+
+### Features
+
+* **workflows:** build a bare React Native app as well as an Expo one ([#167](https://github.com/blinkbitcoin/shared-workflows/issues/167)) ([c00ba1e](https://github.com/blinkbitcoin/shared-workflows/commit/c00ba1e4cab23b05aa6430fd0ebb988aea4adcdd))
+
 ## [0.5.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.4.0...app-tooling-v0.5.0) (2026-10-01)
 
 
