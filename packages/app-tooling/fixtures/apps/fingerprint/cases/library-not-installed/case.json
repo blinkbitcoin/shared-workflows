@@ -1,0 +1,7 @@
+{
+  "passes": false,
+  "modules": false,
+  "output": [
+    "@expo/fingerprint does not resolve from"
+  ]
+}

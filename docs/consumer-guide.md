@@ -316,6 +316,31 @@ and nothing else from outside the npm registry.
 A caller on the `@v0` tag passes as long as every call uses it. A tag moves, so
 no package can be held to it; pin a commit SHA to take packages from git.
 
+## The app suites
+
+The contract check asks whether what the workflows need is there. The app
+suites ask whether it works: tests that live in `@blinkbitcoin/app-tooling`,
+read your app's own files, and run this family's code against them. They
+replace the copies an app made from the template used to carry, which nothing
+compared with each other or with the code they tested.
+
+Wire them up with a `"test:app": "test-app"` package script and
+`app-suites: true` in your `check.yml` call.
+
+`pnpm exec test-app --list` prints what would run and why each other suite
+would not: a suite runs when it is for your app's native stack and the files it
+needs are there. To turn one off, give the reason in `app-tooling.json`; it is
+printed on every run:
+
+```json
+{ "appSuites": { "skip": { "fingerprint": "OTA is not used by this app" } } }
+```
+
+The suites move with the pin, like the workflows, so a Dependabot pull request
+that changes one runs it against your app before it merges. The list of suites
+and what each proves is in the
+[package README](../packages/app-tooling/README.md#test-app).
+
 ## When something is missing
 
 Two shapes of failure, and which one you get is deliberate.
@@ -773,6 +798,7 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `ci` | `true` | Run the consumer's `check:ci`, or, when it ships none, lint its `.github/workflows` (actionlint) and its `scripts/` (shellcheck), and audit its `.github` with zizmor, offline, at medium severity and up: template injection, broad permissions, App tokens with blanket scope, dangerous triggers. Without a `zizmor.yml` of its own the consumer gets this family's policy, which allows tag pins. Either way the policy file is passed with `--config` (`.github/zizmor.yml` first, then a root `zizmor.yml`), so a run from a worktree nested in another checkout cannot pick up that checkout's policy |
 | `secrets` | `true` | Run the consumer's `check:secrets`, or scan its **full git history** with gitleaks when it ships none. The Secrets job checks out with `fetch-depth: 0` for this. A `.gitleaks.toml` at the consumer's root is read either way |
 | `licenses` | `true` | Run the consumer's `check:licenses` (the dependency license policy) |
+| `app-suites` | `false` | Run the consumer's `test:app`: the [app suites](#the-app-suites), shared tests run against the app's own files. The `App suites` job is skipped outright while this is off |
 | `prebuild` | `false` | Run the consumer's `check:prebuild`: prebuild both platforms into a temp dir and assert the config plugins produced what they should. **Minutes, not seconds** — enable it where the coverage earns the wall clock (on `main`, on a release, behind a label), not on every PR |
 | `release` | `false` | Install Ruby (`ruby/setup-ruby@v1`, `bundler-cache: true`) and run the consumer's `check:release` script — the Fastfile/Gemfile and release configuration validation behind the template's `make check-release`. Off by default because a repo with no release setup has no such script |
 | `contract-only` | `false` | Run the contract check and **nothing else** — for a repository still being wired up, it answers "would these workflows work here?" in seconds instead of runner-minutes. A run under this flag gates nothing, so it says so: the job logs a warning and the summary names it. Not a setting to leave on |
@@ -783,8 +809,8 @@ one mental model). The exception is `pr-closed.yml`, which declares
 | `e2e-ignore-patterns` | `''` | Extra `\|`-joined POSIX ERE alternatives for paths the native E2E suite never reads, **added to** the built-in list behind `e2e-changed` |
 
 Jobs: `Changes`, `Contract`, `Code`, `Generated`, `Docs`, `Dependencies`,
-`Prebuild`, `Release`, `CI`, `Secrets`, `Commits` — grouped by **who acts on a
-failure**, not by what is cheapest to run. A red `Dependencies` means a
+`App suites`, `Prebuild`, `Release`, `CI`, `Secrets`, `Commits` — grouped by
+**who acts on a failure**, not by what is cheapest to run. A red `Dependencies` means a
 vulnerability, a license problem or an SDK drift and belongs to whoever owns
 operations; a red `Code` is a lint error and belongs to the author. They used to
 share one box called `code`, where a CVE and a formatting nit looked identical
@@ -2510,6 +2536,7 @@ these names:
 | `build:web` | `build-web.yml` (`build-script`) | yes |
 | `check:licenses` | `check.yml` (`licenses` toggle, on by default) | yes |
 | `check:prebuild` | `check.yml` (`prebuild` toggle, **off** by default) | yes — expensive, so the template does not enable the toggle |
+| `test:app` | `check.yml` (`app-suites` toggle, off by default) | **opt-in** — `test-app` from the package; the template takes it with the toggle |
 | `check:release` | `check.yml` (`release` toggle, off by default) | **opt-in** — only a consumer with a release setup ships it; the toggle stays `false` otherwise |
 | `gen:badges` | `publish-badges.yml` (`badges-script`, empty by default) | **opt-in** — only for a consumer that draws its own badges and names the script in `badges-script`; by default `publish-badges.yml` renders with the package's `gen-badges` |
 | `test:e2e:web` | `build-web.yml` (`e2e-script`) | yes (`bash scripts/e2e/web.sh`, which honors `PLAYWRIGHT_SKIP_EXPORT` — see [the web build / E2E contract](#the-web-build--e2e-contract)) |

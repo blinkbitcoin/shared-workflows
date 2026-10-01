@@ -1,0 +1,7 @@
+{
+  "name": "fingerprint-fixture",
+  "private": true,
+  "dependencies": {
+    "expo": "*"
+  }
+}

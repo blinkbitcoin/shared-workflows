@@ -7,7 +7,11 @@ const at = (text) => tree({ '/r/app-tooling.json': text });
 
 test('the family has one file, with a section per program', () => {
   assert.equal(CONFIG_FILE, 'app-tooling.json');
-  assert.deepEqual(SECTIONS, { testSiblings: ['sources', 'exclude', 'mirror'], docs: ['architecture', 'allowTargetNames'] });
+  assert.deepEqual(SECTIONS, {
+    testSiblings: ['sources', 'exclude', 'mirror'],
+    docs: ['architecture', 'allowTargetNames'],
+    appSuites: ['skip'],
+  });
 });
 
 test('a section that is there is returned, and a missing file or section reads as none', () => {
@@ -23,7 +27,7 @@ test('a file that is there and wrong is a ConfigError naming the file and the re
     ['{', /^app-tooling\.json: not valid JSON: /],
     ['[]', /^app-tooling\.json: the top level must be an object of sections$/],
     ['null', /the top level must be an object of sections/],
-    ['{"doc":{}}', /^app-tooling\.json: unknown section "doc"; the sections are testSiblings, docs$/],
+    ['{"doc":{}}', /^app-tooling\.json: unknown section "doc"; the sections are testSiblings, docs, appSuites$/],
     ['{"docs":[]}', /^app-tooling\.json: "docs" must be an object$/],
     ['{"docs":{"architecture":[],"allow":{}}}', /^app-tooling\.json: unknown key "docs\.allow"; "docs" takes architecture, allowTargetNames$/],
   ]) {
