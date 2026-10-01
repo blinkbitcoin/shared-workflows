@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.8.0...app-tooling-v0.8.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **app-tooling:** the Expo presets keep .workflows/ out, and the Biome check follows extends ([#187](https://github.com/blinkbitcoin/shared-workflows/issues/187)) ([d569f5b](https://github.com/blinkbitcoin/shared-workflows/commit/d569f5b8394112c21a7c4f0ee14ce6b83f60754f))
+
 ## [0.8.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.7.0...app-tooling-v0.8.0) (2026-10-01)
 
 
