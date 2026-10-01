@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.7.0...app-tooling-v0.8.0) (2026-10-01)
+
+
+### Features
+
+* **app-tooling:** a store-notes app suite, the environment-variables rule, and the chain tested here ([#184](https://github.com/blinkbitcoin/shared-workflows/issues/184)) ([3107d86](https://github.com/blinkbitcoin/shared-workflows/commit/3107d8652805aad5baa474e87c1d0da82f032004))
+
 ## [0.7.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.6.2...app-tooling-v0.7.0) (2026-10-01)
 
 
