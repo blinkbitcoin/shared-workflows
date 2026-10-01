@@ -8,7 +8,8 @@ import { defineConfig } from '@playwright/test';
 
 // The ports still come from `scripts/ports.mjs` — the shell evaluates it and
 // exports them (`scripts/e2e/web.sh`, and the `PORTS` macro behind
-// `make test-e2e-web`), and this file reads what it exported.
+// `make test-e2e-web`), and this file reads what it exported. knip loads this
+// file too, so the `check:unused` script exports them the same way.
 //
 // It does not import the module, and cannot: Playwright loads a `.ts` config
 // through `require()`, this package.json has no `"type": "module"`, and
@@ -47,7 +48,7 @@ export default defineConfig({
   use: { baseURL: previewUrl },
   webServer: [
     {
-      command: 'pnpm mock-api',
+      command: 'pnpm dev:api',
       url: mockApiUrl,
       reuseExistingServer: true,
       timeout: 30_000,

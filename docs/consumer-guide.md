@@ -2831,20 +2831,21 @@ whole tree:
 | tsconfig | `tsconfig.json` → `exclude`, add `.workflows` |
 | knip | `knip.json` → `ignore` (or `project`/`entry` globs that don't reach into it) |
 | typos | `typos.toml` → `[files] extend-exclude`, add `.workflows/**` |
-| Jest | `jest.config.ts` → `testPathIgnorePatterns`, add `/\.workflows/`. This repo ships its own `*.test.mjs` under `packages/`, and a consumer's jest-expo project will collect them and die on `import.meta` - a red Unit job over a file the consumer does not own |
+| Jest | `jest.config.ts` → `testPathIgnorePatterns`, add `/\.workflows/`. This repo ships its own `*.test.mjs` under `packages/`, and a consumer's jest-expo project will collect them and die on `import.meta` - a red Unit job over a file the consumer does not own. `createJestConfig` from the Expo preset below covers it in `testPathIgnorePatterns`, `modulePathIgnorePatterns` and `coveragePathIgnorePatterns`, anchored to `<rootDir>` |
+| Metro | `metro.config.js` → `resolver.blockList`, a pattern anchored to the project root. `withSharedMetroConfig` from the Expo preset adds it |
 | git | `.gitignore` — not strictly required (`setup` uses `.git/info/exclude`
   instead, which is local-only and never committed), but recommended so a
   local `.workflows/` checkout is ignored by every clone, not just CI's |
 
-The template carries all seven: `biome.json` (`files.includes` →
+The template carries all eight: `biome.json` (`files.includes` →
 `"!**/.workflows"`), `eslint.config.mjs` (`ignores` → `'.workflows/**'`),
 `tsconfig.json` (`exclude` → `".workflows"`), `knip.json` (**the second
 answer**: its `project` and `entry` globs are all rooted — `src/**`,
 `plugins/**`, `scripts/**/*.mjs` — so none of them reaches into a sibling
 directory and there is nothing to exclude), `typos.toml`
 (`[files] extend-exclude` → `".workflows/"`),
-`jest.config.ts` (`testPathIgnorePatterns` → `'/\.workflows/'`) and `.gitignore`
-(`/.workflows`). Copy that set when bootstrapping a new consumer —
+`jest.config.ts` and `metro.config.js` (both through the Expo presets below) and
+`.gitignore` (`/.workflows`). Copy that set when bootstrapping a new consumer —
 [`test/fixtures/consumer-min/`](../test/fixtures/consumer-min) carries it along
 with every contract script as a no-op, which makes it the smallest repository
 that satisfies this contract and the right thing to copy from. The contract
@@ -3066,7 +3067,7 @@ names a tooling path. The base pins no `$schema`; the app's file does.
 ### Metro
 
 ```js
-// Expo's default Metro config, plus the shared worktree block and web fixes.
+// Expo's default Metro config, plus the shared worktree and .workflows blocks and the web fixes.
 const { getDefaultConfig } = require('expo/metro-config');
 const { withSharedMetroConfig } = require('@blinkbitcoin/app-tooling/expo/metro');
 
@@ -3088,7 +3089,7 @@ deleting lines.
 import { createPlaywrightConfig } from '@blinkbitcoin/app-tooling/expo/playwright';
 import { defineConfig } from '@playwright/test';
 
-export default defineConfig(createPlaywrightConfig());
+export default defineConfig(createPlaywrightConfig({ mockApiCommand: 'pnpm dev:api' }));
 ```
 
 `createPlaywrightConfig` reads `WEB_PREVIEW_PORT`, `EXPO_PUBLIC_API_URL` and
@@ -3110,11 +3111,11 @@ extends:
 post-merge:
   commands:
     install:
-      run: bash scripts/hooks/install-if-lockfile-changed.sh post-merge {1}
+      run: bash node_modules/@blinkbitcoin/app-tooling/hooks/install-if-lockfile-changed.sh post-merge {1}
 post-checkout:
   commands:
     install:
-      run: bash scripts/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}
+      run: bash node_modules/@blinkbitcoin/app-tooling/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}
 ```
 
 lefthook merges an `extends` file **over** the app's own: an app adds hooks and
@@ -3122,6 +3123,11 @@ commands, and may add a key a shared command does not set (`skip: true` turns
 one off), but a key the shared file sets wins. `lefthook-local.yml` is still
 applied last. The path goes through `node_modules`, so the hooks exist once the
 app has installed its dependencies, which is also when `prepare` installs them.
+
+knip's lefthook plugin reads only the app's own `lefthook.yml`, not the file it
+extends, so it no longer sees the `commit-msg` hook run `commitlint`: add
+`@commitlint/cli` to `ignoreDependencies` in `knip.json`. `pr-title.yml` and
+the hook still use it.
 
 ### Fingerprint
 

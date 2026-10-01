@@ -17,5 +17,6 @@ export interface MetroConfigLike {
 }
 
 export function worktreeBlock(projectRoot: string): RegExp;
+export function workflowsBlock(projectRoot: string): RegExp;
 export function webResolveRequest(defaultResolveRequest?: ((...args: any[]) => any) | null): (context: any, moduleName: string, platform: string | null) => any;
 export function withSharedMetroConfig<T extends MetroConfigLike>(config: T, options?: MetroPresetOptions): T;

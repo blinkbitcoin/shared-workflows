@@ -20,6 +20,8 @@ export interface JestPresetOptions {
 }
 
 export const WORKTREES: string;
+export const WORKFLOWS: string;
+export const IGNORED_DIRECTORIES: string[];
 export const CONSOLE_SETUP: string;
 export const EXPO_MOCKS: Record<string, string>;
 export const COVERAGE_PATH_IGNORE_PATTERNS: string[];

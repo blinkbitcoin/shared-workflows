@@ -23,7 +23,8 @@
 //           absolute path and the root-relative one Expo's crawler asks about,
 //           and blocks neither this checkout nor a sibling that shares a prefix.
 //   ESLint  eslint.config.*: the installed ESLint answers isPathIgnored.
-//   Biome   biome.json(c): a negated files.includes entry (`!` or `!!`).
+//   Biome   biome.json(c): a negated files.includes entry (`!` or `!!`), its
+//           own or one an `extends` file holds (a shared preset).
 //   tsc     tsconfig.json: exclude names it, or every include is rooted.
 //   knip    knip.json(c): ignore names it, or no entry or project glob starts
 //           at a dot directory (knip's globs skip dot directories otherwise).
@@ -43,6 +44,7 @@
 // repository's own node_modules, so install dependencies first.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
 import { yamlList } from './check-code-scanning.mjs';
@@ -86,6 +88,39 @@ function tomlArray(text, key) {
   return match ? [...match[1].matchAll(/"((?:\\.|[^"\\])*)"|'([^']*)'/g)].map((m) => m[1] ?? m[2]) : [];
 }
 
+/**
+ * A Biome configuration with what its `extends` files hold merged in. Biome
+ * concatenates `files.includes` base first, so a negated entry a shared preset
+ * holds skips the directory as surely as one of the app's own. A relative
+ * specifier is a path from the configuration's directory; anything else is a
+ * package export, resolved from the configuration the way Node resolves it.
+ * `//` (the monorepo root) has no file of its own here and is left out.
+ */
+export function biomeExtends(config, file, { read, resolve }, seen = new Set([file])) {
+  const includes = [];
+  const ignore = [];
+  for (const specifier of [config.extends ?? []].flat()) {
+    if (specifier === '//') continue;
+    const base = specifier.startsWith('.') ? path.resolve(path.dirname(file), specifier) : resolve(specifier, file);
+    if (seen.has(base)) continue;
+    seen.add(base);
+    const merged = biomeExtends(JSON.parse(stripComments(read(base))), base, { read, resolve }, seen);
+    includes.push(...merged.files.includes);
+    ignore.push(...merged.files.ignore);
+  }
+  return {
+    ...config,
+    files: {
+      ...config.files,
+      includes: [...includes, ...(config.files?.includes ?? [])],
+      ignore: [...ignore, ...(config.files?.ignore ?? [])],
+    },
+  };
+}
+
+/** Node's resolution of `specifier` from `file`, package exports included. */
+const resolveFrom = (specifier, file) => createRequire(file).resolve(specifier);
+
 // -- the text checks: (parsed configuration, directory) -> missing | null ----
 
 export const TEXT_CHECKS = [
@@ -93,6 +128,7 @@ export const TEXT_CHECKS = [
     tool: 'Biome',
     files: ['biome.json', 'biome.jsonc'],
     parse: (text) => JSON.parse(stripComments(text)),
+    expand: biomeExtends,
     skips: (config, dir) =>
       (config.files?.includes ?? []).some((entry) => /^!{1,2}/.test(entry) && namesDirectory(entry.replace(/^!{1,2}/, ''), dir)) ||
       (config.files?.ignore ?? []).some((entry) => namesDirectory(entry, dir)),
@@ -268,6 +304,7 @@ export function main(
     exists = existsSync,
     grep = zizmorCalls,
     run = evaluate,
+    resolve = resolveFrom,
   } = {},
 ) {
   let options;
@@ -293,7 +330,11 @@ export function main(
     const file = firstOf(root, check.files, exists);
     if (file === null) continue;
     checked.push(check.tool);
-    const config = load(check.tool, file, () => check.parse(read(path.join(root, file))));
+    const absolute = path.join(root, file);
+    const config = load(check.tool, file, () => {
+      const parsed = check.parse(read(absolute));
+      return check.expand ? check.expand(parsed, absolute, { read, resolve }) : parsed;
+    });
     if (config === null) continue;
     for (const dir of directories) {
       if (!check.skips(config, dir)) problems.push(`${check.tool} (${file}) does not skip ${dir}: ${check.fix(dir)}`);

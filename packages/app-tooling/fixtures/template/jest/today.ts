@@ -13,6 +13,13 @@ import type { Config } from 'jest';
 const worktrees = '<rootDir>/\\.claude/worktrees/';
 
 /**
+ * Every CI job checks shared-workflows out under `.workflows/`, a whole
+ * repository with its own package.json files and tests; none of it is this
+ * app's code.
+ */
+const workflows = '<rootDir>/\\.workflows/';
+
+/**
  * Every entry is a claim that the file has no behaviour a test could assert.
  * The thresholds below are 100%, so anything not on this list has to be tested.
  *
@@ -25,6 +32,7 @@ const coveragePathIgnorePatterns = [
   '/node_modules/',
   // Other checkouts of this repository, not files of this one.
   worktrees,
+  workflows,
   // Ambient type declarations: erased at build time, no runtime statements.
   '\\.d\\.ts$',
   // Jest setup files: every suite runs them, but they execute before this
@@ -110,10 +118,10 @@ const config: Config = {
         '/plugins/',
         '/scripts/',
         '<rootDir>/rules/',
-        '/\\.workflows/',
+        workflows,
         worktrees,
       ],
-      modulePathIgnorePatterns: [worktrees],
+      modulePathIgnorePatterns: [worktrees, workflows],
       coveragePathIgnorePatterns,
     },
     {
@@ -124,7 +132,7 @@ const config: Config = {
       // file because `src/test/setup.ts` pulls in RNTL and MSW.
       setupFilesAfterEnv: ['<rootDir>/src/test/setup.plugins.ts'],
       testMatch: ['<rootDir>/plugins/**/*.test.ts'],
-      modulePathIgnorePatterns: [worktrees],
+      modulePathIgnorePatterns: [worktrees, workflows],
       // `.tsx` is in the pattern even though no plugin suite uses JSX: coverage
       // options are global, so this project also instruments the app's untested
       // `.tsx` files (e.g. platform variants) and needs a transform for them.

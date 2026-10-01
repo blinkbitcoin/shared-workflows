@@ -6,6 +6,7 @@ import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
+  biomeExtends,
   evaluate,
   jestProblems,
   main,
@@ -216,6 +217,8 @@ function run(files, { argv = [], loaded = {}, calls = [] } = {}) {
   const out = { log: [], error: [] };
   const code = main(argv, {
     cwd: '/r',
+    // A package specifier resolves to its file under node_modules, as Node would.
+    resolve: (specifier) => path.join('/r', 'node_modules', `${specifier}.json`),
     read: (file) => {
       const text = files[path.relative('/r', file)];
       if (text === undefined) throw new Error(`ENOENT: ${file}`);
@@ -288,6 +291,65 @@ test('main names each configuration that misses a directory, with the fix', () =
     'zizmor is called without --config: Makefile:1:zizmor --offline .',
     'ignored directories: 4 problem(s)',
   ]);
+});
+
+describe('Biome extends', () => {
+  const PRESET = '{"files":{"includes":["**","!**/.workflows","!!.claude/worktrees"]}}';
+  const reader = (files) => (file) => {
+    if (!(file in files)) throw new Error(`ENOENT: ${file}`);
+    return files[file];
+  };
+  const resolve = (specifier) => `/r/node_modules/${specifier}.json`;
+
+  test('a preset the configuration extends counts, base first, ahead of its own entries', () => {
+    const config = biomeExtends({ extends: ['@scope/preset'], files: { includes: ['!src/generated'] } }, '/r/biome.json', {
+      read: reader({ '/r/node_modules/@scope/preset.json': PRESET }),
+      resolve,
+    });
+    assert.deepEqual(config.files.includes, ['**', '!**/.workflows', '!!.claude/worktrees', '!src/generated']);
+    assert.deepEqual(config.files.ignore, []);
+  });
+
+  test('a relative extends is read from the configuration directory, its own extends followed, a cycle read once', () => {
+    const config = biomeExtends({ extends: './base.json' }, '/r/biome.json', {
+      read: reader({
+        '/r/base.json': '{"extends":["./biome.json","./older.json"],"files":{"includes":["!!.claude/worktrees"]}}',
+        '/r/older.json': '{"files":{"ignore":[".workflows"]}}',
+      }),
+      resolve,
+    });
+    assert.deepEqual(config.files.includes, ['!!.claude/worktrees']);
+    assert.deepEqual(config.files.ignore, ['.workflows']);
+  });
+
+  test('the monorepo root "//" has no file to read and is left out', () => {
+    const config = biomeExtends({ extends: ['//'] }, '/r/biome.json', { read: reader({}), resolve });
+    assert.deepEqual(config.files, { includes: [], ignore: [] });
+  });
+
+  test('main passes an app whose biome.json skips both only through the preset it extends', () => {
+    const { code, error } = run({ ...ALIGNED, 'biome.json': '{"extends":["@scope/preset"]}', 'node_modules/@scope/preset.json': PRESET });
+    assert.equal(code, 0, error.join('\n'));
+  });
+
+  test('main reports an extends it cannot read', () => {
+    const { code, error } = run({ ...ALIGNED, 'biome.json': '{"extends":["@scope/missing"]}' });
+    assert.equal(code, 1);
+    assert.match(error[0], /^Biome \(biome\.json\) could not be read: ENOENT: .*@scope\/missing\.json$/);
+  });
+
+  test('main resolves a package preset through the repository node_modules, package exports included', () => {
+    const root = path.join(work, 'biome-extends');
+    const pkg = path.join(root, 'node_modules', '@scope', 'preset');
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@scope/preset', exports: { './biome': './biome.json' } }));
+    writeFileSync(path.join(pkg, 'biome.json'), PRESET);
+    writeFileSync(path.join(root, 'biome.json'), '{"extends":["@scope/preset/biome"]}');
+    const out = [];
+    const code = main(['--root', root], { cwd: root, grep: () => [], log: (line) => out.push(line), error: (line) => out.push(line) });
+    assert.equal(code, 0, out.join('\n'));
+    assert.deepEqual(out, ['ignored directories ok (.workflows, .claude/worktrees; Biome, zizmor)']);
+  });
 });
 
 test('main reports a configuration it cannot parse, or a tool it cannot load, as a problem', () => {

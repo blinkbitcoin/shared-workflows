@@ -9,9 +9,11 @@ import {
   COVERAGE_PATH_IGNORE_PATTERNS,
   createJestConfig,
   EXPO_MOCKS,
+  IGNORED_DIRECTORIES,
   TEST_PATH_IGNORE_PATTERNS,
   TRANSFORM_PACKAGES,
   transformIgnorePattern,
+  WORKFLOWS,
   WORKTREES,
 } from './expo/jest.mjs';
 
@@ -115,4 +117,26 @@ test('the worktree ignore is anchored to the root, so a worktree still runs its 
   assert.ok(pattern('/repo').test('/repo/.claude/worktrees/topic/src/a.test.ts'), 'another checkout is ignored');
   const worktree = '/repo/.claude/worktrees/topic';
   assert.ok(!pattern(worktree).test(`${worktree}/src/a.test.ts`), "a worktree's own tests are not");
+});
+
+test('the .workflows ignore is anchored to the root, so a checkout under a .workflows directory still runs its own tests', () => {
+  const pattern = (rootDir) => new RegExp(WORKFLOWS.replace('<rootDir>', rootDir));
+  assert.ok(pattern('/repo').test('/repo/.workflows/packages/app-tooling/jest.test.mjs'), "shared-workflows' checkout is ignored");
+  const nested = '/runner/.workflows/consumer';
+  assert.ok(!pattern(nested).test(`${nested}/src/a.test.ts`), "a nested checkout's own tests are not");
+});
+
+test('both projects keep the worktrees and .workflows out of the module map, the tests and coverage', () => {
+  const config = createJestConfig();
+  assert.deepEqual(IGNORED_DIRECTORIES, [WORKTREES, WORKFLOWS]);
+  for (const project of config.projects) {
+    assert.deepEqual(project.modulePathIgnorePatterns, IGNORED_DIRECTORIES, project.displayName);
+    for (const directory of IGNORED_DIRECTORIES) {
+      assert.ok(project.coveragePathIgnorePatterns.includes(directory), `${project.displayName} coverage: ${directory}`);
+    }
+  }
+  for (const directory of IGNORED_DIRECTORIES) assert.ok(config.projects[0].testPathIgnorePatterns.includes(directory), directory);
+  // A copy per project: an app changing one project's list leaves the other's alone.
+  assert.notEqual(config.projects[0].modulePathIgnorePatterns, config.projects[1].modulePathIgnorePatterns);
+  assert.notEqual(config.projects[0].modulePathIgnorePatterns, IGNORED_DIRECTORIES);
 });
