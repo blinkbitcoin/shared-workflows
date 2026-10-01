@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.6.0...app-tooling-v0.6.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **app-tooling:** check the contract under the callers' working-directory ([#173](https://github.com/blinkbitcoin/shared-workflows/issues/173)) ([ba483bc](https://github.com/blinkbitcoin/shared-workflows/commit/ba483bcaaba1d2b3988d21337ff0b0bc3c7eb70c))
+* **workflows:** close three gaps in the bare React Native support ([#170](https://github.com/blinkbitcoin/shared-workflows/issues/170)) ([5aaa33f](https://github.com/blinkbitcoin/shared-workflows/commit/5aaa33f42a6c9a6d3442ea214e8432aaa8419756))
+
 ## [0.6.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.5.0...app-tooling-v0.6.0) (2026-10-01)
 
 
