@@ -47,7 +47,14 @@ export function readContract(file = path.join(HERE, '..', 'contract.json')) {
  * Everything the checks need from a consumer checkout, read once. Injected as a
  * whole in the tests, so no case needs a temp directory unless it wants one.
  */
-export function readConsumer(root, io = defaultIo, { nativeStack = '' } = {}) {
+export function readConsumer(repository, io = defaultIo, { nativeStack = '' } = {}) {
+  // The callers are the repository's own: GitHub reads .github/workflows/ at
+  // the root whatever directory the app lives in. Everything else is the app's,
+  // read under the working-directory the callers pass.
+  const callers = readCallers(repository, io);
+  const inputs = callerInputs(callers);
+  const workingDirectory = workingDirectoryInput(inputs);
+  const root = workingDirectory ? path.join(repository, workingDirectory) : repository;
   const pkgText = io.read(path.join(root, 'package.json'));
   let pkg = null;
   if (pkgText !== null) {
@@ -59,14 +66,17 @@ export function readConsumer(root, io = defaultIo, { nativeStack = '' } = {}) {
       throw new Error(`::error::${path.join(root, 'package.json')} is not valid JSON: ${error.message}`);
     }
   }
-  const callers = readCallers(root, io);
-  const inputs = callerInputs(callers);
   const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
   const input = nativeStack.trim() || stackInput(inputs);
   return {
     // Where the Fastfile, the lanes and the store metadata live: the callers'
     // fastlane-directory, else fastlane.
     fastlaneDirectory: fastlaneInput(inputs),
+    // The repository checked out, and the app's directory inside it: the
+    // callers' working-directory, '' when they pass none. `root` is where every
+    // check below reads.
+    repository,
+    workingDirectory,
     root,
     io,
     pkg,
@@ -114,19 +124,38 @@ export function stackInput(inputs) {
 
 /**
  * The directory holding the Fastfile, the lanes and the store metadata: the
- * fastlane-directory the callers pass (relative to the repository root, its
+ * fastlane-directory the callers pass (relative to the working directory, its
  * trailing slashes dropped), else `fastlane`, the workflows' default. Two
  * different literals are an error: the lanes the build runs and the ones
  * publish-store.yml runs would be two different Fastfiles.
  */
 export function fastlaneInput(inputs) {
-  const normalized = new Map([...inputs].map(([key, value]) => [key, key.endsWith(':fastlane-directory') ? value.replace(/\/+$/, '') : value]));
   const value = literalInput(
-    normalized,
+    trimSlashes(inputs, 'fastlane-directory'),
     'fastlane-directory',
     'A repository has one Fastfile: pass the same fastlane-directory to every workflow that takes it',
   );
   return value || 'fastlane';
+}
+
+/**
+ * The directory the app lives in, relative to the repository root: the
+ * working-directory the callers pass (its trailing slashes dropped), else ''
+ * for the root itself, the workflows' default. Two different literals are an
+ * error: the gates one workflow runs and the build another makes would be two
+ * different apps.
+ */
+export function workingDirectoryInput(inputs) {
+  return literalInput(
+    trimSlashes(inputs, 'working-directory'),
+    'working-directory',
+    'A repository has one app directory: pass the same working-directory to every workflow that takes it',
+  );
+}
+
+/** The inputs, with one input's trailing slashes dropped wherever it is passed. */
+function trimSlashes(inputs, input) {
+  return new Map([...inputs].map(([key, value]) => [key, key.endsWith(`:${input}`) ? value.replace(/\/+$/, '') : value]));
 }
 
 /**
@@ -611,10 +640,13 @@ export function checkRequirement(req, consumer) {
       // lane that was never written, and honest about being no more than that.
       const text = collectRuby(path.join(root, consumer.fastlaneDirectory), consumer.io);
       if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
-      const absent = req.target.filter((lane) => !text.includes(`lane :${lane.split(':')[1]}`));
+      // Named once each: the scan is not per platform, so a lane two platforms
+      // need is either there for both or absent for both.
+      const names = [...new Set(req.target.map((lane) => lane.split(':')[1]))];
+      const absent = names.filter((lane) => !text.includes(`lane :${lane}`));
       return absent.length === 0
         ? ok()
-        : missing(`${consumer.fastlaneDirectory}/ defines no lane named ${absent.map((l) => l.split(':')[1]).join(', ')}`);
+        : missing(`${consumer.fastlaneDirectory}/ defines no lane named ${absent.join(', ')}`);
     }
 
     case 'make-ci-reaches-ci': {
