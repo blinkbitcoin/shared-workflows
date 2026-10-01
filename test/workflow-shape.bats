@@ -1415,6 +1415,27 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   done
 }
 
+# test-e2e.yml takes the three identifiers the build workflows take, empty by
+# default, and every job exports them under the names both stacks'
+# app-config.sh read first: IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME. Empty
+# leaves the identifier to the app itself.
+@test "test-e2e takes ios-bundle-id, android-package and ios-scheme, empty by default, and every job exports them" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local f="$REPO_ROOT/.github/workflows/test-e2e.yml" pair input variable jobs job
+  jobs="$(yq -r '.jobs | keys | .[]' "$f")"
+  [ -n "$jobs" ] || fail "test-e2e.yml: read no jobs"
+  for pair in ios-bundle-id:IOS_BUNDLE_ID android-package:ANDROID_PACKAGE ios-scheme:IOS_SCHEME; do
+    input="${pair%%:*}" variable="${pair#*:}"
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\".type" "$f")" = "string" ] || fail "$input is not a string input"
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\" | has(\"default\")" "$f")" = true ] || fail "$input has no default"
+    [ "$(yq -r ".on.workflow_call.inputs.\"$input\".default" "$f")" = "" ] || fail "$input does not default to empty"
+    for job in $jobs; do
+      [ "$(yq -r ".jobs.\"$job\".env.$variable" "$f")" = "\${{ inputs.$input }}" ] \
+        || fail "test-e2e.yml job '$job' does not export $variable from the $input input"
+    done
+  done
+}
+
 # build-prepare computes the fingerprint, and the bare stack's folds in the
 # native-extra-globs matches - the same globs test-e2e.yml and build-ios.yml
 # fold into the cache key.

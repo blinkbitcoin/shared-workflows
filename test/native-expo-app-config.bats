@@ -5,7 +5,8 @@
 # mapped onto the resolved Expo config (EXPO_CONFIG_JSON feeds a fixture, the
 # seam scripts/lib/expo-config.sh offers), and the Xcode scheme taken from the
 # workspace prebuild wrote, cross-checked against the config's name. Covered:
-# every key, a key the config lacks, an unknown key, the scheme with and
+# every key, the explicit inputs winning without asking the config, a key the
+# config lacks, an unknown key, the scheme with and
 # without the config at hand, a disagreement, no workspace, and a working
 # directory that does not exist.
 load test_helper
@@ -14,6 +15,7 @@ setup() {
   APP="$BATS_TEST_TMPDIR/app"
   mkdir -p "$APP"
   export GITHUB_WORKSPACE="$APP" WORKING_DIRECTORY=.
+  unset IOS_BUNDLE_ID ANDROID_PACKAGE IOS_SCHEME
   export EXPO_CONFIG_JSON="$BATS_TEST_TMPDIR/expo.json"
   printf '{"name":"My App!","scheme":"myapp","ios":{"bundleIdentifier":"com.example.ios"},"android":{"package":"com.example.android"}}\n' \
     > "$EXPO_CONFIG_JSON"
@@ -28,6 +30,18 @@ config() { run bash "$REPO_ROOT/scripts/native/expo/app-config.sh" "$@"; }
   [ "$output" = com.example.android ] || fail "android-package: $status $output"
   config scheme
   [ "$output" = myapp ] || fail "scheme: $status $output"
+}
+
+@test "the explicit inputs win, and the Expo config is not asked" {
+  # A config that cannot be read proves it is never asked.
+  export EXPO_CONFIG_JSON="$BATS_TEST_TMPDIR/absent.json"
+  IOS_BUNDLE_ID=com.example.input config ios-bundle-id
+  [ "$status" -eq 0 ] && [ "$output" = com.example.input ] || fail "ios-bundle-id: $status $output"
+  ANDROID_PACKAGE=com.example.input.dev config android-package
+  [ "$status" -eq 0 ] && [ "$output" = com.example.input.dev ] || fail "android-package: $status $output"
+  # No workspace either: the input answers before one is looked for.
+  IOS_SCHEME=Input config ios-scheme
+  [ "$status" -eq 0 ] && [ "$output" = Input ] || fail "ios-scheme: $status $output"
 }
 
 @test "a key the config lacks fails, naming it" {

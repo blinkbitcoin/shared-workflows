@@ -5,15 +5,17 @@
 # the committed native projects. xcodebuild is a fake that records its
 # arguments and prints $XCODEBUILD_JSON, or fails like a workspace without Pods
 # when that is unset. Covered, per key: the explicit input winning, each source
-# in its order of preference, every fallback, every refusal with its fix; and
-# an unknown key, a missing working directory and the bare fixture.
+# in its order of preference, every fallback, every refusal with its fix; the
+# debug build type's applicationIdSuffix in Groovy and Kotlin, present and
+# absent, and the release variant without it; and an unknown key, a missing
+# working directory and the bare fixture.
 load test_helper
 
 setup() {
   APP="$BATS_TEST_TMPDIR/app"
   mkdir -p "$APP"
   export GITHUB_WORKSPACE="$APP" WORKING_DIRECTORY=.
-  unset IOS_BUNDLE_ID IOS_SCHEME ANDROID_PACKAGE WORKFLOWS_IOS_CONFIGURATION XCODEBUILD_JSON
+  unset IOS_BUNDLE_ID IOS_SCHEME ANDROID_PACKAGE WORKFLOWS_IOS_CONFIGURATION WORKFLOWS_ANDROID_VARIANT XCODEBUILD_JSON
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
   CALLS="$BATS_TEST_TMPDIR/calls"
@@ -184,6 +186,106 @@ pbxproj() {
   printf '    applicationId = "com.example.kotlin"\n' > "$APP/android/app/build.gradle.kts"
   config android-package
   [ "$output" = com.example.kotlin ] || fail "Kotlin: $status $output"
+}
+
+# gradle FILE TEXT - android/app/FILE holding TEXT.
+gradle() {
+  mkdir -p "$APP/android/app"
+  printf '%s' "$2" > "$APP/android/app/$1"
+}
+
+GROOVY_SUFFIX='android {
+    defaultConfig {
+        applicationId "com.example.app"
+    }
+    signingConfigs {
+        debug {
+            storeFile file("debug.keystore")
+        }
+    }
+    buildTypes {
+        release {
+            applicationIdSuffix ".release"
+        }
+        debug {
+            // applicationIdSuffix ".commented"
+            signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+        }
+    }
+}
+'
+
+KOTLIN_SUFFIX='android {
+    defaultConfig {
+        applicationId = "com.example.app"
+    }
+    buildTypes {
+        getByName("release") {
+            applicationIdSuffix = ".release"
+        }
+        getByName("debug") {
+            applicationIdSuffix = ".dev"
+        }
+    }
+}
+'
+
+@test "android-package: the debug build type's applicationIdSuffix is appended, in Groovy" {
+  gradle build.gradle "$GROOVY_SUFFIX"
+  config android-package
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = com.example.app.debug ] || fail "got: $output"
+}
+
+@test "android-package: the debug build type's applicationIdSuffix is appended, in Kotlin" {
+  gradle build.gradle.kts "$KOTLIN_SUFFIX"
+  config android-package
+  [ "$output" = com.example.app.dev ] || fail "getByName: $status $output"
+  # named("debug") and the plain accessor, on one line, single quotes.
+  gradle build.gradle.kts "$(printf 'android {\n  defaultConfig {\n    applicationId = "com.example.app"\n  }\n  buildTypes {\n    named("debug") {\n      applicationIdSuffix = ".named"\n    }\n  }\n}\n')"
+  config android-package
+  [ "$output" = com.example.app.named ] || fail "named: $status $output"
+  gradle build.gradle.kts "$(printf "android {\n  applicationId = 'com.example.app'\n  buildTypes { debug { applicationIdSuffix = '.one' } }\n}\n")"
+  config android-package
+  [ "$output" = com.example.app.one ] || fail "one line: $status $output"
+}
+
+@test "android-package: without a debug suffix the applicationId is answered alone" {
+  # A release suffix and a debug block without one (and after it closes, a
+  # suffix outside any debug block) are not the debug build type's.
+  gradle build.gradle "$(printf 'android {\n  defaultConfig {\n    applicationId "com.example.app"\n  }\n  buildTypes {\n    debug {\n      signingConfig signingConfigs.debug\n    }\n    release {\n      applicationIdSuffix ".release"\n    }\n  }\n}\n')"
+  config android-package
+  [ "$output" = com.example.app ] || fail "Groovy: $status $output"
+  rm "$APP/android/app/build.gradle"
+  gradle build.gradle.kts "$(printf 'android {\n  defaultConfig {\n    applicationId = "com.example.app"\n  }\n}\n')"
+  config android-package
+  [ "$output" = com.example.app ] || fail "Kotlin: $status $output"
+}
+
+@test "android-package: the release variant is the bare applicationId, suffix or not" {
+  gradle build.gradle "$GROOVY_SUFFIX"
+  WORKFLOWS_ANDROID_VARIANT=release config android-package
+  [ "$output" = com.example.app ] || fail "Groovy: $status $output"
+  rm "$APP/android/app/build.gradle"
+  gradle build.gradle.kts "$KOTLIN_SUFFIX"
+  WORKFLOWS_ANDROID_VARIANT=release config android-package
+  [ "$output" = com.example.app ] || fail "Kotlin: $status $output"
+  WORKFLOWS_ANDROID_VARIANT=debug config android-package
+  [ "$output" = com.example.app.dev ] || fail "an explicit debug: $status $output"
+}
+
+@test "android-package: the explicit input is answered as given, with no suffix added" {
+  gradle build.gradle "$GROOVY_SUFFIX"
+  ANDROID_PACKAGE=com.example.input config android-package
+  [ "$output" = com.example.input ] || fail "$status: $output"
+}
+
+@test "android-package: a variant other than debug or release fails, naming it" {
+  gradle build.gradle "$GROOVY_SUFFIX"
+  WORKFLOWS_ANDROID_VARIANT=staging config android-package
+  [ "$status" -eq 1 ] || fail "answered: $output"
+  contains "$output" "WORKFLOWS_ANDROID_VARIANT must be debug or release (got 'staging')" || fail "output: $output"
 }
 
 @test "android-package: no literal applicationId fails with the fix" {

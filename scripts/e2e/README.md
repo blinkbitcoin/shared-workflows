@@ -37,7 +37,9 @@ pure-bash fallback).
 | `WORKFLOWS_PLATFORM` | (none) | `ios` or `android`, used when a script is called without its positional platform argument. |
 | `WORKFLOWS_XCODE` | (none) | Xcode version; `ios-build.sh` runs `sudo xcode-select -s /Applications/Xcode_$WORKFLOWS_XCODE.app` when set. |
 | `WORKFLOWS_NATIVE_STACK_INPUT` | (detect) | `expo` or `bare`; empty detects the stack (`scripts/lib/native-stack.sh`). |
-| `WORKFLOWS_APP_ID` | the stack's `app-config.sh`: `expo config` → `ios.bundleIdentifier` / `android.package`, or the bare app's `PRODUCT_BUNDLE_IDENTIFIER` / `applicationId` | Application id under test. The Expo config already carries any variant suffix, so nothing is appended. |
+| `WORKFLOWS_APP_ID` | the stack's `app-config.sh`: `expo config` → `ios.bundleIdentifier` / `android.package`, or the bare app's `PRODUCT_BUNDLE_IDENTIFIER` / `applicationId` plus its debug `applicationIdSuffix` | Application id under test. The Expo config already carries any variant suffix, so nothing is appended. |
+| `IOS_BUNDLE_ID` / `ANDROID_PACKAGE` / `IOS_SCHEME` | (none) | Both stacks' `app-config.sh` answer these as given, before reading the app: `test-e2e.yml` exports its `ios-bundle-id`, `android-package` and `ios-scheme` inputs under these names. `WORKFLOWS_APP_ID` still wins over both for the app id. |
+| `WORKFLOWS_ANDROID_VARIANT` | `debug` | The bare stack's `android-package`: `debug` appends the debug build type's `applicationIdSuffix` (the id `assembleDebug` installs, which every E2E script wants); `release` answers the bare `applicationId`. Anything else fails. |
 | `WORKFLOWS_DEV_CLIENT` | `true` | Launch through the `expo-development-client` deep link and start Metro with `--dev-client`. Set `false` for a standalone build, and for a bare app (no dev-client launcher). |
 | `WORKFLOWS_MAESTRO_FLOWS` | `.maestro` | Flows directory, consumer-relative. `config.yaml` inside it is passed as `--config` when present. |
 | `WORKFLOWS_MAESTRO_INCLUDE_TAGS` | (none) | Passed as `--include-tags` only when set; the consumer's `config.yaml` normally carries `includeTags` already. |

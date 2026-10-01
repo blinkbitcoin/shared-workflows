@@ -88,6 +88,11 @@ or `"stack": "bare"` (`ios/` and `android/` committed to git, for whichever
 platforms the callers build) is skipped, with the reason, on the other stack
 ([Expo or bare React Native](../../docs/consumer-guide.md#expo-or-bare-react-native)).
 
+The Fastfile and the lanes are read from the callers' `fastlane-directory`
+(`fastlane` when none passes a literal one), so the release rows check the
+directory the lanes really run from; callers passing two different values is
+an error, as two stacks are.
+
 `contract.json` is the table it reads — what wants each thing, which workflow
 input switches it off, whether a fallback exists, and the fix. The consumer
 guide's tables are generated from the same file, so the two cannot disagree.
@@ -594,7 +599,10 @@ bash $e2e/android-maestro.sh [maestro arguments] # install the debug APK, revers
   `WORKFLOWS_APP_ID` is set: `lib/native-stack.sh` asks `lib/native-stack.mjs`
   (`node`, `git`) and runs `native/expo/app-config.sh` (`expo config`, so `pnpm`
   and `yq`) or `native/bare/app-config.sh` (the committed `ios/` and
-  `android/`). A bare app passes `WORKFLOWS_DEV_CLIENT=false` and is launched
+  `android/`, with the debug build type's `applicationIdSuffix` on the Android
+  id). `IOS_BUNDLE_ID`, `ANDROID_PACKAGE` and `IOS_SCHEME`, when set, are
+  answered as given on both stacks: unset them if your shell exports the
+  release identifiers for fastlane. A bare app passes `WORKFLOWS_DEV_CLIENT=false` and is launched
   plainly. `ios-simulator.sh pick` needs `jq`.
 - **Every variable** is in the environment table of `scripts/e2e/README.md` in
   shared-workflows.

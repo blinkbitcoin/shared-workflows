@@ -16,6 +16,7 @@ import {
   checkRequirement,
   ciScripts,
   defaultIo,
+  fastlaneInput,
   formatResult,
   isProgram,
   main,
@@ -29,6 +30,7 @@ import {
   readMiseTools,
   scalarType,
   skeleton,
+  literalInput,
   stackInput,
   stackLine,
   summaryTable,
@@ -68,6 +70,7 @@ function consumer({ files = {}, dirs = [], pkg = {}, callers = {}, stack = EXPO_
     callers: callerList,
     uses: callersUse(callerList),
     inputs: callerInputs(callerList),
+    fastlaneDirectory: fastlaneInput(callerInputs(callerList)),
     stack,
   };
 }
@@ -1370,4 +1373,92 @@ test('a --native-stack that is not a stack is one error line and exit 1', () => 
   const { code, stderr } = runMain(['--root', tree(), '--native-stack', 'native']);
   assert.equal(code, 1);
   assert.match(stderr, /^::error::native-stack is "native": /);
+});
+
+// --- the fastlane rows read the callers' fastlane-directory ------------------
+
+test('the fastlane directory is the one literal the callers agree on, else fastlane', () => {
+  assert.equal(fastlaneInput(new Map()), 'fastlane');
+  assert.equal(fastlaneInput(new Map([['build-ios.yml:fastlane-directory', '']])), 'fastlane');
+  assert.equal(fastlaneInput(new Map([['build-ios.yml:fastlane-directory', '${{ vars.FASTLANE }}']])), 'fastlane');
+  assert.equal(fastlaneInput(new Map([['build-ios.yml:native-stack', 'mobile/fastlane']])), 'fastlane');
+  // A trailing slash is the same directory, so two spellings of it agree.
+  assert.equal(
+    fastlaneInput(new Map([['build-ios.yml:fastlane-directory', 'mobile/fastlane/'], ['publish-store.yml:fastlane-directory', 'mobile/fastlane']])),
+    'mobile/fastlane',
+  );
+});
+
+test('callers passing two different fastlane directories is an error naming each and where', () => {
+  assert.throws(
+    () =>
+      fastlaneInput(
+        new Map([
+          ['build-ios.yml:fastlane-directory', 'mobile/fastlane'],
+          ['build-android.yml:fastlane-directory', 'fastlane'],
+          ['publish-store.yml:fastlane-directory', 'mobile/fastlane'],
+        ]),
+      ),
+    {
+      message:
+        '::error::the callers pass different fastlane-directory inputs: mobile/fastlane (build-ios.yml, publish-store.yml), fastlane (build-android.yml). A repository has one Fastfile: pass the same fastlane-directory to every workflow that takes it',
+    },
+  );
+});
+
+test('literalInput reads one input by name and leaves every other alone', () => {
+  const inputs = new Map([['a.yml:x', '1'], ['b.yml:y', '2'], ['c.yml:x', '1']]);
+  assert.equal(literalInput(inputs, 'x', 'unused'), '1');
+  assert.equal(literalInput(inputs, 'z', 'unused'), '');
+  assert.throws(() => literalInput(new Map([['a.yml:x', '1'], ['b.yml:x', '2']]), 'x', 'Why.'), {
+    message: '::error::the callers pass different x inputs: 1 (a.yml), 2 (b.yml). Why.',
+  });
+});
+
+test('a consumer read from disk carries the callers\' fastlane directory, and refuses two', () => {
+  const ios = (directory) => caller('build-ios.yml', `      fastlane-directory: ${directory}\n`);
+  assert.equal(readConsumer(tree({ 'package.json': '{}' })).fastlaneDirectory, 'fastlane');
+  assert.equal(readConsumer(tree({ '.github/workflows/cd.yml': ios('mobile/fastlane') })).fastlaneDirectory, 'mobile/fastlane');
+  const two = tree({
+    '.github/workflows/cd.yml': ios('mobile/fastlane'),
+    '.github/workflows/store.yml': caller('publish-store.yml', '      fastlane-directory: fastlane\n'),
+  });
+  assert.throws(() => readConsumer(two), /the callers pass different fastlane-directory inputs/);
+});
+
+const LANES = 'platform :ios do\n  lane :build do\n  end\n  lane :verify do\n  end\nend\nplatform :android do\n  lane :build do\n  end\n  lane :verify do\n  end\nend\n';
+const mobile = (files = {}) =>
+  consumer({
+    files,
+    dirs: Object.keys(files).length > 0 ? ['mobile/fastlane'] : [],
+    callers: { 'cd.yml': caller('build-ios.yml', '      fastlane-directory: mobile/fastlane\n') },
+  });
+
+test('the Fastfile is looked for under the callers\' fastlane directory', () => {
+  const found = checkRequirement(req('file.fastfile'), mobile({ 'mobile/fastlane/Fastfile': LANES }));
+  assert.deepEqual(found, { status: 'ok', detail: 'mobile/fastlane/Fastfile' });
+  // A root fastlane/ is not where the lanes run, so it does not count.
+  const root = checkRequirement(req('file.fastfile'), mobile({ 'fastlane/Fastfile': LANES }));
+  assert.deepEqual(root, { status: 'missing', reason: 'none of mobile/fastlane/Fastfile exists' });
+  // Paths outside fastlane/ are untouched.
+  assert.equal(checkRequirement(req('file.gemfile'), mobile({ Gemfile: '' })).status, 'ok');
+});
+
+test('the lanes are read under the callers\' fastlane directory, and named by it', () => {
+  assert.equal(checkRequirement(req('lane.build-verify'), mobile({ 'mobile/fastlane/Fastfile': LANES })).status, 'ok');
+  assert.deepEqual(checkRequirement(req('lane.build-verify'), mobile({ 'fastlane/Fastfile': LANES })), {
+    status: 'skip',
+    reason: 'no mobile/fastlane/',
+  });
+  assert.deepEqual(checkRequirement(req('lane.build-verify'), mobile({ 'mobile/fastlane/Fastfile': 'lane :build do\nend\n' })), {
+    status: 'missing',
+    reason: 'mobile/fastlane/ defines no lane named verify, verify',
+  });
+});
+
+test('the App Review names are read from the lanes under the callers\' fastlane directory', () => {
+  const lanes = (files) => checkRequirement(req('lane-environment.app-review'), mobile(files));
+  assert.deepEqual(lanes({ 'fastlane/Fastfile': "ENV['APP_REVIEW_NICKNAME']\n" }), { status: 'skip', reason: 'no mobile/fastlane/' });
+  assert.equal(lanes({ 'mobile/fastlane/Fastfile': "ENV['APP_REVIEW_EMAIL']\n" }).status, 'ok');
+  assert.equal(lanes({ 'mobile/fastlane/Fastfile': "ENV['APP_REVIEW_NICKNAME']\n" }).status, 'missing');
 });

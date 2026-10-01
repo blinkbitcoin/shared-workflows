@@ -64,6 +64,9 @@ export function readConsumer(root, io = defaultIo, { nativeStack = '' } = {}) {
   const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
   const input = nativeStack.trim() || stackInput(inputs);
   return {
+    // Where the Fastfile, the lanes and the store metadata live: the callers'
+    // fastlane-directory, else fastlane.
+    fastlaneDirectory: fastlaneInput(inputs),
     root,
     io,
     pkg,
@@ -80,24 +83,50 @@ export function readConsumer(root, io = defaultIo, { nativeStack = '' } = {}) {
 }
 
 /**
- * The native-stack input the callers pass, or '' when none passes a literal
- * one. An expression is decided at run time and cannot be read here, so it
- * leaves the stack to the rule. Two different literals are an error: a
- * repository is one stack, and a caller that says otherwise to one workflow
- * would build what the others do not check.
+ * The literal value the callers pass for one input, or '' when none passes a
+ * literal one. An expression is decided at run time and cannot be read here,
+ * so it is left out. Two different literals are an error naming each value
+ * and the workflows that pass it, then `why`.
  */
-export function stackInput(inputs) {
+export function literalInput(inputs, input, why) {
   const values = new Map();
   for (const [key, value] of inputs) {
     const [workflow, name] = key.split(':');
-    if (name !== 'native-stack' || value === '' || value.includes('${{')) continue;
+    if (name !== input || value === '' || value.includes('${{')) continue;
     values.set(value, [...(values.get(value) ?? []), workflow]);
   }
   if (values.size > 1) {
     const each = [...values].map(([value, workflows]) => `${value} (${workflows.join(', ')})`).join(', ');
-    throw new Error(`::error::the callers pass different native-stack inputs: ${each}. A repository is one stack: pass the same value to every workflow that takes it`);
+    throw new Error(`::error::the callers pass different ${input} inputs: ${each}. ${why}`);
   }
   return values.size === 1 ? [...values.keys()][0] : '';
+}
+
+/**
+ * The native-stack input the callers pass, or '' when none passes a literal
+ * one, which leaves the stack to the rule. Two different literals are an
+ * error: a repository is one stack, and a caller that says otherwise to one
+ * workflow would build what the others do not check.
+ */
+export function stackInput(inputs) {
+  return literalInput(inputs, 'native-stack', 'A repository is one stack: pass the same value to every workflow that takes it');
+}
+
+/**
+ * The directory holding the Fastfile, the lanes and the store metadata: the
+ * fastlane-directory the callers pass (relative to the repository root, its
+ * trailing slashes dropped), else `fastlane`, the workflows' default. Two
+ * different literals are an error: the lanes the build runs and the ones
+ * publish-store.yml runs would be two different Fastfiles.
+ */
+export function fastlaneInput(inputs) {
+  const normalized = new Map([...inputs].map(([key, value]) => [key, key.endsWith(':fastlane-directory') ? value.replace(/\/+$/, '') : value]));
+  const value = literalInput(
+    normalized,
+    'fastlane-directory',
+    'A repository has one Fastfile: pass the same fastlane-directory to every workflow that takes it',
+  );
+  return value || 'fastlane';
 }
 
 /**
@@ -503,8 +532,9 @@ export function checkRequirement(req, consumer) {
         : missing(`${req.target} is not a dependency`);
 
     case 'file': {
-      const found = req.target.find(has);
-      return found ? ok(found) : missing(`none of ${req.target.join(', ')} exists`);
+      const targets = req.target.map((file) => fastlanePath(file, consumer));
+      const found = targets.find(has);
+      return found ? ok(found) : missing(`none of ${targets.join(', ')} exists`);
     }
 
     case 'dir-nonempty':
@@ -577,13 +607,14 @@ export function checkRequirement(req, consumer) {
       return io.tracked(root, req.target) ? ok() : missing(`git tracks nothing under ${req.target}/`);
 
     case 'lane': {
-      // A textual scan of fastlane/**.rb, not a Ruby parse: enough to catch a
+      // A textual scan of <fastlane-directory>/**.rb, not a Ruby parse: enough to catch a
       // lane that was never written, and honest about being no more than that.
-      const dir = path.join(root, 'fastlane');
-      const text = collectRuby(dir, consumer.io);
-      if (text === null) return skip('no fastlane/');
+      const text = collectRuby(path.join(root, consumer.fastlaneDirectory), consumer.io);
+      if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
       const absent = req.target.filter((lane) => !text.includes(`lane :${lane.split(':')[1]}`));
-      return absent.length === 0 ? ok() : missing(`fastlane defines no lane named ${absent.map((l) => l.split(':')[1]).join(', ')}`);
+      return absent.length === 0
+        ? ok()
+        : missing(`${consumer.fastlaneDirectory}/ defines no lane named ${absent.map((l) => l.split(':')[1]).join(', ')}`);
     }
 
     case 'make-ci-reaches-ci': {
@@ -630,8 +661,8 @@ export function checkRequirement(req, consumer) {
     case 'lane-environment': {
       // A lane reading an environment variable the lane workflow never passes
       // gets an empty string, and fastlane uploads the empty value.
-      const text = collectRuby(path.join(root, 'fastlane'), io);
-      if (text === null) return skip('no fastlane/');
+      const text = collectRuby(path.join(root, consumer.fastlaneDirectory), io);
+      if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
       const prefix = req.prefix;
       const read = new Set(
         [...text.matchAll(/ENV(?:\.fetch\(|\[)\s*['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]).filter((n) => n.startsWith(prefix)),
@@ -709,6 +740,14 @@ export function ciScripts(contract, uses, inputs, profiles, stack = null) {
     if (state !== false) maybe.add(req.target);
   }
   return { on, maybe };
+}
+
+/**
+ * A contract path under `fastlane/`, moved under the callers'
+ * fastlane-directory; any other path as it is.
+ */
+function fastlanePath(file, consumer) {
+  return file.startsWith('fastlane/') ? `${consumer.fastlaneDirectory}${file.slice('fastlane'.length)}` : file;
 }
 
 function collectRuby(dir, io, depth = 0) {
