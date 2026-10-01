@@ -959,6 +959,19 @@
       "guide": "no-copies-of-this-family"
     },
     {
+      "id": "no-copy.check-skills",
+      "kind": "no-copy",
+      "label": "no copy of check-skills",
+      "target": ["scripts/check-skills.sh"],
+      "profile": "checks",
+      "neededBy": "the check-skills program @blinkbitcoin/app-tooling ships, which runs every .claude/skills/*/tests/run.sh; a copy in your repository is compared with it by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete the copy, and point make check-skills (and check-release, if it runs the skill tests) at pnpm exec check-skills.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
       "id": "no-copy.install-if-lockfile-changed",
       "kind": "no-copy",
       "label": "no copy of install-if-lockfile-changed.sh",

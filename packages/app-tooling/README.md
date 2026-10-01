@@ -140,6 +140,7 @@ check-test-siblings [--source GLOB=SUFFIX]  # a source file without a test file 
 check-ignored-directories                   # a tool that walks into .workflows/ or .claude/worktrees/
 check-docs [--architecture PREFIX]          # docs freshness, the command table, then three of the above
 check-licenses [--allow SPDX]               # a production dependency under a license outside the allowlist
+check-skills [--root DIR]                   # an agent skill whose offline tests fail
 check-code-scanning [--config FILE]         # CodeQL on this machine, with the configuration CI reads
 ```
 
@@ -231,6 +232,11 @@ check-code-scanning [--config FILE]         # CodeQL on this machine, with the c
   (`MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`,
   `CC0-1.0`, `Unlicense`, `MPL-2.0`, `CC-BY-4.0`, `Python-2.0`,
   `BlueOak-1.0.0`) plus each `--allow` the repository adds.
+- `check-skills` runs `.claude/skills/<name>/tests/run.sh` for every skill that
+  has one, in name order, from the repository root, and stops at the first
+  that fails with its exit status. A repository with no skill tests passes.
+  Some suites drive fastlane, so a caller runs it where the Ruby bundle is
+  installed (the template's `make check-release`).
 - `check-code-scanning` runs CodeQL on this machine with the language, query
   suite, packs and `paths-ignore` of the configuration `check-code-scanning.yml` reads
   (`--config`, default `.github/codeql/codeql-config.yml`), so an inline
@@ -295,6 +301,7 @@ becomes one line:
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
 | `check-ignored-directories` | `pnpm exec check-ignored-directories` |
 | `check:licenses` | `check-licenses` |
+| `check-skills` | `pnpm exec check-skills` |
 | `check:generated` | `bash node_modules/@blinkbitcoin/app-tooling/checks/generated.sh` |
 | `check-code-scanning` | `pnpm exec check-code-scanning` |
 | `check:expo-health` | `bash node_modules/@blinkbitcoin/app-tooling/checks/expo-health.sh` |
