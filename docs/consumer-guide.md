@@ -226,6 +226,16 @@ expression), so a `mobile/fastlane` is checked where the lanes run. Two callers
 passing different literal values is an error too: a repository has one
 Fastfile.
 
+An app in a subdirectory is checked there. The checker reads your callers'
+`working-directory` the same way (the repository root when none passes one, or
+only an expression; trailing slashes dropped) and reads everything else under
+it: `package.json`, the mise config, the Makefile, `pnpm-lock.yaml`, the files
+and directories the requirements name, what git tracks under `ios/` and
+`android/`, and the `fastlane-directory`, which is relative to it as in the
+workflows. Only the callers themselves are read from the repository root, where
+GitHub reads them. Two callers passing different literal values is an error: a
+repository has one app directory.
+
 ### Running it yourself
 
 It ships in [`@blinkbitcoin/app-tooling`](../packages/app-tooling), so you can get
@@ -2669,7 +2679,7 @@ directory named `fastlane` (or `.fastlane`) beside its working directory, so the
 lanes run from the directory that contains it: `mobile/fastlane` works,
 `mobile/lanes` is refused with the fix. The store notes and the verify lanes'
 metadata check read `<fastlane-directory>/metadata` too, and the contract check
-looks for the Fastfile and the lanes there.
+looks for the Fastfile and the lanes there, under the callers' `working-directory`.
 
 A bare app's callers, as `test/fixtures/consumer-bare/` holds them:
 

@@ -35,6 +35,7 @@ import {
   stackLine,
   summaryTable,
   toggleOn,
+  workingDirectoryInput,
 } from './bin/check-contract.mjs';
 
 // A consumer, as the checks see one. No temp directories: `io` is the only way
@@ -325,6 +326,14 @@ test('a missing fastlane lane is named, and no fastlane at all is skipped', () =
   const result = checkRequirement(req('lane.build-verify'), partial);
   assert.equal(result.status, 'missing');
   assert.match(result.reason, /verify/);
+});
+
+test('a lane two platforms need is named once when it is missing', () => {
+  const none = consumer({ dirs: ['fastlane'], files: { 'fastlane/Fastfile': 'platform :ios do\nend\n' } });
+  assert.deepEqual(checkRequirement(req('lane.build-verify'), none), {
+    status: 'missing',
+    reason: 'fastlane/ defines no lane named build, verify',
+  });
 });
 
 // --- severity ----------------------------------------------------------------
@@ -1452,7 +1461,7 @@ test('the lanes are read under the callers\' fastlane directory, and named by it
   });
   assert.deepEqual(checkRequirement(req('lane.build-verify'), mobile({ 'mobile/fastlane/Fastfile': 'lane :build do\nend\n' })), {
     status: 'missing',
-    reason: 'mobile/fastlane/ defines no lane named verify, verify',
+    reason: 'mobile/fastlane/ defines no lane named verify',
   });
 });
 
@@ -1461,4 +1470,90 @@ test('the App Review names are read from the lanes under the callers\' fastlane 
   assert.deepEqual(lanes({ 'fastlane/Fastfile': "ENV['APP_REVIEW_NICKNAME']\n" }), { status: 'skip', reason: 'no mobile/fastlane/' });
   assert.equal(lanes({ 'mobile/fastlane/Fastfile': "ENV['APP_REVIEW_EMAIL']\n" }).status, 'ok');
   assert.equal(lanes({ 'mobile/fastlane/Fastfile': "ENV['APP_REVIEW_NICKNAME']\n" }).status, 'missing');
+});
+
+// --- everything but the callers is read under the callers' working-directory --
+
+test('the working directory is the one literal the callers agree on, else the repository root', () => {
+  assert.equal(workingDirectoryInput(new Map()), '');
+  assert.equal(workingDirectoryInput(new Map([['check.yml:working-directory', '']])), '');
+  assert.equal(workingDirectoryInput(new Map([['check.yml:working-directory', '${{ vars.APP_DIRECTORY }}']])), '');
+  assert.equal(workingDirectoryInput(new Map([['check.yml:fastlane-directory', 'app']])), '');
+  // Trailing slashes are the same directory, so they never read as a conflict.
+  assert.equal(
+    workingDirectoryInput(
+      new Map([
+        ['check.yml:working-directory', 'app/'],
+        ['build-ios.yml:working-directory', 'app'],
+        ['test-e2e.yml:working-directory', '${{ vars.X }}'],
+      ]),
+    ),
+    'app',
+  );
+});
+
+test('callers passing two different working directories is an error naming each and where', () => {
+  assert.throws(
+    () =>
+      workingDirectoryInput(
+        new Map([
+          ['check.yml:working-directory', 'app'],
+          ['build-ios.yml:working-directory', 'mobile/'],
+          ['publish-store.yml:working-directory', 'app/'],
+        ]),
+      ),
+    {
+      message:
+        '::error::the callers pass different working-directory inputs: app (check.yml, publish-store.yml), mobile (build-ios.yml). A repository has one app directory: pass the same working-directory to every workflow that takes it',
+    },
+  );
+});
+
+test('a consumer read from disk is read under the callers\' working directory, its callers at the root', () => {
+  const appCaller = (directory) => caller('check.yml', `      working-directory: ${directory}\n`);
+  const repository = tree({
+    'package.json': JSON.stringify({ scripts: { root: 'x' } }),
+    '.github/workflows/ci.yml': appCaller('app/'),
+    '.github/workflows/cd.yml': caller('build-ios.yml', '      working-directory: app\n      fastlane-directory: mobile/fastlane\n'),
+    'app/package.json': JSON.stringify({ scripts: { 'check:lint': 'biome check' }, devDependencies: { knip: '5.0.0' } }),
+    'app/.mise.toml': '[tools]\nnode = "24"\n',
+    'app/mobile/fastlane/Fastfile': 'lane :build do\nend\nlane :verify do\nend\n',
+  });
+  const read = readConsumer(repository);
+  assert.equal(read.repository, repository);
+  assert.equal(read.workingDirectory, 'app');
+  assert.equal(read.root, path.join(repository, 'app'));
+  assert.deepEqual(read.callers.map((c) => c.name).sort(), ['cd.yml', 'ci.yml']);
+  assert.deepEqual(read.scripts, { 'check:lint': 'biome check' });
+  assert.deepEqual(read.deps, { knip: '5.0.0' });
+  assert.equal(read.miseTools.file, '.mise.toml');
+  assert.equal(read.fastlaneDirectory, 'mobile/fastlane');
+  // The Fastfile and the lanes are found under app/mobile/fastlane, and the
+  // repository's own fastlane/ (there is none) is not looked at.
+  assert.deepEqual(checkRequirement(req('file.fastfile'), read), { status: 'ok', detail: 'mobile/fastlane/Fastfile' });
+  assert.deepEqual(checkRequirement(req('lane.build-verify'), read), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(req('package-script.check-lint'), read), { status: 'ok', detail: undefined });
+});
+
+test('a consumer whose callers pass no literal working directory is read at the repository root', () => {
+  const repository = tree({
+    'package.json': JSON.stringify({ scripts: { lint: 'biome check' } }),
+    '.github/workflows/ci.yml': caller('check.yml', '      working-directory: ${{ vars.APP_DIRECTORY }}\n'),
+  });
+  const read = readConsumer(repository);
+  assert.equal(read.workingDirectory, '');
+  assert.equal(read.root, repository);
+  assert.deepEqual(read.scripts, { lint: 'biome check' });
+});
+
+test('a consumer whose callers pass two working directories is refused, and the program says why', () => {
+  const repository = tree({
+    '.github/workflows/ci.yml': caller('check.yml', '      working-directory: app\n'),
+    '.github/workflows/cd.yml': caller('build-ios.yml', '      working-directory: mobile\n'),
+  });
+  assert.throws(() => readConsumer(repository), /the callers pass different working-directory inputs/);
+  let stderr = '';
+  const code = main(['--root', repository], { stdout: { write() {} }, stderr: { write: (text) => { stderr += text; } }, env: {} });
+  assert.equal(code, 1);
+  assert.match(stderr, /^::error::the callers pass different working-directory inputs: (app \(check\.yml\), mobile \(build-ios\.yml\)|mobile \(build-ios\.yml\), app \(check\.yml\))\.[^\n]*\n$/);
 });

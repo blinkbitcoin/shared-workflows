@@ -93,6 +93,13 @@ The Fastfile and the lanes are read from the callers' `fastlane-directory`
 directory the lanes really run from; callers passing two different values is
 an error, as two stacks are.
 
+An app in a subdirectory is checked there: everything but the callers
+(`package.json`, the mise config, the Makefile, the lockfile, the files the
+requirements name, what git tracks and the `fastlane-directory`) is read under
+the callers' `working-directory`, the repository root when none passes a
+literal one. The callers are read from the repository root, where GitHub reads
+them, and two different values are an error here too.
+
 `contract.json` is the table it reads — what wants each thing, which workflow
 input switches it off, whether a fallback exists, and the fix. The consumer
 guide's tables are generated from the same file, so the two cannot disagree.
