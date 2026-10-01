@@ -5,15 +5,19 @@
 # scripts/lib/e2e-env.sh.
 #
 # Keys, and where each comes from - an explicit workflow input always wins
-# (IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME are what build-ios.yml,
-# build-android.yml and publish-store.yml export for their `ios-bundle-id`,
-# `android-package` and `ios-scheme` inputs):
+# (IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME are what test-e2e.yml,
+# build-ios.yml, build-android.yml and publish-store.yml export for their
+# `ios-bundle-id`, `android-package` and `ios-scheme` inputs):
 #   ios-bundle-id    IOS_BUNDLE_ID, else PRODUCT_BUNDLE_IDENTIFIER from
 #                    `xcodebuild -showBuildSettings -json` on the workspace and
 #                    scheme (the application target's), else the first literal
 #                    PRODUCT_BUNDLE_IDENTIFIER in ios/*.xcodeproj/project.pbxproj
 #   android-package  ANDROID_PACKAGE, else `applicationId` in
-#                    android/app/build.gradle or build.gradle.kts
+#                    android/app/build.gradle or build.gradle.kts, plus the debug
+#                    build type's applicationIdSuffix when one is set, unless
+#                    WORKFLOWS_ANDROID_VARIANT is release (it defaults to debug:
+#                    every caller today is test-e2e.yml's, whose app is
+#                    assembleDebug; the release workflows pass the input)
 #   scheme           the URL scheme: the first CFBundleURLSchemes entry in the
 #                    app's Info.plist, else the first non-web android:scheme in
 #                    android/app/src/main/AndroidManifest.xml; empty when the app
@@ -97,14 +101,62 @@ ios_bundle_id() {
   printf '%s\n' "$ids" | head -1
 }
 
+# The debug build type's applicationIdSuffix in one Gradle file, or nothing.
+# The block is `debug {` (Groovy, and Kotlin's accessor), `getByName("debug") {`
+# or `named("debug") {`; the suffix is `applicationIdSuffix ".x"` or
+# `applicationIdSuffix = ".x"`. A block named debug elsewhere (signingConfigs)
+# never sets a suffix, so it is read without harm. Line comments are dropped
+# first, so a commented-out suffix does not count.
+debug_suffix() {
+  awk -v q="'" '
+    BEGIN {
+      quote = "[\"" q "]"
+      opens = "(^|[^[:alnum:]_.])(debug|(getByName|named)\\(" quote "debug" quote "\\))[[:space:]]*\\{"
+      suffix = "applicationIdSuffix[[:space:]]*=?[[:space:]]*" quote "[^\"" q "]*" quote
+    }
+    {
+      line = $0
+      sub(/\/\/.*/, "", line)
+      rest = line
+      if (!inside && match(line, opens)) {
+        inside = 1
+        rest = substr(line, RSTART + RLENGTH)
+        # The depth the block opens at: the braces before it on this line count.
+        before = substr(line, 1, RSTART)
+        start = depth + gsub(/\{/, "{", before) - gsub(/\}/, "}", before)
+      }
+      if (inside && match(rest, suffix)) {
+        value = substr(rest, RSTART, RLENGTH)
+        sub("^[^\"" q "]*" quote, "", value)
+        sub(quote "$", "", value)
+        print value
+        exit
+      }
+      depth += gsub(/\{/, "{", line) - gsub(/\}/, "}", line)
+      if (inside && depth <= start) inside = 0
+    }
+  ' "$1"
+}
+
+# The application id of the build under test. The e2e build is assembleDebug,
+# so by default the debug build type's applicationIdSuffix is appended: that is
+# the id the emulator installs. WORKFLOWS_ANDROID_VARIANT=release answers the
+# bare applicationId, for a caller asking about the release build.
 android_package() {
-  local gradle id
+  local gradle id variant="${WORKFLOWS_ANDROID_VARIANT:-debug}"
+  case "$variant" in
+    debug | release) ;;
+    *) die "WORKFLOWS_ANDROID_VARIANT must be debug or release (got '$variant')" ;;
+  esac
   if [ -n "${ANDROID_PACKAGE:-}" ]; then printf '%s\n' "$ANDROID_PACKAGE"; return 0; fi
   for gradle in android/app/build.gradle android/app/build.gradle.kts; do
     [ -f "$gradle" ] || continue
     # applicationId "x", applicationId 'x' and applicationId = "x" (Kotlin).
     id="$(sed -n -E "s/^[[:space:]]*applicationId[[:space:]]*(=[[:space:]]*)?[\"']([^\"']+)[\"'].*/\\2/p" "$gradle" | head -1)"
-    if [ -n "$id" ]; then printf '%s\n' "$id"; return 0; fi
+    [ -n "$id" ] || continue
+    [ "$variant" = release ] || id="$id$(debug_suffix "$gradle")"
+    printf '%s\n' "$id"
+    return 0
   done
   die_fix "no literal applicationId in $root/android/app/build.gradle or build.gradle.kts" \
     "write applicationId as a string literal in defaultConfig, or pass the android-package input" "expo-or-bare"

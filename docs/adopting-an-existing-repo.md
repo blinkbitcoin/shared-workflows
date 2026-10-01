@@ -239,9 +239,10 @@ needs:
   fix when they are not. Keep `ios/Pods/` and the build directories ignored.
 - **Literal identifiers, or the inputs.** The bundle identifier comes from
   `xcodebuild -showBuildSettings` (or the `project.pbxproj`), the application id
-  from `applicationId` in `build.gradle`, the URL scheme from `Info.plist` or the
-  manifest. Where a workflow takes `ios-bundle-id`, `android-package` or
-  `ios-scheme`, those win.
+  from `applicationId` in `build.gradle` (with the debug build type's
+  `applicationIdSuffix` for the E2E build, which is a debug one), the URL scheme
+  from `Info.plist` or the manifest. Where a workflow takes `ios-bundle-id`,
+  `android-package` or `ios-scheme`, `test-e2e.yml` included, those win.
 - **`native-stack: bare`** on the native callers. Detection gets it right
   without (no `expo` dependency), but naming it keeps the app on the bare path
   if it later adds an Expo module.

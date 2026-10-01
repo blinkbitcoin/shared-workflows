@@ -4,26 +4,33 @@
 # per commit). scripts/lib/native-stack.sh dispatches here; callers ask through
 # workflows_app_config in scripts/lib/e2e-env.sh.
 #
-# Keys:
-#   ios-bundle-id    ios.bundleIdentifier
-#   android-package  android.package
+# Keys, and where each comes from - an explicit workflow input wins, as on the
+# bare stack (IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME, which test-e2e.yml
+# exports for its `ios-bundle-id`, `android-package` and `ios-scheme` inputs),
+# and then `expo config` is not asked at all:
+#   ios-bundle-id    IOS_BUNDLE_ID, else ios.bundleIdentifier
+#   android-package  ANDROID_PACKAGE, else android.package
 #   scheme           the URL scheme, `scheme`
-#   ios-scheme       the Xcode scheme: the name of the ios/*.xcworkspace that
-#                    prebuild wrote, cross-checked against the config's `name`
-#                    stripped of non-alphanumerics (what prebuild generates)
+#   ios-scheme       IOS_SCHEME, else the Xcode scheme: the name of the
+#                    ios/*.xcworkspace that prebuild wrote, cross-checked against
+#                    the config's `name` stripped of non-alphanumerics (what
+#                    prebuild generates)
 # Usage: app-config.sh KEY
 set -euo pipefail
 source "$(dirname "$0")/../../lib/common.sh"
 
 lib="$(cd "$(dirname "$0")/../../lib" && pwd)"
 expo_config() { bash "$lib/expo-config.sh" "$1"; }
+# input VALUE - print VALUE and end the script when it is set.
+input() { if [ -n "$1" ]; then printf '%s\n' "$1"; exit 0; fi; }
 
 key="${1:-}"
 case "$key" in
-  ios-bundle-id) expo_config ios.bundleIdentifier ;;
-  android-package) expo_config android.package ;;
+  ios-bundle-id) input "${IOS_BUNDLE_ID:-}"; expo_config ios.bundleIdentifier ;;
+  android-package) input "${ANDROID_PACKAGE:-}"; expo_config android.package ;;
   scheme) expo_config scheme ;;
   ios-scheme)
+    input "${IOS_SCHEME:-}"
     root="$(consumer_root)" ||
       die "the consumer's working directory does not exist: ${GITHUB_WORKSPACE:-$PWD}/${WORKING_DIRECTORY:-.}"
     # `|| ws=""`: find fails on a missing ios/, and pipefail would end the

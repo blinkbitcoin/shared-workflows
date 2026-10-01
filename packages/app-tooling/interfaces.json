@@ -1360,6 +1360,18 @@
           "type": "string",
           "required": false
         },
+        "ios-bundle-id": {
+          "type": "string",
+          "required": false
+        },
+        "android-package": {
+          "type": "string",
+          "required": false
+        },
+        "ios-scheme": {
+          "type": "string",
+          "required": false
+        },
         "ios": {
           "type": "boolean",
           "required": false

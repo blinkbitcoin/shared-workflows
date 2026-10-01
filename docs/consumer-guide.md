@@ -220,6 +220,12 @@ repository is one stack. Pass the input when the detection is wrong for you,
 such as a bare app that keeps `expo` as a dependency for its modules but
 commits no `ios/` yet.
 
+The release rows read the Fastfile and the lanes from your callers'
+`fastlane-directory` the same way (`fastlane` when none passes one, or only an
+expression), so a `mobile/fastlane` is checked where the lanes run. Two callers
+passing different literal values is an error too: a repository has one
+Fastfile.
+
 ### Running it yourself
 
 It ships in [`@blinkbitcoin/app-tooling`](../packages/app-tooling), so you can get
@@ -871,6 +877,7 @@ No outputs. Secrets: `consumer-token` (optional).
 | `default-branch` | `refs/heads/main` | Fully qualified ref of the branch allowed to **write** the Gradle cache; every other ref reads it. Set it if your default branch is not `main`, or the cache is never written and every run pays a cold Gradle |
 | `native-extra-globs` | `''` | Space-separated consumer-relative shell globs whose file contents join the native dependency hash (see [`docs/cache-keys.md`](cache-keys.md)) |
 | `native-stack` | `''` (detect) | `expo` or `bare`, for every job: prebuild, the identifiers, Metro, the prewarm, the launch and the cache key follow it — see [Expo or bare](#expo-or-bare). A bare app also passes `dev-client: false` |
+| `ios-bundle-id` / `android-package` / `ios-scheme` | `''` (read from the app) | The identifiers of the app under test, exported to every job as `IOS_BUNDLE_ID`,<br>`ANDROID_PACKAGE` and `IOS_SCHEME` and used as given: the launch, the Maestro `APP_ID` and the Xcode build read them first.<br>Empty reads them from the Expo config, or from a bare app's committed projects — its `android-package` is then<br>`applicationId` plus the debug build type's `applicationIdSuffix`, the id `assembleDebug` installs. See [Expo or bare](#expo-or-bare) |
 | `ios` | `false` | Run the iOS build + simulator suite. Default is off because macOS bills at 10x on a private repo; on a public repo it is free, so turn it on |
 | `android` | `true` | Run the Android build + emulator suite |
 | `xcode-version` | `''` | Xcode version to select (folded into the iOS cache key) |
@@ -2646,7 +2653,7 @@ is not, or to keep an app on its path whatever its dependencies say later.
 | Step | `expo` | `bare` |
 | --- | --- | --- |
 | Prebuild (`prebuild.sh`) | `expo prebuild --clean --no-install` for the platform | Nothing is generated; fails, with the fix,<br>unless `ios/` or `android/` is there and tracked by git |
-| Identifiers (`app-config.sh`) | `expo config`: `ios.bundleIdentifier`, `android.package`, `scheme`,<br>and the Xcode scheme from the generated `ios/*.xcworkspace` | The committed projects: `xcodebuild -showBuildSettings -json`, else the `project.pbxproj`;<br>`applicationId` in `android/app/build.gradle(.kts)`; the URL scheme from `Info.plist`<br>or the `AndroidManifest.xml` (empty when there is none); the single `ios/*.xcworkspace`.<br>The `ios-bundle-id`, `android-package` and `ios-scheme` inputs win where a workflow has them |
+| Identifiers (`app-config.sh`) | `expo config`: `ios.bundleIdentifier`, `android.package`, `scheme`,<br>and the Xcode scheme from the generated `ios/*.xcworkspace` | The committed projects: `xcodebuild -showBuildSettings -json`, else the `project.pbxproj`;<br>`applicationId` in `android/app/build.gradle(.kts)`, plus the debug build type's `applicationIdSuffix`<br>for the E2E build (a debug one); the URL scheme from `Info.plist` or the `AndroidManifest.xml`<br>(empty when there is none); the single `ios/*.xcworkspace`. The `ios-bundle-id`, `android-package`<br>and `ios-scheme` inputs win on both stacks, wherever a workflow takes them |
 | Metro (`metro-start.sh`) | `expo start --port N`, `--dev-client` when `dev-client` is on | `react-native start --port N`; the same log, pid and process group |
 | Bundle prewarm (`metro-wait.sh`) | The manifest's `launchAsset` | `index.bundle` for the platform |
 | Launch (`app-launch.sh`) | The `expo-development-client` deep link, or a plain launch | A plain launch: pass `dev-client: false`, as a bare app has no dev-client launcher |
@@ -2661,7 +2668,8 @@ input, which `build-ios.yml`, `build-android.yml`, `publish-store.yml`,
 directory named `fastlane` (or `.fastlane`) beside its working directory, so the
 lanes run from the directory that contains it: `mobile/fastlane` works,
 `mobile/lanes` is refused with the fix. The store notes and the verify lanes'
-metadata check read `<fastlane-directory>/metadata` too.
+metadata check read `<fastlane-directory>/metadata` too, and the contract check
+looks for the Fastfile and the lanes there.
 
 A bare app's callers, as `test/fixtures/consumer-bare/` holds them:
 

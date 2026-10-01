@@ -45,6 +45,28 @@ on:
         description: Extra space-separated consumer-relative shell globs whose file contents are folded into the native dependency hash
         type: string
         default: ''
+      ios-bundle-id:
+        description: >-
+          Bundle identifier of the iOS app under test, exported as IOS_BUNDLE_ID.
+          Empty, the default, reads it from the app: the Expo config, or a bare
+          app's Xcode project
+        type: string
+        default: ''
+      android-package:
+        description: >-
+          Application id of the Android app under test, exported as
+          ANDROID_PACKAGE and used as given. Empty, the default, reads it from
+          the app: the Expo config, or a bare app's applicationId plus its debug
+          build type's applicationIdSuffix
+        type: string
+        default: ''
+      ios-scheme:
+        description: >-
+          Xcode scheme the iOS app is built with, exported as IOS_SCHEME; the
+          build expects ios/<scheme>.xcworkspace and <scheme>.app. Empty, the
+          default, takes the name of the single ios/*.xcworkspace
+        type: string
+        default: ''
       ios:
         description: Run the iOS build and simulator suite (off by default; macOS runners bill at 10x)
         type: boolean
@@ -148,6 +170,9 @@ jobs:
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
       WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
+      IOS_BUNDLE_ID: ${{ inputs.ios-bundle-id }}
+      ANDROID_PACKAGE: ${{ inputs.android-package }}
+      IOS_SCHEME: ${{ inputs.ios-scheme }}
       WORKFLOWS_XCODE: ${{ inputs.xcode-version }}
       WORKFLOWS_IOS_CONFIGURATION: ${{ inputs.ios-configuration }}
     steps:
@@ -270,6 +295,9 @@ jobs:
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
       WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
+      IOS_BUNDLE_ID: ${{ inputs.ios-bundle-id }}
+      ANDROID_PACKAGE: ${{ inputs.android-package }}
+      IOS_SCHEME: ${{ inputs.ios-scheme }}
       WORKFLOWS_IOS_CONFIGURATION: ${{ inputs.ios-configuration }}
       # A Release build has no dev launcher to deep-link into, so it launches
       # directly whatever `dev-client` says. The non-empty value MUST sit in the
@@ -377,6 +405,9 @@ jobs:
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
       WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
+      IOS_BUNDLE_ID: ${{ inputs.ios-bundle-id }}
+      ANDROID_PACKAGE: ${{ inputs.android-package }}
+      IOS_SCHEME: ${{ inputs.ios-scheme }}
     steps:
       - name: Checkout consumer
         uses: actions/checkout@v7
@@ -454,6 +485,9 @@ jobs:
     env:
       WORKING_DIRECTORY: ${{ inputs.working-directory }}
       WORKFLOWS_NATIVE_STACK_INPUT: ${{ inputs.native-stack }}
+      IOS_BUNDLE_ID: ${{ inputs.ios-bundle-id }}
+      ANDROID_PACKAGE: ${{ inputs.android-package }}
+      IOS_SCHEME: ${{ inputs.ios-scheme }}
       WORKFLOWS_DEV_CLIENT: ${{ inputs.dev-client }}
       WORKFLOWS_MAESTRO_FLOWS: ${{ inputs.flows }}
       WORKFLOWS_MAESTRO_INCLUDE_TAGS: ${{ inputs.include-tags }}
