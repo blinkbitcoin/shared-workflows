@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.4.0...app-tooling-v0.5.0) (2026-10-01)
+
+
+### Features
+
+* **workflows:** read a bare React Native app in the contract, check.yml and the scanners ([#164](https://github.com/blinkbitcoin/shared-workflows/issues/164)) ([fd83627](https://github.com/blinkbitcoin/shared-workflows/commit/fd83627d7282de334c20803574511a1e00d5f868))
+
 ## [0.4.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.3.0...app-tooling-v0.4.0) (2026-09-30)
 
 
