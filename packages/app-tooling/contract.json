@@ -997,6 +997,19 @@
       "guide": "no-copies-of-this-family"
     },
     {
+      "id": "no-copy.store-notes-test",
+      "kind": "no-copy",
+      "label": "no copy of the store-notes chain test",
+      "target": ["scripts/release/store-notes.test.mjs"],
+      "profile": "checks",
+      "neededBy": "shared-workflows' own test of the store-notes chain, and test-app's store-notes suite for the app's prompt and locales; a copy in your repository is compared with them by nothing and drifts",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "Delete it: the chain is tested in shared-workflows, the app's prompt and locales by test-app's store-notes suite (app-suites: true), and environment-variables by the contract check itself.",
+      "guide": "no-copies-of-this-family"
+    },
+    {
       "id": "no-copy.install-if-lockfile-changed",
       "kind": "no-copy",
       "label": "no copy of install-if-lockfile-changed.sh",

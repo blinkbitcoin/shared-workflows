@@ -7,7 +7,7 @@
 # secret belongs in `secrets:` and decode-secrets.sh.
 #
 # Key policy is not merely mirrored from scripts/lib/build-env.sh, it is the same
-# code: both call scripts/lib/env-validate.mjs. The previous header claimed the
+# code: both call packages/app-tooling/lib/env-validate.mjs. The previous header claimed the
 # two could not drift because the same assertions covered both. They had already
 # drifted - this script had no credential-name refusal and no NEVER list, so a
 # key like SENTRY_AUTH_TOKEN was published from an unmasked workflow input - and
@@ -36,7 +36,7 @@ require_cmd node
 # node, not yq: only node can reliably reject a non-object and coerce scalars to
 # the exact strings GitHub's env file expects.
 #
-# The rules live in scripts/lib/env-validate.mjs, shared with build-env.sh. They
+# The rules live in packages/app-tooling/lib/env-validate.mjs, shared with build-env.sh. They
 # used to be a copy here, and the copy had drifted where it mattered most: no
 # credential-name refusal at all, so {"SENTRY_AUTH_TOKEN": "..."} was published
 # from an input GitHub does not mask.
@@ -48,7 +48,7 @@ require_cmd node
 WORKFLOWS_ENV_VALIDATE_JSON="$json" \
   WORKFLOWS_ENV_VALIDATE_LABEL=WORKFLOWS_ENV_JSON \
   WORKFLOWS_ENV_VALIDATE_ALLOW_LOWERCASE=1 \
-  node "$(dirname "$0")/../lib/env-validate.mjs" > "$env_file"
+  node "$(dirname "$0")/../../packages/app-tooling/lib/env-validate.mjs" > "$env_file"
 
 while IFS= read -r -d '' key && IFS= read -r -d '' value; do
   log "env-json: $key"

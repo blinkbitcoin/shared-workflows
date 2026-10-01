@@ -42,11 +42,11 @@ workflows_publish_build_env() {
   # `if !`, not a bare call: the scratch file must not survive a rejection
   # either, and errexit would abort before any cleanup could run.
   #
-  # The rules live in scripts/lib/env-validate.mjs, shared with
+  # The rules live in packages/app-tooling/lib/env-validate.mjs, shared with
   # scripts/release/env-json.sh so the two inputs cannot be validated differently
   # - which is exactly what had happened.
   local validator
-  validator="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env-validate.mjs"
+  validator="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../packages/app-tooling/lib" && pwd)/env-validate.mjs"
   if ! WORKFLOWS_ENV_VALIDATE_JSON="$json" \
     WORKFLOWS_ENV_VALIDATE_LABEL=build-env \
     node "$validator" > "$env_file"; then

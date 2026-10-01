@@ -118,6 +118,16 @@ named by file and job. GitHub checks all of that only when the run starts, on
 `main`, after the change merged; and a renamed output is worse, because it
 reads as empty and a `!= 'false'` gate on it quietly runs every time.
 
+An `environment-variables` value written in the caller, as a block or a quoted
+literal, is rendered and held to the rules `build-env.sh` applies at release
+time (`lib/env-validate.mjs`): a flat JSON object, upper-case keys, nothing that
+reads as a credential and nothing the family or the runner owns
+([`environment-variables`](../../docs/consumer-guide.md#environment-variables)).
+Each `${{ toJSON(...) }}` stands for a JSON string and every other expression
+for a bare word, so a value that parses only for some variable values, or a
+quoted `toJSON` that would arrive double-encoded, is a finding now rather than
+a failed release. `publish-store.yml`'s keys may be lower-case, as there.
+
 Unlike `check-tool-versions`, this one is specific to the React Native workflow
 family rather than to any repository on the baseline.
 
@@ -152,6 +162,7 @@ every run:
 | Suite | Stacks | Needs | What it proves |
 | --- | --- | --- | --- |
 | `fingerprint` | expo | `fingerprint.config.js` | `@expo/fingerprint` resolves from the app; the configuration loads (the library<br>swallows one that throws) and keeps `createFingerprintConfig()`'s source skips and ignore paths;<br>and a release's `APP_VERSION` / `APP_BUILD_NUMBER` move neither the iOS nor the Android hash |
+| `store-notes` | expo, bare | `store-notes.prompt.md` | The prompt says something; every locale directory under<br>`fastlane/metadata/ios` is one the generator takes; without a model every locale gets notes for a release;<br>with one (a local stand-in) the prompt reaches it and every locale takes its answer |
 
 A suite is a test, so no coverage number vouches for it. `suites.test.mjs`
 runs each one against the fixture apps under `fixtures/apps/<suite>/`: one in

@@ -1,4 +1,4 @@
-// scripts/lib/env-validate.mjs: the one validator for the caller-supplied JSON
+// lib/env-validate.mjs: the one validator for the caller-supplied JSON
 // objects whose keys become environment variables (build-env through
 // scripts/lib/build-env.sh, env-json through scripts/release/env-json.sh).
 //
@@ -14,7 +14,7 @@
 //
 // The child processes get this process's environment spread into theirs, which
 // carries NODE_V8_COVERAGE, so the command-line entry counts toward the 100%
-// gate that `make test-scripts` holds over scripts/**/*.mjs.
+// gate that `make test-package` holds over the package.
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -27,9 +27,9 @@ import {
   VALID_NAME,
   VALID_NAME_ANY_CASE,
   validateEnvJson,
-} from '../scripts/lib/env-validate.mjs';
+} from './lib/env-validate.mjs';
 
-const SCRIPT = fileURLToPath(new URL('../scripts/lib/env-validate.mjs', import.meta.url));
+const SCRIPT = fileURLToPath(new URL('./lib/env-validate.mjs', import.meta.url));
 
 // This process's environment without the variables the entry reads, so a value
 // set in the calling shell cannot decide a case.
@@ -130,6 +130,21 @@ test('lower-case keys pass the command line only when the switch is exactly 1', 
     assert.equal(result.status, 1, `switch ${value} must not allow lower-case keys`);
     assert.match(result.stderr, /env-json key is not an upper-case env name: track/);
   }
+});
+
+test('importing the module runs nothing, even with WORKFLOWS_ENV_VALIDATE_JSON inherited', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', `import(${JSON.stringify(SCRIPT)}).then((m) => console.log(typeof m.validateEnvJson))`],
+    { env: { ...cleanEnvironment(), WORKFLOWS_ENV_VALIDATE_JSON: '{"BAD KEY":"1"}' }, encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'function\n');
+});
+
+test('run as a program without WORKFLOWS_ENV_VALIDATE_JSON it prints nothing and passes', () => {
+  const result = spawnSync(process.execPath, [SCRIPT], { env: cleanEnvironment(), encoding: 'utf8' });
+  assert.deepEqual({ status: result.status, stdout: result.stdout, stderr: result.stderr }, { status: 0, stdout: '', stderr: '' });
 });
 
 test('importing the module runs nothing: the command line needs WORKFLOWS_ENV_VALIDATE_JSON', () => {

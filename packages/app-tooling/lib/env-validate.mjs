@@ -1,6 +1,9 @@
 // The one validator for caller-supplied JSON objects whose keys become
 // environment variables. Two inputs feed this: $WORKFLOWS_BUILD_ENV (via
-// scripts/lib/build-env.sh) and $WORKFLOWS_ENV_JSON (via scripts/release/env-json.sh).
+// scripts/lib/build-env.sh) and $WORKFLOWS_ENV_JSON (via scripts/release/env-json.sh),
+// and check-contract applies it to a caller's environment-variables before any
+// release does. It lives in the package for that reason; the two scripts reach
+// it at packages/app-tooling/lib/ in this checkout.
 //
 // They used to carry a copy of these rules each, and the copies had drifted in
 // the direction that matters: env-json had no credential-name refusal and no
@@ -20,9 +23,11 @@
 //
 // Usage as a CLI (what the two shell scripts do):
 //   WORKFLOWS_ENV_VALIDATE_JSON='{"A":"1"}' WORKFLOWS_ENV_VALIDATE_LABEL=build-env \
-//     node scripts/lib/env-validate.mjs
+//     node packages/app-tooling/lib/env-validate.mjs
 // It writes `key\0value\0` pairs to stdout and exits non-zero, with an ::error::
 // annotation naming the offending key, on any violation.
+
+import { isProgram } from './is-program.mjs';
 
 /** Names that read as a credential by their suffix. */
 export const SECRETISH = /(^|_)(KEY|TOKEN|PASSWORD|PASSPHRASE|SECRET|CREDENTIALS?)$/;
@@ -107,7 +112,9 @@ export function validateEnvJson(raw, label, opts = {}) {
 }
 
 // CLI. Guarded so the module can be imported by tests without running.
-if (process.env.WORKFLOWS_ENV_VALIDATE_JSON !== undefined) {
+// Only as a program: check-contract imports this module, and an inherited
+// WORKFLOWS_ENV_VALIDATE_JSON must not turn that import into a run that exits.
+if (isProgram(import.meta.url, process.argv[1]) && process.env.WORKFLOWS_ENV_VALIDATE_JSON !== undefined) {
   const label = process.env.WORKFLOWS_ENV_VALIDATE_LABEL || 'env';
   try {
     const allowLowerCase = process.env.WORKFLOWS_ENV_VALIDATE_ALLOW_LOWERCASE === '1';

@@ -1,0 +1,1 @@
+{ "passes": false, "output": ["fastlane/metadata/ios/english would ship without notes", "fail 1\\b"] }

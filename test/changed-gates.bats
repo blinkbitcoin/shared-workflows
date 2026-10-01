@@ -57,7 +57,7 @@ expect() {
 }
 
 @test "a non-shell file under scripts/ does not run ci" {
-  gates_for "scripts/lib/env-validate.mjs"
+  gates_for "scripts/self/render-contract-table.mjs"
   expect false false false
 }
 

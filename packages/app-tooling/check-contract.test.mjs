@@ -11,6 +11,8 @@ import {
   callerInputs,
   callersUse,
   callProblems,
+  environmentVariablesProblems,
+  environmentVariablesText,
   check,
   checkCalls,
   checkRequirement,
@@ -1252,6 +1254,93 @@ test('reading an output the workflow does not declare is named', () => {
   assert.deepEqual(callProblems(aCall({ reads: new Set(['sha', 'version']) }), FACE), [
     'reads output version, which x.yml does not declare',
   ]);
+});
+
+test("a block scalar under with: is kept as text, folded or literal, and the call still lists its key", () => {
+  const text = `jobs:
+  a:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/x.yml@abc
+    with:
+      folded: >-
+        {"A": "1",
+
+        "B": "2"}
+
+      literal: |
+        {"A": "1",
+          "B": "2"}
+      plain: value
+      - not a key
+  b:
+    uses: blinkbitcoin/shared-workflows/.github/workflows/x.yml@abc
+    secrets:
+      folded: >-
+        not kept
+`;
+  const [a, b] = callerCalls([{ name: 'x.yml', text }]);
+  assert.deepEqual([...a.with.keys()], ['folded', 'literal', 'plain']);
+  assert.equal(a.with.get('folded'), '>-');
+  assert.deepEqual(Object.fromEntries(a.blocks), { folded: '{"A": "1", "B": "2"}', literal: '{"A": "1",\n"B": "2"}' });
+  assert.deepEqual([...b.blocks], [], 'a secrets: block is not an input');
+  assert.deepEqual([...call('prepare').blocks.keys()], ['environment-variables']);
+});
+
+test('environment-variables is read from a block or a quoted literal, never from an expression', () => {
+  assert.equal(environmentVariablesText('>-', '{"A":"1"}'), '{"A":"1"}');
+  assert.equal(environmentVariablesText(`'{"A":"it''s"}'`, undefined), `{"A":"it's"}`);
+  assert.equal(environmentVariablesText('"{\\"A\\":\\"1\\"}"', undefined), '{"A":"1"}');
+  assert.equal(environmentVariablesText('"\\q"', undefined), null, 'a double-quoted value that does not unescape');
+  assert.equal(environmentVariablesText('${{ vars.BUILD_ENV }}', undefined), null);
+  assert.equal(environmentVariablesText('{}', undefined), null);
+});
+
+test('environment-variables passes when every expression in it renders to valid build environment JSON', () => {
+  assert.deepEqual(
+    environmentVariablesProblems(
+      '{"APP_VARIANT":"production", "OTA_ENABLED":"${{ vars.OTA_ENABLED }}", "EXTRA":${{ toJSON(vars.EXTRA || \'\') }}, "N":"${{ format(\'{0}\', vars.N) }}"}',
+    ),
+    [],
+  );
+});
+
+test('environment-variables is refused the way build-env.sh would refuse it, before any release', () => {
+  for (const [text, problem] of [
+    ['{"A":"${{ vars.A }}",}', /^environment-variables is not valid JSON: /],
+    ['{"A":${{ vars.A }}}', /^environment-variables is not valid JSON: /],
+    ['["A"]', /^environment-variables must be a flat JSON object$/],
+    ['{"A":{"B":"1"}}', /^environment-variables value for A must be a scalar$/],
+    ['{"lower":"1"}', /^environment-variables key is not an upper-case env name: lower$/],
+    ['{"OPENAI_API_KEY":"x"}', /^environment-variables key OPENAI_API_KEY looks like a credential; pass it as a secret instead/],
+    ['{"WORKFLOWS_FINGERPRINT_IOS":"x"}', /^environment-variables key WORKFLOWS_FINGERPRINT_IOS is reserved/],
+  ]) {
+    const problems = environmentVariablesProblems(text);
+    assert.equal(problems.length, 1, text);
+    assert.match(problems[0], problem, text);
+  }
+});
+
+test('a quoted toJSON is named as the double-encoding it is', () => {
+  assert.deepEqual(environmentVariablesProblems('{"EXTRA":"${{ toJSON(vars.EXTRA) }}"}'), [
+    'environment-variables quotes a ${{ toJSON(...) }}, which is a JSON string already: drop the quotes around it',
+  ]);
+});
+
+test('a call reports what is wrong with its environment-variables, and skips one it cannot read', () => {
+  const face = { inputs: { 'environment-variables': { type: 'string', required: false } }, secrets: {}, outputs: [] };
+  const withEnv = (raw, block) =>
+    callProblems(
+      { workflow: 'x.yml', with: new Map([['environment-variables', raw]]), blocks: new Map(block === undefined ? [] : [['environment-variables', block]]), secrets: new Set(), reads: new Set() },
+      face,
+    );
+  assert.deepEqual(withEnv('>-', '{"A":"1"}'), []);
+  assert.match(withEnv('>-', '{"A_TOKEN":"1"}')[0], /looks like a credential/);
+  assert.match(withEnv(`'{"A":}'`)[0], /is not valid JSON/);
+  assert.deepEqual(withEnv('${{ vars.BUILD_ENV }}'), []);
+  const bare = { workflow: 'x.yml', with: new Map([['environment-variables', `'{"A":"1"}'`]]), secrets: new Set(), reads: new Set() };
+  assert.deepEqual(callProblems(bare, face), [], 'a call built without blocks still reads a quoted literal');
+  const lower = { workflow: 'publish-store.yml', with: new Map([['environment-variables', `'{"track":"beta"}'`]]), secrets: new Set(), reads: new Set() };
+  assert.deepEqual(callProblems(lower, face), [], "publish-store.yml's keys reach a fastlane lane and may be lower-case");
+  assert.match(callProblems({ ...lower, workflow: 'build-prepare.yml' }, face)[0], /not an upper-case env name: track/);
 });
 
 const interfaces = { workflows: { 'build-prepare.yml': { inputs: {}, secrets: {}, outputs: [] } } };
