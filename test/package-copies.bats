@@ -127,7 +127,7 @@ packaged_e2e_consumer() {
   printf '{"scheme":"exampleapp","ios":{"bundleIdentifier":"com.example.app"},"android":{"package":"com.example.app"}}\n' > "$EXPO_CONFIG_JSON"
   : > "$CALLS"
   for tool in adb xcrun; do
-    printf '#!/usr/bin/env bash\nprintf "%s %%s\\n" "$*" >> "$CALLS"\ncase "$*" in *screenrecord*) exit 1 ;; esac\n' "$tool" > "$BATS_TEST_TMPDIR/bin/$tool"
+    printf '#!/usr/bin/env bash\nprintf "%s %%s\\n" "$*" >> "$CALLS"\ncase "$*" in *screenrecord*) exit 1 ;; *resolve-activity*) printf "%%s/.MainActivity\\n" "${!#}" ;; esac\n' "$tool" > "$BATS_TEST_TMPDIR/bin/$tool"
   done
   printf '#!/usr/bin/env bash\nprintf packager-status:running\n' > "$BATS_TEST_TMPDIR/bin/curl"
   cat > "$BATS_TEST_TMPDIR/bin/maestro" <<'STUB'

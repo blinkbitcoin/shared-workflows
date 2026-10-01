@@ -105,7 +105,17 @@ else
     adb shell am start -a android.intent.action.VIEW \
       -d "$scheme://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A$WORKFLOWS_METRO_PORT"
   else
-    adb shell am start -n "$app_id/.MainActivity"
+    # The launcher activity as the package declares it, not a guess: the
+    # activity class lives in the app's namespace, which need not be its
+    # applicationId (sv.blink.terminal's is com.blinkterminalapp.MainActivity).
+    # Read on its own line: set -e does not reach a failure inside `$(...)`
+    # used as an argument.
+    component="$(adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$app_id" | tr -d '\r' | tail -1)"
+    case "$component" in
+      "$app_id"/*) ;;
+      *) die "$app_id has no launcher activity on the device (resolve-activity said: ${component:-nothing}). Is the debug build installed?" ;;
+    esac
+    adb shell am start -n "$component"
   fi
 fi
 

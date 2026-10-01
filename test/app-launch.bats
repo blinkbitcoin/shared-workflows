@@ -23,6 +23,15 @@ printf '%s %s\n' "$tool" "\$*" >> "$CALLS"
 STUB
     chmod +x "$bin/$tool"
   done
+  # The launcher component adb resolves for the package: ADB_LAUNCHER when set,
+  # else <package>/.MainActivity, the shape a package whose namespace is its
+  # applicationId resolves to.
+  cat >> "$bin/adb" <<'STUB'
+case "$*" in
+  *"resolve-activity"*)
+    if [ -n "${ADB_LAUNCHER+x}" ]; then printf '%s\r\n' "$ADB_LAUNCHER"; else printf 'priority=0 preferredOrder=0\r\n%s/.MainActivity\r\n' "${!#}"; fi ;;
+esac
+STUB
   # Metro's /status, as the fake curl answers it: METRO_STATUS when set, else a
   # refused connection - so no Metro on this machine's real port can leak in.
   cat > "$bin/curl" <<'STUB'
@@ -147,6 +156,31 @@ launch() { run bash "$REPO_ROOT/scripts/e2e/app-launch.sh" "$@"; }
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
   contains "$output" "launching com.example.bare on android (dev-client=false)" || fail "output: $output"
   grep -q 'adb shell am start -n com.example.bare/.MainActivity' "$CALLS" || fail "not a plain launch: $(cat "$CALLS")"
+}
+
+# The bug: the launch guessed <applicationId>/.MainActivity, which does not
+# exist when the activity lives in another namespace (blink-terminal-app's
+# sv.blink.terminal runs com.blinkterminalapp.MainActivity).
+@test "a bare Android launch starts the activity the package declares, whatever its namespace" {
+  printf 'metro started\n' > "$WORKFLOWS_OUT/metro.log"
+  ( sleep 1; printf ' BUNDLE  ./index.js\n' >> "$WORKFLOWS_OUT/metro.log" ) &
+  ADB_LAUNCHER=com.example.app/com.other.namespace.MainActivity WORKFLOWS_NATIVE_STACK_INPUT=bare \
+    GITHUB_WORKSPACE="$FIXTURES/consumer-bare" WORKING_DIRECTORY=. WORKFLOWS_DEV_CLIENT=false launch android
+  wait
+  [ "$status" -eq 0 ] || fail "status $status; output: $output"
+  grep -q 'adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER com.example.app' "$CALLS" ||
+    fail "did not ask for the launcher activity: $(cat "$CALLS")"
+  grep -q 'adb shell am start -n com.example.app/com.other.namespace.MainActivity' "$CALLS" ||
+    fail "did not start the declared activity: $(cat "$CALLS")"
+}
+
+@test "a package with no launcher activity on the device fails with the fix, before any start" {
+  METRO_STATUS=packager-status:running ADB_LAUNCHER="No activity found" WORKFLOWS_NATIVE_STACK_INPUT=bare \
+    GITHUB_WORKSPACE="$FIXTURES/consumer-bare" WORKING_DIRECTORY=. WORKFLOWS_DEV_CLIENT=false launch android
+  [ "$status" -ne 0 ] || fail "launched nothing and passed; output: $output"
+  contains "$output" "com.example.app has no launcher activity on the device" || fail "output: $output"
+  contains "$output" "Is the debug build installed?" || fail "no fix: $output"
+  not_contains "$(cat "$CALLS")" "am start" || fail "started anyway: $(cat "$CALLS")"
 }
 
 @test "dev-client on for an app with no URL scheme fails with the fix, before any launch" {
