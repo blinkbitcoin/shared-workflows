@@ -86,6 +86,13 @@ test('a default-on toggle reads as required, with the input that turns it off', 
   );
 });
 
+test('a toggle that names the script reads as required, with the empty value that turns it off', () => {
+  assert.equal(
+    need({ severity: 'required', toggle: 'test-unit.yml:scripts-script', toggleValue: 'script-name', defaultOn: true }),
+    "required, or pass `scripts-script: ''`",
+  );
+});
+
 test('a default-off toggle reads as needed only once it is turned on', () => {
   assert.equal(
     need({ severity: 'required', toggle: 'test-unit.yml:coverage', defaultOn: false }),

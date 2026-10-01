@@ -112,6 +112,35 @@ test('locksAt takes the tarball alone or with peer suffixes, and nothing else af
   assert.equal(locksAt(`    version: ${tarballFor(OTHER, '/packages/app-tooling')}${PEER}\n`, SHA, '/packages/app-tooling'), false);
 });
 
+// What pnpm 12 writes when it does not hash the peers (no peersSuffixMaxLength):
+// the importer line of blink-terminal-app's lockfile, the commit replaced.
+const NESTED = '(eslint@8.57.1(supports-color@8.1.1))(jest@29.7.0(@types/node@26.1.1)(supports-color@8.1.1))(typescript@5.9.3)';
+
+test('locksAt takes nested peer suffixes, pinning the commit exactly', () => {
+  const tarball = tarballFor(SHA, '/packages/app-tooling');
+  const at = (suffix) => locksAt(`    version: ${tarball}${suffix}\n`, SHA, '/packages/app-tooling');
+  assert.equal(at(NESTED), true);
+  assert.equal(at('(a@1(b@2(c@3)))'), true);
+  assert.equal(at(`${NESTED}${PEER}`), true);
+  assert.equal(at('(eslint@8.57.1(supports-color@8.1.1)'), false);
+  assert.equal(at('(eslint@8.57.1)supports-color@8.1.1)'), false);
+  assert.equal(at('(eslint@8.57.1())'), false);
+  assert.equal(at(`${NESTED}-extra`), false);
+  assert.equal(at('(eslint@8.57.1 (x))'), false);
+  assert.equal(locksAt(`    version: ${tarballFor(OTHER, '/packages/app-tooling')}${NESTED}\n`, SHA, '/packages/app-tooling'), false);
+  assert.equal(locksAt(`    version: ${tarballFor(SHA.slice(0, 39), '/packages/app-tooling')}${NESTED}\n`, SHA, '/packages/app-tooling'), false);
+});
+
+test('locksAt finds the matching line among others for the same tarball', () => {
+  const tarball = tarballFor(SHA, '/packages/app-tooling');
+  assert.equal(locksAt(`    version: ${tarball}-extra\n    version: ${tarball}${NESTED}\n`, SHA, '/packages/app-tooling'), true);
+});
+
+test('pinProblems accepts a lockfile with nested peer suffixes at the pin', () => {
+  const lockfile = `    version: ${tarballFor(SHA, '/packages/app-tooling')}${NESTED}\n`;
+  assert.deepEqual(pinProblems({ callers: callers(call()), pkg: pkgAt(SHA), lockfile }), []);
+});
+
 test('pinProblems names a spec that is not the pinned github form', () => {
   const pkg = { devDependencies: { '@blinkbitcoin/app-tooling': 'github:blinkbitcoin/shared-workflows#main' } };
   assert.deepEqual(pinProblems({ callers: callers(call()), pkg, lockfile: null }), [

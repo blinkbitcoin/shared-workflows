@@ -34,6 +34,7 @@ import {
   stackInput,
   stackLine,
   summaryTable,
+  resolved,
   toggleOn,
   workingDirectoryInput,
 } from './bin/check-contract.mjs';
@@ -109,6 +110,7 @@ test('every requirement declares the fields the report depends on', () => {
     assert.equal(typeof r.defaultOn, 'boolean', `${r.id}: defaultOn must be a boolean`);
     assert.ok(r.stack === undefined || ['expo', 'bare'].includes(r.stack), `${r.id}: stack must be expo or bare`);
     assert.ok(r.workflow === undefined || /^[a-z-]+\.yml$/.test(r.workflow), `${r.id}: workflow must be a workflow file`);
+    assert.ok(r.toggleValue === undefined || (r.toggleValue === 'script-name' && r.toggle), `${r.id}: toggleValue is script-name, on a toggle`);
   }
 });
 
@@ -230,6 +232,81 @@ test('a requirement behind an expression is reported but never blocks', () => {
   const result = check(readContract(), c).find((r) => r.req.id === 'package-script.check-types');
   assert.equal(result.level, 'warn');
   assert.match(result.reason, /cannot evaluate/);
+});
+
+// test-unit.yml's scripts-script names the script the step runs; '' skips the step.
+const unitCaller = (line) =>
+  ['jobs:', '  unit:', '    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0', ...(line ? ['    with:', `      ${line}`] : [])].join('\n');
+const scriptsRow = (line, scripts = {}) =>
+  check(readContract(), consumer({ pkg: { scripts }, callers: { 'ci.yml': unitCaller(line) } })).find(
+    (r) => r.req.id === 'package-script.test-scripts',
+  );
+
+test('test:scripts is required while scripts-script is unset', () => {
+  const result = scriptsRow(null);
+  assert.equal(result.level, 'fail');
+  assert.match(result.reason, /no "test:scripts" script in package\.json/);
+  assert.equal(scriptsRow(null, { 'test:scripts': 'node --test' }).level, 'ok');
+});
+
+test("scripts-script: '' skips the scripts row, as it skips the step", () => {
+  for (const line of ["scripts-script: ''", 'scripts-script: ""']) {
+    const result = scriptsRow(line);
+    assert.equal(result.level, 'skip');
+    assert.equal(result.reason, 'test-unit.yml:scripts-script is empty');
+  }
+});
+
+test('scripts-script set to another script requires that script instead', () => {
+  const result = scriptsRow('scripts-script: test:tools');
+  assert.equal(result.level, 'fail');
+  assert.equal(result.req.target, 'test:tools');
+  assert.match(result.reason, /no "test:tools" script in package\.json/);
+  assert.match(formatResult(result), /^FAIL {2}test:tools: /);
+  assert.equal(scriptsRow('scripts-script: test:tools', { 'test:tools': 'node --test' }).level, 'ok');
+  assert.equal(scriptsRow("scripts-script: 'test:tools'", { 'test:scripts': 'node --test' }).level, 'fail');
+});
+
+test('scripts-script wired to an expression is reported against the default script, never blocking', () => {
+  const inputs = new Map([['test-unit.yml:scripts-script', '${{ vars.SCRIPTS }}']]);
+  assert.equal(toggleOn(req('package-script.test-scripts'), inputs), 'unknown');
+  assert.equal(resolved(req('package-script.test-scripts'), inputs).target, 'test:scripts');
+  const result = scriptsRow('scripts-script: ${{ vars.SCRIPTS }}');
+  assert.equal(result.level, 'warn');
+  assert.match(result.reason, /no "test:scripts" script.*cannot evaluate/);
+});
+
+test('a boolean toggle leaves the target as the contract writes it', () => {
+  const types = req('package-script.check-types');
+  assert.equal(resolved(types, new Map([['check.yml:types', 'true']])), types);
+  assert.equal(toggleOn(req('package-script.check-types'), new Map([['check.yml:types', 'false']])), false);
+});
+
+test('the scripts script make ci must reach follows scripts-script', () => {
+  const contract = readContract();
+  const uses = new Set(['test-unit.yml']);
+  const at = (value) => ciScripts(contract, uses, new Map([['test-unit.yml:scripts-script', value]]), null);
+  assert.ok(ciScripts(contract, uses, new Map(), null).on.has('test:scripts'));
+  assert.ok(!at('').maybe.has('test:scripts'));
+  assert.ok(at('test:tools').on.has('test:tools'));
+  assert.ok(!at('test:tools').maybe.has('test:scripts'));
+  assert.ok(at('${{ vars.SCRIPTS }}').maybe.has('test:scripts'));
+  assert.ok(!at('${{ vars.SCRIPTS }}').on.has('test:scripts'));
+});
+
+test("the skeleton turns scripts-script off with '' and a boolean gate with false", () => {
+  const callers = {
+    'ci.yml': [
+      'jobs:',
+      '  unit:',
+      '    uses: blinkbitcoin/shared-workflows/.github/workflows/test-unit.yml@v0',
+      '  checks:',
+      '    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0',
+    ].join('\n'),
+  };
+  const text = skeleton(check(readContract(), consumer({ callers })));
+  assert.match(text, /^ {6}scripts-script: ''$/m);
+  assert.match(text, /^ {6}types: false$/m);
 });
 
 // --- individual checks -------------------------------------------------------

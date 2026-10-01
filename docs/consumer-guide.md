@@ -307,8 +307,11 @@ One commit covers both, so a laptop runs the same contract, tool table and
 release scripts that CI runs. Dependabot moves the `uses:` pins and cannot move
 the package with them, so on its pull request run `pnpm exec fix-tooling-pin`.
 It moves every package to the pin and relocks. Until it runs, the contract's
-`pin.one-commit` row blocks. `pnpm exec check-lockfile` allows exactly that one
-git source in the lockfile and nothing else from outside the npm registry.
+`pin.one-commit` row blocks. The row takes the lockfile entry at that exact
+commit with whatever peer suffix pnpm writes after it, a hash or the peers
+themselves nested, so no `peersSuffixMaxLength` setting is needed for it.
+`pnpm exec check-lockfile` allows exactly that one git source in the lockfile
+and nothing else from outside the npm registry.
 
 A caller on the `@v0` tag passes as long as every call uses it. A tag moves, so
 no package can be held to it; pin a commit SHA to take packages from git.
@@ -871,7 +874,7 @@ in your `pnpm-workspace.yaml` — with a per-entry reason next to the id.
 | `coverage` | `true` | Run `coverage-script` and upload `coverage/`; otherwise run `unit-script` |
 | `unit-script` | `test` | Script run when `coverage` is off |
 | `coverage-script` | `test:coverage` | Script run when `coverage` is on. Passing `coverage: true` with an **empty** `coverage-script` silently falls back to `unit-script` (`${{ inputs.coverage && inputs.coverage-script \|\| inputs.unit-script }}`) and then uploads an empty `coverage/`; leave the default or set a real script name |
-| `scripts-script` | `test:scripts` | Script that tests `scripts/` itself; empty skips this step |
+| `scripts-script` | `test:scripts` | Script that tests `scripts/` itself; empty skips this step. `check-contract` follows it: empty skips its `test:scripts` row, another name is the script it requires |
 | `coverage-artifact-retention-days` | `30` | Retention for the uploaded `coverage/` artifact |
 
 No outputs. Secrets: `consumer-token` (optional).

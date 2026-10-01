@@ -516,10 +516,30 @@ export function toggleOn(req, inputs) {
   if (!req.toggle) return true;
   const value = inputs.get(req.toggle);
   if (value === undefined) return req.defaultOn;
+  if (req.toggleValue === 'script-name') {
+    if (value === '') return false;
+    return value.includes('${{') ? 'unknown' : true;
+  }
   if (value === 'false') return false;
   if (value === 'true') return true;
   return 'unknown';
 }
+
+/**
+ * The requirement as this caller holds it. A toggle whose value names the
+ * script (`toggleValue: script-name`, such as test-unit.yml's scripts-script)
+ * set to another script makes that script the target; unset, empty or an
+ * expression, the requirement is as the contract writes it.
+ */
+export function resolved(req, inputs) {
+  if (req.toggleValue !== 'script-name') return req;
+  const value = inputs.get(req.toggle);
+  if (value === undefined || value === '' || value.includes('${{')) return req;
+  return { ...req, target: value };
+}
+
+/** How a toggle that is off reads: a script-name input is empty, a boolean one false. */
+const offReason = (req) => `${req.toggle} is ${req.toggleValue === 'script-name' ? 'empty' : 'off'}`;
 
 /** The profiles to check: what the caller uses, or an explicit override. */
 export function activeProfiles(uses, override) {
@@ -768,8 +788,9 @@ export function ciScripts(contract, uses, inputs, profiles, stack = null) {
     if (!['checks', 'unit'].includes(req.profile) || !active.has(req.profile)) continue;
     if (req.stack && stack && req.stack !== stack) continue;
     const state = toggleOn(req, inputs);
-    if (state === true) on.add(req.target);
-    if (state !== false) maybe.add(req.target);
+    const { target } = resolved(req, inputs);
+    if (state === true) on.add(target);
+    if (state !== false) maybe.add(target);
   }
   return { on, maybe };
 }
@@ -805,7 +826,8 @@ export function check(contract, consumer, { profiles } = {}) {
   const active = activeProfiles(consumer.uses, profiles);
   const { stack, reason } = consumer.stack;
   consumer.ciScripts = ciScripts(contract, consumer.uses, consumer.inputs, profiles, stack);
-  return contract.requirements.map((req) => {
+  return contract.requirements.map((row) => {
+    const req = resolved(row, consumer.inputs);
     if (!active.has(req.profile)) {
       return { req, level: 'skip', reason: `${req.profile} workflows are not called from this repository` };
     }
@@ -817,7 +839,7 @@ export function check(contract, consumer, { profiles } = {}) {
     }
     const on = toggleOn(req, consumer.inputs);
     if (on === false) {
-      return { req, level: 'skip', reason: `${req.toggle} is off` };
+      return { req, level: 'skip', reason: offReason(req) };
     }
     const result = checkRequirement(req, consumer);
     if (result.status === 'ok') return { req, level: 'ok', detail: result.detail };
@@ -907,13 +929,13 @@ export function skeleton(results, stack = null) {
     for (const { req } of toggles) {
       const [workflow, input] = req.toggle.split(':');
       if (!byWorkflow.has(workflow)) byWorkflow.set(workflow, []);
-      byWorkflow.get(workflow).push(input);
+      byWorkflow.get(workflow).push(`${input}: ${req.toggleValue === 'script-name' ? "''" : 'false'}`);
     }
     lines.push('Or turn the gates off in your caller until you have them:', '');
     for (const [workflow, list] of byWorkflow) {
       lines.push(`  # the job calling ${workflow}`);
       lines.push('    with:');
-      for (const input of [...new Set(list)]) lines.push(`      ${input}: false`);
+      for (const input of [...new Set(list)]) lines.push(`      ${input}`);
     }
     lines.push('');
   }
