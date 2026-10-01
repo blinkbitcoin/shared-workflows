@@ -252,7 +252,9 @@ check-code-scanning [--config FILE]         # CodeQL on this machine, with the c
   - Jest, Metro and ESLint by behaviour, loading the repository's own
     configuration and ESLint from its node_modules, so install first.
   - Biome, tsc, knip, typos, `.gitignore`, `.semgrepignore` and the CodeQL
-    configuration by what their files say.
+    configuration by what their files say. For Biome that includes every file
+    its `extends` names, so an app extending the Expo preset passes on the
+    preset's own entries.
   - Every zizmor call in a tracked file must pass `--config`, since a worktree's
     `.git` is a file and zizmor would read the outer checkout's policy.
   - A tool whose configuration file is absent is skipped. `--directory DIR`
@@ -380,7 +382,7 @@ scope list.
 | `@blinkbitcoin/app-tooling/expo/jest/mocks/*` | stand-ins for `expo-secure-store`, `expo-sqlite/kv-store`, `expo-updates`,<br>mapped by the Jest preset | nothing |
 | `@blinkbitcoin/app-tooling/expo/eslint` | `createEslintConfig(options)`: generic ignores, Expo's preset, every rule Biome owns<br>switched off, Node globals | generated paths, extra Node files |
 | `@blinkbitcoin/app-tooling/expo/biome` | a Biome base to `extends`: formatter, recommended rules, generic excludes,<br>`noConsole` off for tooling paths | restricted imports, overrides for its own files, generated excludes |
-| `@blinkbitcoin/app-tooling/expo/metro` | `withSharedMetroConfig(config, { web })`: the worktree block, and the web `tslib`<br>and `wasm` fixes | the `getDefaultConfig(__dirname)` call |
+| `@blinkbitcoin/app-tooling/expo/metro` | `withSharedMetroConfig(config, { web })`: the worktree and `.workflows` blocks, and the<br>web `tslib` and `wasm` fixes | the `getDefaultConfig(__dirname)` call |
 | `@blinkbitcoin/app-tooling/expo/playwright` | `createPlaywrightConfig(options)`: ports and base path from the environment,<br>the mock API and preview servers | the `defineConfig` call |
 | `@blinkbitcoin/app-tooling/expo/lefthook.yml` | the pre-commit, commit-msg and pre-push hooks, for lefthook's `extends:` | hooks of its own |
 | `@blinkbitcoin/app-tooling/expo/fingerprint` | `createFingerprintConfig(options)`: the source skips and the ignore paths<br>`.fingerprintignore` held | nothing |

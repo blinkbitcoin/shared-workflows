@@ -8,7 +8,7 @@ import { stubModules } from './fixtures/stubs/register.mjs';
 // returns a fresh configuration per call, shaped by two globals a case sets.
 stubModules({ 'expo/metro-config': 'expo-metro-config.cjs' });
 
-const { webResolveRequest, withSharedMetroConfig, worktreeBlock } = await import('./expo/metro.mjs');
+const { webResolveRequest, withSharedMetroConfig, workflowsBlock, worktreeBlock } = await import('./expo/metro.mjs');
 
 const require = createRequire(import.meta.url);
 const TODAY = require.resolve('./fixtures/template/metro/today.cjs');
@@ -90,17 +90,30 @@ test('the worktree block matches relative and anchored paths, never a worktree o
   assert.ok(!worktreeBlock('/a.b').test('/axb/.claude/worktrees'), 'a dot in the root is literal');
 });
 
-test('a single default block list pattern is kept alongside the worktree block', () => {
-  const config = { projectRoot: '/repo', resolver: { blockList: /existing/, assetExts: [] } };
-  withSharedMetroConfig(config);
-  assert.deepEqual(config.resolver.blockList, [/existing/, worktreeBlock('/repo')]);
+test('the .workflows block matches relative and anchored paths, never a checkout of its own root', () => {
+  const root = path.join(path.sep, 'repo');
+  const block = workflowsBlock(root);
+  assert.ok(block.test('.workflows/packages/app-tooling/index.mjs'), 'project-relative');
+  assert.ok(block.test(path.join(root, '.workflows')), 'the directory itself');
+  assert.ok(block.test(path.join(root, '.workflows', 'scripts', 'a.sh')), 'absolute under this root');
+  assert.ok(!block.test(path.join(root, 'src', '.workflows', 'x')), 'not anchored elsewhere');
+  assert.ok(!block.test(path.join(root, '.workflows-notes', 'a.ts')), 'ends at a separator');
+  const nested = path.join(root, '.workflows', 'consumer');
+  assert.ok(!workflowsBlock(nested).test(path.join(nested, 'src', 'index.ts')), "a nested checkout's own files");
+  assert.ok(!workflowsBlock('/a.b').test('/axb/.workflows'), 'a dot in the root is literal');
 });
 
-test('an app with no web target gets the worktree block and nothing else', () => {
+test('a single default block list pattern is kept alongside the worktree and .workflows blocks', () => {
+  const config = { projectRoot: '/repo', resolver: { blockList: /existing/, assetExts: [] } };
+  withSharedMetroConfig(config);
+  assert.deepEqual(config.resolver.blockList, [/existing/, worktreeBlock('/repo'), workflowsBlock('/repo')]);
+});
+
+test('an app with no web target gets the two blocks and nothing else', () => {
   const resolveRequest = () => 'default';
   const config = { projectRoot: '/repo', resolver: { assetExts: ['png'], resolveRequest } };
   assert.equal(withSharedMetroConfig(config, { web: false }), config);
-  assert.deepEqual(config.resolver.blockList, [worktreeBlock('/repo')]);
+  assert.deepEqual(config.resolver.blockList, [worktreeBlock('/repo'), workflowsBlock('/repo')]);
   assert.deepEqual(config.resolver.assetExts, ['png']);
   assert.equal(config.resolver.resolveRequest, resolveRequest);
 });

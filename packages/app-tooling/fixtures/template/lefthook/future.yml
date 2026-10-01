@@ -9,8 +9,8 @@ extends:
 post-merge:
   commands:
     install:
-      run: bash scripts/hooks/install-if-lockfile-changed.sh post-merge {1}
+      run: bash node_modules/@blinkbitcoin/app-tooling/hooks/install-if-lockfile-changed.sh post-merge {1}
 post-checkout:
   commands:
     install:
-      run: bash scripts/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}
+      run: bash node_modules/@blinkbitcoin/app-tooling/hooks/install-if-lockfile-changed.sh post-checkout {1} {2} {3}

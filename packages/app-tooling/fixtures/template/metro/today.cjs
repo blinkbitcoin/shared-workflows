@@ -14,6 +14,8 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 config.resolver.blockList = [
   ...[].concat(config.resolver.blockList ?? []),
   new RegExp(`^(?:${escapeRegExp(__dirname + path.sep)})?\\.claude[\\\\/]worktrees(?:[\\\\/]|$)`),
+  // Every CI job's checkout of shared-workflows: a whole repository, not this app.
+  new RegExp(`^(?:${escapeRegExp(__dirname + path.sep)})?\\.workflows(?:[\\\\/]|$)`),
 ];
 
 // init:web-start

@@ -4,4 +4,4 @@
 import { createPlaywrightConfig } from '@blinkbitcoin/app-tooling/expo/playwright';
 import { defineConfig } from '@playwright/test';
 
-export default defineConfig(createPlaywrightConfig());
+export default defineConfig(createPlaywrightConfig({ mockApiCommand: 'pnpm dev:api' }));

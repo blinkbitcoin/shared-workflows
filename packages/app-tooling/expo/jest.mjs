@@ -23,6 +23,17 @@ const own = (relative) => fileURLToPath(new URL(relative, import.meta.url));
  */
 export const WORKTREES = '<rootDir>/\\.claude/worktrees/';
 
+/**
+ * Every CI job checks shared-workflows out under `.workflows/`: a whole
+ * repository with its own package.json files and tests, none of it the app's
+ * code. Anchored to `<rootDir>` like the worktrees, so a checkout that itself
+ * sits under a `.workflows/` directory still runs its own tests.
+ */
+export const WORKFLOWS = '<rootDir>/\\.workflows/';
+
+/** The directories no project walks into: module map, tests or coverage. */
+export const IGNORED_DIRECTORIES = [WORKTREES, WORKFLOWS];
+
 /** The file every project's `setupFilesAfterEnv` ends with: the silent-tests guard. */
 export const CONSOLE_SETUP = own('./jest/setup-console.cjs');
 
@@ -47,8 +58,8 @@ export const EXPO_MOCKS = {
 export const COVERAGE_PATH_IGNORE_PATTERNS = [
   // Jest's own default, which declaring this option would otherwise drop.
   '/node_modules/',
-  // Other checkouts of this repository, not files of this one.
-  WORKTREES,
+  // Other checkouts of this repository and of shared-workflows, not files of this one.
+  ...IGNORED_DIRECTORIES,
   // Ambient type declarations: erased at build time, no runtime statements.
   '\\.d\\.ts$',
 ];
@@ -107,7 +118,7 @@ export const TEST_PATH_IGNORE_PATTERNS = [
   '/plugins/',
   '/scripts/',
   '<rootDir>/rules/',
-  '/\\.workflows/',
+  WORKFLOWS,
   WORKTREES,
 ];
 
@@ -184,7 +195,7 @@ export function createJestConfig({
           transformIgnorePattern([...TRANSFORM_PACKAGES, ...transformPackages]),
         ],
         testPathIgnorePatterns: [...TEST_PATH_IGNORE_PATTERNS, ...testPathIgnorePatterns],
-        modulePathIgnorePatterns: [WORKTREES],
+        modulePathIgnorePatterns: [...IGNORED_DIRECTORIES],
         coveragePathIgnorePatterns: coverageIgnores,
       },
       {
@@ -195,7 +206,7 @@ export function createJestConfig({
         // setup, because the app's pulls in React Native and MSW.
         setupFilesAfterEnv: guard,
         testMatch: ['<rootDir>/plugins/**/*.test.ts'],
-        modulePathIgnorePatterns: [WORKTREES],
+        modulePathIgnorePatterns: [...IGNORED_DIRECTORIES],
         // `.tsx` is in the pattern even though no plugin suite uses JSX:
         // coverage options are global, so this project also instruments the
         // app's untested `.tsx` files and needs a transform for them.

@@ -1,5 +1,5 @@
 // What every Expo app of this family adds to Expo's default Metro
-// configuration: the worktree block, and the two fixes a web export needs. It
+// configuration: the worktree and .workflows blocks, and the two fixes a web export needs. It
 // takes the configuration `getDefaultConfig` returned and changes it in place,
 // so the app keeps calling Expo itself and this package needs no Expo import.
 import path from 'node:path';
@@ -16,6 +16,13 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  */
 export const worktreeBlock = (projectRoot) =>
   new RegExp(`^(?:${escapeRegExp(projectRoot + path.sep)})?\\.claude[\\\\/]worktrees(?:[\\\\/]|$)`);
+
+/**
+ * Every CI job checks shared-workflows out under `.workflows/`: a whole
+ * repository, not the app. Matched and anchored the same way as the worktrees.
+ */
+export const workflowsBlock = (projectRoot) =>
+  new RegExp(`^(?:${escapeRegExp(projectRoot + path.sep)})?\\.workflows(?:[\\\\/]|$)`);
 
 /**
  * `expo export --platform web` renders the routes in a Node bundle first
@@ -44,6 +51,7 @@ export function withSharedMetroConfig(config, { web = true } = {}) {
   config.resolver.blockList = [
     ...[].concat(config.resolver.blockList ?? []),
     worktreeBlock(config.projectRoot),
+    workflowsBlock(config.projectRoot),
   ];
   if (web) {
     // expo-sqlite's web implementation (wa-sqlite) imports a .wasm file, which
