@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.2](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.6.1...app-tooling-v0.6.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* **app-tooling:** accept nested pnpm peer suffixes and honour scripts-script ([#175](https://github.com/blinkbitcoin/shared-workflows/issues/175)) ([22ace35](https://github.com/blinkbitcoin/shared-workflows/commit/22ace35105e88cc22f897f852ecd11ab2f43ba46))
+* **e2e:** launch the Android activity the package declares, not a guessed one ([#178](https://github.com/blinkbitcoin/shared-workflows/issues/178)) ([9018603](https://github.com/blinkbitcoin/shared-workflows/commit/9018603c1dbd1e8d0daedc3b49f4690b8381b298))
+
 ## [0.6.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.6.0...app-tooling-v0.6.1) (2026-10-01)
 
 
