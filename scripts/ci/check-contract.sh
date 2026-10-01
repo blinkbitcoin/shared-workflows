@@ -32,4 +32,11 @@ if [ "${WORKFLOWS_CONTRACT_ONLY:-}" = "true" ]; then
 fi
 
 root="$(consumer_root)"
-exec node "$checker" --root "$root" --skeleton
+# check.yml's native-stack input, when the caller sets one. The checker also
+# reads the callers' own `with: native-stack:`, but a value wired to an
+# expression is only known here, at run time.
+stack=()
+[ -z "${NATIVE_STACK:-}" ] || stack=(--native-stack "$NATIVE_STACK")
+# Expanded with ${stack[@]+...}: an empty array is "unbound" under set -u in
+# bash before 4.4.
+exec node "$checker" --root "$root" --skeleton ${stack[@]+"${stack[@]}"}

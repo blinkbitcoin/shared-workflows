@@ -241,7 +241,7 @@ on_block() {
 
 # `script<TAB>condition` for every check.yml/test-unit.yml step that runs a consumer
 # script: SCRIPT_NAME for run-script.sh, the positional name for
-# run-consumer-or.sh. An expression SCRIPT_NAME (test-unit.yml) is resolved to the
+# run-consumer-or.sh and expo-only.sh (a third column, `expo`, for the latter). An expression SCRIPT_NAME (test-unit.yml) is resolved to the
 # defaults of the `*-script` inputs it names.
 ci_steps() {
   local f
@@ -258,8 +258,9 @@ process.stdin.on("data", (d) => (buf += d)).on("end", () => {
       for (const step of job.steps ?? []) {
         const run = step.run ?? "";
         const cond = `${step.if ?? ""} ${step.env?.SCRIPT_NAME ?? ""}`;
-        const positional = /run-consumer-or\.sh" \x27([^\x27]+)\x27/.exec(run);
-        if (positional) { console.log(`${positional[1]}\t${cond}`); continue; }
+        const positional = /(run-consumer-or|expo-only)\.sh" \x27([^\x27]+)\x27/.exec(run);
+        // A third column: the stack the step is limited to, by expo-only.sh.
+        if (positional) { console.log(`${positional[2]}\t${cond}\t${positional[1] === "expo-only" ? "expo" : ""}`); continue; }
         if (!/run-script\.sh/.test(run)) continue;
         const name = String(step.env?.SCRIPT_NAME ?? "");
         if (!name.includes("${{")) { console.log(`${name}\t${cond}`); continue; }
@@ -278,13 +279,16 @@ process.stdin.on("data", (d) => (buf += d)).on("end", () => {
 const c = require(process.argv[1]);
 const out = [];
 for (const line of process.env.STEPS.split("\n")) {
-  const [script, cond] = line.split("\t");
+  const [script, cond, stack = ""] = line.split("\t");
   // test-unit.yml falls back to plain `test` when coverage is off; the contract
   // names test:coverage for that step, gated on the same input.
   if (script === "test") continue;
   const req = c.requirements.find((r) => ["package-script", "script-or-dep"].includes(r.kind) && r.target === script);
   if (!req) { out.push(`${script}: no requirement in contract.json`); continue; }
   if (req.toggle && !cond.includes(`inputs.${req.toggle.split(":")[1]}`)) out.push(`${script}: contract toggle ${req.toggle} is not what switches the step (${cond.trim()})`);
+  // A step only the Expo stack runs is a row only the Expo stack is held to,
+  // and the other way round: make ci must reach exactly what CI runs.
+  if ((req.stack ?? "") !== stack) out.push(`${script}: the contract says stack "${req.stack ?? ""}", the step runs on "${stack || "either"}"`);
 }
 console.log(out.join("\n"));
 ' "$REPO_ROOT/packages/app-tooling/contract.json")"

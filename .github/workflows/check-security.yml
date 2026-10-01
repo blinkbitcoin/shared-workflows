@@ -42,6 +42,13 @@ on:
         description: Native cache key prefix (unused by this workflow; carried for input-set consistency across the family)
         type: string
         default: 'v1'
+      native-stack:
+        description: >-
+          The app's native stack, expo or bare (React Native with committed ios/
+          and android/), for the bundle and mobile scanners. Empty detects it:
+          expo when package.json lists expo and git tracks no ios/, bare otherwise
+        type: string
+        default: ''
       dependencies:
         description: >-
           Allow the dependency scanner (`check-security dependencies`).
@@ -67,14 +74,16 @@ on:
       bundle:
         description: >-
           Allow the bundle scanner (`check-security bundle`: exports
-          the JavaScript bundle and reads what it gives away). Minutes, so off by
+          the JavaScript bundle - expo export, or react-native bundle on the bare
+          stack - and reads what it gives away). Minutes, so off by
           default; the release pull request and the production dispatch turn it on.
         type: boolean
         default: false
       mobile:
         description: >-
           Allow the native project scanner (`check-security mobile`:
-          mobsfscan over a fresh prebuild). Off by default: production stage.
+          mobsfscan over a fresh prebuild, or over the committed ios/ and android/
+          on the bare stack). Off by default: production stage.
         type: boolean
         default: false
       binaries:
@@ -415,7 +424,9 @@ jobs:
           if-no-files-found: error
           retention-days: 90
   # Every job here installs (see the settings job); these two are the reason:
-  # expo export and expo prebuild both run from the consumer's node_modules.
+  # expo export and expo prebuild, or react-native bundle on the bare stack,
+  # run from the consumer's node_modules. Both take native-stack, which decides
+  # which (scripts/security/lib/runner.sh: sec_native_stack).
   bundle:
     name: Bundle
     needs: settings
@@ -450,6 +461,7 @@ jobs:
         timeout-minutes: 25
         env:
           SECURITY_JOB: bundle
+          NATIVE_STACK: ${{ inputs.native-stack }}
         run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
       - name: Upload SARIF
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
@@ -488,11 +500,12 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           install: 'true'
-      - name: Scan a fresh prebuild
+      - name: Scan the native projects
         id: scan
         timeout-minutes: 35
         env:
           SECURITY_JOB: mobile
+          NATIVE_STACK: ${{ inputs.native-stack }}
         run: bash "$WORKFLOWS_DIR/scripts/security/run-job.sh" "$SECURITY_JOB"
       - name: Upload SARIF
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}

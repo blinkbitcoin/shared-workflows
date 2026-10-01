@@ -471,6 +471,10 @@
           "type": "string",
           "required": false
         },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
         "dependencies": {
           "type": "boolean",
           "required": false
@@ -565,6 +569,10 @@
           "type": "string",
           "required": false
         },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
         "types": {
           "type": "boolean",
           "required": false
@@ -591,6 +599,14 @@
         },
         "generated": {
           "type": "boolean",
+          "required": false
+        },
+        "i18n-paths": {
+          "type": "string",
+          "required": false
+        },
+        "graphql-paths": {
+          "type": "string",
           "required": false
         },
         "expo-health": {

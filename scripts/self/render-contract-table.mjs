@@ -30,8 +30,19 @@ export const PROFILE_TITLE = {
   release: 'the release workflows',
 };
 
-/** What a reader has to do about one requirement, in a sentence. */
+export const STACK_TITLE = { expo: 'Expo apps only', bare: 'bare React Native apps only' };
+
+/**
+ * What a reader has to do about one requirement, in a sentence, and for which
+ * native stack when it applies to one only.
+ */
 export function need(req) {
+  const base = needOnEitherStack(req);
+  const only = [req.stack && STACK_TITLE[req.stack], req.workflow && `when you call \`${req.workflow}\``].filter(Boolean);
+  return only.length > 0 ? `${base} (${only.join(', ')})` : base;
+}
+
+function needOnEitherStack(req) {
   if (req.severity === 'degrades') return 'optional — a fallback runs';
   if (req.toggle && req.defaultOn) return `required, or pass \`${req.toggle.split(':')[1]}: false\``;
   if (req.toggle) return `only if you set \`${req.toggle.split(':')[1]}: true\``;
@@ -61,6 +72,7 @@ export function targetOf(req) {
   if (req.kind === 'ci-runs-make-ci') return 'every gate `make ci` runs, run by CI';
   if (req.kind === 'lane-environment') return `lanes that read only these \`${req.prefix}*\` names: ${joined}`;
   if (req.kind === 'no-copy') return `no ${joined}`;
+  if (req.kind === 'tracked-dir') return `${joined}, committed to git`;
   return joined;
 }
 

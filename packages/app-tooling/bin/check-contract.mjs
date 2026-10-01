@@ -2,7 +2,8 @@
 // Answer "is this repository wired up for the shared workflows?" in one report,
 // before a run spends twenty minutes answering it one red job at a time.
 //
-//   check-contract [--root DIR] [--profile checks,unit,...] [--json] [--skeleton]
+//   check-contract [--root DIR] [--profile checks,unit,...] [--native-stack expo|bare]
+//                  [--json] [--skeleton]
 //
 // Why this exists. Every gate in this family already fails with a good message:
 // `run-script.sh` names the script it wanted, `tool-version.sh` names the file.
@@ -14,7 +15,10 @@
 // So this reads the contract as data (../contract.json), checks the whole of it
 // against a consumer checkout, and reports everything at once with a fix per
 // finding. It runs before the setup action, so it may use nothing but node: no
-// pnpm, no yq, no installed dependencies, no node_modules.
+// pnpm, no yq, no installed dependencies, no node_modules. (It does ask git
+// which directories it tracks, to tell an Expo app from a bare React Native
+// one; git is on every runner image, and a checkout without it reads as
+// tracking nothing.)
 //
 // It is deliberately conservative about what counts as a failure. A gate the
 // caller turned off is not a finding. A gate shared-workflows has a fallback for
@@ -25,6 +29,7 @@ import { appendFileSync, existsSync, readdirSync, readFileSync, realpathSync, st
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expandIncludes } from '../lib/makefile.mjs';
+import { isTracked, resolveNativeStack } from '../lib/native-stack.mjs';
 import { pinProblems } from '../lib/pin.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -42,7 +47,7 @@ export function readContract(file = path.join(HERE, '..', 'contract.json')) {
  * Everything the checks need from a consumer checkout, read once. Injected as a
  * whole in the tests, so no case needs a temp directory unless it wants one.
  */
-export function readConsumer(root, io = defaultIo) {
+export function readConsumer(root, io = defaultIo, { nativeStack = '' } = {}) {
   const pkgText = io.read(path.join(root, 'package.json'));
   let pkg = null;
   if (pkgText !== null) {
@@ -55,17 +60,44 @@ export function readConsumer(root, io = defaultIo) {
     }
   }
   const callers = readCallers(root, io);
+  const inputs = callerInputs(callers);
+  const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
+  const input = nativeStack.trim() || stackInput(inputs);
   return {
     root,
     io,
     pkg,
     scripts: pkg?.scripts ?? {},
-    deps: { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) },
+    deps,
     miseTools: readMiseTools(root, io),
     callers,
     uses: callersUse(callers),
-    inputs: callerInputs(callers),
+    inputs,
+    // The rule every consumer of lib/native-stack.mjs applies; git is asked
+    // only when no input decides.
+    stack: resolveNativeStack({ input, dependencies: deps, iosTracked: input === '' && io.tracked(root, 'ios') }),
   };
+}
+
+/**
+ * The native-stack input the callers pass, or '' when none passes a literal
+ * one. An expression is decided at run time and cannot be read here, so it
+ * leaves the stack to the rule. Two different literals are an error: a
+ * repository is one stack, and a caller that says otherwise to one workflow
+ * would build what the others do not check.
+ */
+export function stackInput(inputs) {
+  const values = new Map();
+  for (const [key, value] of inputs) {
+    const [workflow, name] = key.split(':');
+    if (name !== 'native-stack' || value === '' || value.includes('${{')) continue;
+    values.set(value, [...(values.get(value) ?? []), workflow]);
+  }
+  if (values.size > 1) {
+    const each = [...values].map(([value, workflows]) => `${value} (${workflows.join(', ')})`).join(', ');
+    throw new Error(`::error::the callers pass different native-stack inputs: ${each}. A repository is one stack: pass the same value to every workflow that takes it`);
+  }
+  return values.size === 1 ? [...values.keys()][0] : '';
 }
 
 /**
@@ -96,6 +128,9 @@ export const defaultIo = {
     } catch {
       return [];
     }
+  },
+  tracked(root, dir) {
+    return isTracked(root, dir);
   },
   // Synchronous on purpose. This used to be a dynamic import() in the CLI
   // branch, and `process.exit()` two lines later killed the pending promise -
@@ -536,6 +571,11 @@ export function checkRequirement(req, consumer) {
       return problems.length === 0 ? ok() : missing(problems.join('; '));
     }
 
+    case 'tracked-dir':
+      // A bare app builds the ios/ and android/ it commits. One that is only
+      // on a laptop is a build that works there and nowhere else.
+      return io.tracked(root, req.target) ? ok() : missing(`git tracks nothing under ${req.target}/`);
+
     case 'lane': {
       // A textual scan of fastlane/**.rb, not a Ruby parse: enough to catch a
       // lane that was never written, and honest about being no more than that.
@@ -656,13 +696,14 @@ export function readMakefile(root, io = defaultIo) {
  * the ones wired to an expression, so neither direction of the gate-set check
  * fails on a value it cannot read.
  */
-export function ciScripts(contract, uses, inputs, profiles) {
+export function ciScripts(contract, uses, inputs, profiles, stack = null) {
   const active = activeProfiles(uses, profiles);
   const on = new Set();
   const maybe = new Set();
   for (const req of contract.requirements) {
     if (req.kind !== 'package-script') continue;
     if (!['checks', 'unit'].includes(req.profile) || !active.has(req.profile)) continue;
+    if (req.stack && stack && req.stack !== stack) continue;
     const state = toggleOn(req, inputs);
     if (state === true) on.add(req.target);
     if (state !== false) maybe.add(req.target);
@@ -691,10 +732,17 @@ const skip = (reason) => ({ status: 'skip', reason });
 /** Every requirement, resolved against one consumer. */
 export function check(contract, consumer, { profiles } = {}) {
   const active = activeProfiles(consumer.uses, profiles);
-  consumer.ciScripts = ciScripts(contract, consumer.uses, consumer.inputs, profiles);
+  const { stack, reason } = consumer.stack;
+  consumer.ciScripts = ciScripts(contract, consumer.uses, consumer.inputs, profiles, stack);
   return contract.requirements.map((req) => {
     if (!active.has(req.profile)) {
       return { req, level: 'skip', reason: `${req.profile} workflows are not called from this repository` };
+    }
+    if (req.stack && req.stack !== stack) {
+      return { req, level: 'skip', reason: `only the ${req.stack} stack needs it, and this repository is ${stack} (${reason})` };
+    }
+    if (req.workflow && !consumer.uses.has(req.workflow)) {
+      return { req, level: 'skip', reason: `${req.workflow} is not called from this repository` };
     }
     const on = toggleOn(req, consumer.inputs);
     if (on === false) {
@@ -739,9 +787,13 @@ function nameOf(req) {
 
 const GUIDE = 'https://github.com/blinkbitcoin/shared-workflows/blob/v0/docs/consumer-guide.md';
 
-export function summaryTable(results) {
+/** The stack line every report starts with, so a skipped row's reason is never a surprise. */
+export const stackLine = ({ stack, reason }) => `native stack: ${stack} (${reason})`;
+
+export function summaryTable(results, stack = null) {
   const notable = results.filter((r) => r.level === 'fail' || r.level === 'warn');
   const lines = ['## Consumer contract', ''];
+  if (stack) lines.push(`Native stack: **${stack.stack}** (${stack.reason}).`, '');
   if (notable.length === 0) {
     lines.push('Every requirement of the workflows this repository calls is satisfied.', '');
     return lines.join('\n');
@@ -756,13 +808,21 @@ export function summaryTable(results) {
   return lines.join('\n');
 }
 
-/** The package.json scripts and caller inputs that would clear every failure. */
-export function skeleton(results) {
+/**
+ * The package.json scripts and caller inputs that would clear every failure,
+ * after the stack they were judged against: a wrong stack is the one mistake
+ * that makes every other line of it wrong.
+ */
+export function skeleton(results, stack = null) {
   const failed = results.filter((r) => r.level === 'fail');
   const scripts = failed.filter((r) => r.req.kind === 'package-script');
   const deps = failed.filter((r) => r.req.kind === 'package-dep');
   const toggles = failed.filter((r) => r.req.toggle && r.req.defaultOn);
   const lines = [];
+  if (stack) {
+    const other = stack.stack === 'expo' ? 'bare' : 'expo';
+    lines.push(`Judged as the ${stack.stack} stack (${stack.reason}). If this repository is ${other}, pass native-stack: ${other} to the workflows that take it.`, '');
+  }
   if (scripts.length > 0) {
     lines.push('Either add these to package.json:', '', '  "scripts": {');
     lines.push(scripts.map((r) => `    "${r.req.target}": "echo TODO && exit 1"`).join(',\n'));
@@ -794,13 +854,14 @@ export function skeleton(results) {
 // ---------------------------------------------------------------------------
 
 export function parseArgs(argv, cwd = process.cwd()) {
-  const options = { root: cwd, profiles: null, json: false, skeleton: false };
+  const options = { root: cwd, profiles: null, json: false, skeleton: false, nativeStack: '' };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--root') options.root = argv[++i];
     else if (arg === '--profile') options.profiles = argv[++i].split(',').map((s) => s.trim()).filter(Boolean);
     else if (arg === '--json') options.json = true;
     else if (arg === '--skeleton') options.skeleton = true;
+    else if (arg === '--native-stack') options.nativeStack = argv[++i] ?? '';
     else throw new Error(`::error::unknown argument: ${arg}`);
   }
   return options;
@@ -838,9 +899,10 @@ function run(argv, { io, stdout, stderr, env, cwd }) {
   if (unknown.length > 0) {
     throw new Error(`::error::unknown profile(s): ${unknown.join(', ')} (known: ${contract.profiles.join(', ')})`);
   }
-  const consumer = readConsumer(path.resolve(options.root), io);
+  const consumer = readConsumer(path.resolve(options.root), io, { nativeStack: options.nativeStack });
   const results = [...check(contract, consumer, { profiles: options.profiles }), ...checkCalls(consumer, readInterfaces())];
 
+  if (!options.json) stdout.write(`${stackLine(consumer.stack)}\n`);
   if (options.json) {
     stdout.write(`${JSON.stringify(results.map(({ req, level, reason, detail }) => ({ id: req.id, level, reason, detail })), null, 2)}\n`);
   } else {
@@ -854,11 +916,11 @@ function run(argv, { io, stdout, stderr, env, cwd }) {
   const warnings = results.filter((r) => r.level === 'warn');
 
   if (env.GITHUB_STEP_SUMMARY) {
-    io.append?.(env.GITHUB_STEP_SUMMARY, `${summaryTable(results)}\n`);
+    io.append?.(env.GITHUB_STEP_SUMMARY, `${summaryTable(results, consumer.stack)}\n`);
   }
 
   if (!options.json) {
-    if (failures.length > 0 && options.skeleton) stdout.write(`\n${skeleton(results)}`);
+    if (failures.length > 0 && options.skeleton) stdout.write(`\n${skeleton(results, consumer.stack)}`);
     const parts = [];
     if (failures.length > 0) parts.push(`${failures.length} blocked`);
     if (warnings.length > 0) parts.push(`${warnings.length} degraded`);

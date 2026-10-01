@@ -2,8 +2,10 @@
   "$comment": "The consumer contract, as data. Every id is <kind>.<the program, target or file it is about>. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-contract.mjs, docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
 
   "$schema-notes": {
-    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. file: any one of target exists. dir-nonempty: target is a directory with at least one entry. pinned-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. one-pin: every shared-workflows call pins one full commit SHA with its # vX.Y.Z, and each of this family's packages in package.json and pnpm-lock.yaml is at that commit (target unused). lane: the Fastfile (fastlane/**.rb) defines each lane in target, as platform:lane. lane-environment: the lanes read no environment variable with the row's prefix that is not in target. make-ci-reaches-ci and ci-runs-make-ci: `make <target>` and CI run the same gates, one direction each. no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted.",
+    "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. file: any one of target exists. dir-nonempty: target is a directory with at least one entry. pinned-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. one-pin: every shared-workflows call pins one full commit SHA with its # vX.Y.Z, and each of this family's packages in package.json and pnpm-lock.yaml is at that commit (target unused). lane: the Fastfile (fastlane/**.rb) defines each lane in target, as platform:lane. lane-environment: the lanes read no environment variable with the row's prefix that is not in target. make-ci-reaches-ci and ci-runs-make-ci: `make <target>` and CI run the same gates, one direction each. no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted. tracked-dir: git tracks at least one file under target.",
     "toggle": "The workflow_call input that decides whether this is needed at all, as `workflow.yml:input`. The contract check reads the caller's own `with:` block first and falls back to defaultOn.",
+    "stack": "Optional. expo or bare: the row applies only to a repository of that native stack (lib/native-stack.mjs resolves it: the callers' native-stack input, else expo when package.json lists expo and git tracks no ios/, else bare). A row without it applies to both.",
+    "workflow": "Optional. The row applies only when the caller calls this workflow, for a requirement narrower than its profile (build-ios.yml, not every release workflow).",
     "severity": "required: the gate cannot run without it and the job dies. degrades: shared-workflows has a fallback, so the gate still runs but not as the consumer defined it. optional: nothing happens unless the consumer opts in.",
     "guide": "Anchor in docs/consumer-guide.md."
   },
@@ -149,6 +151,7 @@
       "kind": "package-script",
       "target": "check:expo-health",
       "profile": "checks",
+      "stack": "expo",
       "neededBy": "check.yml (expo-health)",
       "toggle": "check.yml:expo-health",
       "defaultOn": true,
@@ -309,6 +312,7 @@
       "kind": "file",
       "target": ["app.config.ts", "app.config.js", "app.config.cjs", "app.json"],
       "profile": "e2e",
+      "stack": "expo",
       "neededBy": "test-e2e.yml and every build workflow, through scripts/lib/expo-config.sh",
       "toggle": null,
       "defaultOn": true,
@@ -327,6 +331,32 @@
       "severity": "required",
       "fix": "Add at least one Maestro flow under .maestro/, or point flows at the directory you use. An empty selection is not a pass: the suite asserts it actually ran flows.",
       "guide": "test-e2eyml"
+    },
+    {
+      "id": "tracked-dir.ios-e2e",
+      "kind": "tracked-dir",
+      "target": "ios",
+      "profile": "e2e",
+      "stack": "bare",
+      "neededBy": "test-e2e.yml's iOS build, on the bare stack",
+      "toggle": "test-e2e.yml:ios",
+      "defaultOn": false,
+      "severity": "required",
+      "fix": "On the bare stack the iOS build compiles the ios/ this repository commits, and a checkout has only what git tracks. Commit ios/ (an untracked or gitignored one is a project that exists on one laptop), or, if the app is an Expo app after all, pass native-stack: expo.",
+      "guide": "expo-or-bare-react-native"
+    },
+    {
+      "id": "tracked-dir.android-e2e",
+      "kind": "tracked-dir",
+      "target": "android",
+      "profile": "e2e",
+      "stack": "bare",
+      "neededBy": "test-e2e.yml's Android build, on the bare stack",
+      "toggle": "test-e2e.yml:android",
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "On the bare stack the Android build compiles the android/ this repository commits, and a checkout has only what git tracks. Commit android/ (an untracked or gitignored one is a project that exists on one laptop), or, if the app is an Expo app after all, pass native-stack: expo.",
+      "guide": "expo-or-bare-react-native"
     },
     {
       "id": "caller-path.e2e-hooks",
@@ -532,12 +562,41 @@
       "kind": "package-dep",
       "target": "@expo/fingerprint",
       "profile": "release",
+      "stack": "expo",
       "neededBy": "build-prepare.yml and publish-ota.yml, through scripts/lib/release-env.sh",
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
       "fix": "Add @expo/fingerprint as a devDependency. The native fingerprints go into build-info.json and are what the OTA gate compares - an update whose fingerprint differs from the installed binary crashes every user on the channel.",
       "guide": "the-ota-fingerprint-gate"
+    },
+    {
+      "id": "tracked-dir.ios-build",
+      "kind": "tracked-dir",
+      "target": "ios",
+      "profile": "release",
+      "stack": "bare",
+      "workflow": "build-ios.yml",
+      "neededBy": "build-ios.yml, on the bare stack",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "On the bare stack the iOS build compiles the ios/ this repository commits, and a checkout has only what git tracks. Commit ios/ (an untracked or gitignored one is a project that exists on one laptop), or, if the app is an Expo app after all, pass native-stack: expo.",
+      "guide": "expo-or-bare-react-native"
+    },
+    {
+      "id": "tracked-dir.android-build",
+      "kind": "tracked-dir",
+      "target": "android",
+      "profile": "release",
+      "stack": "bare",
+      "workflow": "build-android.yml",
+      "neededBy": "build-android.yml, on the bare stack",
+      "toggle": null,
+      "defaultOn": true,
+      "severity": "required",
+      "fix": "On the bare stack the Android build compiles the android/ this repository commits, and a checkout has only what git tracks. Commit android/ (an untracked or gitignored one is a project that exists on one laptop), or, if the app is an Expo app after all, pass native-stack: expo.",
+      "guide": "expo-or-bare-react-native"
     },
 
     {

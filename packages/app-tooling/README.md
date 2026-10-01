@@ -56,6 +56,7 @@ check-contract                     # this repository, against the contract
 check-contract --skeleton          # ...and what would clear every failure
 check-contract --json              # the same findings, machine-readable
 check-contract --profile checks    # before you have written a caller
+check-contract --native-stack bare # judge it as a bare React Native app
 ```
 
 Answers "is this repository wired up for the shared workflows?" in one report.
@@ -74,6 +75,18 @@ It reports **blocked** for a gate you asked for that cannot run, and
 runs, just not the one this repository defined. It reads your own
 `.github/workflows/` to decide what applies: a repository that never calls
 `test-e2e.yml` is not told it is missing Maestro flows.
+
+It judges the repository as one **native stack**, and prints which first:
+`expo` (an Expo app, whose `ios/` and `android/` a prebuild generates) or
+`bare` (a React Native app that commits them). The callers' `native-stack`
+input decides, or `--native-stack`; without one it is `expo` when
+`package.json` lists `expo` and git tracks no `ios/`, and `bare` otherwise.
+`lib/native-stack.mjs` holds that rule, and the Expo health gate and the
+security scanners ask the same module. A `contract.json` row tagged
+`"stack": "expo"` (the Expo health script, the Expo config, `@expo/fingerprint`)
+or `"stack": "bare"` (`ios/` and `android/` committed to git, for whichever
+platforms the callers build) is skipped, with the reason, on the other stack
+([Expo or bare React Native](../../docs/consumer-guide.md#expo-or-bare-react-native)).
 
 `contract.json` is the table it reads — what wants each thing, which workflow
 input switches it off, whether a fallback exists, and the fix. The consumer
@@ -401,11 +414,11 @@ bash node_modules/@blinkbitcoin/app-tooling/ci/check-ci.sh         # actionlint,
 ```
 
 - **Paths:**
-  - `I18N_PATHS` defaults to `src/i18n/locales`.
-  - `GRAPHQL_PATHS` defaults to `src/graphql/generated`.
+  - `I18N_PATHS` defaults to `src/i18n/locales` (`check.yml`'s `i18n-paths` input in CI).
+  - `GRAPHQL_PATHS` defaults to `src/graphql/generated` (`graphql-paths` in CI).
   - `WORKFLOWS_SHELLCHECK_PATHS` names the directories shellcheck lints (default `scripts`).
 - **zizmor policy:** a repository without its own `.github/zizmor.yml` gets this family's, which the package carries as `zizmor.yml`.
-- **The Expo health check:** `expo install --check` is advisory. Drift is printed, counted in a warning (an annotation under Actions) and never fails: Expo publishes patches most weeks, and a release cooldown refuses each for a day. Doctor then runs with its own version check off, and its status is the gate's. It is your pinned `expo-doctor` devDependency, or the latest through `pnpm dlx`; with no `expo` dependency the drift half is skipped.
+- **The Expo health check:** `expo install --check` is advisory. Drift is printed, counted in a warning (an annotation under Actions) and never fails: Expo publishes patches most weeks, and a release cooldown refuses each for a day. Doctor then runs with its own version check off, and its status is the gate's. It is your pinned `expo-doctor` devDependency, or the latest through `pnpm dlx`; with no `expo` dependency the drift half is skipped. In CI the gate runs on the Expo stack only: on a bare React Native app `check.yml` passes it with a notice.
 - **Run with `bash`, not as a program:** the scripts source `lib/` beside them, and a `node_modules/.bin` link would break that.
 
 ## Security scanning
@@ -433,13 +446,17 @@ pnpm exec check-security code bundle  # those jobs only, then their verdict
   - `code`: Semgrep's TypeScript, secrets and OWASP packs plus your rules.
   - `policy`: your `pnpm-workspace.yaml` install policy.
   - `sbom`: a CycloneDX bill from the lockfile.
-  - `bundle`: `expo export`, then what the bundle gives away.
-  - `mobile`: mobsfscan over a fresh Expo prebuild.
+  - `bundle`: `expo export`, or `react-native bundle` per platform on a bare
+    app, then what the bundle gives away.
+  - `mobile`: mobsfscan over a fresh Expo prebuild, or over a bare app's
+    committed `ios/` and `android/`.
   - `binaries`: MASTG checks over `APK=` / `IPA=`.
   - `review` and `review-codebase`: the LLM reviews. These are off until a
     provider, a model and a key are set.
 - **Missing tools:** a tool that is not installed is a skip on a laptop and a
   failure under `CI`.
+- **Native stack:** `NATIVE_STACK=expo` or `bare` decides how `bundle` and
+  `mobile` read the app; unset, it is detected, as `check-contract` does.
 - **Output:** one SARIF per job in `.security/` (`SECURITY_DIR`).
 - **Exit code:** the verdict's. The program exits 1 while a finding blocks.
 

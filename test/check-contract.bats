@@ -7,8 +7,9 @@
 # the checker's exit code is the step's. Covered: a consumer that meets the
 # contract and one that does not, the skeleton on a failure, the contract-only
 # warning with and without a job summary, a working directory below the
-# workspace, the path through a symlinked .workflows, and both refusals - no
-# node, and no checker beside the script.
+# workspace, the path through a symlinked .workflows, the native-stack input
+# passed through as --native-stack and left out when empty, and both refusals
+# - no node, and no checker beside the script.
 # The checker's own rules are packages/app-tooling/check-contract.test.mjs
 # and contract-program.bats.
 
@@ -103,6 +104,21 @@ write_failing_consumer() { # <directory>
   [ "$status" -eq 1 ] || fail "expected the checker's exit 1, got $status: $output"
   contains "$output" "Either add these to package.json:" || fail "no skeleton - was --skeleton passed? $output"
   contains "$output" "::error::consumer contract:" || fail "no annotation: $output"
+}
+
+@test "the native-stack input reaches the checker, and without it the stack is detected" {
+  # The passing consumer has no expo dependency, so it is detected as bare and
+  # its missing check:expo-health is not asked about; named expo, it is.
+  local ws="$BATS_TEST_TMPDIR/ws"
+  write_passing_consumer "$ws"
+  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." NATIVE_STACK="" run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  contains "$output" "native stack: bare (expo is not a dependency in package.json)" || fail "the detected stack is not printed: $output"
+  not_contains "$output" "check:expo-health" || fail "a bare app was asked for the Expo health script: $output"
+  GITHUB_WORKSPACE="$ws" WORKING_DIRECTORY="." NATIVE_STACK=expo run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  contains "$output" "native stack: expo (the native-stack input)" || fail "the input did not reach the checker: $output"
+  contains "$output" "warn  check:expo-health" || fail "the Expo stack's rows were not checked: $output"
 }
 
 @test "a contract-only run with no job summary warns on the log and writes no file" {
