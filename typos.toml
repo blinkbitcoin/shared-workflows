@@ -1,5 +1,7 @@
 [files]
-extend-exclude = ["test/fixtures/**", "plugins/*/skills/*/tests/fixtures/**", "CHANGELOG.md", ".git/**"]
+# docs/superpowers/ is history: plans and specs as they were written, which a
+# spell check would only make someone edit.
+extend-exclude = ["test/fixtures/**", "plugins/*/skills/*/tests/fixtures/**", "docs/superpowers/**", "CHANGELOG.md", ".git/**"]
 
 [default]
 extend-ignore-re = [

@@ -283,6 +283,68 @@ Every row is a make target; nothing here is run through a package manager.
   `<!--count:...-->` marker that disagrees with the tree
   (`test/docs-facts.bats`).
 
+## Rules every app of the family follows
+
+The rules above are for this repository. These are the ones its checks enforce in
+an app, written once here so an app's own `AGENTS.md` can link to them and keep
+only what is specific to it. Each names the program in `@blinkbitcoin/app-tooling`
+that holds the rule, and the section of the app's `app-tooling.json` that tunes it.
+
+- **Every source file has its own sibling test, and that file alone covers it at
+  100%.** `foo.mjs` has `foo.test.mjs` and `Foo.tsx` has `Foo.test.tsx` (a `.ts`
+  module may use `.test.tsx`), in the same directory. A directory-wide test file,
+  a `__tests__/` directory, or a module's tests living in a caller's test file does
+  not count, even when global coverage is 100%. The one exception is a route
+  directory whose files a router loads as routes (expo-router's `src/app/`): a
+  route's test mirrors its path under a directory the app names (`mirror` in the
+  config), such as `src/__tests__/app/`. Check a module with its own test alone:
+  `node --test --experimental-test-coverage --test-coverage-include=<file>.mjs
+  <file>.test.mjs`, or `jest <file>.test.tsx --coverage
+  --collectCoverageFrom=<file>.tsx`. `check-test-siblings` (rules in the
+  `testSiblings` section: `sources`, `exclude`, `mirror`) fails naming every file
+  without one. **No exceptions, no allowlist**: a module that needs a device, a
+  simulator, a native build or the network is tested against fakes of them, and the
+  check fails if an allowlist comes back. A shell script is held to the same rule,
+  with its test named after it and running the script against fake tools on `PATH`
+  (the rule for scripts above).
+- **Global coverage is not enough.** It says every line ran somewhere, not that its
+  own test ran it; the sibling rule closes that gap, so deleting a caller's test
+  never silently uncovers the module it used. The shared Jest preset holds coverage
+  at 100% lines, branches, functions and statements, and a file with nothing to
+  assert goes in the app's `coveragePathIgnorePatterns` **with a one-line reason**;
+  an entry without one is not mergeable, and a native module's TypeScript wrapper
+  does not qualify just because the native half is Swift or Kotlin.
+  `check-coverage-empty` also fails on any file with zero statements, so a
+  re-export barrel cannot lift the number while testing nothing; one kept under
+  `coveragePathIgnorePatterns` still has its sibling test, pinning what it
+  re-exports.
+- **A script's command-line entry is `main(argv, io)`**: an exported function that
+  returns the exit code and is tested in-process. The entry itself is only an
+  `import.meta.main` guard that sets `process.exitCode` from `main`, which one
+  subprocess run per script covers.
+- **Tests are silent.** `console.error` and `console.warn` during a test fails it
+  (the shared Jest preset's guard, in every project). A console line is usually a
+  missing `await waitFor`, not a logging need; a deliberate one opts out with
+  `allowConsole(method, matcher)` from
+  `@blinkbitcoin/app-tooling/expo/jest/console`, or by spying on the method.
+- **Worktrees under `.claude/worktrees/` are not the checkout.** Claude Code puts
+  whole checkouts there, `node_modules` included, so every tool that walks the tree
+  excludes the directory itself (Jest and Metro anchored to the root, since a
+  worktree's own root is under it too). The same goes for `.workflows/`, where every
+  CI job checks this repository out. A new tool adds its entry;
+  `check-ignored-directories` holds the existing ones, and the Expo presets already
+  carry them.
+- **Workflow files carry their stage in the name** (the rule above), and an app's
+  callers use the same prefixes: `ci.yml` and `ci-*.yml` run on every change and
+  display as `CI` / `CI / ...`; `cd-*.yml` make releases and display as
+  `CD / ...`. `check-workflow-names` fails on a workflow without the prefix and the
+  matching display name.
+- **A make target is named for what it checks or does** (the rule above), enforced
+  in an app by `check-make-target-names`: it fails on a target with a word that names
+  a tool pinned in `.mise.toml` or a package in `package.json`. A `setup-` target
+  installs the tool it names, and any other exception needs an entry in the
+  `docs.allowTargetNames` section of `app-tooling.json`, target to reason.
+
 ## Testing map
 
 | Layer | Where | Run with |
