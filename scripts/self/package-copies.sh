@@ -67,6 +67,7 @@ copies=(
   scripts/e2e/android-emulator.sh:e2e/android-emulator.sh
   scripts/e2e/collect-forensics.sh:e2e/collect-forensics.sh
   scripts/e2e/maestro-bound.sh:e2e/maestro-bound.sh
+  scripts/e2e/wait-for-http.sh:e2e/wait-for-http.sh
   scripts/lib/e2e-env.sh:lib/e2e-env.sh
   scripts/lib/expo-config.sh:lib/expo-config.sh
   scripts/lib/native-stack.sh:lib/native-stack.sh
