@@ -338,6 +338,13 @@ one place:
     "allowTargetNames": {
       "gen-graphql": "GraphQL is what it generates, the typed documents, not the tool that does it"
     }
+  },
+  "ports": {
+    "allow": {
+      ".mise.toml": "the base default, which mise exports",
+      "docs/decisions/": "ADRs record what was true when they were accepted"
+    },
+    "retired": [4000, 8089]
   }
 }
 ```
@@ -350,6 +357,43 @@ JSON that does not parse, a section or key this version does not know (an
 `excludes` written for `exclude` would otherwise check nothing), a field of the wrong type, or
 a single-file exclude.
 
+### Ports and the web export
+
+Three small programs that every Expo app of this family wrote for itself:
+
+```sh
+ports                 # each service's port, its offset and override variable
+eval "$(pnpm exec ports --sh)"   # export them: METRO_PORT, MOCK_API_PORT,
+                                 # WEB_PREVIEW_PORT, RCT_METRO_PORT, EXPO_PUBLIC_API_URL
+check-ports           # fail on a tracked file that hardcodes one of them
+build-web [args]      # expo export --platform web, then dist/404.html
+```
+
+Every port derives from `APP_PORT_BASE` (default 8080) plus a fixed offset: Metro +1
+(8081 is Expo's own default), the mock API +2 and the web preview +3, each with its own
+override variable (`METRO_PORT`, `MOCK_API_PORT`, `WEB_PREVIEW_PORT`). Eval-ing
+`ports --sh` in a Makefile's run targets works in a shell with no mise activated, and
+`APP_PORT_BASE=8090 make dev` moves everything. `mise` exports only the base: a
+mirrored `METRO_PORT` in the environment looks like a deliberate override, so the base
+would silently stop moving anything.
+
+An app with other services names its own table in the `ports` section of
+`app-tooling.json`: `base`, `services` (each with `offset`, `env` and `what`) and
+`apiPath`. `EXPO_PUBLIC_API_URL` and `RCT_METRO_PORT` are exported only for a `mockApi`
+and a `metro` service. From code, `@blinkbitcoin/app-tooling/ports` exports
+`resolvePorts(env, table)`, typed.
+
+`check-ports` scans the tracked text files for a line that *uses* one of those numbers
+as a port (`localhost:8081`, `port: 4000`, `-p 8083`, `METRO_PORT:-8081`) and fails
+naming each. It looks for the base, every service's default port and the `retired`
+ports, so a copy-paste from an older branch is caught. `limit: 4000`, a store-note
+length, is not a port and is not matched. A file that has to carry one is named in
+`ports.allow`, with the reason as its value.
+
+`build-web` does what a `build:web` script did: `pnpm exec expo export --platform web`
+with the arguments it was given, then the router's `dist/+not-found.html` as
+`dist/404.html`, which GitHub Pages serves for a path with no file.
+
 ### How the template calls them
 
 Once the template takes the release that ships these, each of its own copies
@@ -358,6 +402,9 @@ becomes one line:
 | Target or script | The call |
 | --- | --- |
 | `make help` | `pnpm exec help` |
+| `ports` (a `scripts/ports.mjs` of your own) | `pnpm exec ports [--sh]` |
+| the bare-port-literal guard | `pnpm exec check-ports` |
+| `build:web` (`expo export` and the 404 page) | `pnpm exec build-web [expo export arguments]` |
 | `check-docs` | `pnpm exec check-docs` |
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
 | `check-ignored-directories` | `pnpm exec check-ignored-directories` |

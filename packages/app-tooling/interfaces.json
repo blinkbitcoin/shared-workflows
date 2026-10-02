@@ -966,6 +966,154 @@
       },
       "outputs": []
     },
+    "publish-beta.yml": {
+      "inputs": {
+        "repository": {
+          "type": "string",
+          "required": false
+        },
+        "ref": {
+          "type": "string",
+          "required": false
+        },
+        "working-directory": {
+          "type": "string",
+          "required": false
+        },
+        "linux-runner": {
+          "type": "string",
+          "required": false
+        },
+        "macos-runner": {
+          "type": "string",
+          "required": false
+        },
+        "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
+        "ios-bundle-id": {
+          "type": "string",
+          "required": true
+        },
+        "ios-scheme": {
+          "type": "string",
+          "required": true
+        },
+        "android-package": {
+          "type": "string",
+          "required": true
+        },
+        "build-number-offset": {
+          "type": "number",
+          "required": false
+        },
+        "environment-variables": {
+          "type": "string",
+          "required": false
+        },
+        "app-variant": {
+          "type": "string",
+          "required": false
+        },
+        "tag": {
+          "type": "string",
+          "required": true
+        },
+        "green-workflow": {
+          "type": "string",
+          "required": false
+        },
+        "stage-environment": {
+          "type": "string",
+          "required": false
+        },
+        "testflight-external-group": {
+          "type": "string",
+          "required": false
+        },
+        "store-uploads-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "huawei-uploads-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "huawei-environment-variables": {
+          "type": "string",
+          "required": false
+        },
+        "ota-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "ota-cli-version": {
+          "type": "string",
+          "required": false
+        },
+        "manifest-url": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "secrets": {
+        "consumer-token": {
+          "required": false
+        },
+        "ASC_KEY_ID": {
+          "required": false
+        },
+        "ASC_ISSUER_ID": {
+          "required": false
+        },
+        "ASC_KEY_P8_BASE64": {
+          "required": false
+        },
+        "APP_REVIEW_EMAIL": {
+          "required": false
+        },
+        "APP_REVIEW_FIRST_NAME": {
+          "required": false
+        },
+        "APP_REVIEW_LAST_NAME": {
+          "required": false
+        },
+        "APP_REVIEW_PHONE": {
+          "required": false
+        },
+        "APP_REVIEW_DEMO_USER": {
+          "required": false
+        },
+        "APP_REVIEW_DEMO_PASSWORD": {
+          "required": false
+        },
+        "APP_REVIEW_NOTES": {
+          "required": false
+        },
+        "PLAY_SERVICE_ACCOUNT_JSON": {
+          "required": false
+        },
+        "HUAWEI_CLIENT_ID": {
+          "required": false
+        },
+        "HUAWEI_CLIENT_SECRET": {
+          "required": false
+        },
+        "OTA_PUBLISH_TOKEN": {
+          "required": false
+        }
+      },
+      "outputs": []
+    },
     "publish-github-release.yml": {
       "inputs": {
         "repository": {
@@ -1053,6 +1201,166 @@
         "url"
       ]
     },
+    "publish-internal.yml": {
+      "inputs": {
+        "repository": {
+          "type": "string",
+          "required": false
+        },
+        "ref": {
+          "type": "string",
+          "required": false
+        },
+        "working-directory": {
+          "type": "string",
+          "required": false
+        },
+        "linux-runner": {
+          "type": "string",
+          "required": false
+        },
+        "macos-runner": {
+          "type": "string",
+          "required": false
+        },
+        "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
+        "ios-bundle-id": {
+          "type": "string",
+          "required": true
+        },
+        "ios-scheme": {
+          "type": "string",
+          "required": true
+        },
+        "android-package": {
+          "type": "string",
+          "required": true
+        },
+        "build-number-offset": {
+          "type": "number",
+          "required": false
+        },
+        "environment-variables": {
+          "type": "string",
+          "required": false
+        },
+        "app-variant": {
+          "type": "string",
+          "required": false
+        },
+        "green-workflow": {
+          "type": "string",
+          "required": false
+        },
+        "stage-environment": {
+          "type": "string",
+          "required": false
+        },
+        "xcode-version": {
+          "type": "string",
+          "required": false
+        },
+        "ios-signing-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "android-signing-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "testflight-internal-group": {
+          "type": "string",
+          "required": false
+        },
+        "play-update-priority": {
+          "type": "string",
+          "required": false
+        },
+        "store-uploads-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "huawei-uploads-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "huawei-environment-variables": {
+          "type": "string",
+          "required": false
+        },
+        "ota-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "ota-cli-version": {
+          "type": "string",
+          "required": false
+        },
+        "manifest-url": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "secrets": {
+        "consumer-token": {
+          "required": false
+        },
+        "MATCH_PASSWORD": {
+          "required": false
+        },
+        "MATCH_GIT_URL": {
+          "required": false
+        },
+        "MATCH_GIT_BASIC_AUTHORIZATION": {
+          "required": false
+        },
+        "ASC_KEY_ID": {
+          "required": false
+        },
+        "ASC_ISSUER_ID": {
+          "required": false
+        },
+        "ASC_KEY_P8_BASE64": {
+          "required": false
+        },
+        "ANDROID_UPLOAD_KEYSTORE_BASE64": {
+          "required": false
+        },
+        "ANDROID_UPLOAD_KEYSTORE_PASSWORD": {
+          "required": false
+        },
+        "ANDROID_UPLOAD_KEY_ALIAS": {
+          "required": false
+        },
+        "ANDROID_UPLOAD_KEY_PASSWORD": {
+          "required": false
+        },
+        "PLAY_SERVICE_ACCOUNT_JSON": {
+          "required": false
+        },
+        "HUAWEI_CLIENT_ID": {
+          "required": false
+        },
+        "HUAWEI_CLIENT_SECRET": {
+          "required": false
+        },
+        "OTA_PUBLISH_TOKEN": {
+          "required": false
+        }
+      },
+      "outputs": []
+    },
     "publish-ota.yml": {
       "inputs": {
         "repository": {
@@ -1122,6 +1430,178 @@
       },
       "outputs": []
     },
+    "publish-production.yml": {
+      "inputs": {
+        "repository": {
+          "type": "string",
+          "required": false
+        },
+        "ref": {
+          "type": "string",
+          "required": false
+        },
+        "working-directory": {
+          "type": "string",
+          "required": false
+        },
+        "linux-runner": {
+          "type": "string",
+          "required": false
+        },
+        "macos-runner": {
+          "type": "string",
+          "required": false
+        },
+        "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
+        "ios-bundle-id": {
+          "type": "string",
+          "required": true
+        },
+        "ios-scheme": {
+          "type": "string",
+          "required": true
+        },
+        "android-package": {
+          "type": "string",
+          "required": true
+        },
+        "build-number-offset": {
+          "type": "number",
+          "required": false
+        },
+        "environment-variables": {
+          "type": "string",
+          "required": false
+        },
+        "app-variant": {
+          "type": "string",
+          "required": false
+        },
+        "tag": {
+          "type": "string",
+          "required": true
+        },
+        "action": {
+          "type": "string",
+          "required": false
+        },
+        "platforms": {
+          "type": "string",
+          "required": false
+        },
+        "play-rollout-percent": {
+          "type": "string",
+          "required": false
+        },
+        "ios-phased-release": {
+          "type": "boolean",
+          "required": false
+        },
+        "stage-environment": {
+          "type": "string",
+          "required": false
+        },
+        "play-update-priority": {
+          "type": "string",
+          "required": false
+        },
+        "security-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "web": {
+          "type": "boolean",
+          "required": false
+        },
+        "web-base-url": {
+          "type": "string",
+          "required": false
+        },
+        "store-uploads-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "huawei-uploads-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "huawei-environment-variables": {
+          "type": "string",
+          "required": false
+        },
+        "ota-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "ota-cli-version": {
+          "type": "string",
+          "required": false
+        },
+        "manifest-url": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "secrets": {
+        "consumer-token": {
+          "required": false
+        },
+        "ASC_KEY_ID": {
+          "required": false
+        },
+        "ASC_ISSUER_ID": {
+          "required": false
+        },
+        "ASC_KEY_P8_BASE64": {
+          "required": false
+        },
+        "APP_REVIEW_EMAIL": {
+          "required": false
+        },
+        "APP_REVIEW_FIRST_NAME": {
+          "required": false
+        },
+        "APP_REVIEW_LAST_NAME": {
+          "required": false
+        },
+        "APP_REVIEW_PHONE": {
+          "required": false
+        },
+        "APP_REVIEW_DEMO_USER": {
+          "required": false
+        },
+        "APP_REVIEW_DEMO_PASSWORD": {
+          "required": false
+        },
+        "APP_REVIEW_NOTES": {
+          "required": false
+        },
+        "PLAY_SERVICE_ACCOUNT_JSON": {
+          "required": false
+        },
+        "HUAWEI_CLIENT_ID": {
+          "required": false
+        },
+        "HUAWEI_CLIENT_SECRET": {
+          "required": false
+        },
+        "OTA_PUBLISH_TOKEN": {
+          "required": false
+        }
+      },
+      "outputs": []
+    },
     "publish-retry.yml": {
       "inputs": {
         "repository": {
@@ -1158,6 +1638,125 @@
         }
       },
       "secrets": {},
+      "outputs": []
+    },
+    "publish-store-listing.yml": {
+      "inputs": {
+        "repository": {
+          "type": "string",
+          "required": false
+        },
+        "ref": {
+          "type": "string",
+          "required": false
+        },
+        "working-directory": {
+          "type": "string",
+          "required": false
+        },
+        "linux-runner": {
+          "type": "string",
+          "required": false
+        },
+        "macos-runner": {
+          "type": "string",
+          "required": false
+        },
+        "native-cache-version": {
+          "type": "string",
+          "required": false
+        },
+        "native-stack": {
+          "type": "string",
+          "required": false
+        },
+        "fastlane-directory": {
+          "type": "string",
+          "required": false
+        },
+        "ios-bundle-id": {
+          "type": "string",
+          "required": true
+        },
+        "ios-scheme": {
+          "type": "string",
+          "required": true
+        },
+        "android-package": {
+          "type": "string",
+          "required": true
+        },
+        "app-variant": {
+          "type": "string",
+          "required": false
+        },
+        "direction": {
+          "type": "string",
+          "required": false
+        },
+        "platforms": {
+          "type": "string",
+          "required": false
+        },
+        "dry-run": {
+          "type": "boolean",
+          "required": false
+        },
+        "stage-environment": {
+          "type": "string",
+          "required": false
+        },
+        "store-metadata-sync-enabled": {
+          "type": "boolean",
+          "required": false
+        },
+        "ios-metadata-edit-live": {
+          "type": "string",
+          "required": false
+        },
+        "play-metadata-track": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "secrets": {
+        "consumer-token": {
+          "required": false
+        },
+        "ASC_KEY_ID": {
+          "required": false
+        },
+        "ASC_ISSUER_ID": {
+          "required": false
+        },
+        "ASC_KEY_P8_BASE64": {
+          "required": false
+        },
+        "APP_REVIEW_EMAIL": {
+          "required": false
+        },
+        "APP_REVIEW_FIRST_NAME": {
+          "required": false
+        },
+        "APP_REVIEW_LAST_NAME": {
+          "required": false
+        },
+        "APP_REVIEW_PHONE": {
+          "required": false
+        },
+        "APP_REVIEW_DEMO_USER": {
+          "required": false
+        },
+        "APP_REVIEW_DEMO_PASSWORD": {
+          "required": false
+        },
+        "APP_REVIEW_NOTES": {
+          "required": false
+        },
+        "PLAY_SERVICE_ACCOUNT_JSON": {
+          "required": false
+        }
+      },
       "outputs": []
     },
     "publish-store.yml": {
