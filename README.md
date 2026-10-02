@@ -20,7 +20,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
-<!--count:shell-scripts-->137<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
+<!--count:shell-scripts-->140<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
 hang, wait for Metro, hash the native inputs so a build cache means something,
 decode signing secrets without leaving them on disk, upload a build and then
 prove that the artifact uploaded is the one that was built.
@@ -175,6 +175,12 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | `publish-github-release.yml`     | `Publish`            | Creates or moves a release with a fixed asset set and `SHA256SUMS`                                           |
 | `publish-ota.yml`   | `Publish`            | Publishes an OTA update only when the native fingerprint is unchanged                                        |
 | `publish-retry.yml` | `Retry`   | Re-runs the failed jobs of a promotion the green gate gave up on, once the build it waited for goes green |
+| `publish-internal.yml` | `Prepare`<br>`Build iOS`<br>`Build Android`<br>`Upload iOS`<br>`Upload Android`<br>`Upload Huawei`<br>`Pre-release`<br>`OTA` | The whole internal pipeline in one call: build both platforms, upload to the internal tracks, publish the `-build.N` pre-release and the internal OTA update |
+| `publish-beta.yml` | `Prepare`<br>`Promote iOS`<br>`Promote Android`<br>`Release`<br>`Promote Huawei`<br>`Attach store notes`<br>`OTA` | The whole beta promotion in one call: it never builds, it promotes what internal built |
+| `publish-production.yml` | `Prepare`<br>`Security`<br>`Release iOS`<br>`Release Android`<br>`Release Huawei`<br>`Phased iOS`<br>`Rollout Android`<br>`Halt Android`<br>`Release`<br>`Attach stage note`<br>`OTA`<br>`Web` | The whole production release or rollout change in one call |
+| `publish-store-listing.yml` | `Push/Pull iOS listing`<br>`Push/Pull Android listing` | The store page, not a release: pushes the consumer's metadata tree or reports what the consoles hold |
+
+The last four chain the others with explicit inputs and no `vars`; the caller keeps the trigger, the concurrency group, the permissions and the secrets ([pipeline workflows](docs/consumer-guide.md#pipeline-workflows)).
 
 `build-prepare.yml` can also block until a named CI workflow is green for the
 same sha, which is how a release refuses to build on a red `main`.
@@ -195,7 +201,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Path                   | Responsibility                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/`   | The <!--count:workflows-->25<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
+| `.github/workflows/`   | The <!--count:workflows-->29<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
 | `.github/actions/`     | <!--count:actions-->5<!--/count--> composite actions — `setup`, `maestro`, `native-key`, `free-disk`, `forensics` — the steps repeated across workflows |
 | `scripts/checks/`      | A gate each: audit, commits, expo-health, generated, secrets; plus the scripts that pick the consumer's over this repo's   |
 | `scripts/ci/`          | Runner plumbing: Android SDK, KVM, disk pressure, pnpm store, badges, cancel-runs, tool versions                          |

@@ -349,6 +349,13 @@ one place:
     "allowTargetNames": {
       "gen-graphql": "GraphQL is what it generates, the typed documents, not the tool that does it"
     }
+  },
+  "ports": {
+    "allow": {
+      ".mise.toml": "the base default, which mise exports",
+      "docs/decisions/": "ADRs record what was true when they were accepted"
+    },
+    "retired": [4000, 8089]
   }
 }
 ```
@@ -361,6 +368,90 @@ JSON that does not parse, a section or key this version does not know (an
 `excludes` written for `exclude` would otherwise check nothing), a field of the wrong type, or
 a single-file exclude.
 
+### Ports and the web export
+
+Three small programs that every Expo app of this family wrote for itself:
+
+```sh
+ports                 # each service's port, its offset and override variable
+eval "$(pnpm exec ports --sh)"   # export them: METRO_PORT, MOCK_API_PORT,
+                                 # WEB_PREVIEW_PORT, RCT_METRO_PORT, EXPO_PUBLIC_API_URL
+check-ports           # fail on a tracked file that hardcodes one of them
+build-web [args]      # expo export --platform web, then dist/404.html
+```
+
+Every port derives from `APP_PORT_BASE` (default 8080) plus a fixed offset: Metro +1
+(8081 is Expo's own default), the mock API +2 and the web preview +3, each with its own
+override variable (`METRO_PORT`, `MOCK_API_PORT`, `WEB_PREVIEW_PORT`). Eval-ing
+`ports --sh` in a Makefile's run targets works in a shell with no mise activated, and
+`APP_PORT_BASE=8090 make dev` moves everything. `mise` exports only the base: a
+mirrored `METRO_PORT` in the environment looks like a deliberate override, so the base
+would silently stop moving anything.
+
+An app with other services names its own table in the `ports` section of
+`app-tooling.json`: `base`, `services` (each with `offset`, `env` and `what`) and
+`apiPath`. `EXPO_PUBLIC_API_URL` and `RCT_METRO_PORT` are exported only for a `mockApi`
+and a `metro` service. From code, `@blinkbitcoin/app-tooling/ports` exports
+`resolvePorts(env, table)`, typed.
+
+`check-ports` scans the tracked text files for a line that *uses* one of those numbers
+as a port (`localhost:8081`, `port: 4000`, `-p 8083`, `METRO_PORT:-8081`) and fails
+naming each. It looks for the base, every service's default port and the `retired`
+ports, so a copy-paste from an older branch is caught. `limit: 4000`, a store-note
+length, is not a port and is not matched. A file that has to carry one is named in
+`ports.allow`, with the reason as its value.
+
+`build-web` does what a `build:web` script did: `pnpm exec expo export --platform web`
+with the arguments it was given, then the router's `dist/+not-found.html` as
+`dist/404.html`, which GitHub Pages serves for a path with no file.
+
+### The prebuild check
+
+`ios/` and `android/` are build output in an Expo app, never committed, so a config
+plugin that edits an `Info.plist` or a Gradle file can only be tested by running the
+prebuild and reading what it wrote:
+
+```sh
+check-prebuild [--root DIR] [--keep]
+```
+
+It copies the app into a temporary directory (leaving out `node_modules`, which it
+links, `ios/`, `android/`, `.git`, `.expo`, `.claude/worktrees`, `.workflows`, `dist`
+and `coverage`, plus whatever `prebuild.exclude` adds), runs the prebuild there, and
+checks the generated files against the `prebuild` section of `app-tooling.json`. Each
+scenario is one prebuild with its own environment, because a plugin that behaves
+differently with a variable on (OTA) needs both builds:
+
+```json
+{
+  "prebuild": {
+    "scenarios": {
+      "default": {
+        "label": "OTA off",
+        "env": { "APP_VARIANT": "production", "APP_VERSION": "1.2.3", "APP_BUILD_NUMBER": "42" },
+        "assert": [
+          { "file": "ios/*/Info.plist", "contains": "<key>AppBuildStamp</key>", "message": "iOS Info.plist lacks AppBuildStamp" },
+          { "file": "ios/*/Supporting/Expo.plist", "absent": "EXUpdatesCodeSigningCertificate" },
+          { "file": "ios/*/Supporting/Expo.plist", "pattern": "<key>EXUpdatesEnabled</key>\\s*<false/>" },
+          { "exists": "ios/**/SplashScreenBackground.colorset" }
+        ]
+      }
+    }
+  }
+}
+```
+
+An assertion is one of `contains` and `absent` (text, in the files `file` matches),
+`pattern` (a regular expression, with the `s` flag so `.` crosses lines) or `exists`
+(a path pattern); the optional `message` is what a failure says. A `file` is a path
+pattern with `*` for any one name (or a run of characters inside one) and `**` for any
+number of directories. `contains` and `pattern` need one of the matching files to hold
+it, `absent` needs none of them to, and a pattern that matches no file is a failure.
+Every assertion of every scenario is checked and every failure listed, so one run says
+everything that is wrong. `command` replaces `expo prebuild --platform all --clean
+--no-install`, and `--keep` leaves the temporary directory behind to look at. The
+prebuild runs with `EXPO_NO_GIT_STATUS=1` unless a scenario sets it.
+
 ### How the template calls them
 
 Once the template takes the release that ships these, each of its own copies
@@ -369,6 +460,11 @@ becomes one line:
 | Target or script | The call |
 | --- | --- |
 | `make help` | `pnpm exec help` |
+| `ports` (a `scripts/ports.mjs` of your own) | `pnpm exec ports [--sh]` |
+| the bare-port-literal guard | `pnpm exec check-ports` |
+| `build:web` (`expo export` and the 404 page) | `pnpm exec build-web [expo export arguments]` |
+
+| `check-prebuild` (`scripts/check-prebuild.sh`) | `pnpm exec check-prebuild` |
 | `check-docs` | `pnpm exec check-docs` |
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
 | `check-ignored-directories` | `pnpm exec check-ignored-directories` |

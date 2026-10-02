@@ -1,0 +1,393 @@
+name: Publish beta
+# Promotes the build internal already made. It never builds: it waits for that
+# exact commit's internal pipeline to be green (and starts it once when it is
+# missing or red), then promotes the binary internal uploaded - TestFlight
+# external testing, the Play beta track, Huawei open testing - moves the
+# GitHub pre-release onto the `vX.Y.Z` release, attaches the reviewed store
+# notes and publishes the OTA update, so beta ships bytes that were tested on
+# internal. The whole pipeline of the template's `cd-beta.yml`, as one call.
+#
+# The caller keeps the trigger (a dispatch carrying the tag), the concurrency
+# group and the secrets. It grants the union of what the jobs below ask for:
+# `contents: write` (the release) and `actions: write` (the green gate runs
+# `gh run list` and, when the build is missing, `gh workflow run`).
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Consumer repository, owner/name (defaults to the caller's repository)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref (defaults to the caller's)
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for Linux jobs
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix
+        type: string
+        default: 'v1'
+      native-stack:
+        description: "expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare)"
+        type: string
+        default: ''
+      fastlane-directory:
+        description: The consumer's fastlane directory relative to working-directory
+        type: string
+        default: 'fastlane'
+      ios-bundle-id:
+        description: iOS bundle identifier (a Fastfile contract variable, asserted for every lane on both platforms)
+        type: string
+        required: true
+      ios-scheme:
+        description: Xcode scheme
+        type: string
+        required: true
+      android-package:
+        description: Android application id
+        type: string
+        required: true
+      build-number-offset:
+        description: Added to the commit count to make the build number. A number, so a caller passes fromJSON(vars.X || '1000') for an unset variable
+        type: number
+        default: 1000
+      environment-variables:
+        description: 'JSON object of non-secret variables for the prebuild, the lanes and the consumer scripts (APP_VARIANT, OTA_ENABLED, EXPO_UPDATES_URL, the EXPO_PUBLIC_* values). It is a workflow input, so unmasked: build-env.sh refuses a key that looks like a credential'
+        type: string
+        default: '{}'
+      app-variant:
+        description: The APP_VARIANT value the store lanes run under
+        type: string
+        default: 'production'
+      tag:
+        description: The `vX.Y.Z` release tag to promote. It becomes the checkout ref, the gated and stamped commit and the source of the store notes
+        type: string
+        required: true
+      green-workflow:
+        description: The caller's internal build workflow file, which must be green for the tag's commit and is started once at the tag when it is missing or red
+        type: string
+        default: 'cd-internal.yml'
+      stage-environment:
+        description: The GitHub environment the store jobs run in
+        type: string
+        default: 'beta'
+      testflight-external-group:
+        description: TestFlight external testing group the build is promoted to
+        type: string
+        default: ''
+      store-uploads-enabled:
+        description: Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works
+        type: boolean
+        default: false
+      huawei-uploads-enabled:
+        description: Whether the Huawei AppGallery job runs, on top of store-uploads-enabled. A repository shipping only to Apple and Google must not acquire a third submission by turning store uploads on
+        type: boolean
+        default: false
+      huawei-environment-variables:
+        description: JSON object of the non-secret variables the Huawei lane reads (HUAWEI_APP_ID, HUAWEI_UPLOADS_ENABLED, HUAWEI_SUBMIT_DELAY_SECONDS, HUAWEI_FEEDBACK_EMAIL, HUAWEI_TEST_DAYS), with APP_VARIANT
+        type: string
+        default: '{}'
+      ota-enabled:
+        description: Whether the OTA publish job runs
+        type: boolean
+        default: false
+      ota-cli-version:
+        description: Pinned OTA CLI version (empty takes publish-ota.yml's default)
+        type: string
+        default: ''
+      manifest-url:
+        description: Update server manifest URL for the smoke check after a publish (empty skips it)
+        type: string
+        default: ''
+    secrets:
+      consumer-token:
+        description: Token to check out a private consumer repository (defaults to the caller token)
+        required: false
+      ASC_KEY_ID:
+        description: App Store Connect API key id
+        required: false
+      ASC_ISSUER_ID:
+        description: App Store Connect issuer id
+        required: false
+      ASC_KEY_P8_BASE64:
+        description: App Store Connect API key (.p8), base64
+        required: false
+      APP_REVIEW_EMAIL:
+        description: App Review contact email
+        required: false
+      APP_REVIEW_FIRST_NAME:
+        description: App Review contact first name
+        required: false
+      APP_REVIEW_LAST_NAME:
+        description: App Review contact last name
+        required: false
+      APP_REVIEW_PHONE:
+        description: App Review contact phone
+        required: false
+      APP_REVIEW_DEMO_USER:
+        description: App Review demo account user
+        required: false
+      APP_REVIEW_DEMO_PASSWORD:
+        description: App Review demo account password
+        required: false
+      APP_REVIEW_NOTES:
+        description: App Review notes
+        required: false
+      PLAY_SERVICE_ACCOUNT_JSON:
+        description: Google Play service account JSON
+        required: false
+      HUAWEI_CLIENT_ID:
+        description: Huawei AppGallery Connect API client id
+        required: false
+      HUAWEI_CLIENT_SECRET:
+        description: Huawei AppGallery Connect API client secret
+        required: false
+      OTA_PUBLISH_TOKEN:
+        description: Update server publish token
+        required: false
+permissions:
+  contents: read
+jobs:
+  prepare:
+    name: Prepare
+    uses: ./.github/workflows/build-prepare.yml
+    permissions:
+      contents: read
+      # `require-green-workflow` runs `gh run list` against the gated workflow,
+      # and `require-green-dispatch` runs `gh workflow run` to start the
+      # internal build when it is missing or red. Write covers both.
+      actions: write
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      native-stack: ${{ inputs.native-stack }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      # `release-tag` (not `ref`) is what makes this correct: it becomes the
+      # checkout ref, the gated and stamped commit (`TAG^{commit}`, exposed as
+      # the `sha` output) and the source of the store notes. A manual dispatch
+      # can run on the default branch while promoting an older tag.
+      release-tag: ${{ inputs.tag }}
+      stage: beta
+      build-number-offset: ${{ inputs.build-number-offset }}
+      # A promotion must never ship a binary whose own build never went green...
+      require-green-workflow: ${{ inputs.green-workflow }}
+      # ...and a release must never wait for a human either: when that build is
+      # missing, cancelled or failed, the gate starts it at this tag once and
+      # waits for it.
+      require-green-dispatch: true
+      environment-variables: ${{ inputs.environment-variables }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+
+  promote-ios:
+    name: Promote iOS
+    if: ${{ inputs.store-uploads-enabled }}
+    needs: prepare
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: ios
+      lane: promote_beta
+      # Promotion is an App Store Connect API call: no Xcode, so no macOS runner.
+      environment: ${{ inputs.stage-environment }}
+      artifacts: build-info
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"TESTFLIGHT_EXTERNAL_GROUP":{1}}}', toJSON(inputs.app-variant), toJSON(inputs.testflight-external-group)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      APP_REVIEW_EMAIL: ${{ secrets.APP_REVIEW_EMAIL }}
+      APP_REVIEW_FIRST_NAME: ${{ secrets.APP_REVIEW_FIRST_NAME }}
+      APP_REVIEW_LAST_NAME: ${{ secrets.APP_REVIEW_LAST_NAME }}
+      APP_REVIEW_PHONE: ${{ secrets.APP_REVIEW_PHONE }}
+      APP_REVIEW_DEMO_USER: ${{ secrets.APP_REVIEW_DEMO_USER }}
+      APP_REVIEW_DEMO_PASSWORD: ${{ secrets.APP_REVIEW_DEMO_PASSWORD }}
+      APP_REVIEW_NOTES: ${{ secrets.APP_REVIEW_NOTES }}
+
+  promote-android:
+    name: Promote Android
+    if: ${{ inputs.store-uploads-enabled }}
+    needs: prepare
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      lane: promote_beta
+      environment: ${{ inputs.stage-environment }}
+      artifacts: build-info
+      environment-variables: ${{ format('{{"APP_VARIANT":{0}}}', toJSON(inputs.app-variant)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+  github-release:
+    name: Release
+    # `!cancelled() && !failure()` lets this run when the promotions are skipped:
+    # a skipped dependency skips its dependents unless the condition uses a
+    # status function.
+    needs: [prepare, promote-ios, promote-android]
+    if: ${{ !cancelled() && !failure() }}
+    uses: ./.github/workflows/publish-github-release.yml
+    permissions:
+      contents: write
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      mode: promote
+      release-tag: ${{ inputs.tag }}
+      # The promoted release ships the bytes internal testers actually ran:
+      # `from-tag` re-uploads the pre-release's ipa/aab/apk/dSYM/mapping to this
+      # tag and regenerates SHA256SUMS over the merged set. The build number is
+      # derived from the tag's commit, so it resolves to the same `-build.N` tag
+      # the internal pipeline created for that sha.
+      from-tag: v${{ needs.prepare.outputs.version }}-build.${{ needs.prepare.outputs.build-number }}
+      body-note: >-
+        ${{ !inputs.store-uploads-enabled && 'Store uploads were off for this build: it was never sent to TestFlight or Play. Turn store uploads on to send builds to the stores.' || '' }}
+      # Removed only after the upload succeeded; a re-run whose source is
+      # already gone continues instead of failing.
+      delete-source: true
+      # build-info.json and the store notes from this run ride along, so the
+      # release is the single record of what beta got, and the OTA gate has a
+      # fingerprint baseline to download.
+      assets-artifacts: build-info
+
+  # ---- Huawei AppGallery (opt-in, additional store) ------------------------
+
+  promote-huawei:
+    name: Promote Huawei
+    # `promote-android` too: AppGallery should not receive a beta Play refused.
+    # Nothing downstream waits for this job.
+    needs: [prepare, promote-android]
+    if: ${{ inputs.store-uploads-enabled && inputs.huawei-uploads-enabled }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      # AppGallery has no promote endpoint: the beta tier re-uploads the bundle
+      # from the tag and submits it as an open test version, which is the same
+      # submission with manual review left on.
+      lane: promote_huawei_beta
+      environment: ${{ inputs.stage-environment }}
+      # The build info and the store notes from build-info, and the bundle from
+      # the release the job above moved the assets onto.
+      artifacts: build-info
+      release-tag: ${{ inputs.tag }}
+      release-assets: '*.aab'
+      environment-variables: ${{ inputs.huawei-environment-variables }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      timeout-minutes: 90
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      HUAWEI_CLIENT_ID: ${{ secrets.HUAWEI_CLIENT_ID }}
+      HUAWEI_CLIENT_SECRET: ${{ secrets.HUAWEI_CLIENT_SECRET }}
+
+  # The store notes are what beta testers and, later, App Review read. `append`
+  # changes only the release body, so it takes the notes straight from
+  # build-info's store-notes.txt: it uploads nothing and leaves the promoted
+  # binaries' SHA256SUMS alone.
+  store-notes:
+    name: Attach store notes
+    needs: [prepare, github-release]
+    uses: ./.github/workflows/publish-github-release.yml
+    permissions:
+      contents: write
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      # Marker-delimited and idempotent across re-runs, so a retry is safe.
+      mode: append
+      release-tag: ${{ inputs.tag }}
+      append-title: Store notes
+      release-notes-artifact: build-info
+      release-notes-file: store-notes.txt
+
+  ota-beta:
+    name: OTA
+    needs: [prepare, github-release]
+    if: ${{ inputs.ota-enabled }}
+    uses: ./.github/workflows/publish-ota.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      # The commit the tag actually points at, resolved by prepare - not the ref
+      # the dispatch carried.
+      ref: ${{ needs.prepare.outputs.sha }}
+      ota-enabled: ${{ inputs.ota-enabled }}
+      channel: beta
+      rollout: 100
+      environment: ${{ inputs.stage-environment }}
+      ota-cli-version: ${{ inputs.ota-cli-version }}
+      # The release being promoted is the binary now on the beta track.
+      baseline-tag: ${{ inputs.tag }}
+      manifest-url: ${{ inputs.manifest-url }}
+      runtime-version: ${{ needs.prepare.outputs.fingerprint-ios }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      OTA_PUBLISH_TOKEN: ${{ secrets.OTA_PUBLISH_TOKEN }}

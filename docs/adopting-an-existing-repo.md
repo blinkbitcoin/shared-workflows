@@ -189,8 +189,8 @@ is a warning in the report, not a failure. See
 | lanes that read only these `APP_REVIEW_*` names: `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_NOTES` and `APP_REVIEW_PHONE` | required | publish-store.yml, which passes exactly these as secrets |
 | no `scripts/release/verify-ios.sh`, `scripts/release/verify-android.sh`, `scripts/release/lib/verify-common.sh` or `scripts/release/verify.test.mjs` | required | the release verifiers @blinkbitcoin/app-tooling ships as release/verify-ios.sh and release/verify-android.sh (with lib/verify-common.sh), which your verify lanes run; a copy in your repository is compared with them by nothing and drifts |
 | `@expo/fingerprint` | required (Expo apps only) | build-prepare.yml and publish-ota.yml, through scripts/lib/release-env.sh |
-| `ios`, committed to git | required (bare React Native apps only, when you call `build-ios.yml`) | build-ios.yml, on the bare stack |
-| `android`, committed to git | required (bare React Native apps only, when you call `build-android.yml`) | build-android.yml, on the bare stack |
+| `ios`, committed to git | required (bare React Native apps only, when you call `build-ios.yml` or `publish-internal.yml`) | build-ios.yml, on the bare stack (and publish-internal.yml, which calls it) |
+| `android`, committed to git | required (bare React Native apps only, when you call `build-android.yml` or `publish-internal.yml`) | build-android.yml, on the bare stack (and publish-internal.yml, which calls it) |
 
 <!-- contract-table:end -->
 

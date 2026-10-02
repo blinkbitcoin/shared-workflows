@@ -132,6 +132,24 @@ on:
           GitHub neither masks nor hides it.
         type: string
         default: '{}'
+      mock-api-port:
+        description: >-
+          Host port the mock API listens on: reversed into the Android emulator so
+          the app's localhost URLs work unchanged, and the one mock-api-command is
+          waited for on. 8082 is the family's port base (8080) plus the mock API's
+          offset; empty disables the reverse and the wait.
+        type: string
+        default: '8082'
+      mock-api-command:
+        description: >-
+          Command that starts the app's mock API, run in the consumer's working
+          directory with MOCK_API_PORT set to WORKFLOWS_MOCK_API_PORT (8082 unless
+          the consumer moved it). It is started in the background before the suite,
+          waited for until it answers HTTP on that port, and stopped after the suite,
+          pass or fail. Empty starts none (a consumer with its own setup hook, or
+          none, needs no mock API).
+        type: string
+        default: ''
       e2e-setup-script:
         description: Consumer-relative script run before the suite (empty skips it); a missing file is fatal
         type: string
@@ -298,6 +316,7 @@ jobs:
       IOS_BUNDLE_ID: ${{ inputs.ios-bundle-id }}
       ANDROID_PACKAGE: ${{ inputs.android-package }}
       IOS_SCHEME: ${{ inputs.ios-scheme }}
+      WORKFLOWS_MOCK_API_PORT: ${{ inputs.mock-api-port }}
       WORKFLOWS_IOS_CONFIGURATION: ${{ inputs.ios-configuration }}
       # A Release build has no dev launcher to deep-link into, so it launches
       # directly whatever `dev-client` says. The non-empty value MUST sit in the
@@ -349,6 +368,11 @@ jobs:
       - name: Start Metro
         if: ${{ inputs.ios-configuration != 'Release' }}
         run: bash "$WORKFLOWS_DIR/scripts/e2e/metro-start.sh"
+      - name: Start mock API
+        if: ${{ inputs.mock-api-command != '' }}
+        env:
+          MOCK_API_COMMAND: ${{ inputs.mock-api-command }}
+        run: bash "$WORKFLOWS_DIR/scripts/e2e/mock-api-start.sh"
       - name: E2E setup script
         if: ${{ inputs.e2e-setup-script != '' }}
         env:
@@ -388,6 +412,9 @@ jobs:
         env:
           HOOK: ${{ inputs.e2e-teardown-script }}
         run: bash "$WORKFLOWS_DIR/scripts/e2e/run-hook.sh"
+      - name: Stop mock API
+        if: ${{ always() && inputs.mock-api-command != '' }}
+        run: bash "$WORKFLOWS_DIR/scripts/e2e/mock-api-stop.sh"
       - name: Collect forensics
         if: always()
         run: bash "$WORKFLOWS_DIR/scripts/e2e/collect-forensics.sh" ios
@@ -488,6 +515,7 @@ jobs:
       IOS_BUNDLE_ID: ${{ inputs.ios-bundle-id }}
       ANDROID_PACKAGE: ${{ inputs.android-package }}
       IOS_SCHEME: ${{ inputs.ios-scheme }}
+      WORKFLOWS_MOCK_API_PORT: ${{ inputs.mock-api-port }}
       WORKFLOWS_DEV_CLIENT: ${{ inputs.dev-client }}
       WORKFLOWS_MAESTRO_FLOWS: ${{ inputs.flows }}
       WORKFLOWS_MAESTRO_INCLUDE_TAGS: ${{ inputs.include-tags }}
@@ -530,6 +558,11 @@ jobs:
         run: bash "$WORKFLOWS_DIR/scripts/ci/enable-kvm.sh"
       - name: Start Metro
         run: bash "$WORKFLOWS_DIR/scripts/e2e/metro-start.sh"
+      - name: Start mock API
+        if: ${{ inputs.mock-api-command != '' }}
+        env:
+          MOCK_API_COMMAND: ${{ inputs.mock-api-command }}
+        run: bash "$WORKFLOWS_DIR/scripts/e2e/mock-api-start.sh"
       - name: E2E setup script
         if: ${{ inputs.e2e-setup-script != '' }}
         env:
@@ -601,6 +634,9 @@ jobs:
         env:
           HOOK: ${{ inputs.e2e-teardown-script }}
         run: bash "$WORKFLOWS_DIR/scripts/e2e/run-hook.sh"
+      - name: Stop mock API
+        if: ${{ always() && inputs.mock-api-command != '' }}
+        run: bash "$WORKFLOWS_DIR/scripts/e2e/mock-api-stop.sh"
       - name: Upload forensics
         if: always()
         uses: ./.workflows/.github/actions/forensics

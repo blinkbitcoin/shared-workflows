@@ -1,0 +1,11 @@
+{
+  "name": "store-release",
+  "description": "Take an app on the family's shared release workflows from unsigned builds to a submittable App Store Connect and Google Play listing: the resumable store setup checklist, the console click-paths, the credentials, and the listing metadata.",
+  "author": {
+    "name": "Blink Bitcoin",
+    "url": "https://github.com/blinkbitcoin"
+  },
+  "homepage": "https://github.com/blinkbitcoin/shared-workflows/tree/main/plugins/store-release",
+  "repository": "https://github.com/blinkbitcoin/shared-workflows",
+  "license": "MIT"
+}
