@@ -3230,6 +3230,47 @@ and `.claude/worktrees/` (Claude Code's checkouts of the repository), and holds
 Biome, tsc, knip, typos, git, Semgrep and CodeQL to the same pair. See
 [its README](../packages/app-tooling/README.md#repository-guards).
 
+## The store-release plugin
+
+Getting an app from the unsigned builds these workflows produce to a submittable
+App Store Connect and Google Play listing is forty-odd console steps and a dozen
+credentials. `plugins/store-release` is a Claude Code plugin that walks it: four
+skills (`store-setup`, `store-consoles`, `store-credentials`, `store-metadata`) that
+keep one resumable checklist in the app's `.store-setup/state.json`, give the exact
+console click-paths (driven in the browser or handed to a person), validate each
+credential locally before it is pushed to GitHub through stdin, and fill and sync the
+store listing. Nothing in it is copied into the app.
+
+Opt in from the app's committed `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "shared-workflows": {
+      "source": { "source": "github", "repo": "blinkbitcoin/shared-workflows", "ref": "v0" }
+    }
+  },
+  "enabledPlugins": { "store-release@shared-workflows": true }
+}
+```
+
+`ref` takes a tag, a branch or (with `sha`) a commit. The skills run against the app
+you are in and expect what these workflows already expect of it: a `fastlane/`
+directory (set `FASTLANE_DIRECTORY`, relative to the repository root, when it sits
+elsewhere, as `fastlane-directory` does for the workflows), the five Fastfile contract
+variables, and `gh` logged in to the repository. The identifiers gate compares the
+`IOS_BUNDLE_ID` and `ANDROID_PACKAGE` variables with the app's own configuration:
+`app.config.*` or `app.json` on Expo, the Xcode project and `android/app/build.gradle`
+on a bare app.
+
+The skills' own suites run in this repository (`test/store-release-plugin.bats`). Two
+comparisons need more than the plugin has: the variable and secret names
+`push-to-github.sh` lists against an app's runbook and workflows, and the lists in the
+metadata scripts against the app's lanes and the fastlane gem. They run when
+`APP_REPO_ROOT=<an app checkout>` is set (or, for the metadata ones, when this
+repository's own lanes and the gems `make test-fastlane` installs are found), and
+the suites report them as skipped, by name, otherwise.
+
 ## Gotchas encoded
 
 Hard-won CI/E2E lessons (mostly from `blinkbitcoin/esign`), and exactly where

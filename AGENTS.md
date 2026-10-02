@@ -42,6 +42,9 @@ scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files) and native-stack, the dispatch to scripts/native/<stack>/
 test/               the bats suite + fixtures/ (consumer-min, the Expo caller the guide is held to;
                     consumer-bare, a bare React Native app; both kept byte-identical to the guide)
+plugins/            store-release, the Claude Code plugin apps install (four store skills, each
+                    with its offline suite under skills/<name>/tests); .claude-plugin/ at the
+                    root is the marketplace that offers it
 packages/           app-tooling (tooling any repo installs; expo/ holds the Expo presets,
                     security/ the scanner copies and lib/security-*.mjs their modules,
                     lib/native-stack.mjs the Expo-or-bare rule every part applies,
@@ -285,6 +288,7 @@ Every row is a make target; nothing here is run through a package manager.
 |---|---|---|
 | Pure bash scripts, one test file each | `test/<name>.bats` | `make test-unit` |
 | The Node scripts under `scripts/`, one test file each, 100% lines, branches and functions | `test/<name>.test.mjs` | `make test-scripts` |
+| The store-release plugin: marketplace and manifest shape, the skills' paths through `${CLAUDE_PLUGIN_ROOT}`, and each skill's offline suite | `test/store-release-plugin.bats`, `plugins/store-release/skills/*/tests/run.sh` | `make test-unit` |
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test-unit` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-smoke-local.yml` via act | `make test-smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-program.bats` | `make test-unit` |

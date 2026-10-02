@@ -1,5 +1,5 @@
 [files]
-extend-exclude = ["test/fixtures/**", "CHANGELOG.md", ".git/**"]
+extend-exclude = ["test/fixtures/**", "plugins/*/skills/*/tests/fixtures/**", "CHANGELOG.md", ".git/**"]
 
 [default]
 extend-ignore-re = [
