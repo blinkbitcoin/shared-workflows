@@ -3241,7 +3241,9 @@ answer**: its `project` and `entry` globs are all rooted — `src/**`,
 `plugins/**`, `scripts/**/*.mjs` — so none of them reaches into a sibling
 directory and there is nothing to exclude), `typos.toml`
 (`[files] extend-exclude` → `".workflows/"`),
-`jest.config.ts` and `metro.config.js` (both through the Expo presets below) and
+`jest.config.ts` and `metro.config.js` (both through the Expo presets below; the
+contract check accepts a `biome.json`, `eslint.config.mjs` or `jest.config.ts` that
+extends or calls its preset) and
 `.gitignore` (`/.workflows`). Copy that set when bootstrapping a new consumer —
 [`test/fixtures/consumer-min/`](../test/fixtures/consumer-min) carries it along
 with every contract script as a no-op, which makes it the smallest repository

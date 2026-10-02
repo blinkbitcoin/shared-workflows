@@ -652,6 +652,13 @@ export function activeProfiles(uses, override) {
 // The checks
 // ---------------------------------------------------------------------------
 
+/** The Expo presets that exclude the `.workflows` checkout, by the config that extends or calls them. */
+export const WORKFLOWS_PRESETS = {
+  'biome.json': 'expo/biome',
+  'eslint.config.mjs': 'expo/eslint',
+  'jest.config.ts': 'expo/jest',
+};
+
 /** `{ status, reason }` for one requirement. `status` is ok | missing | skip. */
 export function checkRequirement(req, consumer) {
   const { io, root, scripts, deps } = consumer;
@@ -693,6 +700,14 @@ export function checkRequirement(req, consumer) {
       // does not use that tool, so nothing of ours can walk into its glob.
       if (text === null) return skip(`no ${req.target}`);
       if (text.includes('.workflows')) return ok();
+      // A configuration that takes the exclusion from this package's Expo
+      // preset names it nowhere itself. Which presets hold it is kept in the
+      // package's own tests, and check-ignored-directories loads the real
+      // configuration to confirm it.
+      const preset = WORKFLOWS_PRESETS[req.target];
+      if (preset && new RegExp(`@blinkbitcoin/app-tooling/${preset}(?:\\.json)?["'\`]`).test(text)) {
+        return ok(`through ${preset}`);
+      }
       // The guide accepts a second answer for globbed tools: globs that never
       // reach in. A config with no tree-wide `**/` pattern cannot walk into a
       // sibling directory, so there is nothing for it to exclude. Checking this

@@ -386,6 +386,27 @@ test('a config that globs the whole tree must exclude the .workflows checkout', 
   assert.equal(checkRequirement(req('ignores-workflows.biome-json'), excluded).status, 'ok');
 });
 
+test('a config that takes the exclusion from the shared Expo preset is satisfied by naming it', () => {
+  const via = (target, id, text) => checkRequirement(req(id), consumer({ files: { [target]: text } }));
+  const biome = via('biome.json', 'ignores-workflows.biome-json', '{"extends":["@blinkbitcoin/app-tooling/expo/biome"]}');
+  assert.deepEqual([biome.status, biome.detail], ['ok', 'through expo/biome']);
+  assert.equal(via('biome.json', 'ignores-workflows.biome-json', '{"extends":["@blinkbitcoin/app-tooling/expo/biome.json"]}').status, 'ok');
+  assert.equal(
+    via('eslint.config.mjs', 'ignores-workflows.eslint-configuration', "import { createEslintConfig } from '@blinkbitcoin/app-tooling/expo/eslint';").status,
+    'ok',
+  );
+  assert.equal(
+    via('jest.config.ts', 'ignores-workflows.jest-configuration', "import { createJestConfig } from '@blinkbitcoin/app-tooling/expo/jest';").status,
+    'ok',
+  );
+  // Only the preset for that tool counts: another tool's preset, a sub-path and a prefix do not.
+  for (const text of ['{"extends":["@blinkbitcoin/app-tooling/expo/jest"]}', '@blinkbitcoin/app-tooling/expo/biomes"', '@blinkbitcoin/app-tooling/expo/biome/x"']) {
+    assert.equal(via('biome.json', 'ignores-workflows.biome-json', text).status, 'missing', text);
+  }
+  // A tool with no preset that excludes it still has to name the directory.
+  assert.equal(via('tsconfig.json', 'ignores-workflows.tsconfig-json', '{"extends":["@blinkbitcoin/app-tooling/expo/tsconfig.base.json"]}').status, 'missing');
+});
+
 test('knip is satisfied by globs that never reach into .workflows', () => {
   // The guide accepts either answer for knip, and the template ships the second
   // one. Demanding the ignore entry would report a finding the consumer would be
