@@ -135,7 +135,7 @@ A count in a doc — how many scripts, how many tests — is marked so a test ca
 check it:
 
 ```markdown
-<sub><!--count:scripts-->138<!--/count--> scripts · <!--count:tests-->1804<!--/count--> tests</sub>
+<sub><!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1814<!--/count--> tests</sub>
 ```
 
 `test/docs-facts.bats` derives each one from the repository and fails when they
