@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.8.1...app-tooling-v0.9.0) (2026-10-02)
+
+
+### Features
+
+* **app-tooling:** check-prebuild runs a prebuild and checks its output against config ([#194](https://github.com/blinkbitcoin/shared-workflows/issues/194)) ([291d059](https://github.com/blinkbitcoin/shared-workflows/commit/291d059a32c41bbe2de4817bd53ac0b3512d2242))
+* **app-tooling:** one program for each Makefile recipe that carried logic ([#197](https://github.com/blinkbitcoin/shared-workflows/issues/197)) ([abef718](https://github.com/blinkbitcoin/shared-workflows/commit/abef718674dfea2b77bc0ed6aad385e3cdef8ad4))
+* **app-tooling:** security defaults the family ships, so an app keeps only its own ([#196](https://github.com/blinkbitcoin/shared-workflows/issues/196)) ([3835046](https://github.com/blinkbitcoin/shared-workflows/commit/383504685f0d96075305647ab8bef26386392cae))
+* **app-tooling:** test-scripts holds an app's own Node scripts to their tests at 100% ([#195](https://github.com/blinkbitcoin/shared-workflows/issues/195)) ([1541fc5](https://github.com/blinkbitcoin/shared-workflows/commit/1541fc5161d7fbbf90c970d96784db6385505a32))
+* **app-tooling:** the ports, the bare-port guard and the web export an Expo app wrote itself ([#192](https://github.com/blinkbitcoin/shared-workflows/issues/192)) ([6bc4686](https://github.com/blinkbitcoin/shared-workflows/commit/6bc4686195bc59f2097d165081054af237fb9eda))
+* **app-tooling:** the store lanes ship in the package, an app's Fastfile is one import ([#198](https://github.com/blinkbitcoin/shared-workflows/issues/198)) ([a0d867c](https://github.com/blinkbitcoin/shared-workflows/commit/a0d867c1fde9d85729d53502a7f7ac0f8139ae7c))
+* **workflows:** test-e2e starts and stops the app's mock API from one command ([#193](https://github.com/blinkbitcoin/shared-workflows/issues/193)) ([2775056](https://github.com/blinkbitcoin/shared-workflows/commit/2775056e6a2ab2fbcb6bfe8d6713d7d2089aabbb))
+* **workflows:** whole-pipeline workflows for internal, beta, production and the store listing ([#190](https://github.com/blinkbitcoin/shared-workflows/issues/190)) ([ed651dd](https://github.com/blinkbitcoin/shared-workflows/commit/ed651dd31360f6c182af01adbe6747f5a341843a))
+
+
+### Bug Fixes
+
+* **app-tooling:** the contract check accepts the Expo presets as the .workflows exclusion ([#191](https://github.com/blinkbitcoin/shared-workflows/issues/191)) ([832eca3](https://github.com/blinkbitcoin/shared-workflows/commit/832eca33d310ac801bb8076d992eaf8ce37cf2b4))
+
 ## [0.8.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.8.0...app-tooling-v0.8.1) (2026-10-01)
 
 
