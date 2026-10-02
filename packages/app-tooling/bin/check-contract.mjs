@@ -613,6 +613,22 @@ export function resolved(req, inputs) {
 /** How a toggle that is off reads: a script-name input is empty, a boolean one false. */
 const offReason = (req) => `${req.toggle} is ${req.toggleValue === 'script-name' ? 'empty' : 'off'}`;
 
+/**
+ * The workflows that put a repository on the release path: the leaves, and the
+ * pipelines that call them (a caller of only a pipeline never names a leaf).
+ */
+export const RELEASE_WORKFLOWS = [
+  'build-prepare.yml',
+  'build-ios.yml',
+  'build-android.yml',
+  'publish-store.yml',
+  'publish-ota.yml',
+  'publish-internal.yml',
+  'publish-beta.yml',
+  'publish-production.yml',
+  'publish-store-listing.yml',
+];
+
 /** The profiles to check: what the caller uses, or an explicit override. */
 export function activeProfiles(uses, override) {
   if (override && override.length > 0) return new Set(override);
@@ -623,7 +639,7 @@ export function activeProfiles(uses, override) {
   if (uses.has('build-web.yml')) active.add('web');
   if (uses.has('publish-badges.yml')) active.add('badges');
   if (uses.has('check-code-scanning.yml')) active.add('code-scanning');
-  for (const name of ['build-prepare.yml', 'build-ios.yml', 'build-android.yml', 'publish-store.yml', 'publish-ota.yml']) {
+  for (const name of RELEASE_WORKFLOWS) {
     if (uses.has(name)) active.add('release');
   }
   // No caller found at all: a repository being checked before it has written
@@ -921,8 +937,10 @@ export function check(contract, consumer, { profiles } = {}) {
     if (req.stack && req.stack !== stack) {
       return { req, level: 'skip', reason: `only the ${req.stack} stack needs it, and this repository is ${stack} (${reason})` };
     }
-    if (req.workflow && !consumer.uses.has(req.workflow)) {
-      return { req, level: 'skip', reason: `${req.workflow} is not called from this repository` };
+    // One workflow, or a list of them: the leaf and the pipeline that calls it.
+    const workflows = [req.workflow ?? []].flat();
+    if (workflows.length > 0 && !workflows.some((name) => consumer.uses.has(name))) {
+      return { req, level: 'skip', reason: `${workflows.join(' or ')} is not called from this repository` };
     }
     const on = toggleOn(req, consumer.inputs);
     if (on === false) {
