@@ -490,7 +490,7 @@
       "toggle": null,
       "defaultOn": true,
       "severity": "required",
-      "fix": "The release workflows run named fastlane lanes. Ship a fastlane/Fastfile whose before_all asserts APP_VERSION, APP_BUILD_NUMBER, IOS_BUNDLE_ID, IOS_SCHEME and ANDROID_PACKAGE and rejects an empty value - that assertion is the only thing standing between an unset repository variable and a build signed with an empty identifier.",
+      "fix": "The release workflows run named fastlane lanes. Ship a fastlane/Fastfile that imports the package's: import '../node_modules/@blinkbitcoin/app-tooling/fastlane/Fastfile'. Its before_all asserts APP_VERSION, APP_BUILD_NUMBER, IOS_BUNDLE_ID, IOS_SCHEME and ANDROID_PACKAGE and rejects an empty value - that assertion is the only thing standing between an unset repository variable and a build signed with an empty identifier. An app that writes its own lanes keeps that before_all.",
       "guide": "the-five-fastfile-contract-variables"
     },
     {
