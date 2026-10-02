@@ -3,7 +3,9 @@
 # packs, this family's React Native rules (rules/, beside this script), plus the
 # repository's own rules, named in jobs.code.rules of security-settings.json. A
 # named path that does not exist fails the run: a typo must not quietly drop a
-# rule set. Findings do not fail this script. Paths to leave alone: the
+# rule set. A named directory's own rule tests (`semgrep --test`: the `ruleid:`
+# and `ok:` comments in the fixtures beside the rules) run first, and a failing
+# one fails the run, so a rule that stopped matching is not scanned with. Findings do not fail this script. Paths to leave alone: the
 # family's list (semgrepignore, beside this script) and the repository's own
 # .semgrepignore, both applied.
 set -euo pipefail
@@ -25,6 +27,15 @@ if [ -n "$rules" ]; then
       exit 1
     }
     configs+=(--config "$path")
+  done
+  for path in "${paths[@]}"; do
+    # A single rule file has nowhere to keep fixtures (semgrep --test wants
+    # --config for one), so only directories are tested.
+    [ -d "$path" ] || continue
+    semgrep --test --metrics off "$path" || {
+      echo "code: the rule tests in $path failed" >&2
+      exit 1
+    }
   done
 fi
 
