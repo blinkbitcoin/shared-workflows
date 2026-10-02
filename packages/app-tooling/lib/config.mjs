@@ -24,6 +24,7 @@ export const SECTIONS = {
   docs: ['architecture', 'allowTargetNames'],
   appSuites: ['skip'],
   prebuild: ['scenarios', 'exclude', 'command'],
+  testScripts: ['sources', 'tests'],
 };
 
 /** A configuration file that is there and wrong; a program exits 2 on one. */
@@ -136,4 +137,16 @@ export function prebuildConfig(section) {
     return { name, label: scenario.label ?? name, env, assertions };
   });
   return { exclude, command, scenarios };
+}
+
+/**
+ * The `testScripts` section with its defaults: `{ sources, tests }`, the path patterns of the
+ * script modules held to 100% coverage and of the test files that run them.
+ */
+export function testScriptsConfig(section) {
+  const sources = section?.sources === undefined ? ['scripts/**/*.mjs'] : stringList(section.sources, 'testScripts.sources');
+  const tests = section?.tests === undefined ? ['scripts/**/*.test.mjs'] : stringList(section.tests, 'testScripts.tests');
+  if (sources.length === 0) throw new ConfigError(`${CONFIG_FILE}: "testScripts.sources" must name at least one path pattern`);
+  if (tests.length === 0) throw new ConfigError(`${CONFIG_FILE}: "testScripts.tests" must name at least one path pattern`);
+  return { sources, tests };
 }
