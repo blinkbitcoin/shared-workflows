@@ -530,7 +530,10 @@ pnpm exec check-security code bundle  # those jobs only, then their verdict
     committed `ios/` and `android/`.
   - `binaries`: MASTG checks over `APK=` / `IPA=`.
   - `review` and `review-codebase`: the LLM reviews. These are off until a
-    provider, a model and a key are set.
+    provider, a model and a key are set. The review reads this package's
+    `security-review.prompt.md`; a `security-review.prompt.md` in your
+    repository is added after it (what the app is, what it has already
+    decided), so you write context, not the whole prompt.
 - **Missing tools:** a tool that is not installed is a skip on a laptop and a
   failure under `CI`.
 - **Native stack:** `NATIVE_STACK=expo` or `bare` decides how `bundle` and

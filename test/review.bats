@@ -63,16 +63,16 @@ review() { run bash "$REPO_ROOT/scripts/security/review.sh"; }
 }
 
 @test "the reviewer runs in the consumer's root and writes to its .security by default" {
-  # The consumer has no prompt file, so the reviewer stops there - before any
-  # request - and says so; that proves which directory it looked in.
+  # The consumer has no git history to diff, so the reviewer stops there -
+  # before any request - and says so; that proves which directory it looked in.
   unset SECURITY_DIR
   export SECURITY_REVIEW=true SECURITY_LLM_PROVIDER=openai OPENAI_API_KEY=sk-test-review GITHUB_WORKSPACE="$app"
   cd "$BATS_TEST_TMPDIR" || fail "cd"
   review
   [ "$status" -eq 0 ] || fail "status $status: $output"
   [ -s "$app/.security/review.sarif" ] || fail "no SARIF at $app/.security/review.sarif"
-  contains "$(sarif_note "$app/.security/review.sarif")" 'security-review.prompt.md is missing' \
-    || fail "not the missing-prompt skip: $(sarif_note "$app/.security/review.sarif")"
+  contains "$(sarif_note "$app/.security/review.sarif")" 'no base to diff against' \
+    || fail "not the no-base skip: $(sarif_note "$app/.security/review.sarif")"
   not_contains "$output" 'sk-test-review' || fail "the key reached the log"
 }
 
@@ -84,7 +84,6 @@ review() { run bash "$REPO_ROOT/scripts/security/review.sh"; }
 }
 
 @test "a configuration error in the reviewer fails the run" {
-  printf 'prompt\n' > "$app/security-review.prompt.md"
   export SECURITY_REVIEW=true SECURITY_LLM_PROVIDER=openai OPENAI_API_KEY=sk-test SECURITY_LLM_EXTRA_PARAMS='not json'
   review
   [ "$status" -eq 1 ] || fail "a configuration error passed with $status: $output"

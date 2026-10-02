@@ -28,6 +28,7 @@
     "doctor.requirements.json",
     "zizmor.yml",
     "store-notes.prompt.md",
+    "security-review.prompt.md",
     "contract.json",
     "interfaces.json",
     "versions.json",
