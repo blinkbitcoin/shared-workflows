@@ -1,0 +1,49 @@
+# Self-hosted OTA update server for expo-updates.
+#
+# UNVERIFIED OFFLINE: the image reference and the EOO_* variable names below
+# come from the family's spec, not from a running server. Check them against
+# the upstream README before the first deploy and fix this file, .env.example
+# and deploy/ota/README.md together.
+#   https://github.com/expo-open-ota/expo-open-ota
+#
+# Usage:
+#   cp .env.example .env && $EDITOR .env
+#   docker compose up -d
+services:
+  ota:
+    # Pinned by tag on purpose: an update server that silently changes the
+    # manifest format between restarts breaks every installed client at once.
+    image: ghcr.io/expo-open-ota/expo-open-ota:v2.0.0
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      # Public origin clients fetch manifests from. Must match
+      # EXPO_UPDATES_URL in the app repository's variables, including scheme
+      # and any path prefix.
+      EOO_BASE_URL: ${EOO_BASE_URL:?set EOO_BASE_URL in .env}
+      # `local` keeps updates in the ./data volume below; `s3` uses the
+      # AWS_*/S3_* variables in .env (S3, Cloudflare R2 or any S3-compatible
+      # endpoint).
+      EOO_STORAGE_MODE: ${EOO_STORAGE_MODE:-local}
+      # PEM private key matching the certificate committed in the app repo.
+      # Newlines are escaped as \n in .env. Without it, or with the wrong key,
+      # every client rejects every manifest.
+      EOO_PRIVATE_KEY: ${EOO_PRIVATE_KEY:?set EOO_PRIVATE_KEY in .env}
+      # Comma-separated publish tokens; one per environment, so a leaked
+      # internal token cannot publish to production. The value the CI secret
+      # OTA_PUBLISH_TOKEN carries must appear here.
+      EOO_TOKENS: ${EOO_TOKENS:?set EOO_TOKENS in .env}
+    ports:
+      # Bound to loopback: TLS and the public port belong to the reverse proxy
+      # in front of this, never to the container. See README.md.
+      - "127.0.0.1:${OTA_HOST_PORT:-3000}:3000"
+    volumes:
+      # Only used when EOO_STORAGE_MODE=local. Back this directory up: it holds
+      # every update an installed client can still be asked to download.
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
