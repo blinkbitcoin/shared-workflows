@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->136<!--/count--> scripts · <!--count:tests-->1776<!--/count--> tests · one pinned tag · one tooling package</sub>
+<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->137<!--/count--> scripts · <!--count:tests-->1794<!--/count--> tests · one pinned tag · one tooling package</sub>
 
 </div>
 
@@ -20,7 +20,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
-<!--count:shell-scripts-->135<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
+<!--count:shell-scripts-->136<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
 hang, wait for Metro, hash the native inputs so a build cache means something,
 decode signing secrets without leaving them on disk, upload a build and then
 prove that the artifact uploaded is the one that was built.
@@ -183,7 +183,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Workflow           | Jobs                              | What it does                                                                                   |
 | ------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `self-ci.yml`      | `Changes`<br>`Checks / CI`<br>`Checks / Secrets`<br>`Checks / Versions`<br>`Checks / Spell`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package`<br>`Store notes / Dry run / Draft`<br>`Store notes / Validate` | The gates of `make check`, a job each so a run names the one that failed, and the store notes dry run - this repository only. `Changes` skips CI, Versions and Package when the diff cannot affect them |
+| `self-ci.yml`      | `Changes`<br>`Checks / CI`<br>`Checks / Secrets`<br>`Checks / Versions`<br>`Checks / Spell`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package`<br>`Unit / Ruby`<br>`Store notes / Dry run / Draft`<br>`Store notes / Validate` | The gates of `make check`, a job each so a run names the one that failed, and the store notes dry run - this repository only. `Changes` skips CI, Versions and Package when the diff cannot affect them |
 | `self-checks.yml`  | `CI`<br>`Secrets`<br>`Versions`<br>`Spell`<br>`Commits` | shellcheck, actionlint and zizmor; gitleaks; version agreement; typos; commitlint. Called by `self-ci.yml` |
 | `self-unit.yml`    | `Tests`<br>`Package`              | The bats suite, and node:test over every package under `packages/`. Called by `self-ci.yml` |
 | `self-store-notes.yml` | `Dry run`<br>`Validate` | `pr-store-notes.yml` run for real against the template in a dry run, then its `section` output checked. Called by `self-ci.yml` and `self-release.yml` |
@@ -207,7 +207,8 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the local smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->156<!--/count--> bats files, <!--count:tests-->1776<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
+| `test/`                | <!--count:bats-files-->158<!--/count--> bats files, <!--count:tests-->1794<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
+| `plugins/store-release/` | A Claude Code plugin an app installs from this repository: four skills that take an app from unsigned builds to a store listing (checklist, console steps, credentials, metadata); offered by `.claude-plugin/marketplace.json` |
 | `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer, the store notes generator, the Maestro suite runners for a laptop and the web preview server; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 

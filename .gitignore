@@ -4,3 +4,6 @@ lefthook-local.yml
 # The consumer checkout self-ci.yml's parity job makes, so the cross-repo
 # parity cases have a real sibling to compare against.
 .template
+
+# The gems make test-fastlane installs for the lanes' tests.
+.gems/

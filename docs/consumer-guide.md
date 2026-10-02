@@ -1607,14 +1607,13 @@ login is a real credential, and both of those inputs are printed to the log.
 client the template's `android upload_huawei` lane reads; the numeric
 `HUAWEI_APP_ID` is configuration and travels in `environment-variables`.
 
-Their names are a cross-repo contract — the consumer's `fastlane/lanes/shared.rb`
-reads them straight out of `ENV` — so a rename on either side silently stops
-populating the App Store review form: `deliver` and `pilot` just receive fewer
-keys, with no error. `test/workflow-shape.bats` therefore derives the expected
-names from a committed copy of the template's `shared.rb`
-(`test/fixtures/consumer-min/fastlane/lanes/shared.rb`) and compares the two sets
-in both directions, so a rename on either side fails here instead of in a store
-submission.
+Their names are a contract — the package's lanes
+(`packages/app-tooling/fastlane/lanes/shared.rb`) read them straight out of
+`ENV` — so a rename on either side silently stops populating the App Store
+review form: `deliver` and `pilot` just receive fewer keys, with no error.
+`test/workflow-shape.bats` therefore derives the expected names from that file
+and compares the two sets in both directions, so a rename on either side fails
+here instead of in a store submission.
 
 **Inside the job.** Nine steps, in this order; the labels are what each step
 hands the next.
@@ -1662,7 +1661,7 @@ raise).
 #### Dry-running a lane
 
 `dry-run: true` sets `DRY_RUN=1` for the "Fastlane lane" step. That variable is
-not this workflow's own invention: `fastlane/lanes/shared.rb`'s `store_action`
+not this workflow's own invention: the package's `store_action` (`fastlane/lanes/shared.rb`)
 helper already wraps every `deliver`/`pilot`/`supply`/AppGallery call a lane
 makes, and under `DRY_RUN=1` it logs the call and returns canned data instead
 of making it - `phased` and the `pull_metadata` lanes check the same variable
@@ -2172,10 +2171,35 @@ any repo that has not set the variable. Wrap it:
 through to the quoted literal, and `fromJSON` turns whichever string won into a
 number.
 
+### The lanes: one import
+
+The lanes are not yours to carry. `@blinkbitcoin/app-tooling` ships them in
+`fastlane/` (`Fastfile` and `lanes/`), and your `fastlane/Fastfile` is one line:
+
+```ruby
+import '../node_modules/@blinkbitcoin/app-tooling/fastlane/Fastfile'
+```
+
+You keep `Appfile`, `Matchfile`, a `Pluginfile` with the Huawei plugin if you
+upload there, the `Gemfile` that pins fastlane, and `metadata/` and
+`screenshots/` under your fastlane directory (the `fastlane-directory` input
+moves it). The Contract job follows that import: the lane rows read the
+package's lanes as if they were yours, and hold them to the same App Review
+secret names. An app that writes lanes of its own keeps the rows' requirements.
+
+Expo or bare is the `native-stack` the workflows already resolve;
+`fastlane.sh` passes it to the lanes. On `bare` the iOS build stamps the
+release's version and build number into the committed Xcode project before the
+archive, where Expo's prebuild wrote them; and `android/app/build.gradle` reads
+the four `ANDROID_UPLOAD_*` gradle properties for its release signing config
+and `APP_VERSION` / `APP_BUILD_NUMBER` for its version. The snippet is in the
+package README, under "Fastlane lanes".
+
 ### The five Fastfile contract variables
 
-The consumer's `Fastfile` asserts, in `before_all`, for **every lane on both
-platforms**:
+The package's Fastfile (`@blinkbitcoin/app-tooling/fastlane/Fastfile`, which an
+app's own `fastlane/Fastfile` imports) asserts, in `before_all`, for **every
+lane on both platforms**:
 
 ```ruby
 require_env!(%w[APP_VERSION APP_BUILD_NUMBER IOS_BUNDLE_ID IOS_SCHEME ANDROID_PACKAGE])
@@ -3230,6 +3254,47 @@ and `.claude/worktrees/` (Claude Code's checkouts of the repository), and holds
 Biome, tsc, knip, typos, git, Semgrep and CodeQL to the same pair. See
 [its README](../packages/app-tooling/README.md#repository-guards).
 
+## The store-release plugin
+
+Getting an app from the unsigned builds these workflows produce to a submittable
+App Store Connect and Google Play listing is forty-odd console steps and a dozen
+credentials. `plugins/store-release` is a Claude Code plugin that walks it: four
+skills (`store-setup`, `store-consoles`, `store-credentials`, `store-metadata`) that
+keep one resumable checklist in the app's `.store-setup/state.json`, give the exact
+console click-paths (driven in the browser or handed to a person), validate each
+credential locally before it is pushed to GitHub through stdin, and fill and sync the
+store listing. Nothing in it is copied into the app.
+
+Opt in from the app's committed `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "shared-workflows": {
+      "source": { "source": "github", "repo": "blinkbitcoin/shared-workflows", "ref": "v0" }
+    }
+  },
+  "enabledPlugins": { "store-release@shared-workflows": true }
+}
+```
+
+`ref` takes a tag, a branch or (with `sha`) a commit. The skills run against the app
+you are in and expect what these workflows already expect of it: a `fastlane/`
+directory (set `FASTLANE_DIRECTORY`, relative to the repository root, when it sits
+elsewhere, as `fastlane-directory` does for the workflows), the five Fastfile contract
+variables, and `gh` logged in to the repository. The identifiers gate compares the
+`IOS_BUNDLE_ID` and `ANDROID_PACKAGE` variables with the app's own configuration:
+`app.config.*` or `app.json` on Expo, the Xcode project and `android/app/build.gradle`
+on a bare app.
+
+The skills' own suites run in this repository (`test/store-release-plugin.bats`). Two
+comparisons need more than the plugin has: the variable and secret names
+`push-to-github.sh` lists against an app's runbook and workflows, and the lists in the
+metadata scripts against the app's lanes and the fastlane gem. They run when
+`APP_REPO_ROOT=<an app checkout>` is set (or, for the metadata ones, when this
+repository's own lanes and the gems `make test-fastlane` installs are found), and
+the suites report them as skipped, by name, otherwise.
+
 ## Gotchas encoded
 
 Hard-won CI/E2E lessons (mostly from `blinkbitcoin/esign`), and exactly where
@@ -3269,7 +3334,7 @@ each one lives so a future edit doesn't quietly regress it.
 | A bare `[[ ]]` assertion in a bats body cannot fail the test under macOS's bash 3.2, so a security control can silently stop checking | `test/test_helper.bash` (`fail`/`contains`/`not_contains`) and the `\|\| fail` form in every release test file |
 | A promoted release must ship the bytes that were tested, not a rebuild (a rebuild has a different signature and fingerprint) | `publish-github-release.yml`'s `promote` + `from-tag` downloads the pre-release's assets and re-uploads them; `delete-source` runs only after the upload |
 | `github.sha` on a `release: published` event is the default-branch tip, not the tag's commit | `scripts/release/target-sha.sh` resolves `TAG^{commit}` and feeds it to the green-run gate and `build-info.json`; exposed as `build-prepare`'s `sha` output |
-| A renamed App Review env name breaks the review form silently - deliver and pilot accept a smaller hash without erroring | `test/workflow-shape.bats` derives the names from a committed copy of the template's `fastlane/lanes/shared.rb` and compares both directions |
+| A renamed App Review env name breaks the review form silently - deliver and pilot accept a smaller hash without erroring | `test/workflow-shape.bats` derives the names from the package's `fastlane/lanes/shared.rb` and compares both directions |
 | A non-secret value passed as a workflow input is public, so a credential smuggled through one leaks quietly | `scripts/lib/build-env.sh` refuses keys ending in `_KEY`/`_TOKEN`/`_PASSWORD`/`_SECRET`/… and logs key names only; `test/build-env.bats` (the key rules) and `test/lib-build-env.bats` (the library) |
 | An unset repo variable is `''`, which a `type: number` input rejects outright | The guide's `fromJSON(vars.X \|\| '1000')` idiom for `build-number-offset` and `rollout` |
 | No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-version-pins.sh`) |
