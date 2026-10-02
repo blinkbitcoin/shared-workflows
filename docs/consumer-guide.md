@@ -1377,7 +1377,7 @@ jobs:
 
 ## Release workflows
 
-Nine more reusable workflows cover the release path: the release PR itself,
+Nine more reusable workflows cover the release path (and four [pipeline workflows](#pipeline-workflows) chain them for you): the release PR itself,
 the store notes drafted into it, version/notes preparation, signed store builds,
 arbitrary fastlane lanes, the GitHub release, OTA publishing, and a retry for a
 promotion the green gate gave up on. They are strictly opt-in — nothing in `ci.yml` calls them — and
@@ -1607,14 +1607,13 @@ login is a real credential, and both of those inputs are printed to the log.
 client the template's `android upload_huawei` lane reads; the numeric
 `HUAWEI_APP_ID` is configuration and travels in `environment-variables`.
 
-Their names are a cross-repo contract — the consumer's `fastlane/lanes/shared.rb`
-reads them straight out of `ENV` — so a rename on either side silently stops
-populating the App Store review form: `deliver` and `pilot` just receive fewer
-keys, with no error. `test/workflow-shape.bats` therefore derives the expected
-names from a committed copy of the template's `shared.rb`
-(`test/fixtures/consumer-min/fastlane/lanes/shared.rb`) and compares the two sets
-in both directions, so a rename on either side fails here instead of in a store
-submission.
+Their names are a contract — the package's lanes
+(`packages/app-tooling/fastlane/lanes/shared.rb`) read them straight out of
+`ENV` — so a rename on either side silently stops populating the App Store
+review form: `deliver` and `pilot` just receive fewer keys, with no error.
+`test/workflow-shape.bats` therefore derives the expected names from that file
+and compares the two sets in both directions, so a rename on either side fails
+here instead of in a store submission.
 
 **Inside the job.** Nine steps, in this order; the labels are what each step
 hands the next.
@@ -1662,7 +1661,7 @@ raise).
 #### Dry-running a lane
 
 `dry-run: true` sets `DRY_RUN=1` for the "Fastlane lane" step. That variable is
-not this workflow's own invention: `fastlane/lanes/shared.rb`'s `store_action`
+not this workflow's own invention: the package's `store_action` (`fastlane/lanes/shared.rb`)
 helper already wraps every `deliver`/`pilot`/`supply`/AppGallery call a lane
 makes, and under `DRY_RUN=1` it logs the call and returns canned data instead
 of making it - `phased` and the `pull_metadata` lanes check the same variable
@@ -2172,10 +2171,35 @@ any repo that has not set the variable. Wrap it:
 through to the quoted literal, and `fromJSON` turns whichever string won into a
 number.
 
+### The lanes: one import
+
+The lanes are not yours to carry. `@blinkbitcoin/app-tooling` ships them in
+`fastlane/` (`Fastfile` and `lanes/`), and your `fastlane/Fastfile` is one line:
+
+```ruby
+import '../node_modules/@blinkbitcoin/app-tooling/fastlane/Fastfile'
+```
+
+You keep `Appfile`, `Matchfile`, a `Pluginfile` with the Huawei plugin if you
+upload there, the `Gemfile` that pins fastlane, and `metadata/` and
+`screenshots/` under your fastlane directory (the `fastlane-directory` input
+moves it). The Contract job follows that import: the lane rows read the
+package's lanes as if they were yours, and hold them to the same App Review
+secret names. An app that writes lanes of its own keeps the rows' requirements.
+
+Expo or bare is the `native-stack` the workflows already resolve;
+`fastlane.sh` passes it to the lanes. On `bare` the iOS build stamps the
+release's version and build number into the committed Xcode project before the
+archive, where Expo's prebuild wrote them; and `android/app/build.gradle` reads
+the four `ANDROID_UPLOAD_*` gradle properties for its release signing config
+and `APP_VERSION` / `APP_BUILD_NUMBER` for its version. The snippet is in the
+package README, under "Fastlane lanes".
+
 ### The five Fastfile contract variables
 
-The consumer's `Fastfile` asserts, in `before_all`, for **every lane on both
-platforms**:
+The package's Fastfile (`@blinkbitcoin/app-tooling/fastlane/Fastfile`, which an
+app's own `fastlane/Fastfile` imports) asserts, in `before_all`, for **every
+lane on both platforms**:
 
 ```ruby
 require_env!(%w[APP_VERSION APP_BUILD_NUMBER IOS_BUNDLE_ID IOS_SCHEME ANDROID_PACKAGE])
@@ -2487,6 +2511,379 @@ Prerelease tags (`v1.2.3-rc.1`) are ignored at every step: they never win at
 HEAD and never seed the bump, so a repository that has only ever cut release
 candidates starts at `0.0.1` rather than regressing from them. The build number
 is the first-parent commit count plus `BUILD_NUMBER_OFFSET` in both copies.
+
+## Pipeline workflows
+
+The release workflows above are the building blocks. Four more are whole
+pipelines made of them: the job graph a caller used to write out in a `cd-*.yml`
+file, so that file is only what a workflow's own file can hold: the **trigger**,
+the **concurrency group**, the **permissions** and the **secrets**. A pipeline
+calls its leaves with local `uses: ./.github/workflows/...` paths, which resolve
+to the same commit as the pipeline itself, so one pin moves all of them. The
+nesting is three levels (the caller, the pipeline, the leaf).
+
+Rules that hold for all four:
+
+- **Settings are inputs.** A pipeline never reads `vars`: the caller passes each
+  toggle and identifier, so the contract check sees every one of them. An unset
+  repository variable is the empty string, so a `number` input takes
+  `fromJSON(vars.X || '1000')` and a `boolean` one takes `vars.X == 'true'`.
+- **Secrets are explicit.** Every secret is declared `required: false`; the
+  caller passes the ones its stage needs by name, and the pipeline forwards each
+  leaf only the secrets that leaf declares.
+- **The caller grants the union of the permissions** the pipeline's jobs ask
+  for (stated per pipeline below): a called workflow can only narrow its
+  caller's token.
+- **The concurrency group stays in the caller**, because a reusable workflow
+  cannot name one for its caller. The store jobs of `publish-internal.yml` join
+  the shared `release` queue on their own, as they did as caller jobs.
+- **`github.*` is the caller's.** `github.sha`, `github.event_name` and the run id
+  are those of the run that called the pipeline, so a dispatch's own values
+  (`tag`, `action`, `platforms`) are passed as inputs.
+- **Callers keep their file names.** `require-green-workflow`, `dispatch-on-release`
+  and a `workflow_run` listener name the caller's workflow files and display
+  names, so renaming `cd-internal.yml` or its `name:` still breaks them.
+
+### `publish-internal.yml`
+
+Every commit on the default branch becomes a signed, uploaded internal build, in
+one call: `build-prepare.yml` (with the green gate and the reserved build tag),
+`build-ios.yml` and `build-android.yml`, the TestFlight and Play uploads (and
+Huawei AppGallery when it is on), a `vX.Y.Z-build.N` pre-release carrying every
+artifact, and an optional OTA publish on the `internal` channel. It is
+`build-prepare` → builds → uploads → `publish-github-release` → `publish-ota`,
+the chain a caller used to spell out as eight `uses:` jobs.
+
+The caller keeps what only a workflow's own file can hold: the `push` trigger,
+the **per-commit** concurrency group (`release-internal-${{ github.sha }}`, so
+two quick pushes never evict a pending build while this one waits for CI), the
+permissions, and the secrets. The store jobs, the OTA job, and nothing else,
+join the shared `release` queue on their own. Uploads imply signing, so
+`store-uploads-enabled` signs both builds even when the two signing inputs are
+off. The pre-release names the two build jobs directly, so a repository with
+store uploads off still publishes every artifact, and Huawei never holds it up.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Passed to every job the pipeline calls |
+| `native-stack` | `''` | expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare) |
+| `fastlane-directory` | `fastlane` | The consumer's fastlane directory relative to working-directory |
+| `ios-bundle-id` | (required) | iOS bundle identifier (a Fastfile contract variable, asserted for every lane on both platforms) |
+| `ios-scheme` | (required) | Xcode scheme |
+| `android-package` | (required) | Android application id |
+| `build-number-offset` | `1000` | Added to the commit count to make the build number. A number, so a caller passes fromJSON(vars.X \|\| '1000') for an unset variable |
+| `environment-variables` | `{}` | JSON object of non-secret variables for the prebuild, the lanes and the consumer scripts (APP_VARIANT, OTA_ENABLED, EXPO_UPDATES_URL, the EXPO_PUBLIC_* values). It is a workflow input, so unmasked: build-env.sh refuses a key that looks like a credential |
+| `app-variant` | `production` | The APP_VARIANT value the store lanes run under |
+| `green-workflow` | `ci.yml` | The caller's CI workflow file that must be green for this commit before anything builds |
+| `stage-environment` | `internal` | The GitHub environment the build and store jobs run in |
+| `xcode-version` | `''` | Xcode version for the iOS build (empty takes the runner image's default) |
+| `ios-signing-enabled` | `False` | Sign the iOS build even when store uploads are off (uploads imply signing) |
+| `android-signing-enabled` | `False` | Sign the Android build even when store uploads are off (uploads imply signing) |
+| `testflight-internal-group` | `''` | TestFlight internal testing group the build is added to |
+| `play-update-priority` | `''` | Google Play in-app update priority |
+| `store-uploads-enabled` | `False` | Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works |
+| `huawei-uploads-enabled` | `False` | Whether the Huawei AppGallery job runs, on top of store-uploads-enabled. A repository shipping only to Apple and Google must not acquire a third submission by turning store uploads on |
+| `huawei-environment-variables` | `{}` | JSON object of the non-secret variables the Huawei lane reads (HUAWEI_APP_ID, HUAWEI_UPLOADS_ENABLED, HUAWEI_SUBMIT_DELAY_SECONDS, HUAWEI_FEEDBACK_EMAIL, HUAWEI_TEST_DAYS), with APP_VARIANT |
+| `ota-enabled` | `False` | Whether the OTA publish job runs |
+| `ota-cli-version` | `''` | Pinned OTA CLI version (empty takes publish-ota.yml's default) |
+| `manifest-url` | `''` | Update server manifest URL for the smoke check after a publish (empty skips it) |
+
+Secrets, all optional: `consumer-token`, `MATCH_PASSWORD`, `MATCH_GIT_URL`, `MATCH_GIT_BASIC_AUTHORIZATION`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON`, `HUAWEI_CLIENT_ID`, `HUAWEI_CLIENT_SECRET`, `OTA_PUBLISH_TOKEN`. The caller grants `contents: write` and `actions: read`.
+
+```yaml
+# .github/workflows/cd-internal.yml
+name: CD / Internal
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: release-internal-${{ github.sha }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  internal:
+    name: Internal
+    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-internal.yml@v0
+    permissions:
+      contents: write
+      actions: read
+    with:
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      build-number-offset: ${{ fromJSON(vars.BUILD_NUMBER_OFFSET || '1000') }}
+      environment-variables: >-
+        {"APP_VARIANT":"production",
+        "OTA_ENABLED":"${{ vars.OTA_ENABLED }}",
+        "EXPO_UPDATES_URL":"${{ vars.EXPO_UPDATES_URL }}"}
+      store-uploads-enabled: ${{ vars.STORE_UPLOADS_ENABLED == 'true' }}
+      ota-enabled: ${{ vars.OTA_ENABLED == 'true' }}
+      ota-cli-version: ${{ vars.OTA_CLI_VERSION }}
+      manifest-url: ${{ vars.EXPO_UPDATES_URL }}
+    secrets:
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+      ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+      ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+      ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+      ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+      OTA_PUBLISH_TOKEN: ${{ secrets.OTA_PUBLISH_TOKEN }}
+```
+
+### `publish-beta.yml`
+
+Promotes the build internal already made, in one call. It never builds:
+`build-prepare.yml` with `release-tag` waits for that exact commit's internal
+pipeline to be green (and, with `require-green-dispatch`, starts it once at the
+tag when it is missing or red), then the TestFlight external and Play beta
+promotions, the move of the pre-release onto the `vX.Y.Z` release (`promote`,
+`from-tag`, `delete-source`), Huawei open testing, the store notes appended to
+the release body, and the OTA publish on the `beta` channel. Beta ships bytes
+that were tested on internal.
+
+The caller keeps the trigger (a `workflow_dispatch` with the tag), the
+concurrency group (`release`) and the secrets. The store notes are taken from
+the `build-info` artifact's `store-notes.txt`: `append` changes only the release
+body and uploads nothing.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Passed to every job the pipeline calls |
+| `native-stack` | `''` | expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare) |
+| `fastlane-directory` | `fastlane` | The consumer's fastlane directory relative to working-directory |
+| `ios-bundle-id` | (required) | iOS bundle identifier (a Fastfile contract variable, asserted for every lane on both platforms) |
+| `ios-scheme` | (required) | Xcode scheme |
+| `android-package` | (required) | Android application id |
+| `build-number-offset` | `1000` | Added to the commit count to make the build number. A number, so a caller passes fromJSON(vars.X \|\| '1000') for an unset variable |
+| `environment-variables` | `{}` | JSON object of non-secret variables for the prebuild, the lanes and the consumer scripts (APP_VARIANT, OTA_ENABLED, EXPO_UPDATES_URL, the EXPO_PUBLIC_* values). It is a workflow input, so unmasked: build-env.sh refuses a key that looks like a credential |
+| `app-variant` | `production` | The APP_VARIANT value the store lanes run under |
+| `tag` | (required) | The `vX.Y.Z` release tag to promote. It becomes the checkout ref, the gated and stamped commit and the source of the store notes |
+| `green-workflow` | `cd-internal.yml` | The caller's internal build workflow file, which must be green for the tag's commit and is started once at the tag when it is missing or red |
+| `stage-environment` | `beta` | The GitHub environment the store jobs run in |
+| `testflight-external-group` | `''` | TestFlight external testing group the build is promoted to |
+| `store-uploads-enabled` | `False` | Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works |
+| `huawei-uploads-enabled` | `False` | Whether the Huawei AppGallery job runs, on top of store-uploads-enabled. A repository shipping only to Apple and Google must not acquire a third submission by turning store uploads on |
+| `huawei-environment-variables` | `{}` | JSON object of the non-secret variables the Huawei lane reads (HUAWEI_APP_ID, HUAWEI_UPLOADS_ENABLED, HUAWEI_SUBMIT_DELAY_SECONDS, HUAWEI_FEEDBACK_EMAIL, HUAWEI_TEST_DAYS), with APP_VARIANT |
+| `ota-enabled` | `False` | Whether the OTA publish job runs |
+| `ota-cli-version` | `''` | Pinned OTA CLI version (empty takes publish-ota.yml's default) |
+| `manifest-url` | `''` | Update server manifest URL for the smoke check after a publish (empty skips it) |
+
+Secrets, all optional: `consumer-token`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_PHONE`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_NOTES`, `PLAY_SERVICE_ACCOUNT_JSON`, `HUAWEI_CLIENT_ID`, `HUAWEI_CLIENT_SECRET`, `OTA_PUBLISH_TOKEN`. The caller grants `contents: write` and `actions: write`.
+
+```yaml
+# .github/workflows/cd-beta.yml
+name: CD / Beta
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to promote (e.g. v1.2.3)
+        type: string
+        required: true
+concurrency:
+  group: release
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  beta:
+    name: Beta
+    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-beta.yml@v0
+    permissions:
+      contents: write
+      actions: write
+    with:
+      tag: ${{ inputs.tag }}
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      build-number-offset: ${{ fromJSON(vars.BUILD_NUMBER_OFFSET || '1000') }}
+      store-uploads-enabled: ${{ vars.STORE_UPLOADS_ENABLED == 'true' }}
+      testflight-external-group: ${{ vars.TESTFLIGHT_EXTERNAL_GROUP }}
+    secrets:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+```
+
+### `publish-production.yml`
+
+Acts on a release beta already promoted, in one call. It never builds. With
+`action: release` it runs the binary-side security scanners (`check-security.yml`:
+binaries, a fresh prebuild, the bundle and a bill of materials), releases to the
+App Store with phased release and to Google Play at an initial staged-rollout
+fraction (and to Huawei AppGallery when it is on), marks the GitHub release
+latest, appends a stage note, publishes the OTA update on `production`, and with
+`web` redeploys the Pages site. `rollout`, `halt`, `resume` and `complete` move
+an existing rollout instead.
+
+The store jobs that release wait on the security gate with `!failure() &&
+!cancelled()`, so a gate that was switched off (`security-enabled: false`) does
+not skip the release. The stage note is a line naming the action, the platforms,
+the rollout and the run, appended as `release-notes-text`: nothing is uploaded.
+The caller keeps the trigger (a `workflow_dispatch` carrying `tag`, `action`,
+`platforms` and the rollout choices), the concurrency group (`release`) and the
+secrets.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Passed to every job the pipeline calls |
+| `native-stack` | `''` | expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare) |
+| `fastlane-directory` | `fastlane` | The consumer's fastlane directory relative to working-directory |
+| `ios-bundle-id` | (required) | iOS bundle identifier (a Fastfile contract variable, asserted for every lane on both platforms) |
+| `ios-scheme` | (required) | Xcode scheme |
+| `android-package` | (required) | Android application id |
+| `build-number-offset` | `1000` | Added to the commit count to make the build number. A number, so a caller passes fromJSON(vars.X \|\| '1000') for an unset variable |
+| `environment-variables` | `{}` | JSON object of non-secret variables for the prebuild, the lanes and the consumer scripts (APP_VARIANT, OTA_ENABLED, EXPO_UPDATES_URL, the EXPO_PUBLIC_* values). It is a workflow input, so unmasked: build-env.sh refuses a key that looks like a credential |
+| `app-variant` | `production` | The APP_VARIANT value the store lanes run under |
+| `tag` | (required) | The `vX.Y.Z` release tag to act on |
+| `action` | `release` | What to do with that release - release, rollout, halt, resume or complete |
+| `platforms` | `both` | Which stores to act on - both, ios or android. `rollout` is Android-only, so choosing ios with it does nothing |
+| `play-rollout-percent` | `10` | Play staged-rollout percentage (rollout and resume; release uses it as the initial fraction) |
+| `ios-phased-release` | `True` | Use App Store phased release for action `release` |
+| `stage-environment` | `production` | The GitHub environment the store jobs run in (its required reviewers gate the release) |
+| `play-update-priority` | `''` | Google Play in-app update priority |
+| `security-enabled` | `True` | Run the binary-side security scanners before a release. Off, the gate is skipped and the store jobs do not wait for it |
+| `web` | `False` | Redeploy the web site to GitHub Pages after a release |
+| `web-base-url` | `''` | Base path the web export is built for, `/<repo>` for a project Pages site and empty for a custom domain; use the same value as the CI web deploy |
+| `store-uploads-enabled` | `False` | Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works |
+| `huawei-uploads-enabled` | `False` | Whether the Huawei AppGallery job runs, on top of store-uploads-enabled. A repository shipping only to Apple and Google must not acquire a third submission by turning store uploads on |
+| `huawei-environment-variables` | `{}` | JSON object of the non-secret variables the Huawei lane reads (HUAWEI_APP_ID, HUAWEI_UPLOADS_ENABLED, HUAWEI_SUBMIT_DELAY_SECONDS, HUAWEI_FEEDBACK_EMAIL, HUAWEI_TEST_DAYS), with APP_VARIANT |
+| `ota-enabled` | `False` | Whether the OTA publish job runs |
+| `ota-cli-version` | `''` | Pinned OTA CLI version (empty takes publish-ota.yml's default) |
+| `manifest-url` | `''` | Update server manifest URL for the smoke check after a publish (empty skips it) |
+
+Secrets, all optional: `consumer-token`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_PHONE`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_NOTES`, `PLAY_SERVICE_ACCOUNT_JSON`, `HUAWEI_CLIENT_ID`, `HUAWEI_CLIENT_SECRET`, `OTA_PUBLISH_TOKEN`. The caller grants `contents: write`, `actions: read`, `security-events: write` and, with `web`, `pages: write` and `id-token: write`.
+
+```yaml
+# .github/workflows/cd-production.yml
+name: CD / Production
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+      action:
+        type: choice
+        default: release
+        options: [release, rollout, halt, resume, complete]
+      platforms:
+        type: choice
+        default: both
+        options: [both, ios, android]
+      play_rollout_percent:
+        type: string
+        default: "10"
+concurrency:
+  group: release
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  production:
+    name: Production
+    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-production.yml@v0
+    permissions:
+      contents: write
+      actions: read
+      security-events: write
+    with:
+      tag: ${{ inputs.tag }}
+      action: ${{ inputs.action }}
+      platforms: ${{ inputs.platforms }}
+      play-rollout-percent: ${{ inputs.play_rollout_percent }}
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      build-number-offset: ${{ fromJSON(vars.BUILD_NUMBER_OFFSET || '1000') }}
+      store-uploads-enabled: ${{ vars.STORE_UPLOADS_ENABLED == 'true' }}
+    secrets:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+```
+
+### `publish-store-listing.yml`
+
+The store page, not a release, in one call: pushes the consumer's
+`fastlane/metadata` tree to App Store Connect and Google Play, or pulls the
+consoles' copy back and reports the difference. It uploads no binary, moves no
+track and submits nothing for review. One `publish-store.yml` call per platform,
+named by the direction ("Push iOS listing"), both gated on
+`store-metadata-sync-enabled` so a fresh checkout cannot overwrite a live page
+from a mistaken dispatch. The caller keeps the trigger, the concurrency group
+(`release`, so a listing edit and a release submission are never open against
+the same app) and the secrets.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | (as above) | Passed to every job the pipeline calls |
+| `native-stack` | `''` | expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare) |
+| `fastlane-directory` | `fastlane` | The consumer's fastlane directory relative to working-directory |
+| `ios-bundle-id` | (required) | iOS bundle identifier (a Fastfile contract variable) |
+| `ios-scheme` | (required) | Xcode scheme |
+| `android-package` | (required) | Android application id |
+| `app-variant` | `production` | The APP_VARIANT value the lanes run under |
+| `direction` | `push` | push writes the consoles from the consumer's tree; pull reports what they hold |
+| `platforms` | `both` | Which stores to act on - both, ios or android |
+| `dry-run` | `True` | Log every store call and change nothing |
+| `stage-environment` | `production` | The GitHub environment the jobs run in (its required reviewers gate a push) |
+| `store-metadata-sync-enabled` | `False` | Whether the jobs run at all. Off by default, so a fresh checkout cannot overwrite a live store page from a mistaken dispatch. The lane asserts the same switch itself |
+| `ios-metadata-edit-live` | `''` | IOS_METADATA_EDIT_LIVE for the iOS lane - whether the live version's page may be edited |
+| `play-metadata-track` | `''` | PLAY_METADATA_TRACK for the Android lane |
+
+Secrets, all optional: `consumer-token`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `APP_REVIEW_EMAIL`, `APP_REVIEW_FIRST_NAME`, `APP_REVIEW_LAST_NAME`, `APP_REVIEW_PHONE`, `APP_REVIEW_DEMO_USER`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_NOTES`, `PLAY_SERVICE_ACCOUNT_JSON`. The caller grants `contents: read`.
+
+```yaml
+# .github/workflows/cd-store-listing.yml
+name: CD / Store listing
+on:
+  workflow_dispatch:
+    inputs:
+      direction:
+        type: choice
+        default: push
+        options: [push, pull]
+      platforms:
+        type: choice
+        default: both
+        options: [both, ios, android]
+      dry_run:
+        type: boolean
+        default: true
+concurrency:
+  group: release
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  listing:
+    name: Store listing
+    uses: blinkbitcoin/shared-workflows/.github/workflows/publish-store-listing.yml@v0
+    permissions:
+      contents: read
+    with:
+      direction: ${{ inputs.direction }}
+      platforms: ${{ inputs.platforms }}
+      dry-run: ${{ inputs.dry_run }}
+      ios-bundle-id: ${{ vars.IOS_BUNDLE_ID }}
+      ios-scheme: ${{ vars.IOS_SCHEME }}
+      android-package: ${{ vars.ANDROID_PACKAGE }}
+      store-metadata-sync-enabled: ${{ vars.STORE_METADATA_SYNC_ENABLED == 'true' }}
+    secrets:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+```
 
 ## Script contract
 
@@ -2844,7 +3241,9 @@ answer**: its `project` and `entry` globs are all rooted — `src/**`,
 `plugins/**`, `scripts/**/*.mjs` — so none of them reaches into a sibling
 directory and there is nothing to exclude), `typos.toml`
 (`[files] extend-exclude` → `".workflows/"`),
-`jest.config.ts` and `metro.config.js` (both through the Expo presets below) and
+`jest.config.ts` and `metro.config.js` (both through the Expo presets below; the
+contract check accepts a `biome.json`, `eslint.config.mjs` or `jest.config.ts` that
+extends or calls its preset) and
 `.gitignore` (`/.workflows`). Copy that set when bootstrapping a new consumer —
 [`test/fixtures/consumer-min/`](../test/fixtures/consumer-min) carries it along
 with every contract script as a no-op, which makes it the smallest repository
@@ -3230,6 +3629,47 @@ and `.claude/worktrees/` (Claude Code's checkouts of the repository), and holds
 Biome, tsc, knip, typos, git, Semgrep and CodeQL to the same pair. See
 [its README](../packages/app-tooling/README.md#repository-guards).
 
+## The store-release plugin
+
+Getting an app from the unsigned builds these workflows produce to a submittable
+App Store Connect and Google Play listing is forty-odd console steps and a dozen
+credentials. `plugins/store-release` is a Claude Code plugin that walks it: four
+skills (`store-setup`, `store-consoles`, `store-credentials`, `store-metadata`) that
+keep one resumable checklist in the app's `.store-setup/state.json`, give the exact
+console click-paths (driven in the browser or handed to a person), validate each
+credential locally before it is pushed to GitHub through stdin, and fill and sync the
+store listing. Nothing in it is copied into the app.
+
+Opt in from the app's committed `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "shared-workflows": {
+      "source": { "source": "github", "repo": "blinkbitcoin/shared-workflows", "ref": "v0" }
+    }
+  },
+  "enabledPlugins": { "store-release@shared-workflows": true }
+}
+```
+
+`ref` takes a tag, a branch or (with `sha`) a commit. The skills run against the app
+you are in and expect what these workflows already expect of it: a `fastlane/`
+directory (set `FASTLANE_DIRECTORY`, relative to the repository root, when it sits
+elsewhere, as `fastlane-directory` does for the workflows), the five Fastfile contract
+variables, and `gh` logged in to the repository. The identifiers gate compares the
+`IOS_BUNDLE_ID` and `ANDROID_PACKAGE` variables with the app's own configuration:
+`app.config.*` or `app.json` on Expo, the Xcode project and `android/app/build.gradle`
+on a bare app.
+
+The skills' own suites run in this repository (`test/store-release-plugin.bats`). Two
+comparisons need more than the plugin has: the variable and secret names
+`push-to-github.sh` lists against an app's runbook and workflows, and the lists in the
+metadata scripts against the app's lanes and the fastlane gem. They run when
+`APP_REPO_ROOT=<an app checkout>` is set (or, for the metadata ones, when this
+repository's own lanes and the gems `make test-fastlane` installs are found), and
+the suites report them as skipped, by name, otherwise.
+
 ## Gotchas encoded
 
 Hard-won CI/E2E lessons (mostly from `blinkbitcoin/esign`), and exactly where
@@ -3269,7 +3709,7 @@ each one lives so a future edit doesn't quietly regress it.
 | A bare `[[ ]]` assertion in a bats body cannot fail the test under macOS's bash 3.2, so a security control can silently stop checking | `test/test_helper.bash` (`fail`/`contains`/`not_contains`) and the `\|\| fail` form in every release test file |
 | A promoted release must ship the bytes that were tested, not a rebuild (a rebuild has a different signature and fingerprint) | `publish-github-release.yml`'s `promote` + `from-tag` downloads the pre-release's assets and re-uploads them; `delete-source` runs only after the upload |
 | `github.sha` on a `release: published` event is the default-branch tip, not the tag's commit | `scripts/release/target-sha.sh` resolves `TAG^{commit}` and feeds it to the green-run gate and `build-info.json`; exposed as `build-prepare`'s `sha` output |
-| A renamed App Review env name breaks the review form silently - deliver and pilot accept a smaller hash without erroring | `test/workflow-shape.bats` derives the names from a committed copy of the template's `fastlane/lanes/shared.rb` and compares both directions |
+| A renamed App Review env name breaks the review form silently - deliver and pilot accept a smaller hash without erroring | `test/workflow-shape.bats` derives the names from the package's `fastlane/lanes/shared.rb` and compares both directions |
 | A non-secret value passed as a workflow input is public, so a credential smuggled through one leaks quietly | `scripts/lib/build-env.sh` refuses keys ending in `_KEY`/`_TOKEN`/`_PASSWORD`/`_SECRET`/… and logs key names only; `test/build-env.bats` (the key rules) and `test/lib-build-env.bats` (the library) |
 | An unset repo variable is `''`, which a `type: number` input rejects outright | The guide's `fromJSON(vars.X \|\| '1000')` idiom for `build-number-offset` and `rollout` |
 | No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-version-pins.sh`) |

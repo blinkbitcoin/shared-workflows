@@ -22,7 +22,8 @@ setup() {
 @test "every reusable workflow this family publishes is present" {
   for w in check test-unit test-e2e build-web publish-badges pr-closed pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
-    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release; do
+    publish-store publish-github-release publish-ota pr-store-notes publish-retry pr-release \
+    publish-internal publish-beta publish-production publish-store-listing; do
     [ -f "$REPO_ROOT/.github/workflows/$w.yml" ] || {
       echo "missing .github/workflows/$w.yml" >&2
       return 1
@@ -288,33 +289,33 @@ lane_step_count() {
 # consumer's Fastfile reads them straight out of ENV, so a rename on either side
 # silently stops populating the App Store review form - deliver and pilot simply
 # receive fewer keys, with no error. The names are therefore not hard-coded here
-# but read out of a committed copy of the template's shared.rb, and the two sets
-# are compared in both directions.
+# but read out of the package's own lanes (packages/app-tooling/fastlane/lanes/
+# shared.rb, which every app imports), and the two sets are compared in both
+# directions.
 #
 # They are secrets rather than environment-variables/env-json values because a reviewer demo
 # login is a real credential and both of those inputs are printed to the log.
 #
-# Read from the fixture consumer's lanes, which is what the guide's examples are
-# built from. A real consumer's lanes are held to the same names by its own
-# Contract job (lane.app-review-env in contract.json).
-@test "publish-store's App Review secrets are exactly the names the fixture's lanes read" {
-  TEMPLATE_LANES="$FIXTURES/consumer-min/fastlane/lanes/shared.rb"
-  [ -f "$TEMPLATE_LANES" ] || fail "no fixture lanes at $TEMPLATE_LANES"
+# An app that writes lanes of its own is held to the same names by its Contract
+# job (lane-environment.app-review in contract.json).
+@test "publish-store's App Review secrets are exactly the names the shipped lanes read" {
+  TEMPLATE_LANES="$REPO_ROOT/packages/app-tooling/fastlane/lanes/shared.rb"
+  [ -f "$TEMPLATE_LANES" ] || fail "no lanes at $TEMPLATE_LANES"
   wanted="$(grep -oE "ENV\['APP_REVIEW_[A-Z0-9_]*'\]" "$TEMPLATE_LANES" |
     sed "s/ENV\['//; s/'\]//" | sort -u)"
   [ "$(grep -c . <<<"$wanted")" -ge 7 ] \
-    || fail "read only '$wanted' from $TEMPLATE_LANES - has the fixture changed shape?"
+    || fail "read only '$wanted' from $TEMPLATE_LANES - have the lanes changed shape?"
   declared="$(yq -r '.on.workflow_call.secrets | keys | .[]' "$REPO_ROOT/.github/workflows/publish-store.yml" |
     grep '^APP_REVIEW_' | sort -u)"
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$declared" \
-      || fail "the fixture's lanes read $name but publish-store.yml does not declare it"
+      || fail "the shipped lanes read $name but publish-store.yml does not declare it"
   done <<<"$wanted"
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$wanted" \
-      || fail "publish-store.yml declares $name but no lane in the fixture reads it"
+      || fail "publish-store.yml declares $name but no shipped lane reads it"
   done <<<"$declared"
 }
 
@@ -635,9 +636,12 @@ lane_step_count() {
   done
 }
 
+# A job that calls a reusable workflow cannot carry `timeout-minutes`: GitHub
+# rejects the key there, and the called workflow's own jobs hold the bound. So
+# the rule is about the jobs that run steps.
 @test "every job has timeout-minutes" {
   for w in "${WORKFLOWS[@]}"; do
-    missing=$(yq -r '[.jobs[] | select(has("timeout-minutes") | not)] | length' "$w")
+    missing=$(yq -r '[.jobs[] | select((has("uses") | not) and (has("timeout-minutes") | not))] | length' "$w")
     [ "$missing" -eq 0 ]
   done
 }
@@ -820,7 +824,10 @@ lane_step_count() {
 # so the write scope is pinned to the exact three jobs that need it - the two
 # gh-pages publishers and the one that cuts a GitHub release. Any new one has to
 # be added here deliberately.
-@test "contents: write is asked for by exactly the four jobs that write" {
+# The pipelines' jobs that write are exactly the ones that call a leaf which
+# writes (the build tag, a release): a called workflow can only narrow its
+# caller's token, so the grant has to be made on the calling job.
+@test "contents: write is asked for by exactly the jobs that write" {
   got=""
   for w in "${WORKFLOWS[@]}"; do
     while read -r j; do
@@ -829,8 +836,25 @@ lane_step_count() {
       [ "$perm" = "write" ] && got="$got$(basename "$w"):$j "
     done <<<"$(yq -r '.jobs | keys | .[]' "$w")"
   done
-  [ "$got" = "pr-closed.yml:badges-cleanup pr-release.yml:release publish-badges.yml:badges publish-github-release.yml:release " ] \
-    || fail "jobs asking for contents: write are now: $got"
+  want="pr-closed.yml:badges-cleanup pr-release.yml:release publish-badges.yml:badges"
+  want="$want publish-beta.yml:github-release publish-beta.yml:store-notes publish-github-release.yml:release"
+  want="$want publish-internal.yml:prepare publish-internal.yml:github-prerelease"
+  want="$want publish-production.yml:github-release publish-production.yml:stage-append "
+  [ "$got" = "$want" ] || fail "jobs asking for contents: write are now: $got"
+}
+
+@test "in a pipeline, every job that writes calls build-prepare or publish-github-release" {
+  for w in publish-internal publish-beta publish-production; do
+    f="$REPO_ROOT/.github/workflows/$w.yml"
+    while read -r j; do
+      [ -n "$j" ] || continue
+      uses=$(yq -r ".jobs.\"$j\".uses" "$f")
+      case "$uses" in
+        ./.github/workflows/build-prepare.yml | ./.github/workflows/publish-github-release.yml) ;;
+        *) fail "$w.yml: job $j writes contents but calls $uses" ;;
+      esac
+    done <<<"$(yq -r '.jobs | to_entries | .[] | select(.value.permissions.contents == "write") | .key' "$f")"
+  done
 }
 
 @test "publish-badges.yml keeps contents: read at the top and escalates only on its job" {

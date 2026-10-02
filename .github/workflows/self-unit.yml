@@ -1,8 +1,8 @@
 name: Self unit
-# The two test suites, split so a run says which one failed: the bats cases
-# over the shell scripts and the workflow shapes, and node:test over every
-# package under packages/. Called from self-ci.yml, which turns these into
-# `Unit / Tests` and `Unit / Package`.
+# The test suites, split so a run says which one failed: the bats cases over
+# the shell scripts and the workflow shapes, node:test over every package under
+# packages/, and the Ruby lanes' own tests. Called from self-ci.yml, which turns these into
+# `Unit / Tests`, `Unit / Package` and `Unit / Ruby`.
 #
 # Kept apart from self-checks.yml because they answer different questions - "is
 # the code right" rather than "is the repository tidy" - and because this is
@@ -42,3 +42,16 @@ jobs:
       # on the target in the Makefile for why they ratchet and never drop.
       - run: make test-package
       - run: make test-scripts
+  # The Ruby lanes the package ships (packages/app-tooling/fastlane): their unit
+  # tests, run under Bundler against the test Gemfile. A job of its own because
+  # it needs Ruby and a gem install the other two do not, and because a run
+  # should say "the lanes" failed rather than "the package".
+  fastlane:
+    name: Ruby
+    if: ${{ inputs.package }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      - run: make test-fastlane
