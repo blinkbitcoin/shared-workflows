@@ -443,19 +443,6 @@
     },
 
     {
-      "id": "file.code-scanning-configuration",
-      "kind": "file",
-      "target": [".github/codeql/codeql-config.yml"],
-      "profile": "code-scanning",
-      "neededBy": "check-code-scanning.yml (configuration-file)",
-      "toggle": null,
-      "defaultOn": true,
-      "severity": "degrades",
-      "fix": "Add .github/codeql/codeql-config.yml, or pass configuration-file: '' in your caller. Without it the analysis still runs, on CodeQL's own defaults - so your path exclusions and the alert-suppression pack that makes an inline // codeql[rule-id] marker count are not applied.",
-      "guide": "check-code-scanningyml"
-    },
-
-    {
       "id": "no-copy.security",
       "kind": "no-copy",
       "label": "no copy of the security scanners",

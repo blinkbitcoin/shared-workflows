@@ -194,6 +194,7 @@ check-docs [--architecture PREFIX]          # docs freshness, the command table,
 check-licenses [--allow SPDX]               # a production dependency under a license outside the allowlist
 check-skills [--root DIR]                   # an agent skill whose offline tests fail
 check-code-scanning [--config FILE]         # CodeQL on this machine, with the configuration CI reads
+resolve-code-scanning-config --out FILE     # the CodeQL configuration: the family's defaults, your file merged over them
 ```
 
 - `check-docs-tables` measures each `<br>` segment of a cell's visible text,
@@ -291,9 +292,15 @@ check-code-scanning [--config FILE]         # CodeQL on this machine, with the c
   that fails with its exit status. A repository with no skill tests passes.
   Some suites drive fastlane, so a caller runs it where the Ruby bundle is
   installed (the template's `make check-release`).
+- `resolve-code-scanning-config` writes the CodeQL configuration both CI and
+  `check-code-scanning` read: this package's defaults (the `security-and-quality`
+  suite, the alert-suppression pack, `paths-ignore` for generated and checked-out
+  directories) with your `.github/codeql/codeql-config.yml`, if you have one,
+  merged over them. Your `paths-ignore` entries are added; `name`, `queries` and
+  `packs` replace the defaults; any other key is an error, not a silent drop.
 - `check-code-scanning` runs CodeQL on this machine with the language, query
-  suite, packs and `paths-ignore` of the configuration `check-code-scanning.yml` reads
-  (`--config`, default `.github/codeql/codeql-config.yml`), so an inline
+  suite, packs and `paths-ignore` of that merged configuration
+  (`--config`, default `.github/codeql/codeql-config.yml`, optional), so an inline
   `// codeql[rule-id]` marker shows as suppressing its finding or not before a
   push. It needs `codeql` on PATH or the `gh codeql` extension, writes to
   `.codeql/`, and fails while a finding is open. Only

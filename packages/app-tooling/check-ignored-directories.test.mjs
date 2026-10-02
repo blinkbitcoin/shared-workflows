@@ -267,7 +267,6 @@ test('every text check says how to fix it', () => {
       'knip (knip.json) does not skip .workflows: add ".workflows/**" to ignore, or keep every entry and project glob out of dot directories',
       'typos (typos.toml) does not skip .workflows: add ".workflows/" to [files] extend-exclude',
       'git (.gitignore) does not skip .workflows: add /.workflows/',
-      'CodeQL (.github/codeql/codeql-config.yml) does not skip .workflows: add "- .workflows" to paths-ignore',
     ],
   );
 });
@@ -278,6 +277,15 @@ test('Semgrep counts the package list: the default pair needs no line of the app
   const semgrep = (argv) => run(files, { argv }).error.filter((line) => line.startsWith('Semgrep'));
   assert.deepEqual(semgrep(['--directory', 'generated']), ['Semgrep (.semgrepignore) does not skip generated: add generated/']);
   assert.deepEqual(semgrep(['--directory', 'node_modules']), []);
+});
+
+test('CodeQL counts the package defaults, so only a directory they do not name needs the app\'s own entry', () => {
+  const files = { ...ALIGNED, '.github/codeql/codeql-config.yml': 'paths-ignore:\n  - src/generated\n' };
+  assert.equal(run(files).code, 0);
+  const codeql = (argv) => run(files, { argv }).error.filter((line) => line.startsWith('CodeQL'));
+  assert.deepEqual(codeql(['--directory', 'vendor']), ['CodeQL (.github/codeql/codeql-config.yml) does not skip vendor: add "- vendor" to paths-ignore']);
+  assert.deepEqual(codeql(['--directory', 'src/generated']), []);
+  assert.deepEqual(codeql(['--directory', 'ios']), []);
 });
 
 test('main passes a repository whose every configuration skips both, and names what it checked', () => {

@@ -112,14 +112,21 @@ export BOUNDARY
   [ "$status" -eq 0 ] || fail "$output"
 }
 
-@test "check-code-scanning.yml passes a config file only when the consumer has one" {
+@test "check-code-scanning.yml scans with the resolved configuration, never the consumer's path directly" {
   # codeql-action/init fails outright on a path it cannot read, and this
   # workflow is informational by design - a caller must not make it required.
+  # So init reads the file the resolver wrote (the family's defaults with the
+  # consumer's file merged over them, present or not), after the step that
+  # writes it, and the shared-workflows checkout it needs stays out of the
+  # database because the defaults ignore .workflows.
   run node -e '
     const text = require("fs").readFileSync(`${process.env.REPO_ROOT}/.github/workflows/check-code-scanning.yml`, "utf8");
-    if (!/config-file: \$\{\{ hashFiles\(inputs\.configuration-file\) != .. && inputs\.configuration-file \|\| .. \}\}/.test(text)) {
-      throw new Error("check-code-scanning.yml passes its configuration file unconditionally again");
-    }
+    const scan = text.slice(text.indexOf("  code-scanning:"));
+    const resolve = scan.indexOf("resolve-code-scanning-config.sh");
+    const init = scan.indexOf("github/codeql-action/init@");
+    if (resolve === -1 || init === -1 || resolve > init) throw new Error("the configuration is not resolved before codeql-action/init");
+    if (!/config-file: \.\/\.codeql-config\.yml/.test(scan)) throw new Error("codeql-action/init does not read the resolved file");
+    if (/hashFiles\(inputs\.configuration-file\)/.test(scan)) throw new Error("the consumer path is passed to init directly again");
   '
   [ "$status" -eq 0 ] || fail "$output"
 }

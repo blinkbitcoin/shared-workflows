@@ -69,7 +69,10 @@ if [ "${#existing[@]}" -gt 0 ]; then
     files+=("$f")
   done < <(find "${existing[@]}" -name '*.sh')
   if [ "${#files[@]}" -gt 0 ]; then
-    mise x "shellcheck@$SHELLCHECK_VERSION" -- shellcheck -x "${files[@]}"
+    # The two options this family's .shellcheckrc sets (follow sourced helpers,
+    # resolve them from the sourcing script), passed here so a consumer needs
+    # no .shellcheckrc of its own; one it has still applies.
+    mise x "shellcheck@$SHELLCHECK_VERSION" -- shellcheck -x -P SCRIPTDIR "${files[@]}"
   fi
 else
   log "check-ci: skipping shellcheck"

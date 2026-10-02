@@ -27,6 +27,7 @@
     "setup",
     "doctor.requirements.json",
     "zizmor.yml",
+    "codeql-config.yml",
     "store-notes.prompt.md",
     "security-review.prompt.md",
     "contract.json",
@@ -63,6 +64,7 @@
     "./check-skills": "./bin/check-skills.mjs",
     "./test-app": "./bin/test-app.mjs",
     "./check-code-scanning": "./bin/check-code-scanning.mjs",
+    "./resolve-code-scanning-config": "./bin/resolve-code-scanning-config.mjs",
     "./check-security": "./bin/check-security.mjs",
     "./doctor": "./bin/doctor.mjs",
     "./serve-dist": "./bin/serve-dist.mjs",
@@ -139,6 +141,7 @@
     "test-app": "./bin/test-app.mjs",
     "check-code-scanning": "./bin/check-code-scanning.mjs",
     "check-security": "./bin/check-security.mjs",
+    "resolve-code-scanning-config": "./bin/resolve-code-scanning-config.mjs",
     "doctor": "./bin/doctor.mjs",
     "serve-dist": "./bin/serve-dist.mjs",
     "help": "./bin/help.mjs"
