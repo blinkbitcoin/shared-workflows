@@ -1,0 +1,32 @@
+# gitleaks configuration, read by `make check-secrets` (full history) and the
+# pre-commit hook (staged changes).
+#
+# The default rule set stays on; this file only carves out places that hold
+# secret-SHAPED test data on purpose. Each entry says why. Add to it only for
+# a fixture or a detector, never for a real value: a real secret that reached a
+# commit is rotated, not allowlisted.
+
+[extend]
+useDefault = true
+
+# The store-release plugin's skill test suites run offline against fakes, and the
+# fakes have to look real to exercise the validators: a throwaway RSA key in a
+# "decoy-project" service account, a Huawei client secret made of
+# 0123456789abcdef, a basic-auth header that decodes to "user:never-in-argv".
+[[allowlists]]
+description = "store-release skill test fixtures and fakes"
+paths = ['''^plugins/store-release/skills/[^/]+/tests/''']
+
+# validate-asc-key.sh greps the first line of a .p8 file for the PEM header, and
+# names the wrong header in its error message. The two headers on neighbouring
+# lines are what the private-key rule sees as a key. Matched on the text that
+# sits between the two headers (the grep's closing quote, or the error message)
+# so it covers exactly that shape and not a key pasted into the file. Both,
+# because earlier revisions of the script put the pair one line apart in the
+# other order, and the history scan reads every revision.
+[[allowlists]]
+description = "PEM header literals in the App Store Connect key validator"
+paths = ['''^plugins/store-release/skills/store-credentials/scripts/validate-asc-key\.sh$''']
+regexTarget = "match"
+regexes = ['''PRIVATE KEY-----'; then''', '''re-download the \.p8 from Users and Access''']
+condition = "AND"
