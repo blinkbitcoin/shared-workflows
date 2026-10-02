@@ -1015,8 +1015,11 @@ To render the same badges on a laptop, run the program from the installed
 package with the same environment, after your coverage run:
 
 ```sh
-BADGE_UNIT=success BADGE_E2E=skipped pnpm exec gen-badges   # into coverage/badge
+pnpm exec gen-badges --local   # into coverage/badge: Unit and E2E as success, Security from .security/verdict.json
 ```
+
+`--local` is what a `make gen-badges` recipe calls; `BADGE_UNIT=... pnpm exec
+gen-badges` still renders exactly what the environment says.
 
 `gen-coverage-badge` and `gen-status-badge` render one badge each, for a layout that
 wants only one. A copy of the renderer in your repository (`scripts/badges/`,
@@ -1242,7 +1245,9 @@ A green laptop and a green pipeline are the same claim. **You ship no scanner
 code.** You keep `security-settings.json` (optional: without it the defaults
 apply; `@blinkbitcoin/app-tooling/security-settings.json` is every key at its
 default, ready to copy) and the files it names: your own Semgrep rules
-(`jobs.code.rules`, added to the React Native rules the package already runs),
+(`jobs.code.rules`, added to the React Native rules the package already runs;
+a directory there also has its `semgrep --test` fixtures run first, and a
+failing one fails the job),
 and a `.mobsf` with reasoned mobsfscan suppressions if you need one. A
 `.semgrepignore` lists only paths the package does not already skip
 (`node_modules`, `ios`, `android`, `dist`, `coverage`, `vendor/bundle`,

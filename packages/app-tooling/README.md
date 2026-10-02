@@ -193,6 +193,8 @@ check-ignored-directories                   # a tool that walks into .workflows/
 check-docs [--architecture PREFIX]          # docs freshness, the command table, then three of the above
 check-licenses [--allow SPDX]               # a production dependency under a license outside the allowlist
 check-skills [--root DIR]                   # an agent skill whose offline tests fail
+check-release [--fastlane-directory DIR]    # Ruby syntax, fastlane lanes, the lanes' unit tests, then check-skills
+install-gems                                # bundle install under vendor/bundle (NO_BUNDLE=1 skips)
 check-code-scanning [--config FILE]         # CodeQL on this machine, with the configuration CI reads
 resolve-code-scanning-config --out FILE     # the CodeQL configuration: the family's defaults, your file merged over them
 ```
@@ -298,6 +300,15 @@ resolve-code-scanning-config --out FILE     # the CodeQL configuration: the fami
   directories) with your `.github/codeql/codeql-config.yml`, if you have one,
   merged over them. Your `paths-ignore` entries are added; `name`, `queries` and
   `packs` replace the defaults; any other key is an error, not a silent drop.
+- `check-release` is the whole offline release check in one call, in order:
+  `bundle check` (not installed: run `install-gems`), `ruby -c` over the
+  `Fastfile`, `lanes/*.rb` and `test/*.rb` of the fastlane directory
+  (`--fastlane-directory`, default `fastlane`), `bundle exec fastlane lanes`
+  with `FASTLANE_SKIP_ENV_ASSERT=1`, the directory's `test/lanes_test.rb` when
+  it has one, then `check-skills`. It stops at the first step that fails.
+- `install-gems` points bundler at `vendor/bundle` and installs. It runs after
+  `pnpm install`, which is what puts it in `node_modules`; `NO_BUNDLE=1` skips
+  it for a job that only runs the JavaScript checks.
 - `check-code-scanning` runs CodeQL on this machine with the language, query
   suite, packs and `paths-ignore` of that merged configuration
   (`--config`, default `.github/codeql/codeql-config.yml`, optional), so an inline
@@ -595,11 +606,17 @@ laptop runs the same program from the installed package:
 
 ```sh
 BADGE_UNIT=success BADGE_E2E=skipped gen-badges   # every badge the environment asks for, into coverage/badge
+gen-badges --local                                # a laptop: unit and E2E default to success, the verdict from .security/
 gen-coverage-badge [--status failing|pending] [--out DIR] [--summary FILE]
 gen-status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
 ```
 
-- `gen-badges` takes no arguments. It reads `BADGE_UNIT` and `BADGE_E2E`
+- `gen-badges --local` is for a laptop, where no CI says how the jobs went:
+  `BADGE_UNIT` and `BADGE_E2E` default to `success`, and `BADGE_SECURITY` to
+  the verdict the last `check-security` run left in `.security/verdict.json`
+  (set `BADGE_SECURITY` to empty to leave the published badge alone). It is
+  the one call a `make gen-badges` recipe needs. Otherwise it takes no
+  arguments and reads `BADGE_UNIT` and `BADGE_E2E`
   (GitHub job results), `BADGE_UNIT_LABEL` / `BADGE_E2E_LABEL`,
   `BADGE_COVERAGE` (`measure`, `failing`, `pending` or `skip`),
   `BADGE_COVERAGE_SUMMARY`, `BADGE_OUT_DIR`, and `BADGE_SECURITY` /
