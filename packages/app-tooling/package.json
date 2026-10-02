@@ -30,6 +30,8 @@
     "codeql-config.yml",
     "store-notes.prompt.md",
     "security-review.prompt.md",
+    "fastlane/Fastfile",
+    "fastlane/lanes",
     "contract.json",
     "interfaces.json",
     "versions.json",

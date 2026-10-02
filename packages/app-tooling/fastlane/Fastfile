@@ -1,0 +1,23 @@
+# The family's store lanes: build, verify and upload for iOS and Android, and
+# the Huawei and store-listing lanes beside them. An app's own fastlane/Fastfile
+# is one import of this file (see docs/consumer-guide.md):
+#
+#   import '../node_modules/@blinkbitcoin/app-tooling/fastlane/Fastfile'
+#
+# The lane files are imported by absolute path. fastlane resolves a relative
+# `import` against the Fastfile it started from rather than the one containing
+# the import, so a relative path here would be looked up in the app.
+#
+# What the app keeps: Appfile, Matchfile and Pluginfile, the Gemfile that pins
+# fastlane, and the store metadata and screenshots.
+fastlane_require 'json'
+
+%w[shared ios android huawei].each do |name|
+  import File.join(__dir__, 'lanes', "#{name}.rb")
+end
+
+before_all do |_lane, _options|
+  next if ENV['FASTLANE_SKIP_ENV_ASSERT'] == '1' # unit tests and `check-release`
+
+  require_env!(%w[APP_VERSION APP_BUILD_NUMBER IOS_BUNDLE_ID IOS_SCHEME ANDROID_PACKAGE])
+end
