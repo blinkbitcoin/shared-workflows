@@ -395,7 +395,7 @@ generated (internal, and the release PR draft) and never where they are
 copied: a verbatim section is final.
 
 **Optional LLM pass**, off unless configured. Every failure — no key, an HTTP
-error, unparseable JSON, a missing locale, a leaked commit hash — is a warning
+error, unparsable JSON, a missing locale, a leaked commit hash — is a warning
 and a fall back to the deterministic prose. A release never fails because a
 model was unavailable.
 
