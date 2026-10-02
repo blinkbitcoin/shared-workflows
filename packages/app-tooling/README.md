@@ -387,6 +387,53 @@ length, is not a port and is not matched. A file that has to carry one is named 
 with the arguments it was given, then the router's `dist/+not-found.html` as
 `dist/404.html`, which GitHub Pages serves for a path with no file.
 
+### The prebuild check
+
+`ios/` and `android/` are build output in an Expo app, never committed, so a config
+plugin that edits an `Info.plist` or a Gradle file can only be tested by running the
+prebuild and reading what it wrote:
+
+```sh
+check-prebuild [--root DIR] [--keep]
+```
+
+It copies the app into a temporary directory (leaving out `node_modules`, which it
+links, `ios/`, `android/`, `.git`, `.expo`, `.claude/worktrees`, `.workflows`, `dist`
+and `coverage`, plus whatever `prebuild.exclude` adds), runs the prebuild there, and
+checks the generated files against the `prebuild` section of `app-tooling.json`. Each
+scenario is one prebuild with its own environment, because a plugin that behaves
+differently with a variable on (OTA) needs both builds:
+
+```json
+{
+  "prebuild": {
+    "scenarios": {
+      "default": {
+        "label": "OTA off",
+        "env": { "APP_VARIANT": "production", "APP_VERSION": "1.2.3", "APP_BUILD_NUMBER": "42" },
+        "assert": [
+          { "file": "ios/*/Info.plist", "contains": "<key>AppBuildStamp</key>", "message": "iOS Info.plist lacks AppBuildStamp" },
+          { "file": "ios/*/Supporting/Expo.plist", "absent": "EXUpdatesCodeSigningCertificate" },
+          { "file": "ios/*/Supporting/Expo.plist", "pattern": "<key>EXUpdatesEnabled</key>\\s*<false/>" },
+          { "exists": "ios/**/SplashScreenBackground.colorset" }
+        ]
+      }
+    }
+  }
+}
+```
+
+An assertion is one of `contains` and `absent` (text, in the files `file` matches),
+`pattern` (a regular expression, with the `s` flag so `.` crosses lines) or `exists`
+(a path pattern); the optional `message` is what a failure says. A `file` is a path
+pattern with `*` for any one name (or a run of characters inside one) and `**` for any
+number of directories. `contains` and `pattern` need one of the matching files to hold
+it, `absent` needs none of them to, and a pattern that matches no file is a failure.
+Every assertion of every scenario is checked and every failure listed, so one run says
+everything that is wrong. `command` replaces `expo prebuild --platform all --clean
+--no-install`, and `--keep` leaves the temporary directory behind to look at. The
+prebuild runs with `EXPO_NO_GIT_STATUS=1` unless a scenario sets it.
+
 ### How the template calls them
 
 Once the template takes the release that ships these, each of its own copies
@@ -398,6 +445,8 @@ becomes one line:
 | `ports` (a `scripts/ports.mjs` of your own) | `pnpm exec ports [--sh]` |
 | the bare-port-literal guard | `pnpm exec check-ports` |
 | `build:web` (`expo export` and the 404 page) | `pnpm exec build-web [expo export arguments]` |
+
+| `check-prebuild` (`scripts/check-prebuild.sh`) | `pnpm exec check-prebuild` |
 | `check-docs` | `pnpm exec check-docs` |
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
 | `check-ignored-directories` | `pnpm exec check-ignored-directories` |

@@ -71,6 +71,7 @@
     },
     "./check-ports": "./bin/check-ports.mjs",
     "./build-web": "./bin/build-web.mjs",
+    "./check-prebuild": "./bin/check-prebuild.mjs",
     "./doctor.requirements.json": "./doctor.requirements.json",
     "./security-settings.json": "./security-settings.json",
     "./help": "./bin/help.mjs",
@@ -149,6 +150,7 @@
     "ports": "./bin/ports.mjs",
     "check-ports": "./bin/check-ports.mjs",
     "build-web": "./bin/build-web.mjs",
+    "check-prebuild": "./bin/check-prebuild.mjs",
     "help": "./bin/help.mjs"
   },
   "peerDependencies": {
