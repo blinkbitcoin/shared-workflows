@@ -25,3 +25,6 @@ act = "0.2.89"
 # check-security ships, and skips without it - which on a runner without it
 # meant the fixtures were never run. The version the template pins.
 semgrep = "1.177.0"
+# The lanes in packages/app-tooling/fastlane are Ruby, and `make test-fastlane` runs
+# their tests. The major and minor the template pins.
+ruby = "3.3"

@@ -849,6 +849,68 @@ pnpm exec serve-dist          # dist/ on WEB_PREVIEW_PORT
 pnpm exec serve-dist build    # another directory
 ```
 
+## Fastlane lanes
+
+The store lanes live here, in `fastlane/` (`Fastfile` and `lanes/`), so an app
+does not carry them: iOS and Android `build`, `verify`, `upload_internal`,
+`promote_beta`, `release_production` and the rest, the Huawei AppGallery lane,
+and the store-listing sync and pull lanes. The release workflows run them
+through `scripts/release/fastlane.sh`; a laptop runs them with `bundle exec
+fastlane <platform> <lane>`.
+
+An app's whole `fastlane/Fastfile` is one import, from where the package is
+installed:
+
+```ruby
+import '../node_modules/@blinkbitcoin/app-tooling/fastlane/Fastfile'
+```
+
+The package's Fastfile asserts the five contract variables (`APP_VERSION`,
+`APP_BUILD_NUMBER`, `IOS_BUNDLE_ID`, `IOS_SCHEME`, `ANDROID_PACKAGE`) in
+`before_all`. What the app keeps is its own: `Appfile`, `Matchfile`, a
+`Pluginfile` with the Huawei plugin if it uploads there, the `Gemfile` that pins
+fastlane and CocoaPods, and `metadata/` and `screenshots/` under its fastlane
+directory. The lanes find that directory through fastlane itself, so
+`mobile/fastlane` works as well as `fastlane` (the `fastlane-directory` input).
+
+**Expo or bare.** The workflows resolve the native stack once and
+`fastlane.sh` hands it to the lanes as `WORKFLOWS_NATIVE_STACK` (unset means
+`expo`). Two things differ:
+
+- **The iOS version.** On `expo`, prebuild already wrote the release's version
+  and build number into the generated project, so the lane reads them back from
+  the Info.plist and compares. On `bare` nothing generated them, so before the
+  archive the lane stamps `APP_VERSION` and `APP_BUILD_NUMBER` into the
+  committed Xcode project (in the checkout only, never committed), with the
+  scheme as the target, then reads them back and compares.
+- **Android signing.** The lanes pass the keystore as four gradle properties
+  (`ANDROID_UPLOAD_STORE_FILE`, `ANDROID_UPLOAD_STORE_PASSWORD`,
+  `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_PASSWORD`). An Expo app's
+  config plugin reads them. A bare app reads them in `android/app/build.gradle`:
+
+  ```groovy
+  signingConfigs {
+      release {
+          if (project.hasProperty('ANDROID_UPLOAD_STORE_FILE')) {
+              storeFile file(ANDROID_UPLOAD_STORE_FILE)
+              storePassword ANDROID_UPLOAD_STORE_PASSWORD
+              keyAlias ANDROID_UPLOAD_KEY_ALIAS
+              keyPassword ANDROID_UPLOAD_KEY_PASSWORD
+          }
+      }
+  }
+  ```
+
+  and takes its `versionName` and `versionCode` from the environment
+  (`APP_VERSION`, `APP_BUILD_NUMBER`), which the lanes leave in place.
+  Without the properties the build must fall back to the debug keystore, which
+  is what lets a repository with no Play credentials still compile and `verify`.
+
+`check-release` (above) checks an app's own Ruby and lists its lanes; the lanes
+themselves are tested here, by `make test-fastlane`, so an app does not run
+them. `WORKFLOWS_VERIFIERS_DIR` points them at another copy of the release
+verifiers (the unit tests use it); by default they are the ones beside them.
+
 ## Release scripts
 
 `release/verify-ios.sh <ipa-or-app> [--no-signing] [--dsym DIR]` and

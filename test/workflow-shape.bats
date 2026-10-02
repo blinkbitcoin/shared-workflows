@@ -289,33 +289,33 @@ lane_step_count() {
 # consumer's Fastfile reads them straight out of ENV, so a rename on either side
 # silently stops populating the App Store review form - deliver and pilot simply
 # receive fewer keys, with no error. The names are therefore not hard-coded here
-# but read out of a committed copy of the template's shared.rb, and the two sets
-# are compared in both directions.
+# but read out of the package's own lanes (packages/app-tooling/fastlane/lanes/
+# shared.rb, which every app imports), and the two sets are compared in both
+# directions.
 #
 # They are secrets rather than environment-variables/env-json values because a reviewer demo
 # login is a real credential and both of those inputs are printed to the log.
 #
-# Read from the fixture consumer's lanes, which is what the guide's examples are
-# built from. A real consumer's lanes are held to the same names by its own
-# Contract job (lane.app-review-env in contract.json).
-@test "publish-store's App Review secrets are exactly the names the fixture's lanes read" {
-  TEMPLATE_LANES="$FIXTURES/consumer-min/fastlane/lanes/shared.rb"
-  [ -f "$TEMPLATE_LANES" ] || fail "no fixture lanes at $TEMPLATE_LANES"
+# An app that writes lanes of its own is held to the same names by its Contract
+# job (lane-environment.app-review in contract.json).
+@test "publish-store's App Review secrets are exactly the names the shipped lanes read" {
+  TEMPLATE_LANES="$REPO_ROOT/packages/app-tooling/fastlane/lanes/shared.rb"
+  [ -f "$TEMPLATE_LANES" ] || fail "no lanes at $TEMPLATE_LANES"
   wanted="$(grep -oE "ENV\['APP_REVIEW_[A-Z0-9_]*'\]" "$TEMPLATE_LANES" |
     sed "s/ENV\['//; s/'\]//" | sort -u)"
   [ "$(grep -c . <<<"$wanted")" -ge 7 ] \
-    || fail "read only '$wanted' from $TEMPLATE_LANES - has the fixture changed shape?"
+    || fail "read only '$wanted' from $TEMPLATE_LANES - have the lanes changed shape?"
   declared="$(yq -r '.on.workflow_call.secrets | keys | .[]' "$REPO_ROOT/.github/workflows/publish-store.yml" |
     grep '^APP_REVIEW_' | sort -u)"
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$declared" \
-      || fail "the fixture's lanes read $name but publish-store.yml does not declare it"
+      || fail "the shipped lanes read $name but publish-store.yml does not declare it"
   done <<<"$wanted"
   while read -r name; do
     [ -n "$name" ] || continue
     grep -qxF "$name" <<<"$wanted" \
-      || fail "publish-store.yml declares $name but no lane in the fixture reads it"
+      || fail "publish-store.yml declares $name but no shipped lane reads it"
   done <<<"$declared"
 }
 
