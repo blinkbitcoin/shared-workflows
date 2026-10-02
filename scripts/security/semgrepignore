@@ -1,0 +1,14 @@
+# Paths Semgrep never scans, for every consumer: generated, vendored or
+# someone else's checkout. code.sh passes each line as --exclude, on top of the
+# repository's own .semgrepignore, which adds what only that repository knows
+# (its generated catalogs, its test fixtures).
+node_modules/
+ios/
+android/
+dist/
+coverage/
+vendor/bundle/
+.expo/
+.claude/worktrees/
+# Every CI job's checkout of shared-workflows, not the repository's source.
+.workflows/

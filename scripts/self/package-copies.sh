@@ -60,6 +60,8 @@ copies=(
   scripts/security/review.sh:security/review.sh
   scripts/security/review-codebase.sh:security/review-codebase.sh
   scripts/security/lib/runner.sh:security/lib/runner.sh
+  scripts/security/rules/react-native-secrets.yaml:security/rules/react-native-secrets.yaml
+  scripts/security/semgrepignore:security/semgrepignore
   scripts/e2e/ios-maestro.sh:e2e/ios-maestro.sh
   scripts/e2e/android-maestro.sh:e2e/android-maestro.sh
   scripts/e2e/app-launch.sh:e2e/app-launch.sh

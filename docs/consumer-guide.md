@@ -1231,8 +1231,11 @@ A green laptop and a green pipeline are the same claim. **You ship no scanner
 code.** You keep `security-settings.json` (optional: without it the defaults
 apply; `@blinkbitcoin/app-tooling/security-settings.json` is every key at its
 default, ready to copy) and the files it names: your own Semgrep rules
-(`jobs.code.rules`), and a `.mobsf` with reasoned mobsfscan suppressions if you
-need one. A copy of the scanners in your repository is a `no-copy.security`
+(`jobs.code.rules`, added to the React Native rules the package already runs),
+and a `.mobsf` with reasoned mobsfscan suppressions if you need one. A
+`.semgrepignore` lists only paths the package does not already skip
+(`node_modules`, `ios`, `android`, `dist`, `coverage`, `vendor/bundle`,
+`.expo`, `.claude/worktrees`, `.workflows`). A copy of the scanners in your repository is a `no-copy.security`
 failure in the contract check.
 
 **Every job installs your dependencies** (the `setup` action's
@@ -1260,7 +1263,7 @@ that scans nothing while reporting green is worse than one that is red.
 | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | The family's common six. `macos-runner` and `native-cache-version` are unused here and carried for consistency |
 | `dependencies` | Allow the dependency scanner (`check-security dependencies`, osv-scanner over the lockfile). Default `true` |
-| `code` | Allow the source scanner (`check-security code`, Semgrep's TypeScript, secrets and OWASP packs plus your `jobs.code.rules`). Default `true` |
+| `code` | Allow the source scanner (`check-security code`, Semgrep's TypeScript, secrets and OWASP packs, this package's React Native rules plus your `jobs.code.rules`). Default `true` |
 | `policy` | Allow the install-policy scanner (`check-security policy`, your `pnpm-workspace.yaml` install policy). Default `true` |
 | `sbom` | Allow the bill of materials (`check-security sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
 | `native-stack` | `expo` or `bare`, for the two scanners below. Default empty: detected, as in [Expo or bare React Native](#expo-or-bare-react-native) |

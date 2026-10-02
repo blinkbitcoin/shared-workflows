@@ -511,8 +511,12 @@ pnpm exec check-security code bundle  # those jobs only, then their verdict
 - **What you keep:** `security-settings.json` at your repository root, which is
   optional. `security-settings.json` in this package is every key at its
   default, with a `$comment` beside each option, ready to copy. You also keep
-  the files the settings name: your Semgrep rules (`jobs.code.rules`) and, if
-  you need one, a `.mobsf` with reasoned mobsfscan suppressions. You keep no
+  the files the settings name: your own Semgrep rules (`jobs.code.rules`), run
+  after the package's React Native rules (a plaintext secret in AsyncStorage
+  or `expo-sqlite/kv-store`, a cleartext `http://` endpoint, an interpolated
+  WebView `injectedJavaScript`) and, if you need one, a `.mobsf` with reasoned
+  mobsfscan suppressions. A `.semgrepignore` adds to the package's own list
+  rather than replacing it. You keep no
   scanner code. A `scripts/security/` in your repository is a
   `no-copy.security` failure in the contract check.
 - **The jobs:**

@@ -30,7 +30,9 @@
 //           at a dot directory (knip's globs skip dot directories otherwise).
 //   typos   typos.toml: extend-exclude names it.
 //   git, Semgrep and CodeQL: .gitignore, .semgrepignore and the CodeQL
-//           configuration's paths-ignore name it.
+//           configuration's paths-ignore name it. Semgrep also counts this
+//           package's own list (security/semgrepignore), which the scan always
+//           applies, so an app names only the directories that list does not.
 //   zizmor  every call in a tracked file passes --config: zizmor looks for its
 //           policy at the nearest directory holding a `.git` directory, and a
 //           worktree's `.git` is a file, so without it a worktree reads the
@@ -46,10 +48,13 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isProgram } from '../lib/is-program.mjs';
 import { yamlList } from './check-code-scanning.mjs';
 
 const DEFAULT_DIRECTORIES = ['.workflows', '.claude/worktrees'];
+// What check-security's code scan always excludes, whatever the app's own file says.
+const PACKAGED_SEMGREPIGNORE = fileURLToPath(new URL('../security/semgrepignore', import.meta.url));
 const JEST_OPTIONS = ['testPathIgnorePatterns', 'modulePathIgnorePatterns', 'coveragePathIgnorePatterns'];
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -170,6 +175,7 @@ export const TEXT_CHECKS = [
     tool: 'Semgrep',
     files: ['.semgrepignore'],
     parse: (text) => text.split('\n'),
+    expand: (lines) => [...readFileSync(PACKAGED_SEMGREPIGNORE, 'utf8').split('\n'), ...lines],
     skips: (lines, dir) => lines.some((line) => namesDirectory(line, dir)),
     fix: (dir) => `add ${dir}/`,
   },
