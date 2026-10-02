@@ -72,8 +72,6 @@ jobs:
       ios: ${{ github.event_name == 'workflow_dispatch' && inputs.ios }}
       android: ${{ github.event_name != 'workflow_dispatch' || inputs.android }}
       dev-client: true
-      # A mock GraphQL API the app talks to in dev/E2E. The template ships
-      # both hooks at these paths; a smoke target that does not must leave
-      # these two inputs empty (a non-empty but missing path is fatal).
-      e2e-setup-script: scripts/e2e/ci-mock-api-up.sh
-      e2e-teardown-script: scripts/e2e/ci-mock-api-down.sh
+      # A mock GraphQL API the app talks to in dev/E2E. The template's package
+      # script starts it; a smoke target without one must leave this empty.
+      mock-api-command: pnpm dev:api
