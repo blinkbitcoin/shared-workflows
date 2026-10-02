@@ -24,6 +24,7 @@ export const SECTIONS = {
   docs: ['architecture', 'allowTargetNames'],
   appSuites: ['skip'],
   ports: ['base', 'services', 'apiPath', 'allow', 'retired'],
+  prebuild: ['scenarios', 'exclude', 'command'],
 };
 
 /** A configuration file that is there and wrong; a program exits 2 on one. */
@@ -112,4 +113,64 @@ export function portTable(section) {
     table.services = section.services;
   }
   return table;
+}
+
+/** The assertion forms a prebuild scenario holds: the key naming what is asserted, and what it asserts. */
+export const PREBUILD_ASSERTIONS = {
+  contains: 'a file matching `file` holds this text',
+  absent: 'no file matching `file` holds this text',
+  pattern: 'a file matching `file` has a match for this regular expression (`s` flag: `.` crosses lines)',
+  exists: 'a path matching this pattern exists',
+};
+
+/**
+ * The `prebuild` section checked and filled in: `{ exclude, command, scenarios }`, each scenario
+ * `{ name, label, env, assertions }` and each assertion `{ kind, value, file, message }`. A ConfigError
+ * names the first thing wrong, and says what the key takes.
+ */
+export function prebuildConfig(section) {
+  const fail = (reason) => {
+    throw new ConfigError(`${CONFIG_FILE}: ${reason}`);
+  };
+  if (section === null) fail('no "prebuild" section: name at least one scenario');
+  const exclude = section.exclude === undefined ? [] : stringList(section.exclude, 'prebuild.exclude');
+  const command =
+    section.command === undefined ? ['./node_modules/.bin/expo', 'prebuild', '--platform', 'all', '--clean', '--no-install'] : stringList(section.command, 'prebuild.command');
+  if (command.length === 0) fail('"prebuild.command" must name a program');
+  if (!isObject(section.scenarios) || Object.keys(section.scenarios).length === 0) {
+    fail('"prebuild.scenarios" must be an object with at least one scenario');
+  }
+  const scenarios = Object.entries(section.scenarios).map(([name, scenario]) => {
+    const where = `prebuild.scenarios.${name}`;
+    if (!isObject(scenario)) fail(`"${where}" must be an object`);
+    for (const key of Object.keys(scenario)) {
+      if (!['label', 'env', 'assert'].includes(key)) fail(`unknown key "${where}.${key}"; a scenario takes label, env, assert`);
+    }
+    if (scenario.label !== undefined && typeof scenario.label !== 'string') fail(`"${where}.label" must be a string`);
+    const env = scenario.env === undefined ? {} : stringMap(scenario.env, `${where}.env`);
+    if (!Array.isArray(scenario.assert) || scenario.assert.length === 0) fail(`"${where}.assert" must be a list with at least one assertion`);
+    const assertions = scenario.assert.map((assertion, index) => {
+      const at = `${where}.assert[${index}]`;
+      if (!isObject(assertion)) fail(`"${at}" must be an object`);
+      const kinds = Object.keys(PREBUILD_ASSERTIONS).filter((kind) => kind in assertion);
+      if (kinds.length !== 1) fail(`"${at}" needs exactly one of ${Object.keys(PREBUILD_ASSERTIONS).join(', ')}`);
+      const [kind] = kinds;
+      for (const key of Object.keys(assertion)) {
+        if (!(kind === 'exists' ? [kind, 'message'] : [kind, 'file', 'message']).includes(key)) fail(`unknown key "${at}.${key}"; "${kind}" takes ${kind}${kind === 'exists' ? '' : ', file'}, message`);
+      }
+      if (typeof assertion[kind] !== 'string' || assertion[kind] === '') fail(`"${at}.${kind}" must be a non-empty string`);
+      if (kind === 'pattern') {
+        try {
+          new RegExp(assertion.pattern, 's');
+        } catch (e) {
+          fail(`"${at}.pattern" is not a regular expression: ${e.message}`);
+        }
+      }
+      if (kind !== 'exists' && (typeof assertion.file !== 'string' || assertion.file === '')) fail(`"${at}.file" must name the files to look in`);
+      if (assertion.message !== undefined && typeof assertion.message !== 'string') fail(`"${at}.message" must be a string`);
+      return { kind, value: assertion[kind], file: assertion.file ?? null, message: assertion.message ?? null };
+    });
+    return { name, label: scenario.label ?? name, env, assertions };
+  });
+  return { exclude, command, scenarios };
 }
