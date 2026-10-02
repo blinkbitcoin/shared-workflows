@@ -38,7 +38,7 @@ export const STACK_TITLE = { expo: 'Expo apps only', bare: 'bare React Native ap
  */
 export function need(req) {
   const base = needOnEitherStack(req);
-  const only = [req.stack && STACK_TITLE[req.stack], req.workflow && `when you call \`${req.workflow}\``].filter(Boolean);
+  const only = [req.stack && STACK_TITLE[req.stack], req.workflow && `when you call ${[req.workflow].flat().map((name) => `\`${name}\``).join(' or ')}`].filter(Boolean);
   return only.length > 0 ? `${base} (${only.join(', ')})` : base;
 }
 

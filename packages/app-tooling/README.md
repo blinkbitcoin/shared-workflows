@@ -331,6 +331,13 @@ one place:
     "allowTargetNames": {
       "gen-graphql": "GraphQL is what it generates, the typed documents, not the tool that does it"
     }
+  },
+  "ports": {
+    "allow": {
+      ".mise.toml": "the base default, which mise exports",
+      "docs/decisions/": "ADRs record what was true when they were accepted"
+    },
+    "retired": [4000, 8089]
   }
 }
 ```
@@ -342,6 +349,43 @@ come from the file. A file that is there and wrong exits 2 with the reason:
 JSON that does not parse, a section or key this version does not know (an
 `excludes` written for `exclude` would otherwise check nothing), a field of the wrong type, or
 a single-file exclude.
+
+### Ports and the web export
+
+Three small programs that every Expo app of this family wrote for itself:
+
+```sh
+ports                 # each service's port, its offset and override variable
+eval "$(pnpm exec ports --sh)"   # export them: METRO_PORT, MOCK_API_PORT,
+                                 # WEB_PREVIEW_PORT, RCT_METRO_PORT, EXPO_PUBLIC_API_URL
+check-ports           # fail on a tracked file that hardcodes one of them
+build-web [args]      # expo export --platform web, then dist/404.html
+```
+
+Every port derives from `APP_PORT_BASE` (default 8080) plus a fixed offset: Metro +1
+(8081 is Expo's own default), the mock API +2 and the web preview +3, each with its own
+override variable (`METRO_PORT`, `MOCK_API_PORT`, `WEB_PREVIEW_PORT`). Eval-ing
+`ports --sh` in a Makefile's run targets works in a shell with no mise activated, and
+`APP_PORT_BASE=8090 make dev` moves everything. `mise` exports only the base: a
+mirrored `METRO_PORT` in the environment looks like a deliberate override, so the base
+would silently stop moving anything.
+
+An app with other services names its own table in the `ports` section of
+`app-tooling.json`: `base`, `services` (each with `offset`, `env` and `what`) and
+`apiPath`. `EXPO_PUBLIC_API_URL` and `RCT_METRO_PORT` are exported only for a `mockApi`
+and a `metro` service. From code, `@blinkbitcoin/app-tooling/ports` exports
+`resolvePorts(env, table)`, typed.
+
+`check-ports` scans the tracked text files for a line that *uses* one of those numbers
+as a port (`localhost:8081`, `port: 4000`, `-p 8083`, `METRO_PORT:-8081`) and fails
+naming each. It looks for the base, every service's default port and the `retired`
+ports, so a copy-paste from an older branch is caught. `limit: 4000`, a store-note
+length, is not a port and is not matched. A file that has to carry one is named in
+`ports.allow`, with the reason as its value.
+
+`build-web` does what a `build:web` script did: `pnpm exec expo export --platform web`
+with the arguments it was given, then the router's `dist/+not-found.html` as
+`dist/404.html`, which GitHub Pages serves for a path with no file.
 
 ### The prebuild check
 
@@ -431,6 +475,10 @@ becomes one line:
 | Target or script | The call |
 | --- | --- |
 | `make help` | `pnpm exec help` |
+| `ports` (a `scripts/ports.mjs` of your own) | `pnpm exec ports [--sh]` |
+| the bare-port-literal guard | `pnpm exec check-ports` |
+| `build:web` (`expo export` and the 404 page) | `pnpm exec build-web [expo export arguments]` |
+
 | `check-prebuild` (`scripts/check-prebuild.sh`) | `pnpm exec check-prebuild` |
 | `test:scripts` (siblings, `node --test`, 100%) and `scripts/coverage-completeness.test.mjs` | `pnpm exec test-scripts` |
 | `check-docs` | `pnpm exec check-docs` |
@@ -769,6 +817,68 @@ the variable, when that is unset, and when there is no export to serve.
 pnpm exec serve-dist          # dist/ on WEB_PREVIEW_PORT
 pnpm exec serve-dist build    # another directory
 ```
+
+## Fastlane lanes
+
+The store lanes live here, in `fastlane/` (`Fastfile` and `lanes/`), so an app
+does not carry them: iOS and Android `build`, `verify`, `upload_internal`,
+`promote_beta`, `release_production` and the rest, the Huawei AppGallery lane,
+and the store-listing sync and pull lanes. The release workflows run them
+through `scripts/release/fastlane.sh`; a laptop runs them with `bundle exec
+fastlane <platform> <lane>`.
+
+An app's whole `fastlane/Fastfile` is one import, from where the package is
+installed:
+
+```ruby
+import '../node_modules/@blinkbitcoin/app-tooling/fastlane/Fastfile'
+```
+
+The package's Fastfile asserts the five contract variables (`APP_VERSION`,
+`APP_BUILD_NUMBER`, `IOS_BUNDLE_ID`, `IOS_SCHEME`, `ANDROID_PACKAGE`) in
+`before_all`. What the app keeps is its own: `Appfile`, `Matchfile`, a
+`Pluginfile` with the Huawei plugin if it uploads there, the `Gemfile` that pins
+fastlane and CocoaPods, and `metadata/` and `screenshots/` under its fastlane
+directory. The lanes find that directory through fastlane itself, so
+`mobile/fastlane` works as well as `fastlane` (the `fastlane-directory` input).
+
+**Expo or bare.** The workflows resolve the native stack once and
+`fastlane.sh` hands it to the lanes as `WORKFLOWS_NATIVE_STACK` (unset means
+`expo`). Two things differ:
+
+- **The iOS version.** On `expo`, prebuild already wrote the release's version
+  and build number into the generated project, so the lane reads them back from
+  the Info.plist and compares. On `bare` nothing generated them, so before the
+  archive the lane stamps `APP_VERSION` and `APP_BUILD_NUMBER` into the
+  committed Xcode project (in the checkout only, never committed), with the
+  scheme as the target, then reads them back and compares.
+- **Android signing.** The lanes pass the keystore as four gradle properties
+  (`ANDROID_UPLOAD_STORE_FILE`, `ANDROID_UPLOAD_STORE_PASSWORD`,
+  `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_PASSWORD`). An Expo app's
+  config plugin reads them. A bare app reads them in `android/app/build.gradle`:
+
+  ```groovy
+  signingConfigs {
+      release {
+          if (project.hasProperty('ANDROID_UPLOAD_STORE_FILE')) {
+              storeFile file(ANDROID_UPLOAD_STORE_FILE)
+              storePassword ANDROID_UPLOAD_STORE_PASSWORD
+              keyAlias ANDROID_UPLOAD_KEY_ALIAS
+              keyPassword ANDROID_UPLOAD_KEY_PASSWORD
+          }
+      }
+  }
+  ```
+
+  and takes its `versionName` and `versionCode` from the environment
+  (`APP_VERSION`, `APP_BUILD_NUMBER`), which the lanes leave in place.
+  Without the properties the build must fall back to the debug keystore, which
+  is what lets a repository with no Play credentials still compile and `verify`.
+
+`check-release` (above) checks an app's own Ruby and lists its lanes; the lanes
+themselves are tested here, by `make test-fastlane`, so an app does not run
+them. `WORKFLOWS_VERIFIERS_DIR` points them at another copy of the release
+verifiers (the unit tests use it); by default they are the ones beside them.
 
 ## Release scripts
 

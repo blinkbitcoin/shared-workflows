@@ -1,0 +1,17 @@
+{
+  "name": "shared-workflows",
+  "owner": {
+    "name": "Blink Bitcoin",
+    "url": "https://github.com/blinkbitcoin"
+  },
+  "description": "Claude Code plugins for apps built on blinkbitcoin/shared-workflows.",
+  "plugins": [
+    {
+      "name": "store-release",
+      "source": "./plugins/store-release",
+      "description": "Store setup for an app on the shared release workflows: the resumable checklist, the App Store Connect, Google Play and AppGallery console steps, the credentials, and the listing metadata.",
+      "category": "release",
+      "tags": ["app-store", "google-play", "fastlane", "release"]
+    }
+  ]
+}

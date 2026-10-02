@@ -28,6 +28,8 @@
     "doctor.requirements.json",
     "zizmor.yml",
     "store-notes.prompt.md",
+    "fastlane/Fastfile",
+    "fastlane/lanes",
     "contract.json",
     "interfaces.json",
     "versions.json",
@@ -65,6 +67,12 @@
     "./check-security": "./bin/check-security.mjs",
     "./doctor": "./bin/doctor.mjs",
     "./serve-dist": "./bin/serve-dist.mjs",
+    "./ports": {
+      "types": "./lib/ports.d.mts",
+      "default": "./lib/ports.mjs"
+    },
+    "./check-ports": "./bin/check-ports.mjs",
+    "./build-web": "./bin/build-web.mjs",
     "./check-prebuild": "./bin/check-prebuild.mjs",
     "./test-scripts": "./bin/test-scripts.mjs",
     "./doctor.requirements.json": "./doctor.requirements.json",
@@ -142,6 +150,9 @@
     "check-security": "./bin/check-security.mjs",
     "doctor": "./bin/doctor.mjs",
     "serve-dist": "./bin/serve-dist.mjs",
+    "ports": "./bin/ports.mjs",
+    "check-ports": "./bin/check-ports.mjs",
+    "build-web": "./bin/build-web.mjs",
     "check-prebuild": "./bin/check-prebuild.mjs",
     "test-scripts": "./bin/test-scripts.mjs",
     "help": "./bin/help.mjs"

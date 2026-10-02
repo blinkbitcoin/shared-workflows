@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->136<!--/count--> scripts · <!--count:tests-->1776<!--/count--> tests · one pinned tag · one tooling package</sub>
+<sub><!--count:reusable-workflows-->22<!--/count--> reusable workflows · <!--count:scripts-->137<!--/count--> scripts · <!--count:tests-->1795<!--/count--> tests · one pinned tag · one tooling package</sub>
 
 </div>
 
@@ -20,7 +20,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
-<!--count:shell-scripts-->135<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
+<!--count:shell-scripts-->136<!--/count--> shell scripts: install an Android SDK, boot an emulator that does not
 hang, wait for Metro, hash the native inputs so a build cache means something,
 decode signing secrets without leaving them on disk, upload a build and then
 prove that the artifact uploaded is the one that was built.
@@ -175,6 +175,12 @@ below>` — `Checks / Dependencies`, `E2E / Build Android`.
 | `publish-github-release.yml`     | `Publish`            | Creates or moves a release with a fixed asset set and `SHA256SUMS`                                           |
 | `publish-ota.yml`   | `Publish`            | Publishes an OTA update only when the native fingerprint is unchanged                                        |
 | `publish-retry.yml` | `Retry`   | Re-runs the failed jobs of a promotion the green gate gave up on, once the build it waited for goes green |
+| `publish-internal.yml` | `Prepare`<br>`Build iOS`<br>`Build Android`<br>`Upload iOS`<br>`Upload Android`<br>`Upload Huawei`<br>`Pre-release`<br>`OTA` | The whole internal pipeline in one call: build both platforms, upload to the internal tracks, publish the `-build.N` pre-release and the internal OTA update |
+| `publish-beta.yml` | `Prepare`<br>`Promote iOS`<br>`Promote Android`<br>`Release`<br>`Promote Huawei`<br>`Attach store notes`<br>`OTA` | The whole beta promotion in one call: it never builds, it promotes what internal built |
+| `publish-production.yml` | `Prepare`<br>`Security`<br>`Release iOS`<br>`Release Android`<br>`Release Huawei`<br>`Phased iOS`<br>`Rollout Android`<br>`Halt Android`<br>`Release`<br>`Attach stage note`<br>`OTA`<br>`Web` | The whole production release or rollout change in one call |
+| `publish-store-listing.yml` | `Push/Pull iOS listing`<br>`Push/Pull Android listing` | The store page, not a release: pushes the consumer's metadata tree or reports what the consoles hold |
+
+The last four chain the others with explicit inputs and no `vars`; the caller keeps the trigger, the concurrency group, the permissions and the secrets ([pipeline workflows](docs/consumer-guide.md#pipeline-workflows)).
 
 `build-prepare.yml` can also block until a named CI workflow is green for the
 same sha, which is how a release refuses to build on a red `main`.
@@ -183,7 +189,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Workflow           | Jobs                              | What it does                                                                                   |
 | ------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `self-ci.yml`      | `Changes`<br>`Checks / CI`<br>`Checks / Secrets`<br>`Checks / Versions`<br>`Checks / Spell`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package`<br>`Store notes / Dry run / Draft`<br>`Store notes / Validate` | The gates of `make check`, a job each so a run names the one that failed, and the store notes dry run - this repository only. `Changes` skips CI, Versions and Package when the diff cannot affect them |
+| `self-ci.yml`      | `Changes`<br>`Checks / CI`<br>`Checks / Secrets`<br>`Checks / Versions`<br>`Checks / Spell`<br>`Checks / Commits`<br>`Unit / Tests`<br>`Unit / Package`<br>`Unit / Ruby`<br>`Store notes / Dry run / Draft`<br>`Store notes / Validate` | The gates of `make check`, a job each so a run names the one that failed, and the store notes dry run - this repository only. `Changes` skips CI, Versions and Package when the diff cannot affect them |
 | `self-checks.yml`  | `CI`<br>`Secrets`<br>`Versions`<br>`Spell`<br>`Commits` | shellcheck, actionlint and zizmor; gitleaks; version agreement; typos; commitlint. Called by `self-ci.yml` |
 | `self-unit.yml`    | `Tests`<br>`Package`              | The bats suite, and node:test over every package under `packages/`. Called by `self-ci.yml` |
 | `self-store-notes.yml` | `Dry run`<br>`Validate` | `pr-store-notes.yml` run for real against the template in a dry run, then its `section` output checked. Called by `self-ci.yml` and `self-release.yml` |
@@ -195,7 +201,7 @@ same sha, which is how a release refuses to build on a red `main`.
 
 | Path                   | Responsibility                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/`   | The <!--count:workflows-->25<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
+| `.github/workflows/`   | The <!--count:workflows-->29<!--/count--> workflows above. Thin: a workflow wires inputs and calls a script                                                  |
 | `.github/actions/`     | <!--count:actions-->5<!--/count--> composite actions — `setup`, `maestro`, `native-key`, `free-disk`, `forensics` — the steps repeated across workflows |
 | `scripts/checks/`      | A gate each: audit, commits, expo-health, generated, secrets; plus the scripts that pick the consumer's over this repo's   |
 | `scripts/ci/`          | Runner plumbing: Android SDK, KVM, disk pressure, pnpm store, badges, cancel-runs, tool versions                          |
@@ -207,7 +213,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the local smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->156<!--/count--> bats files, <!--count:tests-->1776<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
+| `test/`                | <!--count:bats-files-->158<!--/count--> bats files, <!--count:tests-->1795<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
 | `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer, the store notes generator, the Maestro suite runners for a laptop and the web preview server; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 

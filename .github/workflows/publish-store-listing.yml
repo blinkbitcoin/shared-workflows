@@ -1,0 +1,198 @@
+name: Publish store listing
+# The store page, not a release. It pushes the consumer's fastlane/metadata
+# tree to App Store Connect and Google Play at any time, independent of a
+# version, and pulls the consoles' copy back so the tree can be seeded from what
+# they already hold. It uploads no binary, moves no track, submits nothing for
+# review and never writes a version's "What's new". The whole of the template's
+# `cd-store-listing.yml`, as one call.
+#
+# A pull here can only *report*: the jobs have `contents: read` and the lane
+# workflow uploads no artifacts, so the lane ends in `git diff --stat` and a real
+# seeding run happens locally.
+#
+# The caller keeps the trigger, the concurrency group (the shared `release`
+# queue: a listing edit and a release submission must not be open against the
+# same app at once) and the secrets, and needs no more than `contents: read`.
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Consumer repository, owner/name (defaults to the caller's repository)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref (defaults to the caller's)
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for Linux jobs
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix
+        type: string
+        default: 'v1'
+      native-stack:
+        description: "expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare)"
+        type: string
+        default: ''
+      fastlane-directory:
+        description: The consumer's fastlane directory relative to working-directory
+        type: string
+        default: 'fastlane'
+      ios-bundle-id:
+        description: iOS bundle identifier (a Fastfile contract variable)
+        type: string
+        required: true
+      ios-scheme:
+        description: Xcode scheme
+        type: string
+        required: true
+      android-package:
+        description: Android application id
+        type: string
+        required: true
+      app-variant:
+        description: The APP_VARIANT value the lanes run under
+        type: string
+        default: 'production'
+      direction:
+        description: push writes the consoles from the consumer's tree; pull reports what they hold
+        type: string
+        default: 'push'
+      platforms:
+        description: Which stores to act on - both, ios or android
+        type: string
+        default: 'both'
+      dry-run:
+        description: Log every store call and change nothing
+        type: boolean
+        default: true
+      stage-environment:
+        description: The GitHub environment the jobs run in (its required reviewers gate a push)
+        type: string
+        default: 'production'
+      store-metadata-sync-enabled:
+        description: Whether the jobs run at all. Off by default, so a fresh checkout cannot overwrite a live store page from a mistaken dispatch. The lane asserts the same switch itself
+        type: boolean
+        default: false
+      ios-metadata-edit-live:
+        description: IOS_METADATA_EDIT_LIVE for the iOS lane - whether the live version's page may be edited
+        type: string
+        default: ''
+      play-metadata-track:
+        description: PLAY_METADATA_TRACK for the Android lane
+        type: string
+        default: ''
+    secrets:
+      consumer-token:
+        description: Token to check out a private consumer repository (defaults to the caller token)
+        required: false
+      ASC_KEY_ID:
+        description: App Store Connect API key id
+        required: false
+      ASC_ISSUER_ID:
+        description: App Store Connect issuer id
+        required: false
+      ASC_KEY_P8_BASE64:
+        description: App Store Connect API key (.p8), base64
+        required: false
+      APP_REVIEW_EMAIL:
+        description: App Review contact email
+        required: false
+      APP_REVIEW_FIRST_NAME:
+        description: App Review contact first name
+        required: false
+      APP_REVIEW_LAST_NAME:
+        description: App Review contact last name
+        required: false
+      APP_REVIEW_PHONE:
+        description: App Review contact phone
+        required: false
+      APP_REVIEW_DEMO_USER:
+        description: App Review demo account user
+        required: false
+      APP_REVIEW_DEMO_PASSWORD:
+        description: App Review demo account password
+        required: false
+      APP_REVIEW_NOTES:
+        description: App Review notes
+        required: false
+      PLAY_SERVICE_ACCOUNT_JSON:
+        description: Google Play service account JSON
+        required: false
+permissions:
+  contents: read
+jobs:
+  ios:
+    name: ${{ inputs.direction == 'pull' && 'Pull iOS listing' || 'Push iOS listing' }}
+    if: ${{ inputs.store-metadata-sync-enabled && inputs.platforms != 'android' }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: ios
+      lane: ${{ inputs.direction == 'pull' && 'pull_metadata' || 'sync_metadata' }}
+      environment: ${{ inputs.stage-environment }}
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"STORE_METADATA_SYNC_ENABLED":{1},"IOS_METADATA_EDIT_LIVE":{2},"DRY_RUN":{3}}}', toJSON(inputs.app-variant), toJSON(format('{0}', inputs.store-metadata-sync-enabled)), toJSON(inputs.ios-metadata-edit-live), toJSON(inputs.dry-run && '1' || '0')) }}
+      version: 0.0.0
+      build-number: "0"
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      timeout-minutes: 60
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      APP_REVIEW_EMAIL: ${{ secrets.APP_REVIEW_EMAIL }}
+      APP_REVIEW_FIRST_NAME: ${{ secrets.APP_REVIEW_FIRST_NAME }}
+      APP_REVIEW_LAST_NAME: ${{ secrets.APP_REVIEW_LAST_NAME }}
+      APP_REVIEW_PHONE: ${{ secrets.APP_REVIEW_PHONE }}
+      APP_REVIEW_DEMO_USER: ${{ secrets.APP_REVIEW_DEMO_USER }}
+      APP_REVIEW_DEMO_PASSWORD: ${{ secrets.APP_REVIEW_DEMO_PASSWORD }}
+      APP_REVIEW_NOTES: ${{ secrets.APP_REVIEW_NOTES }}
+
+  android:
+    name: ${{ inputs.direction == 'pull' && 'Pull Android listing' || 'Push Android listing' }}
+    if: ${{ inputs.store-metadata-sync-enabled && inputs.platforms != 'ios' }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      lane: ${{ inputs.direction == 'pull' && 'pull_metadata' || 'sync_metadata' }}
+      environment: ${{ inputs.stage-environment }}
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"STORE_METADATA_SYNC_ENABLED":{1},"PLAY_METADATA_TRACK":{2},"DRY_RUN":{3}}}', toJSON(inputs.app-variant), toJSON(format('{0}', inputs.store-metadata-sync-enabled)), toJSON(inputs.play-metadata-track), toJSON(inputs.dry-run && '1' || '0')) }}
+      version: 0.0.0
+      build-number: "0"
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      timeout-minutes: 60
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}

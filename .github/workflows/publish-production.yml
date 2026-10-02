@@ -1,0 +1,559 @@
+name: Publish production
+# Acts on a release that beta already promoted. It never builds. With action
+# `release` it runs the binary-side security scanners, then releases to the
+# App Store (phased) and Google Play (staged rollout) - and Huawei AppGallery
+# when it is on - marks the GitHub release latest, publishes the OTA update and
+# redeploys the web site; `rollout`, `halt`, `resume` and `complete` move an
+# existing rollout. The whole pipeline of the template's `cd-production.yml`,
+# as one call.
+#
+# The caller keeps the trigger (a dispatch carrying `tag`, `action`, `platforms`
+# and the rollout choices), the concurrency group and the secrets. It grants
+# the union of what the jobs below ask for: `contents: write` (the release),
+# `actions: read` (the green gate), `security-events: write` (code scanning)
+# and, with `web`, `pages: write` and `id-token: write` (the Pages deploy).
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Consumer repository, owner/name (defaults to the caller's repository)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref (defaults to the caller's)
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for Linux jobs
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix
+        type: string
+        default: 'v1'
+      native-stack:
+        description: "expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare)"
+        type: string
+        default: ''
+      fastlane-directory:
+        description: The consumer's fastlane directory relative to working-directory
+        type: string
+        default: 'fastlane'
+      ios-bundle-id:
+        description: iOS bundle identifier (a Fastfile contract variable, asserted for every lane on both platforms)
+        type: string
+        required: true
+      ios-scheme:
+        description: Xcode scheme
+        type: string
+        required: true
+      android-package:
+        description: Android application id
+        type: string
+        required: true
+      build-number-offset:
+        description: Added to the commit count to make the build number. A number, so a caller passes fromJSON(vars.X || '1000') for an unset variable
+        type: number
+        default: 1000
+      environment-variables:
+        description: 'JSON object of non-secret variables for the prebuild, the lanes and the consumer scripts (APP_VARIANT, OTA_ENABLED, EXPO_UPDATES_URL, the EXPO_PUBLIC_* values). It is a workflow input, so unmasked: build-env.sh refuses a key that looks like a credential'
+        type: string
+        default: '{}'
+      app-variant:
+        description: The APP_VARIANT value the store lanes run under
+        type: string
+        default: 'production'
+      tag:
+        description: The `vX.Y.Z` release tag to act on
+        type: string
+        required: true
+      action:
+        description: What to do with that release - release, rollout, halt, resume or complete
+        type: string
+        default: 'release'
+      platforms:
+        description: Which stores to act on - both, ios or android. `rollout` is Android-only, so choosing ios with it does nothing
+        type: string
+        default: 'both'
+      play-rollout-percent:
+        description: Play staged-rollout percentage (rollout and resume; release uses it as the initial fraction)
+        type: string
+        default: '10'
+      ios-phased-release:
+        description: Use App Store phased release for action `release`
+        type: boolean
+        default: true
+      stage-environment:
+        description: The GitHub environment the store jobs run in (its required reviewers gate the release)
+        type: string
+        default: 'production'
+      play-update-priority:
+        description: Google Play in-app update priority
+        type: string
+        default: ''
+      security-enabled:
+        description: Run the binary-side security scanners before a release. Off, the gate is skipped and the store jobs do not wait for it
+        type: boolean
+        default: true
+      web:
+        description: Redeploy the web site to GitHub Pages after a release
+        type: boolean
+        default: false
+      web-base-url:
+        description: Base path the web export is built for, `/<repo>` for a project Pages site and empty for a custom domain; use the same value as the CI web deploy
+        type: string
+        default: ''
+      store-uploads-enabled:
+        description: Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works
+        type: boolean
+        default: false
+      huawei-uploads-enabled:
+        description: Whether the Huawei AppGallery job runs, on top of store-uploads-enabled. A repository shipping only to Apple and Google must not acquire a third submission by turning store uploads on
+        type: boolean
+        default: false
+      huawei-environment-variables:
+        description: JSON object of the non-secret variables the Huawei lane reads (HUAWEI_APP_ID, HUAWEI_UPLOADS_ENABLED, HUAWEI_SUBMIT_DELAY_SECONDS, HUAWEI_FEEDBACK_EMAIL, HUAWEI_TEST_DAYS), with APP_VARIANT
+        type: string
+        default: '{}'
+      ota-enabled:
+        description: Whether the OTA publish job runs
+        type: boolean
+        default: false
+      ota-cli-version:
+        description: Pinned OTA CLI version (empty takes publish-ota.yml's default)
+        type: string
+        default: ''
+      manifest-url:
+        description: Update server manifest URL for the smoke check after a publish (empty skips it)
+        type: string
+        default: ''
+    secrets:
+      consumer-token:
+        description: Token to check out a private consumer repository (defaults to the caller token)
+        required: false
+      ASC_KEY_ID:
+        description: App Store Connect API key id
+        required: false
+      ASC_ISSUER_ID:
+        description: App Store Connect issuer id
+        required: false
+      ASC_KEY_P8_BASE64:
+        description: App Store Connect API key (.p8), base64
+        required: false
+      APP_REVIEW_EMAIL:
+        description: App Review contact email
+        required: false
+      APP_REVIEW_FIRST_NAME:
+        description: App Review contact first name
+        required: false
+      APP_REVIEW_LAST_NAME:
+        description: App Review contact last name
+        required: false
+      APP_REVIEW_PHONE:
+        description: App Review contact phone
+        required: false
+      APP_REVIEW_DEMO_USER:
+        description: App Review demo account user
+        required: false
+      APP_REVIEW_DEMO_PASSWORD:
+        description: App Review demo account password
+        required: false
+      APP_REVIEW_NOTES:
+        description: App Review notes
+        required: false
+      PLAY_SERVICE_ACCOUNT_JSON:
+        description: Google Play service account JSON
+        required: false
+      HUAWEI_CLIENT_ID:
+        description: Huawei AppGallery Connect API client id
+        required: false
+      HUAWEI_CLIENT_SECRET:
+        description: Huawei AppGallery Connect API client secret
+        required: false
+      OTA_PUBLISH_TOKEN:
+        description: Update server publish token
+        required: false
+permissions:
+  contents: read
+jobs:
+  prepare:
+    name: Prepare
+    uses: ./.github/workflows/build-prepare.yml
+    permissions:
+      contents: read
+      actions: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      native-stack: ${{ inputs.native-stack }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      # `release-tag` becomes the checkout ref, the stamped commit and the
+      # source of the store notes the stores read.
+      release-tag: ${{ inputs.tag }}
+      stage: production
+      build-number-offset: ${{ inputs.build-number-offset }}
+      environment-variables: ${{ inputs.environment-variables }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+
+  # Binary-side checks of what is about to ship: the built binaries, a fresh
+  # prebuild, the bundle and a bill of materials. The source scanners already
+  # ran on every pull request and on the release pull request, against this
+  # same commit. Only for a release: a rollout change ships nothing new.
+  security:
+    name: Security
+    needs: prepare
+    if: ${{ inputs.action == 'release' && inputs.security-enabled }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/check-security.yml
+    with:
+      repository: ${{ inputs.repository }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      ref: ${{ inputs.tag }}
+      native-stack: ${{ inputs.native-stack }}
+      release-tag: ${{ inputs.tag }}
+      dependencies: false
+      code: false
+      policy: false
+      binaries: true
+      mobile: true
+      bundle: true
+      sbom: true
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+
+  # Every store job below that releases waits on `security`. `!failure() &&
+  # !cancelled()`, not the implicit success(): a gate that was switched off is
+  # skipped, and a skipped need would otherwise skip the release with it.
+
+  ios-release:
+    name: Release iOS
+    needs: [prepare, security]
+    if: ${{ !failure() && !cancelled() && inputs.store-uploads-enabled && (inputs.action == 'release' && inputs.platforms != 'android') }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: ios
+      lane: release_production
+      environment: ${{ inputs.stage-environment }}
+      artifacts: build-info
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"IOS_PHASED_RELEASE":{1}}}', toJSON(inputs.app-variant), toJSON(format('{0}', inputs.ios-phased-release))) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      timeout-minutes: 90
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      APP_REVIEW_EMAIL: ${{ secrets.APP_REVIEW_EMAIL }}
+      APP_REVIEW_FIRST_NAME: ${{ secrets.APP_REVIEW_FIRST_NAME }}
+      APP_REVIEW_LAST_NAME: ${{ secrets.APP_REVIEW_LAST_NAME }}
+      APP_REVIEW_PHONE: ${{ secrets.APP_REVIEW_PHONE }}
+      APP_REVIEW_DEMO_USER: ${{ secrets.APP_REVIEW_DEMO_USER }}
+      APP_REVIEW_DEMO_PASSWORD: ${{ secrets.APP_REVIEW_DEMO_PASSWORD }}
+      APP_REVIEW_NOTES: ${{ secrets.APP_REVIEW_NOTES }}
+
+  android-release:
+    name: Release Android
+    needs: [prepare, security]
+    if: ${{ !failure() && !cancelled() && inputs.store-uploads-enabled && (inputs.action == 'release' && inputs.platforms != 'ios') }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      lane: release_production
+      environment: ${{ inputs.stage-environment }}
+      artifacts: build-info
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"PLAY_ROLLOUT":{1},"PLAY_UPDATE_PRIORITY":{2}}}', toJSON(inputs.app-variant), toJSON(inputs.play-rollout-percent), toJSON(inputs.play-update-priority)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+  # ---- action=release: Huawei AppGallery (opt-in, additional store) ---------
+
+  # The one store whose production dispatch is a first upload: the Android App
+  # Bundle is a release asset on the tag, not an artifact of this run, so the
+  # lane downloads it from the release.
+  huawei-release:
+    name: Release Huawei
+    # android-release too: AppGallery should not receive a release Play refused,
+    # and the security gate holds it through that job.
+    needs: [prepare, android-release]
+    if: ${{ inputs.store-uploads-enabled && inputs.huawei-uploads-enabled && (inputs.action == 'release' && inputs.platforms != 'ios') }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      lane: upload_huawei
+      environment: ${{ inputs.stage-environment }}
+      # The build info and the store notes from build-info, and the bundle from
+      # the release on the tag; both land in the same assets directory.
+      artifacts: build-info
+      release-tag: ${{ inputs.tag }}
+      release-assets: '*.aab'
+      environment-variables: ${{ inputs.huawei-environment-variables }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      timeout-minutes: 90
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      HUAWEI_CLIENT_ID: ${{ secrets.HUAWEI_CLIENT_ID }}
+      HUAWEI_CLIENT_SECRET: ${{ secrets.HUAWEI_CLIENT_SECRET }}
+
+  # ---- action=halt|resume|complete|rollout: move an existing rollout --------
+
+
+  ios-phased:
+    name: Phased iOS
+    needs: prepare
+    if: ${{ inputs.store-uploads-enabled && (contains(fromJSON('["halt", "resume", "complete"]'), inputs.action) && inputs.platforms != 'android') }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: ios
+      lane: phased
+      lane-arguments: action:${{ inputs.action == 'halt' && 'pause' || inputs.action }}
+      environment: ${{ inputs.stage-environment }}
+      artifacts: build-info
+      environment-variables: ${{ format('{{"APP_VARIANT":{0}}}', toJSON(inputs.app-variant)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+
+  android-rollout:
+    name: Rollout Android
+    needs: prepare
+    if: ${{ inputs.store-uploads-enabled && (contains(fromJSON('["rollout", "resume", "complete"]'), inputs.action) && inputs.platforms != 'ios') }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      lane: rollout
+      lane-arguments: percent:${{ inputs.action == 'complete' && '100' || inputs.play-rollout-percent }}
+      environment: ${{ inputs.stage-environment }}
+      artifacts: build-info
+      environment-variables: ${{ format('{{"APP_VARIANT":{0}}}', toJSON(inputs.app-variant)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+  android-halt:
+    name: Halt Android
+    needs: prepare
+    if: ${{ inputs.store-uploads-enabled && (inputs.action == 'halt' && inputs.platforms != 'ios') }}
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      lane: halt
+      environment: ${{ inputs.stage-environment }}
+      artifacts: build-info
+      environment-variables: ${{ format('{{"APP_VARIANT":{0}}}', toJSON(inputs.app-variant)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+  # ---- action=release only: mark latest, publish OTA, deploy web ------------
+
+  github-release:
+    name: Release
+    # `prepare` is ordering, not data: this job keys off `inputs.tag`, but the
+    # `build-info` artifact it attaches only exists once prepare has run.
+    needs: [prepare, ios-release, android-release]
+    # A status function in the `if` drops the implicit success() requirement, so
+    # a job skipped by `platforms` does not skip this one; `!failure()` still
+    # holds the line on a store job that actually failed.
+    if: ${{ !failure() && !cancelled() && inputs.action == 'release' }}
+    uses: ./.github/workflows/publish-github-release.yml
+    permissions:
+      contents: write
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      mode: latest
+      release-tag: ${{ inputs.tag }}
+      assets-artifacts: build-info
+      body-note: >-
+        ${{ !inputs.store-uploads-enabled && 'Store uploads were off for this build: it was never sent to TestFlight or Play. Turn store uploads on to send builds to the stores.' || '' }}
+
+  # A production dispatch otherwise leaves no record on the release of which
+  # stage it reached - which action, to which stores, at what rollout. The
+  # section is marker-delimited and rewritten in place, so the release body
+  # always shows the *last* production action. It names the run, whose page
+  # carries the time. `append` changes only the body, so the line goes in as
+  # text: nothing is uploaded and the release's SHA256SUMS stay as they are.
+  stage-append:
+    name: Attach stage note
+    needs: [prepare, ios-release, android-release, ios-phased, android-rollout, android-halt]
+    if: ${{ !failure() && !cancelled() }}
+    uses: ./.github/workflows/publish-github-release.yml
+    permissions:
+      contents: write
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      mode: append
+      release-tag: ${{ inputs.tag }}
+      append-title: Production
+      release-notes-text: >-
+        ${{ format('{0}, platforms {1}, rollout {2}% ([run {3}]({4}/{5}/actions/runs/{3}))', inputs.action, inputs.platforms, inputs.play-rollout-percent, github.run_id, github.server_url, github.repository) }}
+
+  ota-production:
+    name: OTA
+    # github-release is what puts build-info.json on the tag, which is the
+    # fingerprint baseline the gate downloads.
+    needs: [prepare, github-release]
+    if: ${{ !failure() && !cancelled() && inputs.action == 'release' && inputs.ota-enabled }}
+    uses: ./.github/workflows/publish-ota.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      ref: ${{ inputs.tag }}
+      ota-enabled: ${{ inputs.ota-enabled }}
+      channel: production
+      rollout: 100
+      environment: ${{ inputs.stage-environment }}
+      ota-cli-version: ${{ inputs.ota-cli-version }}
+      baseline-tag: ${{ inputs.tag }}
+      manifest-url: ${{ inputs.manifest-url }}
+      runtime-version: ${{ needs.prepare.outputs.fingerprint-ios }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      OTA_PUBLISH_TOKEN: ${{ secrets.OTA_PUBLISH_TOKEN }}
+
+  web:
+    name: Web
+    # Pure ordering: the site should not go live before the stores have accepted
+    # the release. The site tracks what is actually live in the stores, so it
+    # deploys from the production dispatch rather than from the tag push.
+    needs: [prepare, github-release]
+    if: ${{ !failure() && !cancelled() && inputs.action == 'release' && inputs.web }}
+    uses: ./.github/workflows/build-web.yml
+    permissions:
+      contents: read
+      # The called `deploy` job (environment `github-pages`) needs these, and a
+      # called job can only narrow the caller's token, never widen it.
+      pages: write
+      id-token: write
+    with:
+      repository: ${{ inputs.repository }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      ref: ${{ inputs.tag }}
+      deploy: true
+      # Deliberately on: the reviewer has already approved, and a broken site is
+      # the one failure mode nothing downstream would catch.
+      e2e: true
+      base-url: ${{ inputs.web-base-url }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
