@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->18<!--/count--> reusable workflows · <!--count:scripts-->138<!--/count--> scripts · <!--count:tests-->1796<!--/count--> tests · one pinned tag · one tooling package</sub>
+<sub><!--count:reusable-workflows-->22<!--/count--> reusable workflows · <!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1817<!--/count--> tests · one pinned tag · one tooling package</sub>
 
 </div>
 
@@ -213,7 +213,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the local smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->159<!--/count--> bats files, <!--count:tests-->1796<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
+| `test/`                | <!--count:bats-files-->163<!--/count--> bats files, <!--count:tests-->1817<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
 | `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer, the store notes generator, the Maestro suite runners for a laptop and the web preview server; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
 
