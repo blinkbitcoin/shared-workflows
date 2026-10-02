@@ -65,6 +65,7 @@
     "./check-security": "./bin/check-security.mjs",
     "./doctor": "./bin/doctor.mjs",
     "./serve-dist": "./bin/serve-dist.mjs",
+    "./check-prebuild": "./bin/check-prebuild.mjs",
     "./doctor.requirements.json": "./doctor.requirements.json",
     "./security-settings.json": "./security-settings.json",
     "./help": "./bin/help.mjs",
@@ -140,6 +141,7 @@
     "check-security": "./bin/check-security.mjs",
     "doctor": "./bin/doctor.mjs",
     "serve-dist": "./bin/serve-dist.mjs",
+    "check-prebuild": "./bin/check-prebuild.mjs",
     "help": "./bin/help.mjs"
   },
   "peerDependencies": {
