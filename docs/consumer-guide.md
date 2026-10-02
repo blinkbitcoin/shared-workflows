@@ -929,6 +929,8 @@ No outputs. Secrets: `consumer-token` (optional).
 | `dev-client` | `true` | Launch via the `expo-development-client` deep link, Metro `--dev-client`. A bare React Native app has no dev-client launcher: pass `false`, and it is launched plainly |
 | `ios-configuration` | `Debug` | Xcode configuration for the iOS E2E app.<br>`Release` embeds the JS bundle and leaves the dev launcher out, so the app runs on `simctl launch` alone -<br>no Metro, no deep link, no iOS "Open in <app>?" prompt. Forces `dev-client` off for the iOS jobs;<br>Android is unaffected. Changes the cache key, so the two configurations never share a build |
 | `environment-variables` | `{}` | Flat JSON object of non-secret variables exported before the iOS prebuild, so the bundle embeds them.<br>A `Release` build resolves `.env.production` at build time and an exported variable wins over the dotenv file -<br>this is how you point an E2E build at a mock API. Folded into the iOS cache key, so two values never share a build |
+| `mock-api-command` | `''` | Command that starts the app's mock API, run in the working directory with `MOCK_API_PORT` set to `mock-api-port`. Started in the background before the suite, waited for until it answers HTTP, and stopped after the suite, pass or fail. Empty starts none |
+| `mock-api-port` | `8082` | Host port the mock API listens on: reversed into the Android emulator, and what `mock-api-command` is waited for on. `8082` is the family's port base (8080) plus the mock API's offset. Empty disables the reverse and the wait |
 | `e2e-setup-script` / `e2e-teardown-script` | `''` | Consumer-relative hook scripts (setup: missing file is fatal; teardown: always runs) |
 | `ios-artifact` | `ios-app` | Artifact name between `build-ios` and `ios` |
 | `android-artifact` | `android-apk` | Artifact name between `build-android` and `android` |
@@ -2972,6 +2974,15 @@ configuration of your own names it as its web server's `command:
 `no-copy.serve-dist` failure in the [contract check](#no-copies-of-this-family).
 
 ## The E2E hooks contract
+
+**The mock API needs no hook.** Pass `mock-api-command` (for the template,
+`pnpm dev:api`) and `test-e2e.yml` starts it in the background right after Metro
+on both platforms, waits until it answers HTTP on `mock-api-port` (any status is
+an answer, so no health route is needed; a server that never comes up fails the
+step with the tail of its own log), and stops it after the suite, pass or fail.
+The command runs in your working directory with `MOCK_API_PORT` set, and in its
+own process group, so the package manager's child is stopped with it. The hooks
+below are for anything else an app needs around the suite.
 
 `e2e-setup-script` / `e2e-teardown-script` are **consumer-relative file
 paths**, not package.json script names, run via `bash` by
