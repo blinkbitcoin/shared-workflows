@@ -35,8 +35,10 @@
 # variable is exported resolved, so a verify lane's verify-ios.sh or
 # verify-android.sh reads the store metadata from the same directory.
 set -euo pipefail
-source "$(dirname "$0")/../lib/common.sh"
-source "$(dirname "$0")/../lib/release-env.sh"
+# Before any cd: $0 may be a relative path.
+here="$(cd "$(dirname "$0")" && pwd -P)"
+source "$here/../lib/common.sh"
+source "$here/../lib/release-env.sh"
 
 platform="$(workflows_release_platform "${1:-}")"
 shift
@@ -100,10 +102,21 @@ absolutise WORKFLOWS_OUTPUT_DIR BUILD_INFO_FILE STORE_NOTES_FILE STORE_NOTES_JSO
 gemfile="$root/Gemfile"
 [ ! -f "$lane_root/Gemfile" ] || gemfile="$lane_root/Gemfile"
 
+# The lanes differ in a few places by native stack (how the iOS project gets the
+# release's version and build number), and they read which one from here, the
+# same resolution every other step of the family uses. Exported to the lane
+# only: nothing else in this script depends on it.
+resolve_native_stack() {
+  WORKFLOWS_NATIVE_STACK="$(GITHUB_WORKSPACE="$root" WORKING_DIRECTORY=. bash "$here/../lib/native-stack.sh")" ||
+    die "could not resolve the native stack of $root"
+  export WORKFLOWS_NATIVE_STACK
+}
+
 group "fastlane $platform $lane"
 log "running fastlane from $lane_root (fastlane-directory: $fastlane_directory)"
 cd "$lane_root"
 if [ -f "$gemfile" ] && command -v bundle >/dev/null 2>&1; then
+  resolve_native_stack
   BUNDLE_GEMFILE="$gemfile" bundle exec fastlane "$platform" "$lane" "$@"
 else
   # No Gemfile means the consumer is not pinning fastlane; a global fastlane is
@@ -111,6 +124,7 @@ else
   # rather than a confusing "command not found" in the middle of a release.
   require_cmd fastlane
   log "no Gemfile in $lane_root or $root - running the fastlane on PATH (unpinned)"
+  resolve_native_stack
   fastlane "$platform" "$lane" "$@"
 fi
 endgroup

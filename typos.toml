@@ -16,6 +16,8 @@ extend-ignore-re = [
 maestro = "maestro"
 udid = "udid"
 UDID = "UDID"
+# Ruby's File::WRONLY (write only), in the lanes the package ships.
+WRONLY = "WRONLY"
 
 [default.extend-identifiers]
 # typos splits this on the case change (PN + Gs) and flags "PN"; treat the

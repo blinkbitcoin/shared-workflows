@@ -28,6 +28,8 @@
     "doctor.requirements.json",
     "zizmor.yml",
     "store-notes.prompt.md",
+    "fastlane/Fastfile",
+    "fastlane/lanes",
     "contract.json",
     "interfaces.json",
     "versions.json",
