@@ -1,0 +1,459 @@
+name: Publish internal
+# One commit on the default branch becomes a signed, uploaded internal build:
+# prepare -> build both platforms -> upload to TestFlight internal and Play
+# internal (and Huawei AppGallery, when it is on) -> a `vX.Y.Z-build.N` GitHub
+# pre-release carrying every artifact -> an optional OTA publish on the
+# `internal` channel. The whole pipeline of the template's `cd-internal.yml`,
+# as one call.
+#
+# The caller keeps what only a workflow's own file can hold: the trigger, the
+# concurrency group (one per commit, so two quick pushes never evict a pending
+# build while this one waits for CI), the permissions below and the secrets.
+# Every store job joins the shared `release` queue on its own.
+#
+# The caller grants the union of what the jobs below ask for: `contents: write`
+# (the build tag and the pre-release) and `actions: read` (the green gate).
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Consumer repository, owner/name (defaults to the caller's repository)
+        type: string
+        default: ''
+      ref:
+        description: Consumer ref (defaults to the caller's)
+        type: string
+        default: ''
+      working-directory:
+        description: Consumer directory relative to GITHUB_WORKSPACE
+        type: string
+        default: '.'
+      linux-runner:
+        description: Runner label for Linux jobs
+        type: string
+        default: 'ubuntu-latest'
+      macos-runner:
+        description: Runner label for macOS jobs
+        type: string
+        default: 'macos-26'
+      native-cache-version:
+        description: Native cache key prefix
+        type: string
+        default: 'v1'
+      native-stack:
+        description: "expo or bare, passed to every native job (empty detects it: expo when package.json has expo and git tracks nothing under ios/, else bare)"
+        type: string
+        default: ''
+      fastlane-directory:
+        description: The consumer's fastlane directory relative to working-directory
+        type: string
+        default: 'fastlane'
+      ios-bundle-id:
+        description: iOS bundle identifier (a Fastfile contract variable, asserted for every lane on both platforms)
+        type: string
+        required: true
+      ios-scheme:
+        description: Xcode scheme
+        type: string
+        required: true
+      android-package:
+        description: Android application id
+        type: string
+        required: true
+      build-number-offset:
+        description: Added to the commit count to make the build number. A number, so a caller passes fromJSON(vars.X || '1000') for an unset variable
+        type: number
+        default: 1000
+      environment-variables:
+        description: 'JSON object of non-secret variables for the prebuild, the lanes and the consumer scripts (APP_VARIANT, OTA_ENABLED, EXPO_UPDATES_URL, the EXPO_PUBLIC_* values). It is a workflow input, so unmasked: build-env.sh refuses a key that looks like a credential'
+        type: string
+        default: '{}'
+      app-variant:
+        description: The APP_VARIANT value the store lanes run under
+        type: string
+        default: 'production'
+      green-workflow:
+        description: The caller's CI workflow file that must be green for this commit before anything builds
+        type: string
+        default: 'ci.yml'
+      stage-environment:
+        description: The GitHub environment the build and store jobs run in
+        type: string
+        default: 'internal'
+      xcode-version:
+        description: Xcode version for the iOS build (empty takes the runner image's default)
+        type: string
+        default: ''
+      ios-signing-enabled:
+        description: Sign the iOS build even when store uploads are off (uploads imply signing)
+        type: boolean
+        default: false
+      android-signing-enabled:
+        description: Sign the Android build even when store uploads are off (uploads imply signing)
+        type: boolean
+        default: false
+      testflight-internal-group:
+        description: TestFlight internal testing group the build is added to
+        type: string
+        default: ''
+      play-update-priority:
+        description: Google Play in-app update priority
+        type: string
+        default: ''
+      store-uploads-enabled:
+        description: Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works
+        type: boolean
+        default: false
+      huawei-uploads-enabled:
+        description: Whether the Huawei AppGallery job runs, on top of store-uploads-enabled. A repository shipping only to Apple and Google must not acquire a third submission by turning store uploads on
+        type: boolean
+        default: false
+      huawei-environment-variables:
+        description: JSON object of the non-secret variables the Huawei lane reads (HUAWEI_APP_ID, HUAWEI_UPLOADS_ENABLED, HUAWEI_SUBMIT_DELAY_SECONDS, HUAWEI_FEEDBACK_EMAIL, HUAWEI_TEST_DAYS), with APP_VARIANT
+        type: string
+        default: '{}'
+      ota-enabled:
+        description: Whether the OTA publish job runs
+        type: boolean
+        default: false
+      ota-cli-version:
+        description: Pinned OTA CLI version (empty takes publish-ota.yml's default)
+        type: string
+        default: ''
+      manifest-url:
+        description: Update server manifest URL for the smoke check after a publish (empty skips it)
+        type: string
+        default: ''
+    secrets:
+      consumer-token:
+        description: Token to check out a private consumer repository (defaults to the caller token)
+        required: false
+      MATCH_PASSWORD:
+        description: fastlane match passphrase
+        required: false
+      MATCH_GIT_URL:
+        description: fastlane match repository URL
+        required: false
+      MATCH_GIT_BASIC_AUTHORIZATION:
+        description: Basic authorization for the match repository
+        required: false
+      ASC_KEY_ID:
+        description: App Store Connect API key id
+        required: false
+      ASC_ISSUER_ID:
+        description: App Store Connect issuer id
+        required: false
+      ASC_KEY_P8_BASE64:
+        description: App Store Connect API key (.p8), base64
+        required: false
+      ANDROID_UPLOAD_KEYSTORE_BASE64:
+        description: Android upload keystore, base64
+        required: false
+      ANDROID_UPLOAD_KEYSTORE_PASSWORD:
+        description: Android upload keystore password
+        required: false
+      ANDROID_UPLOAD_KEY_ALIAS:
+        description: Android upload key alias
+        required: false
+      ANDROID_UPLOAD_KEY_PASSWORD:
+        description: Android upload key password
+        required: false
+      PLAY_SERVICE_ACCOUNT_JSON:
+        description: Google Play service account JSON
+        required: false
+      HUAWEI_CLIENT_ID:
+        description: Huawei AppGallery Connect API client id
+        required: false
+      HUAWEI_CLIENT_SECRET:
+        description: Huawei AppGallery Connect API client secret
+        required: false
+      OTA_PUBLISH_TOKEN:
+        description: Update server publish token
+        required: false
+permissions:
+  contents: read
+jobs:
+  prepare:
+    name: Prepare
+    uses: ./.github/workflows/build-prepare.yml
+    permissions:
+      # `contents: write` for `reserve-tag` (it creates the build tag);
+      # `actions: read` for the green gate's `gh run list`. build-prepare
+      # inherits exactly what is granted here.
+      contents: write
+      actions: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      native-stack: ${{ inputs.native-stack }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      stage: internal
+      # The `v<version>-build.<n>` tag is created here, seconds after the push,
+      # while this commit is still the default branch's tip - not when the
+      # release is published an hour later. GitHub refuses GITHUB_TOKEN a new tag
+      # on a commit whose workflow files differ from the tip.
+      reserve-tag: true
+      # Both this pipeline and the CI workflow fire on the same push, so without
+      # a gate a red branch still starts a macOS build and, with uploads on,
+      # still reaches a store. "No run exists" is fatal, by design.
+      require-green-workflow: ${{ inputs.green-workflow }}
+      build-number-offset: ${{ inputs.build-number-offset }}
+      environment-variables: ${{ inputs.environment-variables }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+
+  build-ios:
+    name: Build iOS
+    needs: prepare
+    uses: ./.github/workflows/build-ios.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      native-stack: ${{ inputs.native-stack }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      environment: ${{ inputs.stage-environment }}
+      # Uploads imply signing, so the invalid combination - uploading with
+      # nothing signed to upload - cannot be expressed. Both off is an unsigned
+      # build: it still compiles, still runs verify, and needs no Apple account.
+      ios-signing-enabled: ${{ inputs.store-uploads-enabled || inputs.ios-signing-enabled }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      stage: internal
+      xcode-version: ${{ inputs.xcode-version }}
+      environment-variables: ${{ inputs.environment-variables }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+
+  build-android:
+    name: Build Android
+    needs: prepare
+    uses: ./.github/workflows/build-android.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      native-stack: ${{ inputs.native-stack }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      environment: ${{ inputs.stage-environment }}
+      android-signing-enabled: ${{ inputs.store-uploads-enabled || inputs.android-signing-enabled }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      stage: internal
+      environment-variables: ${{ inputs.environment-variables }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+      ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+      ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+      ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+  upload-ios:
+    name: Upload iOS
+    # The one queue every store-touching job in every release workflow shares,
+    # joined here per job rather than by the whole pipeline: this pipeline's own
+    # group is per commit, so builds for two commits run side by side.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    if: ${{ inputs.store-uploads-enabled }}
+    needs: [prepare, build-ios]
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: ios
+      lane: upload_internal
+      # Transporter only ships on macOS, so this lane cannot run on ubuntu.
+      macos-enabled: true
+      environment: ${{ inputs.stage-environment }}
+      # `*` merges every artifact this run produced into $WORKFLOWS_ASSETS_DIR,
+      # where the lane looks for the .ipa, build-info.json and the notes.
+      artifacts: "*"
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"TESTFLIGHT_INTERNAL_GROUP":{1}}}', toJSON(inputs.app-variant), toJSON(inputs.testflight-internal-group)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      timeout-minutes: 60
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+
+  upload-android:
+    name: Upload Android
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    if: ${{ inputs.store-uploads-enabled }}
+    needs: [prepare, build-android]
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      lane: upload_internal
+      environment: ${{ inputs.stage-environment }}
+      artifacts: "*"
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"PLAY_UPDATE_PRIORITY":{1}}}', toJSON(inputs.app-variant), toJSON(inputs.play-update-priority)) }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+  # ---- Huawei AppGallery (opt-in, additional store) ------------------------
+
+  upload-huawei:
+    name: Upload Huawei
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    # Two toggles: the shared one, and Huawei's own.
+    if: ${{ inputs.store-uploads-enabled && inputs.huawei-uploads-enabled }}
+    # upload-android too: AppGallery should not receive a build Play refused,
+    # and it must never be the only store that has one.
+    needs: [prepare, build-android, upload-android]
+    uses: ./.github/workflows/publish-store.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      fastlane-directory: ${{ inputs.fastlane-directory }}
+      platform: android
+      # AppGallery has one version slot and no tracks, so the internal tier is
+      # the same submission as the others with the testing flag set and manual
+      # review skipped: automated review, hours, up to 100 testers.
+      lane: upload_huawei_internal
+      environment: ${{ inputs.stage-environment }}
+      artifacts: "*"
+      environment-variables: ${{ inputs.huawei-environment-variables }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
+      ios-bundle-id: ${{ inputs.ios-bundle-id }}
+      ios-scheme: ${{ inputs.ios-scheme }}
+      android-package: ${{ inputs.android-package }}
+      # The plugin waits for AppGallery to finish compiling the uploaded bundle
+      # before it submits it, which is minutes rather than seconds.
+      timeout-minutes: 90
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      HUAWEI_CLIENT_ID: ${{ secrets.HUAWEI_CLIENT_ID }}
+      HUAWEI_CLIENT_SECRET: ${{ secrets.HUAWEI_CLIENT_SECRET }}
+
+  github-prerelease:
+    name: Pre-release
+    # The build jobs are named directly rather than reached through the upload
+    # jobs: this release carries their artifacts and has never needed a store.
+    # `!cancelled() && !failure()` lets it run when the uploads are skipped; a
+    # build killed by its timeout reports `cancelled`, which neither status
+    # function sees, so both builds are required to have succeeded, by name.
+    # `upload-huawei` is deliberately absent: AppGallery is an additive store
+    # with a review queue that is not ours.
+    needs: [prepare, build-ios, build-android, upload-ios, upload-android]
+    if: ${{ !cancelled() && !failure() && needs.build-ios.result == 'success' && needs.build-android.result == 'success' }}
+    uses: ./.github/workflows/publish-github-release.yml
+    permissions:
+      # The called job creates a release; a called workflow can only narrow the
+      # caller's token.
+      contents: write
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      mode: create-prerelease
+      release-tag: v${{ needs.prepare.outputs.version }}-build.${{ needs.prepare.outputs.build-number }}
+      sha: ${{ github.sha }}
+      title: v${{ needs.prepare.outputs.version }} build ${{ needs.prepare.outputs.build-number }}
+      assets-artifacts: "*"
+      # Empty when uploads ran, so a real store build carries no marker. Inverted
+      # on purpose: GitHub's `&&` yields its first falsy operand, so
+      # `cond && '' || X` is X on both branches.
+      body-note: >-
+        ${{ !inputs.store-uploads-enabled && 'Store uploads were off for this build: it was never sent to TestFlight or Play. Turn store uploads on to send builds to the stores.' || '' }}
+
+  ota-internal:
+    name: OTA
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    needs: [prepare, github-prerelease]
+    if: ${{ inputs.ota-enabled }}
+    uses: ./.github/workflows/publish-ota.yml
+    permissions:
+      contents: read
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      working-directory: ${{ inputs.working-directory }}
+      linux-runner: ${{ inputs.linux-runner }}
+      macos-runner: ${{ inputs.macos-runner }}
+      native-cache-version: ${{ inputs.native-cache-version }}
+      ota-enabled: ${{ inputs.ota-enabled }}
+      channel: internal
+      rollout: 100
+      environment: ${{ inputs.stage-environment }}
+      ota-cli-version: ${{ inputs.ota-cli-version }}
+      # The pre-release this run just created carries the build-info.json of the
+      # binary now on the internal track: the fingerprint baseline.
+      baseline-tag: v${{ needs.prepare.outputs.version }}-build.${{ needs.prepare.outputs.build-number }}
+      manifest-url: ${{ inputs.manifest-url }}
+      runtime-version: ${{ needs.prepare.outputs.fingerprint-ios }}
+    secrets:
+      consumer-token: ${{ secrets.consumer-token }}
+      OTA_PUBLISH_TOKEN: ${{ secrets.OTA_PUBLISH_TOKEN }}

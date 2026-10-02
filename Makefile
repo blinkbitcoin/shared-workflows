@@ -24,7 +24,7 @@ MISE := $(shell command -v mise >/dev/null 2>&1 && echo 'mise exec --')
 # from a worktree nested in another checkout (`.claude/worktrees/<name>/`) it
 # would read that checkout's policy instead of this one's.
 check-ci: ## Lint the scripts (shellcheck), the workflows and actions (actionlint) and audit their security (zizmor)
-	find scripts -name '*.sh' -exec $(MISE) shellcheck -x {} +
+	find scripts plugins -name '*.sh' -exec $(MISE) shellcheck -x {} +
 	$(MISE) actionlint -color
 	$(MISE) zizmor --offline --min-severity medium --config .github/zizmor.yml .github
 # One bats job per core: the suite is about 1,200 cases that each start a
