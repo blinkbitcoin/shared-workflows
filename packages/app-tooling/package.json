@@ -65,6 +65,12 @@
     "./check-security": "./bin/check-security.mjs",
     "./doctor": "./bin/doctor.mjs",
     "./serve-dist": "./bin/serve-dist.mjs",
+    "./ports": {
+      "types": "./lib/ports.d.mts",
+      "default": "./lib/ports.mjs"
+    },
+    "./check-ports": "./bin/check-ports.mjs",
+    "./build-web": "./bin/build-web.mjs",
     "./doctor.requirements.json": "./doctor.requirements.json",
     "./security-settings.json": "./security-settings.json",
     "./help": "./bin/help.mjs",
@@ -140,6 +146,9 @@
     "check-security": "./bin/check-security.mjs",
     "doctor": "./bin/doctor.mjs",
     "serve-dist": "./bin/serve-dist.mjs",
+    "ports": "./bin/ports.mjs",
+    "check-ports": "./bin/check-ports.mjs",
+    "build-web": "./bin/build-web.mjs",
     "help": "./bin/help.mjs"
   },
   "peerDependencies": {

@@ -23,6 +23,7 @@ export const SECTIONS = {
   testSiblings: ['sources', 'exclude', 'mirror'],
   docs: ['architecture', 'allowTargetNames'],
   appSuites: ['skip'],
+  ports: ['base', 'services', 'apiPath', 'allow', 'retired'],
 };
 
 /** A configuration file that is there and wrong; a program exits 2 on one. */
@@ -75,4 +76,40 @@ export function stringMap(value, where) {
     throw new ConfigError(`${CONFIG_FILE}: "${where}" must be an object of non-empty strings`);
   }
   return value;
+}
+
+/** `value` as a port table (base, services, apiPath), or a ConfigError naming the first thing wrong. */
+export function portTable(section) {
+  const table = {};
+  if (section === null) return table;
+  const fail = (reason) => {
+    throw new ConfigError(`${CONFIG_FILE}: ${reason}`);
+  };
+  if (section.base !== undefined) {
+    if (!Number.isInteger(section.base) || section.base < 1 || section.base > 65535) fail('"ports.base" must be a port number (1-65535)');
+    table.base = section.base;
+  }
+  if (section.apiPath !== undefined) {
+    if (typeof section.apiPath !== 'string' || !section.apiPath.startsWith('/')) fail('"ports.apiPath" must be a path starting with /');
+    table.apiPath = section.apiPath;
+  }
+  if (section.services !== undefined) {
+    if (!isObject(section.services) || Object.keys(section.services).length === 0) fail('"ports.services" must be an object with at least one service');
+    for (const [key, service] of Object.entries(section.services)) {
+      const ok =
+        isObject(service) &&
+        Number.isInteger(service.offset) &&
+        service.offset >= 1 &&
+        typeof service.env === 'string' &&
+        /^[A-Z][A-Z0-9_]*$/.test(service.env) &&
+        typeof service.what === 'string';
+      if (!ok) fail(`"ports.services.${key}" needs an integer offset (1 or more), an env variable name in capitals, and what listens there`);
+    }
+    const offsets = Object.values(section.services).map((service) => service.offset);
+    const names = Object.values(section.services).map((service) => service.env);
+    if (new Set(offsets).size !== offsets.length) fail('"ports.services" gives two services the same offset');
+    if (new Set(names).size !== names.length) fail('"ports.services" gives two services the same env variable');
+    table.services = section.services;
+  }
+  return table;
 }
