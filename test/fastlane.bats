@@ -23,6 +23,7 @@ done
 printf 'argc: %s\n' "$#" >> "$WORKFLOWS_TEST_LOG"
 printf 'cwd: %s\n' "$PWD" >> "$WORKFLOWS_TEST_LOG"
 printf 'fastlane-directory: %s\n' "${WORKFLOWS_FASTLANE_DIRECTORY-unset}" >> "$WORKFLOWS_TEST_LOG"
+printf 'native-stack: %s\n' "${WORKFLOWS_NATIVE_STACK-unset}" >> "$WORKFLOWS_TEST_LOG"
 exit 0
 SH
   cat > "$STUB/bundle" <<'SH'
@@ -48,6 +49,33 @@ lane() { run bash "$REPO_ROOT/scripts/release/fastlane.sh" "$@"; }
   grep -qx 'argv: ios build' "$WORKFLOWS_TEST_LOG" || fail "unexpected argv: $(cat "$WORKFLOWS_TEST_LOG")"
   ! grep -q '^bundle:' "$WORKFLOWS_TEST_LOG" || fail "used bundler without a Gemfile"
   contains "$output" "unpinned" || fail "the unpinned fastlane was not called out: $output"
+}
+
+@test "the lane is told the native stack: the input when there is one" {
+  WORKFLOWS_NATIVE_STACK_INPUT=bare lane ios build
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -qx 'native-stack: bare' "$WORKFLOWS_TEST_LOG" || fail "the stack did not reach the lane: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "the lane is told the native stack: detected from the app when there is no input" {
+  printf '{"dependencies":{"expo":"57.0.0"}}' > "$ROOT/package.json"
+  unset WORKFLOWS_NATIVE_STACK_INPUT
+  lane ios build
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -qx 'native-stack: expo' "$WORKFLOWS_TEST_LOG" || fail "the stack was not detected: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "an unusable native-stack input fails before any lane runs" {
+  WORKFLOWS_NATIVE_STACK_INPUT=flutter lane ios build
+  [ "$status" -ne 0 ] || fail "a bad native-stack input ran the lane: $output"
+  ! grep -q '^argv:' "$WORKFLOWS_TEST_LOG" || fail "the lane ran anyway"
+}
+
+@test "it finds the native stack resolver when run by a relative path" {
+  cd "$REPO_ROOT" || fail "cd"
+  WORKFLOWS_NATIVE_STACK_INPUT=bare run bash scripts/release/fastlane.sh ios build
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -qx 'native-stack: bare' "$WORKFLOWS_TEST_LOG" || fail "the stack did not reach the lane"
 }
 
 @test "prefers bundle exec when the consumer ships a Gemfile" {
