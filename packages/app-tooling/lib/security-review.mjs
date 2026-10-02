@@ -19,12 +19,18 @@
 // fail a pull request; only a finding, through the verdict, can do that.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { adapterFor, KEY_ENV, parseExtraParams } from './llm.mjs';
 import { unfence } from './llm-request.mjs';
 import { fromFindings, noted, skipped } from './security-sarif.mjs';
 import { load } from './security-settings.mjs';
 import { isProgram } from './is-program.mjs';
 
+// The package's own prompt, which every repository gets, and the repository's
+// addendum (what its app is, what it has already decided), added after it.
+export const DEFAULT_PROMPT_FILE = fileURLToPath(
+  new URL('../security-review.prompt.md', import.meta.url),
+);
 export const PROMPT_FILE = 'security-review.prompt.md';
 export const SEVERITIES = ['critical', 'high', 'medium', 'low'];
 const MAX_TOKENS = 16000;
@@ -130,6 +136,13 @@ export const validateReview = (raw, files) => {
   return { findings };
 };
 
+/** The system prompt: the package's, then the repository's addendum after a blank line. */
+export const composePrompt = (base, addendum) =>
+  [base, addendum]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join('\n\n');
+
 /** The user turn: the files under review, then their diff. */
 export const buildUserPrompt = (kept, base) =>
   [
@@ -153,7 +166,6 @@ export async function review({
   if (!adapter)
     return skipped('review', 'no LLM provider configured (llm.provider or SECURITY_LLM_PROVIDER)');
   if (!env[KEY_ENV[provider]]) return skipped('review', `${KEY_ENV[provider]} is not set`);
-  if (!exists(PROMPT_FILE)) return skipped('review', `${PROMPT_FILE} is missing`);
   const extraParams = parseExtraParams(env.SECURITY_LLM_EXTRA_PARAMS, 'SECURITY_LLM_EXTRA_PARAMS');
 
   const { base, reason } = resolveBase(env, run);
@@ -177,7 +189,10 @@ export async function review({
   let raw;
   try {
     raw = await adapter.complete({
-      system: read(PROMPT_FILE, 'utf8'),
+      system: composePrompt(
+        read(DEFAULT_PROMPT_FILE, 'utf8'),
+        exists(PROMPT_FILE) ? read(PROMPT_FILE, 'utf8') : '',
+      ),
       user: buildUserPrompt(kept, base),
       model,
       maxTokens: MAX_TOKENS,

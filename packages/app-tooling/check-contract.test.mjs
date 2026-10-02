@@ -1035,12 +1035,12 @@ test('calling publish-badges.yml needs no gen:badges script, and a copy of the r
 });
 
 test('a degraded-only consumer exits 0 and counts what degraded', () => {
-  const { code, stdout, stderr } = runMain(['--root', tree(), '--profile', 'code-scanning']);
+  const { code, stdout, stderr } = runMain(['--root', tree(), '--profile', 'security']);
   assert.equal(code, 0);
   assert.equal(stderr, '');
-  const codeql = check(readContract(), readConsumer(tree()), { profiles: ['code-scanning'] }).find((r) => r.req.id === 'file.code-scanning-configuration');
-  assert.equal(codeql.level, 'warn');
-  assert.equal(stdout, `${BARE_LINE}\n${formatResult(codeql)}\n\n1 degraded. See ${GUIDE}\n`);
+  const settings = check(readContract(), readConsumer(tree()), { profiles: ['security'] }).find((r) => r.req.id === 'file.security-settings');
+  assert.equal(settings.level, 'warn');
+  assert.equal(stdout, `${BARE_LINE}\nok    no copy of the security scanners\n${formatResult(settings)}\n\n1 degraded. See ${GUIDE}\n`);
 });
 
 test('a consumer missing required items exits 1, lists each finding and counts both kinds', () => {
@@ -1063,8 +1063,8 @@ test('--skeleton adds what would clear the failures', () => {
 });
 
 test('--skeleton prints nothing extra when nothing fails', () => {
-  const plain = runMain(['--root', tree(), '--profile', 'code-scanning']);
-  const withSkeleton = runMain(['--root', tree(), '--profile', 'code-scanning', '--skeleton']);
+  const plain = runMain(['--root', tree(), '--profile', 'security']);
+  const withSkeleton = runMain(['--root', tree(), '--profile', 'security', '--skeleton']);
   assert.equal(withSkeleton.stdout, plain.stdout);
 });
 
@@ -1084,7 +1084,7 @@ test('--json prints every result by id and no text summary, keeping the exit cod
 });
 
 test('--json exits 0 when nothing fails', () => {
-  const { code, stderr } = runMain(['--root', tree(), '--profile', 'code-scanning', '--json']);
+  const { code, stderr } = runMain(['--root', tree(), '--profile', 'security', '--json']);
   assert.equal(code, 0);
   assert.equal(stderr, '');
 });
@@ -1100,14 +1100,14 @@ test('the job summary is appended to GITHUB_STEP_SUMMARY when it is set', () => 
 test('no job summary is written without GITHUB_STEP_SUMMARY', () => {
   const appended = [];
   const io = { ...defaultIo, append: (file, text) => appended.push([file, text]) };
-  runMain(['--root', tree(), '--profile', 'code-scanning'], { io });
+  runMain(['--root', tree(), '--profile', 'security'], { io });
   assert.deepEqual(appended, []);
 });
 
 test('an io that cannot append skips the job summary rather than failing the run', () => {
   const { append, ...readOnly } = defaultIo;
   assert.equal(typeof append, 'function');
-  const { code } = runMain(['--root', tree(), '--profile', 'code-scanning'], { io: readOnly, env: { GITHUB_STEP_SUMMARY: '/nonexistent/summary.md' } });
+  const { code } = runMain(['--root', tree(), '--profile', 'security'], { io: readOnly, env: { GITHUB_STEP_SUMMARY: '/nonexistent/summary.md' } });
   assert.equal(code, 0);
 });
 
@@ -1133,7 +1133,7 @@ test('run as a program, it prints the report and exits with the report\'s code',
   assert.equal(failing.status, 1);
   assert.match(failing.stdout, /^FAIL  /m);
   assert.match(failing.stderr, /^::error::consumer contract: /);
-  const passing = spawnSync(process.execPath, [BIN, '--root', tree(), '--profile', 'code-scanning'], { encoding: 'utf8', env: CHILD_ENV });
+  const passing = spawnSync(process.execPath, [BIN, '--root', tree(), '--profile', 'security'], { encoding: 'utf8', env: CHILD_ENV });
   assert.equal(passing.status, 0);
   assert.match(passing.stdout, /1 degraded/);
 });

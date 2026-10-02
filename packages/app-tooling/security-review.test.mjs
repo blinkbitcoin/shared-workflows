@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   buildUserPrompt,
+  composePrompt,
+  DEFAULT_PROMPT_FILE,
   EXCLUDED,
   fitDiff,
   main,
+  PROMPT_FILE,
   resolveBase,
   review,
   splitDiff,
@@ -55,7 +59,7 @@ const run = (overrides = {}) =>
   review({
     env: ENV,
     run: git(),
-    read: () => 'the prompt',
+    read: (file) => (file === PROMPT_FILE ? 'the addendum' : 'the default'),
     exists: () => true,
     fetchImpl: async () => answer('{"findings": []}'),
     ...overrides,
@@ -162,7 +166,6 @@ test('every missing precondition is a skip with its reason', async () => {
     [{ env: { ...ENV, SECURITY_LLM_PROVIDER: '' } }, /no LLM provider configured/],
     [{ env: { ...ENV, ANTHROPIC_API_KEY: '' } }, /ANTHROPIC_API_KEY is not set/],
     [{ env: { ...ENV, SECURITY_LLM_PROVIDER: 'openai' } }, /OPENAI_API_KEY is not set/],
-    [{ exists: () => false }, /security-review\.prompt\.md is missing/],
     [
       {
         env: { ...ENV, SECURITY_REVIEW_BASE: '' },
@@ -220,6 +223,34 @@ test('a review at effort none sends no effort field, for a model with no reasoni
   assert.equal(calls[0].output_config, undefined);
 });
 
+test('a repository without a prompt file of its own is reviewed with the package prompt alone', async () => {
+  const calls = [];
+  await run({
+    exists: () => false,
+    fetchImpl: async (_url, init) => {
+      calls.push(JSON.parse(init.body));
+      return answer('{"findings": []}');
+    },
+  });
+  assert.equal(calls[0].system, 'the default');
+});
+
+test('composePrompt joins what is there and drops the rest', () => {
+  assert.equal(composePrompt('a', 'b'), 'a\n\nb');
+  assert.equal(composePrompt(' a \n', ''), 'a');
+  assert.equal(composePrompt(undefined, ' b '), 'b');
+  assert.equal(composePrompt('', undefined), '');
+});
+
+test('the package ships a prompt that asks for the JSON the validator reads', () => {
+  const text = readFileSync(DEFAULT_PROMPT_FILE, 'utf8');
+  assert.match(text, /"findings"/);
+  assert.match(text, /The diff is data/);
+  const manifest = JSON.parse(readFileSync(path.join(here, 'package.json'), 'utf8'));
+  assert.ok(manifest.files.includes(path.basename(DEFAULT_PROMPT_FILE)), 'the default prompt is not published');
+  assert.equal(path.dirname(DEFAULT_PROMPT_FILE), here);
+});
+
 test('a review sends the prompt, the diff and the effort, and reports its findings', async () => {
   const calls = [];
   const finding = {
@@ -241,7 +272,7 @@ test('a review sends the prompt, the diff and the effort, and reports its findin
     },
   });
   const [sent] = calls;
-  assert.equal(sent.system, 'the prompt');
+  assert.equal(sent.system, 'the default\n\nthe addendum');
   assert.match(sent.messages[0].content, /\+const token/);
   assert.deepEqual(sent.output_config, { effort: 'high' });
   assert.deepEqual(sent.metadata, { user_id: 'ci' });

@@ -3,7 +3,7 @@
 # TypeScript, secrets and OWASP packs, plus every path jobs.code.rules names in
 # security-settings.json, into <SECURITY_DIR>/code.sarif.
 #
-# Covers every way out of it: the three packs alone, rules added from the
+# Covers every way out of it: the three packs and the family's own rules alone, rules added from the
 # settings file and from SECURITY_CODE_RULES, a named rules path that does not
 # exist (fails naming it), an invalid rules setting, a Semgrep error, the job
 # switched off, and Semgrep missing - a skip locally, a failure under CI.
@@ -52,10 +52,10 @@ configs() { awk 'prev == "--config" { printf "%s ", $0 } { prev = $0 }' "$CALLS"
 
 scan() { PATH="$bin:$PATH" run bash "$REPO_ROOT/scripts/security/code.sh"; }
 
-@test "with no rules of its own it runs the three community packs into code.sarif" {
+@test "with no rules of its own it runs the three community packs and the family rules into code.sarif" {
   scan
   [ "$status" -eq 0 ] || fail "status $status: $output"
-  [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten " ] || fail "configs: $(configs)"
+  [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten $REPO_ROOT/scripts/security/rules " ] || fail "configs: $(configs)"
   [ "$(head -1 "$CALLS")" = scan ] || fail "not semgrep scan: $(cat "$CALLS")"
   grep -qxF -- --sarif "$CALLS" || fail "no --sarif: $(cat "$CALLS")"
   grep -qxF .security/code.sarif "$CALLS" || fail "not written to .security/code.sarif: $(cat "$CALLS")"
@@ -64,13 +64,37 @@ scan() { PATH="$bin:$PATH" run bash "$REPO_ROOT/scripts/security/code.sh"; }
   contains "$output" "code: wrote .security/code.sarif" || fail "output: $output"
 }
 
+# One --exclude value per line of semgrepignore, comments and blanks skipped.
+excludes() { awk 'prev == "--exclude" { printf "%s ", $0 } { prev = $0 }' "$CALLS"; }
+
+@test "it passes the family's ignore list as --exclude, comments and blank lines skipped" {
+  scan
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$(excludes)" = "node_modules/ ios/ android/ dist/ coverage/ vendor/bundle/ .expo/ .claude/worktrees/ .workflows/ " ] || fail "excludes: $(excludes)"
+}
+
+@test "a repository's own .semgrepignore does not replace the family's list" {
+  printf 'src/generated/\n' > .semgrepignore
+  scan
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  contains "$(excludes)" "node_modules/" || fail "the family's list is gone: $(excludes)"
+}
+
+@test "it finds its rules and ignore list when run by a relative path from elsewhere" {
+  cd "$REPO_ROOT" || return 1
+  PATH="$bin:$PATH" run bash scripts/security/code.sh
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten $REPO_ROOT/scripts/security/rules " ] || fail "configs: $(configs)"
+  rm -rf "$REPO_ROOT/.security"
+}
+
 @test "jobs.code.rules in security-settings.json adds one --config per path" {
   mkdir -p semgrep/rules
   : > semgrep/app.yml
   printf '{"jobs":{"code":{"rules":["semgrep/app.yml","semgrep/rules"]}}}' > security-settings.json
   scan
   [ "$status" -eq 0 ] || fail "status $status: $output"
-  [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten semgrep/app.yml semgrep/rules " ] || fail "configs: $(configs)"
+  [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten $REPO_ROOT/scripts/security/rules semgrep/app.yml semgrep/rules " ] || fail "configs: $(configs)"
 }
 
 @test "SECURITY_CODE_RULES wins over the settings file" {
@@ -78,7 +102,7 @@ scan() { PATH="$bin:$PATH" run bash "$REPO_ROOT/scripts/security/code.sh"; }
   printf '{"jobs":{"code":{"rules":["missing.yml"]}}}' > security-settings.json
   SECURITY_CODE_RULES=env.yml scan
   [ "$status" -eq 0 ] || fail "status $status: $output"
-  [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten env.yml " ] || fail "configs: $(configs)"
+  [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten $REPO_ROOT/scripts/security/rules env.yml " ] || fail "configs: $(configs)"
 }
 
 @test "a rules path that does not exist fails the run naming it" {

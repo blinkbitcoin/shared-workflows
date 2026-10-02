@@ -365,7 +365,7 @@ Four places used to fail without any of that, and no longer do:
 | No mise config: `jdx/mise-action` installs nothing and succeeds, so the first symptom was `missing command: pnpm` two steps later | The `setup` action checks for a mise config, a `package.json` and a `pnpm-lock.yaml` **before** mise-action, and names whichever is absent |
 | A lockfile out of date with `package.json`: pnpm's own `ERR_PNPM_OUTDATED_LOCKFILE`, which names nothing about this family | The same error, wrapped with what to run and why CI installs frozen |
 | A `pnpm-lock.yaml` this family cannot read (anything but v9 at the repository root): `native-hash.sh` hashed **nothing** and produced a cache key that no longer tracked dependency versions — silently | Fatal, naming the shape it expected. A native dependency bump restoring a stale build is not a failure anyone would notice |
-| `.github/codeql/codeql-config.yml` absent: `codeql-action/init` failed on a path it could not read | The config file is passed only when it exists. CodeQL still runs, on its own defaults, and the contract check reports the difference as degraded |
+| `.github/codeql/codeql-config.yml` absent: `codeql-action/init` failed on a path it could not read | The family's defaults are the configuration; your file, when there is one, is merged over them. `init` always reads a file that exists |
 
 **Lane inputs are checked at the start of the job, not inside the lane.** All
 five of `APP_VERSION`, `APP_BUILD_NUMBER`, `IOS_BUNDLE_ID`, `IOS_SCHEME` and
@@ -1098,10 +1098,10 @@ creation outright.
 | Input | Default | Meaning |
 | --- | --- | --- |
 | `repository`, `ref`, `linux-runner` | (as above) | — |
-| `working-directory` | `.` | Unused: CodeQL reads the whole checkout, and the configuration file's `paths-ignore` is what scopes it |
+| `working-directory` | `.` | Unused: CodeQL reads the whole checkout, and the configuration's `paths-ignore` is what scopes it |
 | `macos-runner`, `native-cache-version` | (unused) | — |
 | `languages` | `javascript-typescript` | Comma-separated CodeQL languages; also the `category` the SARIF is uploaded under |
-| `configuration-file` | `./.github/codeql/codeql-config.yml` | Consumer-relative CodeQL configuration: query suite, packs, `paths-ignore` |
+| `configuration-file` | `./.github/codeql/codeql-config.yml` | Consumer-relative CodeQL configuration, optional: merged over the family's defaults (your `paths-ignore` entries are added; `name`, `queries` and `packs` replace them) |
 | `docs-patterns` | `''` | Extra `\|`-joined POSIX ERE alternatives **added to** the built-in docs pattern, same as `check.yml` |
 
 Outputs: `docs-only` (`'true'` when nothing but docs changed, so no analysis
@@ -1110,9 +1110,12 @@ ran). Secrets: `consumer-token` (optional).
 Two jobs. `changes` runs the **same** classifier `check.yml` does — the same
 `scripts/ci/changed-class.sh`, from the same `.workflows/` self-checkout, with a
 byte-identical `BASE_SHA` expression (`test/workflow-shape.bats` compares the
-two). `analyze` is gated on `docs-only != 'true'` and runs
+two). `analyze` is gated on `docs-only != 'true'`, resolves the configuration
+(`scripts/ci/resolve-code-scanning-config.sh`: the family's defaults with your
+file merged over them, written to `.codeql-config.yml`) and runs
 `github/codeql-action/init@v4` + `analyze@v4` with no build step: JS/TS is
-extracted from source. Permissions escalate on `analyze` only — `actions: read`
+extracted from source. The `.workflows/` checkout the resolver needs stays out
+of the database because the defaults' `paths-ignore` names it. Permissions escalate on `analyze` only — `actions: read`
 for the workflow metadata and `security-events: write` for the SARIF upload,
 with `contents: read` re-declared because naming `permissions:` at all resets
 the scopes you do not name.
@@ -1165,8 +1168,14 @@ level; on a public one it is free.
 
 #### The config file, and why an inline marker beats a dismissal
 
-The consumer owns `.github/codeql/codeql-config.yml`. Two entries carry the
-weight:
+The family ships the configuration: `security-and-quality` queries, the
+alert-suppression pack and a `paths-ignore` for the directories nobody scans
+(`ios`, `android`, `dist`, `coverage`, `vendor/bundle`, `.expo`, `.workflows`,
+`.claude/worktrees`). **You need no file.** A `.github/codeql/codeql-config.yml`
+of your own is merged over it: your `paths-ignore` entries are added to the
+family's, and `name`, `queries` and `packs` replace the defaults when you set
+them. Any other key is an error naming it, because the merge would drop it
+silently. Two entries in the defaults carry the weight:
 
 ```yaml
 queries:
@@ -1233,8 +1242,11 @@ A green laptop and a green pipeline are the same claim. **You ship no scanner
 code.** You keep `security-settings.json` (optional: without it the defaults
 apply; `@blinkbitcoin/app-tooling/security-settings.json` is every key at its
 default, ready to copy) and the files it names: your own Semgrep rules
-(`jobs.code.rules`), and a `.mobsf` with reasoned mobsfscan suppressions if you
-need one. A copy of the scanners in your repository is a `no-copy.security`
+(`jobs.code.rules`, added to the React Native rules the package already runs),
+and a `.mobsf` with reasoned mobsfscan suppressions if you need one. A
+`.semgrepignore` lists only paths the package does not already skip
+(`node_modules`, `ios`, `android`, `dist`, `coverage`, `vendor/bundle`,
+`.expo`, `.claude/worktrees`, `.workflows`). A copy of the scanners in your repository is a `no-copy.security`
 failure in the contract check.
 
 **Every job installs your dependencies** (the `setup` action's
@@ -1262,14 +1274,14 @@ that scans nothing while reporting green is worse than one that is red.
 | --- | --- |
 | `repository`, `ref`, `working-directory`, `linux-runner`, `macos-runner`, `native-cache-version` | The family's common six. `macos-runner` and `native-cache-version` are unused here and carried for consistency |
 | `dependencies` | Allow the dependency scanner (`check-security dependencies`, osv-scanner over the lockfile). Default `true` |
-| `code` | Allow the source scanner (`check-security code`, Semgrep's TypeScript, secrets and OWASP packs plus your `jobs.code.rules`). Default `true` |
+| `code` | Allow the source scanner (`check-security code`, Semgrep's TypeScript, secrets and OWASP packs, this package's React Native rules plus your `jobs.code.rules`). Default `true` |
 | `policy` | Allow the install-policy scanner (`check-security policy`, your `pnpm-workspace.yaml` install policy). Default `true` |
 | `sbom` | Allow the bill of materials (`check-security sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
 | `native-stack` | `expo` or `bare`, for the two scanners below. Default empty: detected, as in [Expo or bare React Native](#expo-or-bare-react-native) |
 | `bundle` | Allow the bundle scanner (`check-security bundle`), which reads what the JavaScript bundle gives away. Expo: `expo export` of every platform in `bundle.platforms`.<br>Bare: `react-native bundle` per platform, `--dev false`, minified only where the platform does not build with Hermes, as its release does. Default `false` |
 | `mobile` | Allow the native project scanner (`check-security mobile`, mobsfscan). Expo: over a fresh prebuild in a temporary copy, never the working tree's `ios/` and `android/`.<br>Bare: over the committed `ios/` and `android/`, in place, with no prebuild and no installed dependencies needed. Default `false` |
 | `binaries` | Allow the MASTG checks over the release's built binaries (`check-security binaries`). Needs `release-tag`. Default `false` |
-| `review` | Allow the LLM review of the change (`check-security review`). Gets full history and, on a pull request, its base. Default `false` |
+| `review` | Allow the LLM review of the change (`check-security review`). Gets full history and, on a pull request, its base. It reads the package's own `security-review.prompt.md`, then your repository's, if you have one, as an addendum. Default `false` |
 | `review-codebase` | Allow the LLM security review of the whole codebase, with OpenAnt (`check-security review-codebase`). The build is cached, keyed on the OpenAnt commit `scripts/security/review-codebase.sh` pins. Default `false` |
 | `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |

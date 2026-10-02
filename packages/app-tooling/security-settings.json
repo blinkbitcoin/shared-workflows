@@ -11,7 +11,7 @@
     },
     "code": {
       "enabled": true,
-      "$rules": "The repository's own Semgrep rule files or directories, added to the community TypeScript, secrets and OWASP packs. Each path must exist.",
+      "$rules": "The repository's own Semgrep rule files or directories, added to the community TypeScript, secrets and OWASP packs and the package's own React Native rules. Each path must exist.",
       "rules": []
     },
     "policy": {
