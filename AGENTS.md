@@ -42,6 +42,9 @@ scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files) and native-stack, the dispatch to scripts/native/<stack>/
 test/               the bats suite + fixtures/ (consumer-min, the Expo caller the guide is held to;
                     consumer-bare, a bare React Native app; both kept byte-identical to the guide)
+plugins/            store-release, the Claude Code plugin apps install (four store skills, each
+                    with its offline suite under skills/<name>/tests); .claude-plugin/ at the
+                    root is the marketplace that offers it
 packages/           app-tooling (tooling any repo installs; expo/ holds the Expo presets,
                     security/ the scanner copies and lib/security-*.mjs their modules,
                     lib/native-stack.mjs the Expo-or-bare rule every part applies,
@@ -58,12 +61,13 @@ Every row is a make target; nothing here is run through a package manager.
 | Target | |
 |---|---|
 | `make setup-hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
-| `make check` | Everything self-ci runs: `check-ci`, the three test suites, the version checks, `check-spell` and `check-secrets` |
+| `make check` | Everything self-ci runs: `check-ci`, the four test suites, the version checks, `check-spell` and `check-secrets` |
 | `make check-ci` | The CI code: shellcheck over every script under `scripts/` (bash strict), actionlint over the workflows and composite actions, and zizmor's security audit of both (offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
-| `make test` | Every test suite: `test-unit`, `test-package` and `test-scripts` |
+| `make test` | Every test suite: `test-unit`, `test-package`, `test-scripts` and `test-fastlane` |
 | `make test-unit` | The bats suite over the scripts, the workflows' shape and the docs' facts |
 | `make test-package` | `node:test` over every package under `packages/`, 100% lines, branches and functions |
 | `make test-scripts` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
+| `make test-fastlane` | Unit tests of the Ruby lanes the package ships (`packages/app-tooling/fastlane`), under Bundler, gems in `.gems/` |
 | `make check-version-pins` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
 | `make check-tool-versions` | Fail when an installed tool is not the version `packages/app-tooling/versions.json` pins |
 | `make check-spell` | typos over the whole repo |
@@ -285,6 +289,8 @@ Every row is a make target; nothing here is run through a package manager.
 |---|---|---|
 | Pure bash scripts, one test file each | `test/<name>.bats` | `make test-unit` |
 | The Node scripts under `scripts/`, one test file each, 100% lines, branches and functions | `test/<name>.test.mjs` | `make test-scripts` |
+| The Ruby lanes every app imports: helpers, promotion logic, the recorded arguments replayed against the real fastlane actions, and the package Fastfile loaded by real fastlane | `packages/app-tooling/fastlane/test/lanes_test.rb` | `make test-fastlane` (CI's `Unit / Ruby`) |
+| The store-release plugin: marketplace and manifest shape, the skills' paths through `${CLAUDE_PLUGIN_ROOT}`, and each skill's offline suite | `test/store-release-plugin.bats`, `plugins/store-release/skills/*/tests/run.sh` | `make test-unit` |
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test-unit` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-smoke-local.yml` via act | `make test-smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-program.bats` | `make test-unit` |

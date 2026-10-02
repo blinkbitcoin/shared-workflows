@@ -416,6 +416,30 @@ test('a lane two platforms need is named once when it is missing', () => {
   });
 });
 
+// An app's Fastfile is one import of the package's, so its lanes are not under
+// its fastlane/ directory: the lane scans read them from the package.
+const IMPORT_FASTFILE = "import '../node_modules/@blinkbitcoin/app-tooling/fastlane/Fastfile'\n";
+
+test('a Fastfile that imports the package lanes has every lane the build needs', () => {
+  const c = consumer({ dirs: ['fastlane'], files: { 'fastlane/Fastfile': IMPORT_FASTFILE } });
+  assert.equal(checkRequirement(req('lane.build-verify'), c).status, 'ok');
+});
+
+test('the imported lanes are held to the same App Review names the workflow passes', () => {
+  const c = consumer({
+    dirs: ['fastlane'],
+    files: { 'fastlane/Fastfile': IMPORT_FASTFILE },
+    callers: { 'r.yml': 'uses: blinkbitcoin/shared-workflows/.github/workflows/publish-store.yml@v0\n' },
+  });
+  const result = check(readContract(), c).find((r) => r.req.id === 'lane-environment.app-review');
+  assert.equal(result.level, 'ok', result.reason);
+});
+
+test('only the Fastfile that names the package is given its lanes: another one missing them still fails', () => {
+  const c = consumer({ dirs: ['fastlane'], files: { 'fastlane/Fastfile': "import 'lanes/mine.rb'\n" } });
+  assert.equal(checkRequirement(req('lane.build-verify'), c).status, 'missing');
+});
+
 // --- severity ----------------------------------------------------------------
 
 test('a missing required item blocks and a missing fallback item only degrades', () => {

@@ -746,7 +746,7 @@ export function checkRequirement(req, consumer) {
     case 'lane': {
       // A textual scan of <fastlane-directory>/**.rb, not a Ruby parse: enough to catch a
       // lane that was never written, and honest about being no more than that.
-      const text = collectRuby(path.join(root, consumer.fastlaneDirectory), consumer.io);
+      const text = laneRuby(path.join(root, consumer.fastlaneDirectory), consumer.io);
       if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
       // Named once each: the scan is not per platform, so a lane two platforms
       // need is either there for both or absent for both.
@@ -801,7 +801,7 @@ export function checkRequirement(req, consumer) {
     case 'lane-environment': {
       // A lane reading an environment variable the lane workflow never passes
       // gets an empty string, and fastlane uploads the empty value.
-      const text = collectRuby(path.join(root, consumer.fastlaneDirectory), io);
+      const text = laneRuby(path.join(root, consumer.fastlaneDirectory), io);
       if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
       const prefix = req.prefix;
       const read = new Set(
@@ -889,6 +889,27 @@ export function ciScripts(contract, uses, inputs, profiles, stack = null) {
  */
 function fastlanePath(file, consumer) {
   return file.startsWith('fastlane/') ? `${consumer.fastlaneDirectory}${file.slice('fastlane'.length)}` : file;
+}
+
+// The lanes this package ships. An app's Fastfile is one import of the package's,
+// so the lanes it runs are not under its fastlane/ directory: the lane scans read
+// them from here, as the text they would have been had the app held a copy.
+const PACKAGE_FASTLANE = fileURLToPath(new URL('../fastlane', import.meta.url));
+const IMPORTS_PACKAGE_LANES = /@blinkbitcoin\/app-tooling\/fastlane\/Fastfile/;
+
+/**
+ * The Ruby of the lanes a consumer runs: its own fastlane directory, plus this
+ * package's Fastfile and lanes when its Fastfile imports them. `null` still
+ * means "no fastlane directory at all".
+ */
+function laneRuby(dir, io) {
+  const own = collectRuby(dir, io);
+  if (own === null || !IMPORTS_PACKAGE_LANES.test(own)) return own;
+  const lanes = path.join(PACKAGE_FASTLANE, 'lanes');
+  const packaged = [path.join(PACKAGE_FASTLANE, 'Fastfile'), ...defaultIo.list(lanes).filter((name) => name.endsWith('.rb')).map((name) => path.join(lanes, name))];
+  // These files ship with this program, so an unreadable one is a broken install
+  // and should say so rather than read as empty.
+  return `${own}${packaged.map((file) => `${readFileSync(file, 'utf8')}\n`).join('')}`;
 }
 
 function collectRuby(dir, io, depth = 0) {

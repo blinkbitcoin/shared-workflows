@@ -21,3 +21,6 @@ gitleaks = "8.30.1"
 lefthook = "2.1.14"
 # Runs self-smoke-local.yml on a laptop (make test-smoke-local). Needs Docker.
 act = "0.2.89"
+# The lanes in packages/app-tooling/fastlane are Ruby, and `make test-fastlane` runs
+# their tests. The major and minor the template pins.
+ruby = "3.3"

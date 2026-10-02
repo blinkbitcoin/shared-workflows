@@ -24,7 +24,7 @@ MISE := $(shell command -v mise >/dev/null 2>&1 && echo 'mise exec --')
 # from a worktree nested in another checkout (`.claude/worktrees/<name>/`) it
 # would read that checkout's policy instead of this one's.
 check-ci: ## Lint the scripts (shellcheck), the workflows and actions (actionlint) and audit their security (zizmor)
-	find scripts -name '*.sh' -exec $(MISE) shellcheck -x {} +
+	find scripts plugins -name '*.sh' -exec $(MISE) shellcheck -x {} +
 	$(MISE) actionlint -color
 	$(MISE) zizmor --offline --min-severity medium --config .github/zizmor.yml .github
 # One bats job per core: the suite is about 1,200 cases that each start a
@@ -58,12 +58,17 @@ test-scripts: ## node:test for the Node scripts under scripts/, with the 100% co
 		--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \
 		--test-coverage-include='scripts/**/*.mjs' \
 		"test/*.test.mjs"
+# The Ruby lanes under packages/app-tooling/fastlane: their unit tests, the
+# recorded lane arguments replayed against the real fastlane actions, and the
+# package Fastfile loaded by real fastlane. See scripts/self/test-fastlane.sh.
+test-fastlane: ## Unit tests of the fastlane lanes the package ships (Ruby; installs the gems into .gems/)
+	$(MISE) bash scripts/self/test-fastlane.sh
 check-spell: ## typos over the whole repo
 	$(MISE) typos
 check-secrets: ## Scan the whole git history for committed secrets (gitleaks)
 	$(MISE) gitleaks git --redact --no-banner .
-test: test-unit test-package test-scripts ## Every test suite: bats, the packages and the Node scripts
-check: check-ci test-unit test-package test-scripts check-version-pins check-tool-versions check-spell check-secrets ## Everything self-ci runs
+test: test-unit test-package test-scripts test-fastlane ## Every test suite: bats, the packages, the Node scripts and the Ruby lanes
+check: check-ci test-unit test-package test-scripts test-fastlane check-version-pins check-tool-versions check-spell check-secrets ## Everything self-ci runs
 # Not part of `check`: needs Docker, a pushed branch and a few minutes. See
 # CONTRIBUTING.md, "Running the release pipeline locally".
 test-smoke-local: ## Run Prepare against the template with act (the Linux jobs, in Docker; needs a pushed branch)
@@ -76,4 +81,4 @@ setup-hooks: ## Install the git hooks (lefthook) - affects the whole clone, not 
 	$(MISE) lefthook install
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
-.PHONY: check-ci check-secrets test test-unit test-package test-scripts check-version-pins check-tool-versions check-spell check test-smoke-local test-smoke-local-android setup-hooks help
+.PHONY: check-ci check-secrets test test-unit test-package test-scripts test-fastlane check-version-pins check-tool-versions check-spell check test-smoke-local test-smoke-local-android setup-hooks help

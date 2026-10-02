@@ -1,0 +1,11 @@
+{
+  "installed": {
+    "client_id": "100000000000-decoydecoydecoydecoydecoydecoy.apps.googleusercontent.com",
+    "project_id": "decoy-project-123456",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "DECOY-not-a-real-secret-00000000",
+    "redirect_uris": ["http://localhost"]
+  }
+}
