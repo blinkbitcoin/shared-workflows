@@ -452,6 +452,39 @@ everything that is wrong. `command` replaces `expo prebuild --platform all --cle
 --no-install`, and `--keep` leaves the temporary directory behind to look at. The
 prebuild runs with `EXPO_NO_GIT_STATUS=1` unless a scenario sets it.
 
+### The script tests
+
+An app's own Node scripts (`scripts/**/*.mjs`) are held to the same bar as its source:
+a test file of their own, and 100% coverage.
+
+```sh
+test-scripts [--root DIR]
+```
+
+Three gates, in order:
+
+1. `check-test-siblings`: every script has its own test file beside it.
+2. `node --test` over the test files, with coverage at 100% for lines, branches and
+   functions over the scripts.
+3. Every script module is in the coverage report.
+
+The third is the one nothing else holds. Node's coverage only measures modules some test
+loaded: a module no test imports is missing from the report instead of reported at 0%, so an
+untested new script would pass the 100% gate by not being in it. `test-scripts` reads the
+report (lcov) against the modules on disk, so an app does not need a test that imports every
+script. A module's command-line entry has to be guarded (`import.meta.main`, or `isProgram`)
+so importing it runs nothing.
+
+The `testScripts` section of `app-tooling.json` names which files are which, and defaults to
+the layout the template uses:
+
+```json
+{ "testScripts": { "sources": ["scripts/**/*.mjs"], "tests": ["scripts/**/*.test.mjs"] } }
+```
+
+A source that is also a test file is not a module. The thresholds are not configurable: a
+threshold is never lowered to make a change pass.
+
 ### How the template calls them
 
 Once the template takes the release that ships these, each of its own copies
@@ -465,6 +498,7 @@ becomes one line:
 | `build:web` (`expo export` and the 404 page) | `pnpm exec build-web [expo export arguments]` |
 
 | `check-prebuild` (`scripts/check-prebuild.sh`) | `pnpm exec check-prebuild` |
+| `test:scripts` (siblings, `node --test`, 100%) and `scripts/coverage-completeness.test.mjs` | `pnpm exec test-scripts` |
 | `check-docs` | `pnpm exec check-docs` |
 | `test-scripts` (siblings) | `pnpm exec check-test-siblings` |
 | `check-ignored-directories` | `pnpm exec check-ignored-directories` |

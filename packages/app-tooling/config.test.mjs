@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConfigError, CONFIG_FILE, PREBUILD_ASSERTIONS, portTable, prebuildConfig, readSection, SECTIONS, stringList, stringMap } from './lib/config.mjs';
+import { CONFIG_FILE, ConfigError, portTable, PREBUILD_ASSERTIONS, prebuildConfig, readSection, SECTIONS, stringList, stringMap, testScriptsConfig } from './lib/config.mjs';
 
 const tree = (files) => (file) => files[file] ?? null;
 const at = (text) => tree({ '/r/app-tooling.json': text });
@@ -13,6 +13,7 @@ test('the family has one file, with a section per program', () => {
     appSuites: ['skip'],
     ports: ['base', 'services', 'apiPath', 'allow', 'retired'],
     prebuild: ['scenarios', 'exclude', 'command'],
+    testScripts: ['sources', 'tests'],
   });
 });
 
@@ -29,7 +30,7 @@ test('a file that is there and wrong is a ConfigError naming the file and the re
     ['{', /^app-tooling\.json: not valid JSON: /],
     ['[]', /^app-tooling\.json: the top level must be an object of sections$/],
     ['null', /the top level must be an object of sections/],
-    ['{"doc":{}}', /^app-tooling\.json: unknown section "doc"; the sections are testSiblings, docs, appSuites, ports, prebuild$/],
+    ['{"doc":{}}', /^app-tooling\.json: unknown section "doc"; the sections are testSiblings, docs, appSuites, ports, prebuild, testScripts$/],
     ['{"docs":[]}', /^app-tooling\.json: "docs" must be an object$/],
     ['{"docs":{"architecture":[],"allow":{}}}', /^app-tooling\.json: unknown key "docs\.allow"; "docs" takes architecture, allowTargetNames$/],
   ]) {
@@ -138,5 +139,23 @@ test('a prebuild section that is wrong is a ConfigError naming the key and what 
     [scenario([{ file: 'a', contains: 'x', message: 1 }]), /\.message" must be a string/],
   ]) {
     assert.throws(() => prebuildConfig(section), (e) => e instanceof ConfigError && reason.test(e.message), JSON.stringify(section));
+  }
+});
+
+test('the testScripts section defaults to scripts/ and is checked when given', () => {
+  const defaults = { sources: ['scripts/**/*.mjs'], tests: ['scripts/**/*.test.mjs'] };
+  assert.deepEqual(testScriptsConfig(null), defaults);
+  assert.deepEqual(testScriptsConfig({}), defaults);
+  assert.deepEqual(testScriptsConfig({ sources: ['tools/**/*.mjs'], tests: ['tools/**/*.test.mjs', 'tools/*.spec.mjs'] }), {
+    sources: ['tools/**/*.mjs'],
+    tests: ['tools/**/*.test.mjs', 'tools/*.spec.mjs'],
+  });
+  for (const [section, reason] of [
+    [{ sources: [] }, /"testScripts\.sources" must name at least one path pattern/],
+    [{ tests: [] }, /"testScripts\.tests" must name at least one path pattern/],
+    [{ sources: 'scripts' }, /"testScripts\.sources" must be a list of non-empty strings/],
+    [{ tests: [''] }, /"testScripts\.tests" must be a list of non-empty strings/],
+  ]) {
+    assert.throws(() => testScriptsConfig(section), (e) => e instanceof ConfigError && reason.test(e.message), JSON.stringify(section));
   }
 });
