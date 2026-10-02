@@ -173,12 +173,6 @@ is a warning in the report, not a failure. See
 | --- | --- | --- |
 | no `scripts/badges/badge.mjs`, `scripts/badges/badge.test.mjs`, `scripts/badges/coverage-badge.mjs`, `scripts/badges/coverage-badge.test.mjs`, `scripts/badges/render.mjs`, `scripts/badges/render.test.mjs`, `scripts/badges/security-badge.mjs`, `scripts/badges/security-badge.test.mjs`, `scripts/badges/status-badge.mjs` or `scripts/badges/status-badge.test.mjs` | required | the gen-badges program @blinkbitcoin/app-tooling ships and publish-badges.yml runs; a copy in your repository is compared with it by nothing and drifts |
 
-### If you call `check-code-scanning.yml`
-
-| What | You need | Why |
-| --- | --- | --- |
-| `.github/codeql/codeql-config.yml` | optional — a fallback runs | check-code-scanning.yml (configuration-file) |
-
 ### If you call `check-security.yml`
 
 | What | You need | Why |

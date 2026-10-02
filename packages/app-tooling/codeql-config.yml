@@ -1,0 +1,51 @@
+# The CodeQL configuration every repository gets, read by BOTH the CI analysis
+# (check-code-scanning.yml) and the local run (`check-code-scanning`). A
+# repository's own .github/codeql/codeql-config.yml is merged over it by
+# resolve-code-scanning-config: its `paths-ignore` entries are added to this
+# list, and its `name`, `queries` and `packs` replace these when it sets them.
+# One resolver for both runs, so local and CI cannot disagree about what was
+# scanned or with which queries.
+name: code-scanning
+
+# `security-and-quality`: the default security suite plus the
+# maintainability/reliability queries that GitHub sells separately as "Code
+# quality". They overlap Biome and ESLint in places; the non-overlapping half is
+# dataflow, which neither linter does.
+queries:
+  - uses: security-and-quality
+
+# Not optional decoration - this pack is the suppression mechanism.
+# `AlertSuppression.ql` is what makes an inline
+#
+#     // Why this cannot happen here.
+#     // codeql[js/some-rule-id]
+#     const value = untrusted;
+#
+# comment actually suppress one finding. A marker alone on its line covers that
+# line and the one immediately BELOW it, so it has to be the last line before
+# the code: the reason goes ABOVE the marker, never between the marker and the
+# code. WITHOUT this pack the marker is ignored: the comment sits in the file
+# looking like it works while the alert keeps coming back.
+#
+# A marker, not an API/UI dismissal: a dismissal is keyed to the alert's
+# fingerprint and evaporates the next time the file moves, while a marker
+# travels with the code, is reviewed in the diff that adds it, and silences
+# exactly one site rather than the whole query. Suppress in the source, with a
+# comment saying why.
+packs:
+  - codeql/javascript-queries:AlertSuppression.ql
+
+# Generated, compiled, vendored or native output, and other checkouts: scanning
+# them reports findings nobody can fix in the repository. A repository adds its
+# own generated paths in its configuration file. `make check-code-scanning`
+# mirrors this list as LGTM_INDEX_FILTERS so a local database holds the same
+# files a CI one does.
+paths-ignore:
+  - ios # expo prebuild output, never committed
+  - android # expo prebuild output, never committed
+  - dist # web export
+  - coverage # jest reports
+  - vendor/bundle # fastlane's gems
+  - .expo
+  - .workflows # the workflows repository, checked out beside the code on a runner
+  - .claude/worktrees # other checkouts of this repository (Claude Code worktrees)

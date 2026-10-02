@@ -193,15 +193,21 @@ describe('the run', () => {
     assert.deepEqual(r.calls, [
       'codeql version --format=terse',
       CREATE,
-      'filters<<exclude:src/graphql/generated',
-      'exclude:ios',
+      'filters<<exclude:ios',
+      'exclude:android',
+      'exclude:dist',
+      'exclude:coverage',
+      'exclude:vendor/bundle',
+      'exclude:.expo',
+      'exclude:.workflows',
       'exclude:.claude/worktrees',
+      'exclude:src/graphql/generated',
       'exclude:.codeql>>',
       analyze(SUITE, SUPPRESSION),
     ]);
     assert.deepEqual(r.stdout.split('\n'), [
       `== codeql 2.99.0, config ${CONFIG}`,
-      `== database (javascript-typescript, no build step; 4 index filters from ${CONFIG})`,
+      `== database (javascript-typescript, no build step; 10 index filters from ${CONFIG})`,
       `== analyze: ${SUITE} ${SUPPRESSION} (the pack is downloaded once)`,
       '== findings (.codeql/results.sarif)',
       'codeql: no findings',
@@ -225,7 +231,8 @@ describe('the run', () => {
 
   test('--config names another configuration file', () => {
     const r = run({ config: null, argv: ['--config', 'codeql.yml'] });
-    assert.match(r.stderr, /^::error::no CodeQL config at codeql\.yml$/);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.split('\n')[0], '== codeql 2.99.0, config codeql.yml');
     const dir = r.repo;
     writeFileSync(path.join(dir, 'codeql.yml'), DEFAULT_CONFIG);
     const out = [];
@@ -239,11 +246,32 @@ describe('the run', () => {
     assert.equal(out[0], '== codeql 2.99.0, config codeql.yml');
   });
 
-  test('a missing configuration fails before CodeQL runs', () => {
+  test('a repository with no configuration of its own is analysed on the family defaults', () => {
     const r = run({ config: null });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(r.calls.includes(analyze(SUITE, SUPPRESSION)), r.calls.join('\n'));
+    assert.ok(r.calls.includes('filters<<exclude:ios'), r.calls.join('\n'));
+    assert.match(r.stdout, /; 9 index filters from /);
+    assert.equal(r.stderr, '');
+  });
+
+  test('a key the merge does not carry fails the run, naming it', () => {
+    const r = run({ config: 'paths:\n  - src\n' });
     assert.equal(r.status, 1);
-    assert.match(r.stderr, /::error::no CodeQL config at \.github\/codeql\/codeql-config\.yml/);
+    assert.match(r.stderr, /::error::\.github\/codeql\/codeql-config\.yml sets paths, which the merge/);
     assert.deepEqual(r.calls, []);
+  });
+
+  test('a configuration that cannot be read for another reason than being absent fails the run', () => {
+    const dir = mkdtempSync(path.join(work, 'unreadable-'));
+    mkdirSync(path.join(dir, '.github', 'codeql', 'codeql-config.yml'), { recursive: true });
+    const bin = path.join(dir, 'bin');
+    mkdirSync(bin);
+    symlinkSync(impl, path.join(bin, 'codeql'));
+    const out = [];
+    const status = main(['--root', dir], { cwd: dir, env: { PATH: bin }, log: (line) => out.push(line), error: (line) => out.push(line) });
+    assert.equal(status, 1, out.join('\n'));
+    assert.match(out.join('\n'), /EISDIR|illegal operation on a directory/);
   });
 
   test('a failed database create shows the last 30 log lines and stops', () => {
@@ -267,7 +295,7 @@ describe('the run', () => {
 
 describe('reading the configuration', () => {
   test('no queries entry at all is refused', () => {
-    const r = run({ config: 'name: fixture\npacks:\n  - codeql/javascript-queries:AlertSuppression.ql\n' });
+    const r = run({ config: 'name: fixture\nqueries:\npacks:\n  - codeql/javascript-queries:AlertSuppression.ql\n' });
     assert.equal(r.status, 1);
     assert.match(r.stderr, /::error::.* names 0 entries under 'queries:'; this check maps exactly one suite/);
     assert.equal(r.calls.some((line) => line.includes('database')), false);
@@ -315,13 +343,12 @@ describe('reading the configuration', () => {
     assert.ok(r.calls.includes(analyze(SUITE, 'acme/extra-queries')), r.calls.join('\n'));
   });
 
-  test('no packs and no paths-ignore: the suite alone, and only the output directory filtered', () => {
-    const r = run({ config: 'queries:\n  - uses: security-and-quality\n' });
+  test('a file that sets only its own paths-ignore keeps the family suite, packs and paths', () => {
+    const r = run({ config: 'paths-ignore:\n  - generated/**\n' });
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /::warning::.* loads no AlertSuppression\.ql pack/);
-    assert.match(r.stdout, /; 1 index filters from /);
-    assert.ok(r.calls.includes('filters<<exclude:.codeql>>'), r.calls.join('\n'));
-    assert.ok(r.calls.includes(analyze(SUITE)), r.calls.join('\n'));
+    assert.ok(r.calls.includes(analyze(SUITE, SUPPRESSION)), r.calls.join('\n'));
+    assert.ok(r.calls.includes('exclude:generated/**'), r.calls.join('\n'));
+    assert.ok(r.calls.includes('filters<<exclude:ios'), r.calls.join('\n'));
   });
 
   test('yamlList reads only its own block', () => {

@@ -267,10 +267,25 @@ test('every text check says how to fix it', () => {
       'knip (knip.json) does not skip .workflows: add ".workflows/**" to ignore, or keep every entry and project glob out of dot directories',
       'typos (typos.toml) does not skip .workflows: add ".workflows/" to [files] extend-exclude',
       'git (.gitignore) does not skip .workflows: add /.workflows/',
-      'Semgrep (.semgrepignore) does not skip .workflows: add .workflows/',
-      'CodeQL (.github/codeql/codeql-config.yml) does not skip .workflows: add "- .workflows" to paths-ignore',
     ],
   );
+});
+
+test('Semgrep counts the package list: the default pair needs no line of the app, another directory does', () => {
+  const files = { ...ALIGNED, '.semgrepignore': '# nothing of its own\n' };
+  assert.equal(run(files).code, 0);
+  const semgrep = (argv) => run(files, { argv }).error.filter((line) => line.startsWith('Semgrep'));
+  assert.deepEqual(semgrep(['--directory', 'generated']), ['Semgrep (.semgrepignore) does not skip generated: add generated/']);
+  assert.deepEqual(semgrep(['--directory', 'node_modules']), []);
+});
+
+test('CodeQL counts the package defaults, so only a directory they do not name needs the app\'s own entry', () => {
+  const files = { ...ALIGNED, '.github/codeql/codeql-config.yml': 'paths-ignore:\n  - src/generated\n' };
+  assert.equal(run(files).code, 0);
+  const codeql = (argv) => run(files, { argv }).error.filter((line) => line.startsWith('CodeQL'));
+  assert.deepEqual(codeql(['--directory', 'vendor']), ['CodeQL (.github/codeql/codeql-config.yml) does not skip vendor: add "- vendor" to paths-ignore']);
+  assert.deepEqual(codeql(['--directory', 'src/generated']), []);
+  assert.deepEqual(codeql(['--directory', 'ios']), []);
 });
 
 test('main passes a repository whose every configuration skips both, and names what it checked', () => {
@@ -287,9 +302,8 @@ test('main names each configuration that misses a directory, with the fix', () =
   assert.deepEqual(error, [
     'tsc (tsconfig.json) does not skip .workflows: add ".workflows" to exclude',
     'tsc (tsconfig.json) does not skip .claude/worktrees: add ".claude/worktrees" to exclude',
-    'Semgrep (.semgrepignore) does not skip .workflows: add .workflows/',
     'zizmor is called without --config: Makefile:1:zizmor --offline .',
-    'ignored directories: 4 problem(s)',
+    'ignored directories: 3 problem(s)',
   ]);
 });
 

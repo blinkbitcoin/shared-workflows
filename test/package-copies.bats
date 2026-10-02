@@ -9,14 +9,14 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (48 files)" || fail "output: $output"
+  contains "$output" "package copies ok (50 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
 tree() {
   tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release" "$tree/scripts/checks" "$tree/scripts/ci" "$tree/scripts/hooks" \
-    "$tree/scripts/security/lib" "$tree/scripts/setup" "$tree/scripts/e2e" "$tree/scripts/native/expo" "$tree/scripts/native/bare" "$tree/.github"
+    "$tree/scripts/security/lib" "$tree/scripts/security/rules" "$tree/scripts/setup" "$tree/scripts/e2e" "$tree/scripts/native/expo" "$tree/scripts/native/bare" "$tree/.github"
   cp "$REPO_ROOT/scripts/self/package-copies.sh" "$tree/scripts/self/"
   cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions,e2e-env,expo-config,native-stack}.sh "$tree/scripts/lib/"
   cp "$REPO_ROOT"/scripts/native/expo/{app-config,fingerprint}.sh "$tree/scripts/native/expo/"
@@ -29,6 +29,8 @@ tree() {
   cp "$REPO_ROOT/scripts/hooks/install-if-lockfile-changed.sh" "$tree/scripts/hooks/"
   cp "$REPO_ROOT"/scripts/security/{scan,dependencies,code,policy,sbom,bundle,mobile,binaries,review,review-codebase}.sh "$tree/scripts/security/"
   cp "$REPO_ROOT/scripts/security/lib/runner.sh" "$tree/scripts/security/lib/"
+  cp "$REPO_ROOT/scripts/security/rules/react-native-secrets.yaml" "$tree/scripts/security/rules/"
+  cp "$REPO_ROOT/scripts/security/semgrepignore" "$tree/scripts/security/"
   cp "$REPO_ROOT"/scripts/e2e/{ios-maestro,android-maestro,app-launch,ios-simulator,android-emulator,collect-forensics,maestro-bound,wait-for-http}.sh "$tree/scripts/e2e/"
   cp "$REPO_ROOT/.github/zizmor.yml" "$tree/.github/"
 }
@@ -37,11 +39,11 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 48 files into packages/app-tooling" || fail "output: $output"
+  contains "$output" "copied 50 files into packages/app-tooling" || fail "output: $output"
   for rel in release/resolve-version.sh release/build-info.sh checks/generated.sh checks/secrets.sh \
     checks/run-script.sh checks/expo-health.sh ci/check-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh security/scan.sh security/code.sh \
-    security/review-codebase.sh security/lib/runner.sh release/verify-ios.sh release/verify-android.sh \
+    security/review-codebase.sh security/lib/runner.sh security/rules/react-native-secrets.yaml security/semgrepignore release/verify-ios.sh release/verify-android.sh \
     lib/verify-common.sh setup/all.sh setup/lib.sh e2e/ios-maestro.sh e2e/android-maestro.sh e2e/app-launch.sh \
     e2e/ios-simulator.sh e2e/android-emulator.sh e2e/collect-forensics.sh e2e/maestro-bound.sh e2e/wait-for-http.sh lib/e2e-env.sh \
     lib/expo-config.sh lib/native-stack.sh native/expo/app-config.sh native/expo/fingerprint.sh \

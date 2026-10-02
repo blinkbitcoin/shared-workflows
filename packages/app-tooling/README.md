@@ -194,6 +194,7 @@ check-docs [--architecture PREFIX]          # docs freshness, the command table,
 check-licenses [--allow SPDX]               # a production dependency under a license outside the allowlist
 check-skills [--root DIR]                   # an agent skill whose offline tests fail
 check-code-scanning [--config FILE]         # CodeQL on this machine, with the configuration CI reads
+resolve-code-scanning-config --out FILE     # the CodeQL configuration: the family's defaults, your file merged over them
 ```
 
 - `check-docs-tables` measures each `<br>` segment of a cell's visible text,
@@ -291,9 +292,15 @@ check-code-scanning [--config FILE]         # CodeQL on this machine, with the c
   that fails with its exit status. A repository with no skill tests passes.
   Some suites drive fastlane, so a caller runs it where the Ruby bundle is
   installed (the template's `make check-release`).
+- `resolve-code-scanning-config` writes the CodeQL configuration both CI and
+  `check-code-scanning` read: this package's defaults (the `security-and-quality`
+  suite, the alert-suppression pack, `paths-ignore` for generated and checked-out
+  directories) with your `.github/codeql/codeql-config.yml`, if you have one,
+  merged over them. Your `paths-ignore` entries are added; `name`, `queries` and
+  `packs` replace the defaults; any other key is an error, not a silent drop.
 - `check-code-scanning` runs CodeQL on this machine with the language, query
-  suite, packs and `paths-ignore` of the configuration `check-code-scanning.yml` reads
-  (`--config`, default `.github/codeql/codeql-config.yml`), so an inline
+  suite, packs and `paths-ignore` of that merged configuration
+  (`--config`, default `.github/codeql/codeql-config.yml`, optional), so an inline
   `// codeql[rule-id]` marker shows as suppressing its finding or not before a
   push. It needs `codeql` on PATH or the `gh codeql` extension, writes to
   `.codeql/`, and fails while a finding is open. Only
@@ -641,8 +648,12 @@ pnpm exec check-security code bundle  # those jobs only, then their verdict
 - **What you keep:** `security-settings.json` at your repository root, which is
   optional. `security-settings.json` in this package is every key at its
   default, with a `$comment` beside each option, ready to copy. You also keep
-  the files the settings name: your Semgrep rules (`jobs.code.rules`) and, if
-  you need one, a `.mobsf` with reasoned mobsfscan suppressions. You keep no
+  the files the settings name: your own Semgrep rules (`jobs.code.rules`), run
+  after the package's React Native rules (a plaintext secret in AsyncStorage
+  or `expo-sqlite/kv-store`, a cleartext `http://` endpoint, an interpolated
+  WebView `injectedJavaScript`) and, if you need one, a `.mobsf` with reasoned
+  mobsfscan suppressions. A `.semgrepignore` adds to the package's own list
+  rather than replacing it. You keep no
   scanner code. A `scripts/security/` in your repository is a
   `no-copy.security` failure in the contract check.
 - **The jobs:**
@@ -656,7 +667,10 @@ pnpm exec check-security code bundle  # those jobs only, then their verdict
     committed `ios/` and `android/`.
   - `binaries`: MASTG checks over `APK=` / `IPA=`.
   - `review` and `review-codebase`: the LLM reviews. These are off until a
-    provider, a model and a key are set.
+    provider, a model and a key are set. The review reads this package's
+    `security-review.prompt.md`; a `security-review.prompt.md` in your
+    repository is added after it (what the app is, what it has already
+    decided), so you write context, not the whole prompt.
 - **Missing tools:** a tool that is not installed is a skip on a laptop and a
   failure under `CI`.
 - **Native stack:** `NATIVE_STACK=expo` or `bare` decides how `bundle` and

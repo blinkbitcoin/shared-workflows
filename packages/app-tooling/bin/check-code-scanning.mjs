@@ -7,7 +7,10 @@
 //   check-code-scanning [--root DIR] [--config FILE] [--language LANGUAGE]
 //
 // --config defaults to `.github/codeql/codeql-config.yml`, check-code-scanning.yml's
-// own default. --language defaults to its default too, `javascript-typescript`,
+// own default, and is optional: this package's defaults (codeql-config.yml)
+// apply without it, and with it they are merged underneath (paths-ignore added,
+// name, queries and packs replaced; see lib/codeql-config.mjs), exactly as the
+// workflow resolves it. --language defaults to its default too, `javascript-typescript`,
 // the one language mapped here: the suite path and the query pack are named
 // after the language, so another one needs this mapping extended rather than
 // guessed. The workflow reads the queries out of the same file, and so does
@@ -23,7 +26,12 @@
 import { spawnSync } from 'node:child_process';
 import { accessSync, constants, mkdirSync, openSync, closeSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isProgram } from '../lib/is-program.mjs';
+import { mergeConfig, yamlList } from '../lib/codeql-config.mjs';
+
+export { yamlList };
+export const DEFAULT_CONFIG = fileURLToPath(new URL('../codeql-config.yml', import.meta.url));
 
 const LANGUAGES = {
   'javascript-typescript': { pack: 'codeql/javascript-queries', suitePrefix: 'javascript' },
@@ -38,27 +46,6 @@ const INSTALL = `codeql: no CodeQL CLI found. Install one of:
                                           # and put \`codeql\` on PATH
 
 This gate is local-only; CI runs CodeQL on GitHub either way.`;
-
-/**
- * The items of the top-level YAML list `key` in `text`, with trailing comments
- * and blanks stripped. Scoped to that key's block on purpose: an unscoped
- * search for `- codeql/...` would also match such a line in a comment, in
- * another key's list, or in prose.
- */
-export function yamlList(text, key) {
-  const lines = text.split('\n');
-  const start = lines.findIndex((line) => line.startsWith(`${key}:`));
-  if (start === -1) return [];
-  const items = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^[^ #-]/.test(line)) break;
-    const item = /^\s*-\s*(.*)$/.exec(line);
-    if (!item) continue;
-    const value = item[1].replace(/\s*#.*$/, '').trimEnd();
-    if (value !== '') items.push(value);
-  }
-  return items;
-}
 
 /**
  * What the configuration asks CodeQL for: `{ queries, filters, warnings }`,
@@ -131,6 +118,16 @@ export const summarize = (sarif) => {
   lines.push(all.length === 0 ? 'codeql: no findings' : `codeql: ${open} open, ${suppressed} suppressed by an inline marker`);
   return { open, suppressed, lines };
 };
+
+/** A file's text, or null when it does not exist; any other failure is thrown. */
+export function readOptional(file) {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return null;
+    throw e;
+  }
+}
 
 /** The arguments, as `{ root, config, language }`. */
 export function parseArgs(argv, cwd) {
@@ -205,9 +202,9 @@ export function main(
   }
   let text;
   try {
-    text = readFileSync(path.join(root, config), 'utf8');
-  } catch {
-    error(`::error::no CodeQL config at ${config}`);
+    text = mergeConfig(readFileSync(DEFAULT_CONFIG, 'utf8'), readOptional(path.join(root, config)), config);
+  } catch (e) {
+    error(`::error::${e.message}`);
     return 1;
   }
   let steps;

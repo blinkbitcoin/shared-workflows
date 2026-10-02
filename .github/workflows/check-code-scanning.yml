@@ -38,7 +38,7 @@ on:
         type: string
         default: 'javascript-typescript'
       configuration-file:
-        description: Consumer-relative CodeQL configuration file (query suite, packs, paths-ignore)
+        description: Consumer-relative CodeQL configuration file, optional, merged over the family's defaults (paths-ignore added; name, queries and packs replaced)
         type: string
         default: './.github/codeql/codeql-config.yml'
       docs-patterns:
@@ -108,37 +108,38 @@ jobs:
       actions: read # workflow metadata for the SARIF upload
       security-events: write # upload the SARIF results
     steps:
-      # No .workflows checkout: this job runs no scripts of ours, and a second
-      # repository in the workspace would be extracted into the database.
       - name: Checkout consumer
         uses: actions/checkout@v7
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
+      # The configuration CodeQL reads is the family's defaults with the
+      # consumer's own file merged over them (paths-ignore added; name,
+      # queries and packs replaced), resolved by the same program the local
+      # `check-code-scanning` uses, so CI and a laptop read the same text. A
+      # consumer with no file is scanned on the defaults, with the suite, the
+      # alert-suppression pack (what makes an inline `// codeql[rule-id]`
+      # marker count) and the path exclusions every consumer wants.
+      - name: Checkout shared-workflows
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflows
+          persist-credentials: false
+      # `.workflows` is in the defaults' paths-ignore, so the checkout above is
+      # not extracted into the database whatever the consumer's own file says.
+      - name: Resolve the CodeQL configuration
+        env:
+          CONFIGURATION_FILE: ${{ inputs.configuration-file }}
+        run: bash ".workflows/scripts/ci/resolve-code-scanning-config.sh" "$CONFIGURATION_FILE" .codeql-config.yml
       # No build step: JS/TS is extracted from source, so autobuild is not used.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ inputs.languages }}
-          # The suite, the alert-suppression pack (what makes an inline
-          # `// codeql[rule-id]` marker count) and the path exclusions all live
-          # in the consumer's config file, so local and CI cannot diverge.
-          #
-          # Passed only when it exists. codeql-action/init fails outright on a
-          # config path it cannot read, with its own message naming neither this
-          # workflow family nor what the file is for - and this workflow is
-          # informational by design (a caller must not make it a required
-          # check), so dying on a file the consumer never had is the wrong
-          # trade. Empty means CodeQL's own defaults: the analysis still runs,
-          # without the consumer's exclusions or suppression pack. That
-          # difference is reported, not hidden - `check.yml`'s contract job
-          # names a missing config file as a degraded requirement.
-          #
-          # `A && B || C` yields B when A is truthy: `inputs.configuration-file` is a
-          # non-empty string, so the middle operand can never be the falsy one
-          # that makes this idiom bite.
-          config-file: ${{ hashFiles(inputs.configuration-file) != '' && inputs.configuration-file || '' }}
+          config-file: ./.codeql-config.yml
       - name: Analyze
         uses: github/codeql-action/analyze@v4
         with:
