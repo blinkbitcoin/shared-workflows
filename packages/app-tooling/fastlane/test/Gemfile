@@ -1,0 +1,11 @@
+# The gems the lanes' unit tests run against: fastlane itself, which
+# validate_options.rb replays the recorded lane arguments against, and the one
+# plugin the Huawei lane is built on. An app pins its own in its Gemfile; this is
+# only what `make test-fastlane` installs.
+source 'https://rubygems.org'
+
+gem 'fastlane', '~> 2.238'
+# A bundled gem since Ruby 3.4, so under Bundler it has to be asked for.
+gem 'minitest'
+
+eval_gemfile File.join(__dir__, 'Pluginfile')
