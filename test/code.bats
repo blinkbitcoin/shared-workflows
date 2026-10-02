@@ -26,6 +26,7 @@ setup() {
   cat > "$bin/semgrep" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >> "$CALLS"
+if [ "$1" = --test ]; then exit "${FAKE_TEST_EXIT:-0}"; fi
 while [ $# -gt 0 ]; do [ "$1" = --output ] && out="$2"; shift; done
 printf '{"version":"2.1.0","runs":[]}' > "$out"
 exit "${FAKE_EXIT:-0}"
@@ -95,6 +96,35 @@ excludes() { awk 'prev == "--exclude" { printf "%s ", $0 } { prev = $0 }' "$CALL
   scan
   [ "$status" -eq 0 ] || fail "status $status: $output"
   [ "$(configs)" = "p/typescript p/secrets p/owasp-top-ten $REPO_ROOT/scripts/security/rules semgrep/app.yml semgrep/rules " ] || fail "configs: $(configs)"
+}
+
+# The calls semgrep got for rule tests: each `--test` invocation's last argument.
+tested() { grep -A3 -xF -- --test "$CALLS" | awk 'NR % 4 == 0'; }
+
+@test "a rules directory has its own rule tests run before the scan, a rules file does not" {
+  mkdir -p semgrep/rules
+  : > semgrep/app.yml
+  printf '{"jobs":{"code":{"rules":["semgrep/app.yml","semgrep/rules"]}}}' > security-settings.json
+  scan
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$(grep -cxF -- --test "$CALLS")" = 1 ] || fail "wrong number of rule test runs: $(cat "$CALLS")"
+  [ "$(tested)" = semgrep/rules ] || fail "tested: $(tested)"
+  [ "$(grep -nxF -- --test "$CALLS" | cut -d: -f1)" -lt "$(grep -nxF scan "$CALLS" | cut -d: -f1)" ] || fail "tests ran after the scan"
+}
+
+@test "a failing rule test fails the run naming the directory, and nothing is scanned" {
+  mkdir -p semgrep/rules
+  printf '{"jobs":{"code":{"rules":["semgrep/rules"]}}}' > security-settings.json
+  FAKE_TEST_EXIT=1 scan
+  [ "$status" -eq 1 ] || fail "expected 1, got $status: $output"
+  contains "$output" "code: the rule tests in semgrep/rules failed" || fail "output: $output"
+  ! grep -qxF scan "$CALLS" || fail "the scan ran anyway: $(cat "$CALLS")"
+}
+
+@test "with no rules of its own there are no rule tests" {
+  scan
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  ! grep -qxF -- --test "$CALLS" || fail "rule tests ran: $(cat "$CALLS")"
 }
 
 @test "SECURITY_CODE_RULES wins over the settings file" {

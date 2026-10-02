@@ -14,7 +14,7 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BadgeError, COLORS } from './lib/badge.mjs';
-import { coverageModeFor, renderBadges, main as renderMain } from './bin/gen-badges.mjs';
+import { coverageModeFor, localEnvironment, renderBadges, main as renderMain } from './bin/gen-badges.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'badge-render-'));
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -171,6 +171,7 @@ describe('render main', () => {
   test('renders from the environment it is given', () => {
     const dir = outDir();
     const code = renderMain(
+      [],
       { BADGE_OUT_DIR: dir, BADGE_UNIT: 'skipped', BADGE_E2E: 'success' },
       capture().io,
     );
@@ -180,7 +181,7 @@ describe('render main', () => {
 
   test('a badge error exits 1 with the reason', () => {
     const { err, io } = capture();
-    assert.equal(renderMain({ BADGE_OUT_DIR: outDir(), BADGE_COVERAGE: 'skip' }, io), 1);
+    assert.equal(renderMain([], { BADGE_OUT_DIR: outDir(), BADGE_COVERAGE: 'skip' }, io), 1);
     assert.match(err[0], /unknown job result ""/);
   });
 
@@ -192,7 +193,7 @@ describe('render main', () => {
       BADGE_E2E: 'skipped',
       BADGE_SECURITY: '{"verdict":"nope"}',
     };
-    assert.equal(renderMain(env, io), 1);
+    assert.equal(renderMain([], env, io), 1);
     assert.match(err[0], /unknown verdict/);
   });
 
@@ -202,11 +203,51 @@ describe('render main', () => {
     assert.throws(
       () =>
         renderMain(
+          [],
           { BADGE_OUT_DIR: path.join(blocker, 'x'), BADGE_UNIT: 'skipped', BADGE_E2E: 'skipped' },
           capture().io,
         ),
       { code: 'ENOTDIR' },
     );
+  });
+
+  test('--local defaults the unit and end-to-end results to success, each still overridable', () => {
+    assert.deepEqual(
+      [localEnvironment({}, () => '').BADGE_UNIT, localEnvironment({}, () => '').BADGE_E2E],
+      ['success', 'success'],
+    );
+    const env = localEnvironment({ BADGE_UNIT: 'failure', BADGE_E2E: 'skipped' }, () => '');
+    assert.deepEqual([env.BADGE_UNIT, env.BADGE_E2E], ['failure', 'skipped']);
+  });
+
+  test('--local reads the security verdict the last scan left, or the one it is given, even empty', () => {
+    const read = (file) => (file === path.join('.security', 'verdict.json') ? '{"verdict":"pass"}' : '');
+    assert.equal(localEnvironment({}, read).BADGE_SECURITY, '{"verdict":"pass"}');
+    assert.equal(localEnvironment({ BADGE_SECURITY: '' }, read).BADGE_SECURITY, '');
+    assert.equal(localEnvironment({ BADGE_SECURITY: 'x' }, read).BADGE_SECURITY, 'x');
+    const elsewhere = (file) => (file === path.join('out', 'verdict.json') ? 'v' : '');
+    assert.equal(localEnvironment({ SECURITY_DIR: 'out' }, elsewhere).BADGE_SECURITY, 'v');
+  });
+
+  test('--local with no verdict file leaves the security badge alone, and with one renders it', () => {
+    const cwd = mkdtempSync(path.join(tmp, 'local-'));
+    mkdirSync(path.join(cwd, 'coverage'));
+    writeFileSync(path.join(cwd, 'coverage/coverage-summary.json'), JSON.stringify(summaryWith(3, 4)));
+    const bare = runScript('gen-badges.mjs', ['--local'], { cwd, env: { BADGE_UNIT: '', BADGE_E2E: '', BADGE_SECURITY: undefined } });
+    assert.equal(bare.status, 0, bare.stderr);
+    assert.match(bare.stdout, /no security verdict/);
+    assert.ok(readFileSync(path.join(cwd, 'coverage/badge/unit.svg'), 'utf8').includes('passing'));
+    mkdirSync(path.join(cwd, '.security'));
+    writeFileSync(path.join(cwd, '.security/verdict.json'), '{"verdict":"pass","highest":null,"canBlock":false}\n');
+    const withVerdict = runScript('gen-badges.mjs', ['--local'], { cwd, env: { BADGE_UNIT: '', BADGE_E2E: '', BADGE_SECURITY: undefined } });
+    assert.equal(withVerdict.status, 0, withVerdict.stderr);
+    assert.match(withVerdict.stdout, /Security /);
+  });
+
+  test('an option it does not know is refused', () => {
+    const { err, io } = capture();
+    assert.equal(renderMain(['--nope'], {}, io), 1);
+    assert.equal(err[0], 'gen-badges: unexpected --nope: the only option is --local');
   });
 
   test('as a command it reads the environment and defaults to coverage/', () => {

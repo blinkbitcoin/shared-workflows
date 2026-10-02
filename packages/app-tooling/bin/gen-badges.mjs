@@ -3,8 +3,8 @@
 // `publish-badges.yml` runs it from its own checkout of shared-workflows
 // (scripts/ci/gen-badges.sh), in the consumer's root, unless the caller names
 // a script of its own in `badges-script`; a consumer runs the same program on a
-// laptop as `pnpm exec gen-badges`. It takes no arguments - the workflow and
-// a consumer's `make` target both hand it everything as environment:
+// laptop as `pnpm exec gen-badges --local`. The workflow hands it everything as
+// environment:
 //
 //   BADGE_UNIT / BADGE_E2E        GitHub job results (`needs.<job>.result`)
 //   BADGE_UNIT_LABEL / ..._E2E_   badge labels (default Unit / E2E)
@@ -19,6 +19,16 @@
 // skipped Unit — a red checks run, a cancelled upstream — renders no coverage
 // badge at all, so publishing leaves the branch's existing one untouched
 // instead of blanking it.
+//
+//   gen-badges [--local]
+//
+// --local is for a laptop, where there is no CI to say how the jobs went: the
+// unit and end-to-end results default to success (BADGE_UNIT / BADGE_E2E still
+// win) and the security verdict to the one the last check-security run left in
+// .security/verdict.json (BADGE_SECURITY wins, even set to empty, which leaves
+// the published badge alone).
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { BadgeError } from '../lib/badge.mjs';
 import { isProgram } from '../lib/is-program.mjs';
 import { writeSecurityBadge } from '../lib/security-badge.mjs';
@@ -79,10 +89,35 @@ export function renderBadges(env = process.env) {
   return written;
 }
 
-/** Command-line entry; returns the exit code. */
-export function main(env = process.env, { error = console.error } = {}) {
+/** A file's trimmed text, or '' when it is not there. */
+const readOrEmpty = (file) => {
   try {
-    renderBadges(env);
+    return readFileSync(file, 'utf8').trim();
+  } catch {
+    return '';
+  }
+};
+
+/** The environment a laptop run renders from: the defaults --local stands for. */
+export function localEnvironment(env = process.env, read = readOrEmpty) {
+  return {
+    ...env,
+    BADGE_UNIT: env.BADGE_UNIT || 'success',
+    BADGE_E2E: env.BADGE_E2E || 'success',
+    BADGE_SECURITY: env.BADGE_SECURITY ?? read(path.join(env.SECURITY_DIR || '.security', 'verdict.json')),
+  };
+}
+
+/** Command-line entry; returns the exit code. */
+export function main(argv = process.argv.slice(2), env = process.env, { error = console.error } = {}) {
+  const local = argv.includes('--local');
+  const unexpected = argv.filter((arg) => arg !== '--local');
+  if (unexpected.length > 0) {
+    error(`gen-badges: unexpected ${unexpected.join(' ')}: the only option is --local`);
+    return 1;
+  }
+  try {
+    renderBadges(local ? localEnvironment(env) : env);
     return 0;
   } catch (e) {
     if (!(e instanceof BadgeError)) throw e;
