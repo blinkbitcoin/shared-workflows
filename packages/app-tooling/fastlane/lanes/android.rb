@@ -210,7 +210,7 @@ platform :android do
     aab = options[:aab] || File.join(out, 'app-release.aab')
     apk = options[:apk] || File.join(out, 'app-universal.apk')
     [aab, apk].each do |path|
-      UI.user_error!("Nothing to verify at #{path} — run `fastlane android build` first") unless File.exist?(path)
+      UI.user_error!("Nothing to verify at #{path} - run `fastlane android build` first") unless File.exist?(path)
     end
 
     # Mirrors ios.rb's --no-signing forwarding, with the opposite meaning: iOS
@@ -242,7 +242,7 @@ platform :android do
       **play_json_key_args
     )
     if Array(existing).map(&:to_s).include?(version_code.to_s)
-      UI.important("Play internal track already has version code #{version_code} — skipping upload")
+      UI.important("Play internal track already has version code #{version_code} - skipping upload")
       next
     end
 

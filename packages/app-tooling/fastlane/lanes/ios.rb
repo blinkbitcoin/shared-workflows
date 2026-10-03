@@ -133,7 +133,7 @@ platform :ios do
     out = output_dir('ios')
     scheme = ENV.fetch('IOS_SCHEME')
     path = options[:path] || default_ios_artifact(out, scheme)
-    UI.user_error!("Nothing to verify at #{path} — run `fastlane ios build` first") unless File.exist?(path)
+    UI.user_error!("Nothing to verify at #{path} - run `fastlane ios build` first") unless File.exist?(path)
 
     args = ['bash', script, path]
     args << '--no-signing' if truthy?(options[:skip_signing])
@@ -167,7 +167,7 @@ platform :ios do
       initial_build_number: 0
     )
     if latest.to_i >= build_number.to_i
-      UI.important("TestFlight already has build #{version} (#{latest}) — skipping upload")
+      UI.important("TestFlight already has build #{version} (#{latest}) - skipping upload")
       next
     end
 
