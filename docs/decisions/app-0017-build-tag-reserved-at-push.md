@@ -22,15 +22,18 @@ touched a workflow.
 Create the `vX.Y.Z-build.N` tag seconds after the push, while the commit is
 still the tip, and publish the release on the existing tag later.
 
-- `.github/workflows/cd-internal.yml` — `reserve-tag: true` and
-  `contents: write` on the prepare job.
+- `.github/workflows/cd-internal.yml` — `contents: write` on the caller's job;
+  shared-workflows' `publish-internal.yml` passes `reserve-tag: true` to its
+  prepare job ([0026](https://github.com/blinkbitcoin/react-native-mobile-template/blob/main/docs/decisions/0026-cd-pipelines-from-shared-workflows.md)). It was both
+  on the prepare job here before.
 - shared-workflows `build-prepare.yml` (0.6.0) — `Resolve version` and
   `Reserve build tag` run before the green gate and before `Setup`; a red gate
   deletes the tag this run reserved. `scripts/release/reserve-tag.sh` is
   idempotent and explains the refusal when it still happens.
 - shared-workflows `release-assets.sh` — `create-prerelease` passes no
   `--target` when the tag exists, so no ref is created at publish time.
-- `scripts/release-workflows.test.mjs` — pins the flag and the permission.
+- `scripts/release-workflows.test.mjs` — pins the permission here; the flag is
+  pinned upstream, in `test/pipelines.test.mjs`.
 
 ## Consequences
 

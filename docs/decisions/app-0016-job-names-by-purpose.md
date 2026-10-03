@@ -29,6 +29,11 @@ Names carry purpose, in the vocabulary of the stores and of the family.
 The order "Promote iOS / Store" is GitHub's: the caller's name is what
 distinguishes jobs in a workflow's own graph, so it comes first.
 
+Since [0026](https://github.com/blinkbitcoin/react-native-mobile-template/blob/main/docs/decisions/0026-cd-pipelines-from-shared-workflows.md) the caller-level names
+above are defined in shared-workflows' pipeline workflows, and the run graph
+reads one level deeper: `Internal / Pre-release`, `Beta / Promote iOS / Store`.
+The vocabulary is unchanged, and the "lane" ban still applies upstream.
+
 ## Consequences
 
 `workflow_run` listeners match on display names, so a rename can silently

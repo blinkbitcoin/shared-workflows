@@ -23,12 +23,18 @@ Nothing that runs on a push to `main` shares a queue with anything else.
 - `.github/workflows/ci.yml` — group `ci-<ref>` on a branch (newest push
   cancels), `ci-refs/heads/main-<sha>` on `main`.
 - `.github/workflows/cd-internal.yml` — group `release-internal-<sha>`.
-  Its store-touching jobs — `upload-ios`, `upload-android`, `ota-internal` —
-  join the `release` queue individually, at job level.
+  Its store-touching jobs — `upload-ios`, `upload-android`, `upload-huawei`,
+  `ota-internal` — join the `release` queue individually, at job level. Since
+  [0026](https://github.com/blinkbitcoin/react-native-mobile-template/blob/main/docs/decisions/0026-cd-pipelines-from-shared-workflows.md) those jobs are
+  shared-workflows' `publish-internal.yml`, which sets the job-level group;
+  the per-commit group stays here, because a reusable workflow cannot name one
+  for its caller.
 - `cd-beta.yml`, `cd-production.yml`, `cd-ota-hotfix.yml` — keep the
   shared `release` queue: they promote, and are dispatched by a person or by
   release-please, never in bursts.
-- `scripts/release-workflows.test.mjs` — pins which group each carries.
+- `scripts/release-workflows.test.mjs` — pins which group each caller carries;
+  that exactly the store jobs join the queue is pinned upstream, in
+  `test/pipelines.test.mjs`.
 
 ## Consequences
 
