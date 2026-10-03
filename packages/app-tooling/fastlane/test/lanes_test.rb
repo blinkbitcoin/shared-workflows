@@ -1700,6 +1700,58 @@ class LaneBehaviourTest < Minitest::Test
     end
   end
 
+  # A Play app that has never been published rejects a completed release, so the
+  # first upload has to be a draft; that is what PLAY_RELEASE_STATUS is for.
+  def test_play_release_status_is_completed_unless_the_environment_says_draft
+    ENV.delete('PLAY_RELEASE_STATUS')
+    assert_equal 'completed', play_release_status
+
+    ENV['PLAY_RELEASE_STATUS'] = '  '
+    assert_equal 'completed', play_release_status, 'an unset repository variable reaches a lane as an empty string'
+
+    ENV['PLAY_RELEASE_STATUS'] = 'draft'
+    assert_equal 'draft', play_release_status
+
+    ENV['PLAY_RELEASE_STATUS'] = ' completed '
+    assert_equal 'completed', play_release_status
+  end
+
+  def test_play_release_status_refuses_anything_else
+    ENV['PLAY_RELEASE_STATUS'] = 'halted'
+    error = assert_raises(UI::UserError) { play_release_status }
+    assert_match(/PLAY_RELEASE_STATUS must be completed or draft \(got "halted"\)/, error.message)
+  end
+
+  def test_android_upload_internal_uploads_completed_by_default
+    in_project do
+      ENV.delete('PLAY_RELEASE_STATUS')
+      stub_result(:google_play_track_version_codes, [41])
+      run_lane(:android, :upload_internal)
+
+      assert_equal 'completed', args_for(:upload_to_play_store)[:release_status]
+    end
+  end
+
+  def test_android_upload_internal_uploads_a_draft_when_asked
+    in_project do
+      ENV['PLAY_RELEASE_STATUS'] = 'draft'
+      stub_result(:google_play_track_version_codes, [41])
+      run_lane(:android, :upload_internal)
+
+      assert_equal 'draft', args_for(:upload_to_play_store)[:release_status]
+    end
+  end
+
+  def test_android_upload_internal_refuses_a_bad_release_status_before_uploading
+    in_project do
+      ENV['PLAY_RELEASE_STATUS'] = 'published'
+      stub_result(:google_play_track_version_codes, [41])
+      assert_raises(UI::UserError) { run_lane(:android, :upload_internal) }
+
+      refute called?(:upload_to_play_store), 'nothing may reach Play with a status the lane does not know'
+    end
+  end
+
   def test_android_upload_internal_reads_the_aab_and_mapping_from_the_download_directory
     in_project do |dir|
       assets = File.join(dir, 'workflows-out', 'assets')

@@ -131,6 +131,18 @@ def android_mapping_path
   File.exist?(path) ? path : nil
 end
 
+# The Play release status of a new internal upload. `completed` publishes it to
+# the internal testers; a Play app that has never been published only accepts
+# `draft`, so PLAY_RELEASE_STATUS=draft is the setting until the first release.
+# Unset means `completed`.
+def play_release_status
+  status = ENV['PLAY_RELEASE_STATUS'].to_s.strip
+  status = 'completed' if status.empty?
+  UI.user_error!("PLAY_RELEASE_STATUS must be completed or draft (got #{status.inspect})") unless %w[completed draft].include?(status)
+
+  status
+end
+
 platform :android do
   desc 'Build the release AAB and a universal APK from that same bundle'
   lane :build do |options|
@@ -259,7 +271,7 @@ platform :android do
     args = {
       package_name: package,
       track: 'internal',
-      release_status: 'completed',
+      release_status: play_release_status,
       aab: options[:aab] || File.join(out, 'app-release.aab'),
       metadata_path: android_metadata_path,
       # Store listing and images are synced once, from release_production;
