@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.9.1...app-tooling-v0.10.0) (2026-10-03)
+
+
+### Features
+
+* **workflows:** let the first internal Play upload be a draft, as a never-published app requires ([#209](https://github.com/blinkbitcoin/shared-workflows/issues/209)) ([849f021](https://github.com/blinkbitcoin/shared-workflows/commit/849f0213c6883802e45490e58cf1f8f7a66c9d53))
+
 ## [0.9.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.9.0...app-tooling-v0.9.1) (2026-10-03)
 
 
