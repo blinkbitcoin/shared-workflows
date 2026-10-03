@@ -1287,6 +1287,10 @@
           "type": "string",
           "required": false
         },
+        "play-release-status": {
+          "type": "string",
+          "required": false
+        },
         "store-uploads-enabled": {
           "type": "boolean",
           "required": false

@@ -100,6 +100,10 @@ on:
         description: Google Play in-app update priority
         type: string
         default: ''
+      play-release-status:
+        description: Release status of the internal Play upload, completed or draft. A Play app that has never been published only accepts draft; empty means completed.
+        type: string
+        default: ''
       store-uploads-enabled:
         description: Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works
         type: boolean
@@ -339,7 +343,7 @@ jobs:
       lane: upload_internal
       environment: ${{ inputs.stage-environment }}
       artifacts: "*"
-      environment-variables: ${{ format('{{"APP_VARIANT":{0},"PLAY_UPDATE_PRIORITY":{1}}}', toJSON(inputs.app-variant), toJSON(inputs.play-update-priority)) }}
+      environment-variables: ${{ format('{{"APP_VARIANT":{0},"PLAY_UPDATE_PRIORITY":{1},"PLAY_RELEASE_STATUS":{2}}}', toJSON(inputs.app-variant), toJSON(inputs.play-update-priority), toJSON(inputs.play-release-status)) }}
       version: ${{ needs.prepare.outputs.version }}
       build-number: ${{ needs.prepare.outputs.build-number }}
       ios-bundle-id: ${{ inputs.ios-bundle-id }}

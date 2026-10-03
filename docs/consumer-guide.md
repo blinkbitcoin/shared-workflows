@@ -2600,6 +2600,7 @@ store uploads off still publishes every artifact, and Huawei never holds it up.
 | `android-signing-enabled` | `False` | Sign the Android build even when store uploads are off (uploads imply signing) |
 | `testflight-internal-group` | `''` | TestFlight internal testing group the build is added to |
 | `play-update-priority` | `''` | Google Play in-app update priority |
+| `play-release-status` | `''` | Release status of the internal Play upload: `completed` or `draft`. A Play app that has never been published only accepts `draft`, so set `draft` until the first release is live; empty means `completed` |
 | `store-uploads-enabled` | `False` | Whether the store jobs run. Off, the pipeline still builds, verifies and publishes its artifacts, so a repository with no store credentials works |
 | `huawei-uploads-enabled` | `False` | Whether the Huawei AppGallery job runs, on top of store-uploads-enabled. A repository shipping only to Apple and Google must not acquire a third submission by turning store uploads on |
 | `huawei-environment-variables` | `{}` | JSON object of the non-secret variables the Huawei lane reads (HUAWEI_APP_ID, HUAWEI_UPLOADS_ENABLED, HUAWEI_SUBMIT_DELAY_SECONDS, HUAWEI_FEEDBACK_EMAIL, HUAWEI_TEST_DAYS), with APP_VARIANT |
