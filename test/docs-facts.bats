@@ -189,3 +189,97 @@ real_jobs() {
   [ "$status" -eq 0 ] || fail "$output"
 }
 
+
+# --- layout ----------------------------------------------------------------
+
+# The directories a layout has to describe: every tracked top-level directory,
+# and one level down where the tree is split by area (`.github/`, `scripts/`).
+# Under `.github/` only the workflows and the composite actions are this
+# repository's code; the rest (issue templates, Dependabot) is GitHub's own
+# configuration. `.claude-plugin/` is only the marketplace for `plugins/`, and
+# is described in the plugin's row. `git ls-files`, so an untracked scratch directory does not
+# demand a row.
+layout_directories() {
+  git -C "$REPO_ROOT" ls-files | awk -F/ '
+    NF < 2 { next }
+    $1 == ".github" { if ($2 == "workflows" || $2 == "actions") print $1 "/" $2 "/"; next }
+    $1 == "scripts" { if (NF > 2) print $1 "/" $2 "/"; next }
+    $1 == ".claude-plugin" { next }
+    { print $1 "/" }
+  ' | sort -u
+}
+
+# README's layout table: the path in each row's first cell.
+readme_layout_paths() {
+  sed -n '/^## Repository layout/,/^## /p' "$REPO_ROOT/README.md" \
+    | sed -nE 's/^\| `([^`]+)`.*/\1/p'
+}
+
+# AGENTS.md's layout block: the path at the start of each line in the fence.
+agents_layout_paths() {
+  sed -n '/^## Layout/,/^## /p' "$REPO_ROOT/AGENTS.md" \
+    | sed -n '/^```/,/^```/p' | sed -nE 's/^([^ `][^ ]*\/).*/\1/p'
+}
+
+# Prints each directory no listed path covers. A row covers a directory when it
+# is the directory or lies inside it (`packages/app-tooling/` covers
+# `packages/`, `deploy/ota/` covers `deploy/`).
+uncovered_directories() {
+  local listed="$1" dir path covered
+  while read -r dir; do
+    covered=""
+    while read -r path; do
+      case "$path" in "$dir"*) covered=1; break ;; esac
+    done <<< "$listed"
+    [ -n "$covered" ] || printf '%s\n' "$dir"
+  done <<< "$(layout_directories)"
+}
+
+@test "README's layout table has a row for every directory" {
+  # plugins/, deploy/ota/, scripts/security/ and scripts/setup/ all landed
+  # without one, and the table went on reading as the whole repository.
+  local listed missing
+  listed="$(readme_layout_paths)"
+  [ -n "$listed" ] || fail "README no longer has a Repository layout table to check"
+  missing="$(uncovered_directories "$listed")"
+  [ -z "$missing" ] || fail "directories missing from README's layout table: $(echo $missing)"
+}
+
+@test "AGENTS.md's layout block has a line for every directory" {
+  local listed missing
+  listed="$(agents_layout_paths)"
+  [ -n "$listed" ] || fail "AGENTS.md no longer has a Layout block to check"
+  missing="$(uncovered_directories "$listed")"
+  [ -z "$missing" ] || fail "directories missing from AGENTS.md's layout: $(echo $missing)"
+}
+
+@test "the layout check names a directory nothing covers, and accepts a nested row" {
+  # Self-validation: a check that cannot fail would pass on an empty table.
+  local missing
+  missing="$(uncovered_directories 'scripts/ci/')"
+  contains "$missing" "scripts/release/" || fail "an unlisted directory was not reported: $missing"
+  not_contains "$missing" "scripts/ci/" || fail "a listed directory was reported: $missing"
+  missing="$(uncovered_directories 'packages/app-tooling/')"
+  not_contains "$missing" "packages/" || fail "a nested row did not cover its parent: $missing"
+}
+
+@test "README's layout extractors read a path from a row and from a line" {
+  local tmp="$BATS_TEST_TMPDIR/README.md"
+  printf '## Repository layout\n\n| Path | What |\n| --- | --- |\n| `deploy/ota/` | x |\n\n## Next\n' > "$tmp"
+  run env REPO_ROOT="$BATS_TEST_TMPDIR" bash -c "$(declare -f readme_layout_paths); readme_layout_paths"
+  [ "$output" = "deploy/ota/" ] || fail "the row's path was not read: $output"
+  printf '## Layout\n\n```\ndeploy/ota/   x\n              continued\n```\n\n## Next\n' > "$BATS_TEST_TMPDIR/AGENTS.md"
+  run env REPO_ROOT="$BATS_TEST_TMPDIR" bash -c "$(declare -f agents_layout_paths); agents_layout_paths"
+  [ "$output" = "deploy/ota/" ] || fail "the line's path was not read, or a continuation was: $output"
+}
+
+@test "README links every page under docs/" {
+  # release-runbook, ota, security and decisions/ moved here with no link from
+  # README's Documentation section.
+  local missing="" page
+  while read -r page; do
+    [ -n "$page" ] || continue
+    grep -qF "($page)" "$REPO_ROOT/README.md" || missing="$missing $page"
+  done <<< "$(git -C "$REPO_ROOT" ls-files 'docs/*.md' 'docs/decisions/README.md' | grep -E '^docs/([^/]+|decisions/README)\.md$')"
+  [ -z "$missing" ] || fail "README does not link these docs:$missing"
+}

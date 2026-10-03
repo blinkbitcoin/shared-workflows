@@ -39,7 +39,8 @@ rest explain the parts of it that surprise people.
 | `CONTRIBUTING.md` | Setup, worktrees, commit conventions, and what a change has to carry |
 | `SECURITY.md` | Private reporting, the threat model and the secrets policy |
 | `README.md` | What this repo is, the caller to copy, the workflow table, pinning, and what it needs from you |
-| `packages/app-tooling/README.md` | `@blinkbitcoin/app-tooling` — the pinned tool table, `check-tool-versions`, `check-contract`, the repository guards, `gen-store-notes`, and under `expo/` the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets with their peer dependencies |
+| `packages/app-tooling/README.md` | `@blinkbitcoin/app-tooling` — the pinned tool table, `check-tool-versions`, `check-contract`, the repository guards, `gen-store-notes`, the security scanners, the store lanes, the shared app suites, the programs an app's Makefile calls, and under `expo/` the Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript and commitlint presets with their peer dependencies |
 | `scripts/e2e/README.md` | How the E2E scripts fit together on a runner |
 | `docs/superpowers/` | The specs and plans this repo and the app template were built from. History, not a guide |
+| `plugins/store-release/` | The Claude Code plugin an app installs for store setup: the store-consoles, store-credentials, store-metadata and store-setup skills |
 | `deploy/ota/` | A Docker Compose deployment of the self-hosted OTA update server, with reverse-proxy, storage and backup notes |

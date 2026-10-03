@@ -9,14 +9,14 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->22<!--/count--> reusable workflows · <!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1817<!--/count--> tests · one pinned tag · one tooling package</sub>
+<sub><!--count:reusable-workflows-->22<!--/count--> reusable workflows · <!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1822<!--/count--> tests · one pinned tag · one tooling package</sub>
 
 </div>
 
 ---
 
 <p align="center">
-  <img src="docs/assets/readme-hero.svg" alt="App repos carry a forty-line ci.yml that calls the reusable GitHub Actions workflows here at the pinned tag @v0: Checks, Unit and E2E on every pull request; Prepare, Build and sign, and Release on the way to a store. Any repo, React Native or not, can install the @blinkbitcoin/app-tooling npm package for git hooks, linters and pinned tool versions, and an Expo app extends the Expo presets it carries. Every app gets green gates, device E2E on iOS and Android, signed and verified builds, and store releases." width="960">
+  <img src="docs/assets/readme-hero.svg" alt="App repos carry a forty-line ci.yml that calls the reusable GitHub Actions workflows here at the pinned tag @v0: Checks, Unit and E2E on every pull request; Prepare, Build and sign, and Release on the way to a store. Any repo, React Native or not, can install the @blinkbitcoin/app-tooling npm package for git hooks, linters, pinned tool versions, the security scanners and the store lanes, and an Expo app extends the Expo presets it carries. Every app gets green gates with security scanning, device E2E on iOS and Android, signed and verified builds, and store releases to TestFlight, Google Play and Huawei AppGallery, plus OTA updates." width="960">
 </p>
 
 Continuous integration for a React Native app is not a config file. It is
@@ -36,7 +36,11 @@ Native and Expo specific; the package is not, and any repo can install it.
 Under `expo/` it also holds the configuration every Expo app runs — Jest,
 ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript,
 commitlint — as presets (`@blinkbitcoin/app-tooling/expo/<preset>`), so an
-app's own config files keep only its paths and scopes.
+app's own config files keep only its paths and scopes. It also carries the
+programs an app's Makefile calls rather than keeping its own copy: the
+security scanners, the prebuild check, the ports, the store lanes its
+`Fastfile` imports, and the doctor. The store setup skills ship beside it as
+a Claude Code plugin, [`store-release`](plugins/store-release).
 
 ```mermaid
 flowchart LR
@@ -208,14 +212,18 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/e2e/`         | The E2E machine: simulator and emulator boot, Metro start and wait, Maestro run, timeouts, forensics collection           |
 | `scripts/native/`      | Prebuild, pods, the iOS and Android build and packaging steps; `expo/` and `bare/` hold what differs per native stack     |
 | `scripts/release/`     | Version resolution, fingerprints, build info, store notes (and their draft into the release PR), assets, hashes, secrets |
+| `scripts/security/`    | `check-security.yml`: a runner per scanner job, `scan.sh` (every job, then the verdict), the custom Semgrep rules, the CI bridges |
+| `scripts/setup/`       | A consumer's machine setup: toolchain, Android SDK and emulator, iOS, and all of them in order                            |
 | `scripts/ota/`         | Fingerprint baseline and gate, export, publish, smoke                                                                     |
 | `scripts/web/`         | Expo web export, Playwright install, cache keys, run                                                                      |
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the local smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->163<!--/count--> bats files, <!--count:tests-->1817<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
-| `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer, the store notes generator, the Maestro suite runners for a laptop and the web preview server; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
-| `docs/`                | The consumer guide, the adoption page, and the three explainers                                                           |
+| `test/`                | <!--count:bats-files-->163<!--/count--> bats files, <!--count:tests-->1822<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
+| `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer, the store notes generator, the security scanners, the store lanes (`fastlane/`), the shared app suites, the programs an app's Makefile calls (ports, prebuild check, script tests, doctor), the Maestro suite runners for a laptop and the web preview server; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
+| `plugins/store-release/` | The Claude Code plugin an app installs for store setup: four skills (consoles, credentials, metadata, setup), each with its offline tests; `.claude-plugin/` at the root is the marketplace that offers it |
+| `deploy/ota/`          | A Docker Compose deployment of the self-hosted OTA update server, only needed when OTA is on                              |
+| `docs/`                | The consumer guide, the adoption page, the release runbook, OTA and security pages, the decision records, and the three explainers ([index](docs/README.md)) |
 
 ## The pinned tool versions
 
@@ -285,6 +293,15 @@ they do not have to be rediscovered. The rest explain the parts that surprise
 people — [**cache keys**](docs/cache-keys.md) (what invalidates a cache),
 [**forensics**](docs/forensics.md) (what a failed E2E run leaves behind),
 [**runners**](docs/runners.md) (labels, billing, KVM, disk).
+
+[**Release runbook**](docs/release-runbook.md) is everything between a merged
+PR and users having it: the release steps, versions and build numbers, store
+notes, rollback and hotfix. [**OTA**](docs/ota.md) covers turning over-the-air
+updates on and the update server in `deploy/ota/`; [**security**](docs/security.md)
+covers the scanners `check-security.yml` runs and their verdict; and
+[**decisions**](docs/decisions/README.md) records why the CI, release and
+tooling choices were made. [docs/README.md](docs/README.md) is the index of
+every page.
 
 [`blinkbitcoin/react-native-mobile-template`](https://github.com/blinkbitcoin/react-native-mobile-template)
 is the app repo these were built for, and the worked example of every caller.

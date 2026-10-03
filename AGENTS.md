@@ -50,8 +50,10 @@ packages/           app-tooling (tooling any repo installs; expo/ holds the Expo
                     lib/native-stack.mjs the Expo-or-bare rule every part applies,
                     e2e/ the Maestro suite runner copies, bin/serve-dist.mjs the web preview,
                     fixtures/template/ the template's files, before and after)
-docs/               consumer-guide, adopting-an-existing-repo, cache-keys,
-                    forensics, runners
+deploy/ota/         the self-hosted OTA update server (Docker Compose), only needed with OTA on
+docs/               consumer-guide, adopting-an-existing-repo, release-runbook, ota, security,
+                    decisions/ (the architecture decision records), cache-keys, forensics,
+                    runners; README.md is the index
 ```
 
 ## Commands
