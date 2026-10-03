@@ -285,7 +285,7 @@ def write_build_info_artifacts!(dir, artifacts)
   source = ENV['BUILD_INFO_FILE'].to_s.strip
   source = root_path('build-info.json') if source.empty?
   unless File.exist?(source)
-    UI.important("No build-info.json at #{source} — artifact checksums not recorded")
+    UI.important("No build-info.json at #{source} - artifact checksums not recorded")
     return nil
   end
 
@@ -507,7 +507,7 @@ METADATA_PLACEHOLDER = 'Replace this text'
 def assert_metadata_locales!(metadata_path, locales = metadata_locales(metadata_path))
   return unless locales.empty?
 
-  UI.user_error!("No locale directories under #{metadata_path} — store metadata is missing or the path is wrong (see the release runbook)")
+  UI.user_error!("No locale directories under #{metadata_path} - store metadata is missing or the path is wrong (see the release runbook)")
 end
 
 def assert_metadata_ready!(metadata_path)

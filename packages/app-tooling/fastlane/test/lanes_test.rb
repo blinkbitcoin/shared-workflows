@@ -2466,4 +2466,22 @@ class LaneBehaviourTest < Minitest::Test
       assert_empty errors, "fastlane rejects these lane arguments:\n#{errors.join("\n")}"
     end
   end
+
+  # fastlane reads the Fastfile and every lane file with the process's default
+  # external encoding and evals the string. On a machine whose locale is not
+  # UTF-8 (a laptop with LANG unset, a minimal container) that is US-ASCII, and
+  # a single non-ASCII character, even inside a message or a comment, stops
+  # `fastlane lanes` with "invalid multibyte char (US-ASCII)". CI runners are
+  # UTF-8, so only a local run or a stripped-down image would find out.
+  def test_every_file_fastlane_loads_is_ascii_only
+    root = File.expand_path('..', __dir__)
+    files = [File.join(root, 'Fastfile')] + Dir.glob(File.join(root, 'lanes', '*.rb'))
+    refute_empty files
+    offenders = files.flat_map do |file|
+      File.binread(file).each_line.with_index(1).filter_map do |line, number|
+        "#{file.delete_prefix("#{root}/")}:#{number}" unless line.ascii_only?
+      end
+    end
+    assert_empty offenders, "non-ASCII characters break `fastlane lanes` without a UTF-8 locale:\n#{offenders.join("\n")}"
+  end
 end
