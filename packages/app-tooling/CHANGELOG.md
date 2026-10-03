@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.9.0...app-tooling-v0.9.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **app-tooling:** keep the fastlane lanes ASCII-only so a non-UTF-8 locale can load them ([#206](https://github.com/blinkbitcoin/shared-workflows/issues/206)) ([03b8d5b](https://github.com/blinkbitcoin/shared-workflows/commit/03b8d5b9719fb842b9e51a4e7bb4d3972fd3e554))
+
 ## [0.9.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.8.1...app-tooling-v0.9.0) (2026-10-02)
 
 
