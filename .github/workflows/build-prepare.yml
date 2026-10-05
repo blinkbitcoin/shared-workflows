@@ -220,9 +220,16 @@ jobs:
           # the `&&` slot on purpose (GitHub's `&&` yields its first falsy operand).
           REQUIRE_GREEN_DISPATCH_REF: ${{ inputs.require-green-dispatch && inputs.release-tag || '' }}
         run: bash ".workflows/scripts/release/require-green-run.sh" "$REQUIRE_GREEN_WORKFLOW" "$REQUIRE_GREEN_SHA"
-      # A tag this run reserved and cannot fill (red gate, or anything else
-      # failing below) would name a commit with no release. Only the tag this
-      # run created; a re-run that found its tag in place leaves it alone.
+      # A tag this run reserved behind a red gate would name a commit with no
+      # release, so it is released. Only the tag this run created; a re-run that
+      # found its tag in place leaves it alone.
+      #
+      # This step catches failures above it only, and that placement is
+      # deliberate. A failure below it (setup, fingerprint, build info, notes,
+      # upload) leaves the tag in place, so a re-run finds it at the same sha and
+      # reuses it. Deleting it there would make the re-run reserve the tag again,
+      # and GitHub refuses that once a later merge has touched a workflow file -
+      # the very refusal reserving early exists to sidestep (see reserve-tag.sh).
       - name: Release the reserved tag
         if: ${{ failure() && steps.reserve.outputs.reserved == 'true' }}
         env:
