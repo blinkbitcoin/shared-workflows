@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
@@ -928,6 +928,7 @@ test('each reusable workflow a repository calls switches on its own profile', ()
   assert.deepEqual(profileOf('build-web.yml'), ['web']);
   assert.deepEqual(profileOf('publish-badges.yml'), ['badges']);
   assert.deepEqual(profileOf('check-code-scanning.yml'), ['code-scanning']);
+  assert.deepEqual(profileOf('check-security.yml'), ['security']);
   for (const workflow of RELEASE_WORKFLOWS) {
     assert.deepEqual(profileOf(workflow), ['release'], workflow);
   }
@@ -935,6 +936,23 @@ test('each reusable workflow a repository calls switches on its own profile', ()
   for (const pipeline of ['publish-internal.yml', 'publish-beta.yml', 'publish-production.yml', 'publish-store-listing.yml']) {
     assert.ok(RELEASE_WORKFLOWS.includes(pipeline), pipeline);
   }
+});
+
+// The security profile once had no workflow that switched it on, so its rules
+// were never checked unless --profile named it. Every profile the contract
+// declares must be reachable from some workflow of this family.
+test('every profile in the contract is switched on by at least one reusable workflow', () => {
+  const workflowsDir = fileURLToPath(new URL('../../.github/workflows/', import.meta.url));
+  const reusable = readdirSync(workflowsDir).filter((f) => f.endsWith('.yml') && !f.startsWith('self-'));
+  const reached = new Set(reusable.flatMap((workflow) => [...activeProfiles(new Set([workflow]))]));
+  for (const profile of readContract().profiles) {
+    assert.ok(reached.has(profile), `no reusable workflow switches on the ${profile} profile`);
+  }
+});
+
+test('calling check.yml and check-security.yml together checks both profiles', () => {
+  const active = activeProfiles(new Set(['check.yml', 'check-security.yml']));
+  assert.deepEqual([...active].sort(), ['checks', 'security']);
 });
 
 test('a make ci prerequisite that is a file, not a rule, reaches nothing and breaks nothing', () => {

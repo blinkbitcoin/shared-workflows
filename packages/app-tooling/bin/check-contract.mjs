@@ -639,6 +639,7 @@ export function activeProfiles(uses, override) {
   if (uses.has('build-web.yml')) active.add('web');
   if (uses.has('publish-badges.yml')) active.add('badges');
   if (uses.has('check-code-scanning.yml')) active.add('code-scanning');
+  if (uses.has('check-security.yml')) active.add('security');
   for (const name of RELEASE_WORKFLOWS) {
     if (uses.has(name)) active.add('release');
   }
