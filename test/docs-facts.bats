@@ -317,3 +317,11 @@ uncovered_directories() {
   done <<< "$(git -C "$REPO_ROOT" ls-files 'docs/*.md' 'docs/decisions/README.md' | grep -E '^docs/([^/]+|decisions/README)\.md$')"
   [ -z "$missing" ] || fail "README does not link these docs:$missing"
 }
+
+# .mise.toml and lefthook.yml both say this repository ships no package.json, and
+# their reasoning (pnpm and the hook tools come from mise) rests on it. A stray
+# `npm init` stub at the root once contradicted both.
+@test "the repository root has no package.json, as .mise.toml and lefthook.yml say" {
+  [ ! -e "$REPO_ROOT/package.json" ] || fail "a package.json is back at the root: $(head -3 "$REPO_ROOT/package.json")"
+  grep -q "ships no package.json" "$REPO_ROOT/.mise.toml" || fail ".mise.toml no longer says it; update this test with it"
+}
