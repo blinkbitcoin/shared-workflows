@@ -3,9 +3,10 @@
 #
 # scripts/ota/export.sh: the `expo export` that produces the OTA update, with
 # source maps, into $WORKFLOWS_OTA_DIR. Covers the export itself, where it runs,
-# clearing a previous export, and every way it fails: no npx, a working
+# clearing a previous export, and every way it fails: no pnpm, a working
 # directory that does not exist, a failing export, an empty one, and one with no
-# metadata.json. (test/export.bats is scripts/web/export.sh's own test.)
+# metadata.json. It goes through pnpm exec, never npx, which with CI set would
+# fetch an unpinned expo from the registry. (test/export.bats is scripts/web/export.sh's own test.)
 load test_helper
 
 setup() {
@@ -24,10 +25,10 @@ setup() {
 
 # Records its argv, the token and the working directory, and writes an export
 # into --output-dir unless told to produce nothing or no metadata.json.
-stub_npx() {
-  cat > "$STUB/npx" <<'SH'
+stub_pnpm() {
+  cat > "$STUB/pnpm" <<'SH'
 #!/usr/bin/env bash
-printf 'npx %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
+printf 'pnpm %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
 printf 'EXPO_TOKEN=%s\n' "${EXPO_TOKEN-}" >> "$WORKFLOWS_TEST_LOG"
 printf 'cwd=%s CI=%s\n' "$PWD" "${CI-}" >> "$WORKFLOWS_TEST_LOG"
 prev=""; out=""
@@ -38,18 +39,19 @@ if [ -n "$out" ] && [ "${WORKFLOWS_TEST_EXPORT_EMPTY:-}" != "true" ]; then
   printf 'bundle\n' > "$out/index.js"
   [ "${WORKFLOWS_TEST_NO_METADATA:-}" = "true" ] && rm -f "$out/metadata.json"
 fi
-exit "${WORKFLOWS_TEST_NPX_STATUS:-0}"
+exit "${WORKFLOWS_TEST_PNPM_STATUS:-0}"
 SH
-  chmod +x "$STUB/npx"
+  chmod +x "$STUB/pnpm"
 }
 
 export_ota() { run bash "$REPO_ROOT/scripts/ota/export.sh"; }
 
 @test "export writes source maps into WORKFLOWS_OTA_DIR" {
-  stub_npx
+  stub_pnpm
   export_ota
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  argv="$(grep '^npx expo export' "$WORKFLOWS_TEST_LOG")"
+  argv="$(grep '^pnpm exec expo export' "$WORKFLOWS_TEST_LOG")"
+  [ -n "$argv" ] || fail "expo export did not run through pnpm exec: $(cat "$WORKFLOWS_TEST_LOG")"
   contains "$argv" "--source-maps" || fail "the source maps are not exported: $argv"
   contains "$argv" "--platform all" || fail "not both platforms: $argv"
   contains "$argv" "--output-dir $WORKFLOWS_OTA_DIR" || fail "wrong output dir: $argv"
@@ -57,7 +59,7 @@ export_ota() { run bash "$REPO_ROOT/scripts/ota/export.sh"; }
 }
 
 @test "export clears a previous export rather than mixing two" {
-  stub_npx
+  stub_pnpm
   mkdir -p "$WORKFLOWS_OTA_DIR"
   printf 'old\n' > "$WORKFLOWS_OTA_DIR/stale.js"
   export_ota
@@ -68,27 +70,27 @@ export_ota() { run bash "$REPO_ROOT/scripts/ota/export.sh"; }
 # `mkdir -p` above the export makes `[ -d ]` an assertion that cannot fail, so
 # the content is what gets asserted.
 @test "an export that produces nothing is fatal" {
-  stub_npx
+  stub_pnpm
   WORKFLOWS_TEST_EXPORT_EMPTY=true export_ota
   [ "$status" -ne 0 ] || fail "accepted an empty export: $output"
   contains "$output" "produced no output" || fail "unexpected message: $output"
 }
 
 @test "an export without metadata.json is fatal" {
-  stub_npx
+  stub_pnpm
   WORKFLOWS_TEST_NO_METADATA=true export_ota
   [ "$status" -ne 0 ] || fail "accepted an export with no metadata.json: $output"
   contains "$output" "no metadata.json" || fail "unexpected message: $output"
 }
 
 @test "a failing expo export is fatal" {
-  stub_npx
-  WORKFLOWS_TEST_NPX_STATUS=1 export_ota
+  stub_pnpm
+  WORKFLOWS_TEST_PNPM_STATUS=1 export_ota
   [ "$status" -ne 0 ] || fail "a failed export was ignored: $output"
 }
 
 @test "export runs in the consumer's working directory, as CI, and lists what it wrote" {
-  stub_npx
+  stub_pnpm
   export_ota
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   root="$(cd "$ROOT" && pwd -P)"
@@ -99,23 +101,36 @@ export_ota() { run bash "$REPO_ROOT/scripts/ota/export.sh"; }
 }
 
 @test "a working directory that does not exist is fatal before anything is exported" {
-  stub_npx
+  stub_pnpm
   WORKING_DIRECTORY=missing export_ota
   [ "$status" -ne 0 ] || fail "exported from a working directory that does not exist: $output"
-  ! grep -q '^npx ' "$WORKFLOWS_TEST_LOG" || fail "ran expo export anyway: $(cat "$WORKFLOWS_TEST_LOG")"
+  ! grep -q '^pnpm ' "$WORKFLOWS_TEST_LOG" || fail "ran expo export anyway: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
-@test "without npx on PATH it is fatal, and a previous export is left alone" {
-  # A PATH of symlinks to exactly what the script runs before its npx check, so
-  # an npx installed on this machine cannot satisfy the lookup.
-  nonpx="$BATS_TEST_TMPDIR/nonpx"
-  mkdir -p "$nonpx" "$WORKFLOWS_OTA_DIR"
+@test "without pnpm on PATH it is fatal, and a previous export is left alone" {
+  # A PATH of symlinks to exactly what the script runs before its pnpm check, so
+  # a pnpm installed on this machine cannot satisfy the lookup.
+  nopnpm="$BATS_TEST_TMPDIR/nopnpm"
+  mkdir -p "$nopnpm" "$WORKFLOWS_OTA_DIR"
   for c in bash dirname mkdir; do
-    p="$(command -v "$c")" && ln -sf "$p" "$nonpx/$c"
+    p="$(command -v "$c")" && ln -sf "$p" "$nopnpm/$c"
   done
   printf 'previous\n' > "$WORKFLOWS_OTA_DIR/index.js"
-  PATH="$nonpx" export_ota
-  [ "$status" -ne 0 ] || fail "ran without npx: $output"
-  contains "$output" "missing command: npx" || fail "unexpected message: $output"
+  PATH="$nopnpm" export_ota
+  [ "$status" -ne 0 ] || fail "ran without pnpm: $output"
+  contains "$output" "missing command: pnpm" || fail "unexpected message: $output"
   [ -f "$WORKFLOWS_OTA_DIR/index.js" ] || fail "the previous export was cleared before the check"
+}
+
+@test "an npx on PATH is never used" {
+  stub_pnpm
+  cat > "$STUB/npx" <<'SH'
+#!/usr/bin/env bash
+printf 'npx %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
+exit 1
+SH
+  chmod +x "$STUB/npx"
+  export_ota
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  ! grep -q '^npx ' "$WORKFLOWS_TEST_LOG" || fail "export went through npx: $(cat "$WORKFLOWS_TEST_LOG")"
 }
