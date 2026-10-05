@@ -126,6 +126,18 @@ gh_env_keys() {
   grep -qx 'PATH=/evil' "$GITHUB_ENV" || fail "the value was mangled: $(cat "$GITHUB_ENV")"
 }
 
+# The NUL half of C1: see test/build-env.bats. A lower-case key is allowed here,
+# so the case covers both name modes of the one validator.
+@test "a value containing a NUL cannot inject a second variable" {
+  for injected in PATH WORKFLOWS_FINGERPRINT_IOS; do
+    : > "$GITHUB_ENV"
+    WORKFLOWS_ENV_JSON="{\"track\":\"a\\u0000$injected\\u0000/evil\"}" publish
+    [ "$status" -ne 0 ] || fail "accepted a NUL that injects $injected: $output"
+    contains "$output" "contains a NUL character" || fail "unexpected message for $injected: $output"
+    [ ! -s "$GITHUB_ENV" ] || fail "wrote to GITHUB_ENV anyway: $(cat "$GITHUB_ENV")"
+  done
+}
+
 # I3, the env-json half: this input reaches $GITHUB_ENV just like build-env.
 @test "a key owned by the family or the runner is refused" {
   for k in WORKFLOWS_FINGERPRINT_IOS WORKFLOWS_ASSETS_DIR GITHUB_REPOSITORY RUNNER_TEMP ACTIONS_STEP_DEBUG PATH HOME LD_PRELOAD NODE_OPTIONS; do

@@ -2080,7 +2080,10 @@ Rules, enforced by `scripts/lib/build-env.sh`:
   caller-supplied constant to compare its baseline against, and
   `WORKFLOWS_ASSETS_DIR` / `WORKFLOWS_RELEASE_META_DIR` would repoint the artifact paths
   mid-job. Use the dedicated input instead.
-- **A value may contain anything, newlines included.** Values reach
+- **A value may contain anything but a NUL character, newlines included.** A
+  NUL (`\u0000`) is refused: the validator hands each pair to the shell
+  NUL-separated, so a NUL inside a value would start a pair of the caller's
+  choosing (`PATH`, `WORKFLOWS_FINGERPRINT_IOS`) past every rule above. Values reach
   `$GITHUB_ENV` through the heredoc delimiter form (`KEY<<__workflows_eof_…`), never
   as a bare `KEY=value` line — a value carrying a newline would otherwise write
   a second line that the runner reads as *another* variable (`PATH=/evil` on the
