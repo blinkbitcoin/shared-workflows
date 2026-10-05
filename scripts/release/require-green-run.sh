@@ -37,7 +37,7 @@ superseded_run_id=""
 
 # gh's stderr goes to a file of its own, never into the JSON on stdout: a
 # notice on stderr from a call that succeeded (an update hint, a deprecation)
-# made the JSON unparseable, which read as "no run" and dispatched a duplicate
+# made the JSON unparsable, which read as "no run" and dispatched a duplicate
 # or died "never started".
 gh_stderr_file="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/workflows-gh-run-list.XXXXXX")"
 trap 'rm -f "$gh_stderr_file"' EXIT

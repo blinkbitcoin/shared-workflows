@@ -23,11 +23,15 @@ setup() {
   unset GITHUB_ENV OTA_ENABLED OTA_CLI_VERSION OTA_PUBLISH_TOKEN
 }
 
-# Records its argv; `expo export` writes an export into --output-dir.
-stub_npx() {
-  cat > "$STUB/npx" <<'SH'
+# Records its argv under its own name; `expo export` writes an export into
+# --output-dir. Installed as pnpm (export.sh runs `pnpm exec expo export`) and
+# as npx (publish.sh runs the pinned `npx eoas@<version>`).
+stub_tools() {
+  local tool
+  for tool in pnpm npx; do
+    cat > "$STUB/$tool" <<'SH'
 #!/usr/bin/env bash
-printf 'npx %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
+printf '%s %s\n' "$(basename "$0")" "$*" >> "$WORKFLOWS_TEST_LOG"
 prev=""; out=""
 for a in "$@"; do [ "$prev" = "--output-dir" ] && out="$a"; prev="$a"; done
 if [ -n "$out" ]; then
@@ -37,17 +41,18 @@ if [ -n "$out" ]; then
 fi
 exit 0
 SH
-  chmod +x "$STUB/npx"
+    chmod +x "$STUB/$tool"
+  done
 }
 
 @test "publish uploads exactly the export that export.sh produced, without exporting again" {
-  stub_npx
+  stub_tools
   run bash "$REPO_ROOT/scripts/ota/export.sh"
   [ "$status" -eq 0 ] || fail "export exited $status: $output"
   before="$(cat "$WORKFLOWS_OTA_DIR/metadata.json")"
   OTA_ENABLED=true OTA_CLI_VERSION=1.2.3 run bash "$REPO_ROOT/scripts/ota/publish.sh" beta 25
   [ "$status" -eq 0 ] || fail "publish exited $status: $output"
-  [ "$(grep -c '^npx expo export' "$WORKFLOWS_TEST_LOG")" -eq 1 ] \
+  [ "$(grep -c 'expo export' "$WORKFLOWS_TEST_LOG")" -eq 1 ] \
     || fail "the update was exported more than once: $(cat "$WORKFLOWS_TEST_LOG")"
   grep -q -- "^npx eoas@1.2.3 publish .*--input-dir $WORKFLOWS_OTA_DIR .*--skip-bundler" "$WORKFLOWS_TEST_LOG" \
     || fail "publish did not upload the exported directory as it stands: $(cat "$WORKFLOWS_TEST_LOG")"
