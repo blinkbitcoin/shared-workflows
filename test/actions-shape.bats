@@ -66,3 +66,12 @@ setup() {
   [ "$key" = 'pnpm-${{ runner.os }}-${{ steps.store.outputs.lock-hash }}' ] || fail "unexpected pnpm cache key: $key"
   not_contains "$(cat "$a")" "hashFiles(" || fail "setup hashes files by glob again"
 }
+
+# Dependabot's `directory: /` reads .github/workflows/ and a root action.yml
+# only, so the pins inside the composite actions were never proposed.
+@test "dependabot watches the composite actions' pins as well as the workflows'" {
+  cfg="$REPO_ROOT/.github/dependabot.yml"
+  dirs="$(yq -r '.updates[] | select(.package-ecosystem == "github-actions") | .directories[]' "$cfg")"
+  printf '%s\n' "$dirs" | grep -qx '/' || fail "the workflows are not watched: $dirs"
+  printf '%s\n' "$dirs" | grep -qxF '/.github/actions/*' || fail "the composite actions are not watched: $dirs"
+}
