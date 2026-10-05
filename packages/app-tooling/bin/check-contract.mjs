@@ -260,9 +260,13 @@ export function callersUse(callers) {
  * Hand-rolled rather than a YAML parser, for the same reason as the mise reader.
  * It tracks which reusable workflow the current `with:` block belongs to by
  * remembering the most recent `uses:` at a shallower indent, which is the shape
- * every caller in the guide has. Anything it cannot read is simply absent from
- * the map, and an absent toggle falls back to the workflow's own default - so a
- * parse it gets wrong costs accuracy in the report, never a false failure.
+ * every caller in the guide has. A `with:` written as a one-line flow mapping
+ * (`with: { lint: false }`) is read too. A `with:` it cannot read at all (a
+ * flow mapping over several lines, a nested value) records the workflow's
+ * wildcard key, `<workflow>.yml:*`, as an expression: every toggle of that
+ * workflow then reads as unknown, which `check()` reports and never blocks.
+ * Falling back to the default instead would fail a caller for a gate it may
+ * well have switched off - the false failure this parser must never cause.
  */
 export function callerInputs(callers) {
   const inputs = new Map();
@@ -279,8 +283,16 @@ export function callerInputs(callers) {
         continue;
       }
       if (workflow === null) continue;
-      if (/^\s*with:\s*$/.test(raw)) {
-        withIndent = indent;
+      const withLine = /^\s*with:(.*)$/.exec(raw);
+      if (withLine) {
+        const inline = withLine[1].replace(/(^|\s+)#.*$/, '').trim();
+        if (inline === '') {
+          withIndent = indent;
+          continue;
+        }
+        const pairs = flowMapping(inline);
+        if (pairs === null) inputs.set(`${workflow}:*`, UNREADABLE_WITH);
+        else for (const [key, value] of pairs) inputs.set(`${workflow}:${key}`, value);
         continue;
       }
       if (withIndent === null) {
@@ -299,6 +311,44 @@ export function callerInputs(callers) {
     }
   }
   return inputs;
+}
+
+/** What an unreadable `with:` records: an expression, so every toggle reads as unknown. */
+export const UNREADABLE_WITH = '${{ with: is written in a form this parser does not read }}';
+
+/**
+ * The pairs of a one-line YAML flow mapping (`{ a: 1, b: 'x, y' }`), values
+ * unquoted, or null for anything else: no braces, a nested mapping or
+ * sequence, an unterminated quote, an item that is not `key: value`.
+ */
+export function flowMapping(text) {
+  const body = /^\{(.*)\}$/.exec(text);
+  if (!body) return null;
+  const items = [];
+  let item = '';
+  let quote = null;
+  for (const ch of body[1]) {
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if ('{}[]'.includes(ch)) return null;
+    else if (ch === ',') {
+      items.push(item);
+      item = '';
+      continue;
+    }
+    item += ch;
+  }
+  if (quote) return null;
+  items.push(item);
+  const pairs = [];
+  for (const raw of items) {
+    if (raw.trim() === '') continue;
+    const pair = /^\s*([A-Za-z0-9._-]+)\s*:\s*(.*?)\s*$/.exec(raw);
+    if (!pair) return null;
+    pairs.push([pair[1], stripQuotes(pair[2])]);
+  }
+  return pairs;
 }
 
 function stripQuotes(value) {
@@ -586,7 +636,8 @@ export function checkCalls(consumer, interfaces) {
  */
 export function toggleOn(req, inputs) {
   if (!req.toggle) return true;
-  const value = inputs.get(req.toggle);
+  const workflow = req.toggle.slice(0, req.toggle.indexOf(':'));
+  const value = inputs.get(req.toggle) ?? inputs.get(`${workflow}:*`);
   if (value === undefined) return req.defaultOn;
   if (req.toggleValue === 'script-name') {
     if (value === '') return false;
