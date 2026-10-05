@@ -270,7 +270,7 @@ jobs:
             ~/Library/Caches/CocoaPods
           key: ${{ steps.keys.outputs.pods-key }}
           restore-keys: |
-            pods-${{ runner.os }}-
+            ${{ steps.keys.outputs.pods-restore-key }}
       - name: Pod install
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
         timeout-minutes: 20

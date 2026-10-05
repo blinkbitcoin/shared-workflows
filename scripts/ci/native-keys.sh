@@ -25,4 +25,9 @@ fi
 gh_output hash "$hash"
 gh_output ios-key "ios-app-${ver}-${os}-${arch}-xcode${xcode}-${hash}${env_suffix}"
 gh_output android-key "android-apk-${ver}-${hash}"
-gh_output pods-key "pods-${os}-${hash}"
+# Pods carry the cache version and the Xcode version too, and so does their
+# restore prefix: without them a native-cache-version bump left the Pods cache
+# in place (the prefix restored the old entry even when the exact key missed),
+# though the bump is documented as invalidating every native cache at once.
+gh_output pods-key "pods-${ver}-${os}-xcode${xcode}-${hash}"
+gh_output pods-restore-key "pods-${ver}-${os}-xcode${xcode}-"

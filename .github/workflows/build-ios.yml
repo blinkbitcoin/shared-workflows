@@ -211,7 +211,7 @@ jobs:
             ~/Library/Caches/CocoaPods
           key: ${{ steps.keys.outputs.pods-key }}
           restore-keys: |
-            pods-${{ runner.os }}-
+            ${{ steps.keys.outputs.pods-restore-key }}
       - name: Pod install
         run: bash "$WORKFLOWS_DIR/scripts/native/pods.sh"
       - name: Download build-info
