@@ -30,6 +30,9 @@ on demand with the same invocation `scripts/checks/commits.sh` uses in CI.
   `git worktree add ../shared-workflows-<topic> -b <branch> origin/main`.
   Several sessions share the main checkout, and a commit made there lands on
   whatever branch someone else left checked out.
+- **Start from the current `origin/main`**, not a local `main`: `git fetch
+  origin`, then `git rev-list --count HEAD..origin/main` must print `0` before
+  you review or change anything (AGENTS.md, "Prove the checkout is current").
 - Name the branch for the change (`ci/hooks-and-hygiene`, `fix/metro-prewarm`).
 - Rebase on `main` rather than merging it back in; the squash merge discards
   the branch history anyway.
