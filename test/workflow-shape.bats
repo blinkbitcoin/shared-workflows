@@ -393,6 +393,20 @@ lane_step_count() {
   [ "$n" -eq 1 ] || fail "build-android does not run artifact-hashes.sh exactly once"
 }
 
+# The same digest for the .ipa: recorded once, between the build and verify
+# lanes, and carried with the .ipa under its platform name so the release's
+# Merge platform build-info step can fold it in.
+@test "build-ios records the .ipa digest between build and verify, and uploads it with the .ipa" {
+  f="$REPO_ROOT/.github/workflows/build-ios.yml"
+  n=$(yq -r '[.jobs[].steps[]? | select((.run? // "") | test("release/artifact-hashes.sh\" ios$"))] | length' "$f")
+  [ "$n" -eq 1 ] || fail "build-ios does not run artifact-hashes.sh ios exactly once"
+  order="$(yq -r '.jobs[].steps[]?.name' "$f" | grep -nE '^(Fastlane ios build|Record artifact hashes|Fastlane ios verify)$' | cut -d: -f2 | tr '\n' '|')"
+  [ "$order" = "Fastlane ios build|Record artifact hashes|Fastlane ios verify|" ] \
+    || fail "the digest step is not between the build and verify lanes: $order"
+  path="$(yq -r '.jobs[].steps[]? | select(.name == "Upload ios-ipa") | .with.path' "$f")"
+  contains "$path" 'build-info.ios.json' || fail "the .ipa upload does not carry build-info.ios.json: $path"
+}
+
 # $WORKFLOWS_DIR is published by the setup composite action, so it exists only
 # in the steps after Setup. A step before it - or in a job that never runs
 # setup - expands `$WORKFLOWS_DIR/scripts/…` to `/scripts/…` and exits 127 on

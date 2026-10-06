@@ -2354,17 +2354,19 @@ computing the fingerprints itself. `stage` falls back to `development` when
 the internal track.
 
 `artifacts` is empty as `build-prepare` writes it and is filled in later, by the
-job that produces the binaries: `build-android.yml` runs
+job that produces the binaries: `build-android.yml` and `build-ios.yml` run
 `scripts/release/artifact-hashes.sh` between the `build` and `verify` lanes,
 which writes an enriched **copy** into `$WORKFLOWS_OUTPUT_DIR` carrying
-`artifacts.apkSha256` / `artifacts.aabSha256`. The `verify` lane reads that copy
+`artifacts.apkSha256` / `artifacts.aabSha256` (Android) or
+`artifacts.ipaSha256` (iOS; empty for an unsigned build, which packages no .ipa). The `verify` lane reads that copy
 (`BUILD_INFO_FILE` points at it), so the `verify-android` your lane runs can compare
 the universal apk against the digest recorded for it. The build-info copy is
 never edited in place: both platform jobs download it, and two jobs must not
 write one file.
 
 **How the digests reach the release.** The copy that travels with the binaries
-is uploaded as **`build-info.android.json`**, not `build-info.json`.
+is uploaded as **`build-info.android.json`** (with the aab) or
+**`build-info.ios.json`** (with the .ipa), not `build-info.json`.
 `publish-github-release.yml` stages several artifacts into one directory with
 `merge-multiple: true`, and that merge has **no defined order** — two artifacts
 carrying the same filename would make the release's record a coin toss, with

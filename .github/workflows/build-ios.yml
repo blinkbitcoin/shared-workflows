@@ -238,6 +238,15 @@ jobs:
           # fastlane.sh appends $LANE_ARGS to the lane arguments.
           LANE_ARGS: ${{ !inputs.ios-signing-enabled && 'skip_signing:true' || '' }}
         run: bash "$WORKFLOWS_DIR/scripts/release/fastlane.sh" ios build
+      # Between build and verify, as in build-android.yml: the digest describes
+      # the .ipa the lane just produced (an unsigned build packages none, which
+      # is recorded as absent). The enriched copy travels with the .ipa as
+      # build-info.ios.json, and publish-github-release.yml folds its
+      # `artifacts` back into the release's build-info.json.
+      - name: Record artifact hashes
+        env:
+          BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
+        run: bash "$WORKFLOWS_DIR/scripts/release/artifact-hashes.sh" ios
       - name: Fastlane ios verify
         if: ${{ inputs.verify }}
         env:
@@ -267,7 +276,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.ipa-artifact }}
-          path: ${{ env.WORKFLOWS_OUTPUT_DIR }}/*.ipa
+          # build-info.ios.json under its platform name for the reason the
+          # Android aab upload gives: two artifacts carrying build-info.json
+          # would make the release's record depend on download order.
+          path: |
+            ${{ env.WORKFLOWS_OUTPUT_DIR }}/*.ipa
+            ${{ env.WORKFLOWS_OUTPUT_DIR }}/build-info.ios.json
           # An .ipa is already a zip; re-compressing it costs minutes and saves
           # nothing.
           compression-level: 0
