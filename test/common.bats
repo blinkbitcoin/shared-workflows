@@ -34,6 +34,68 @@ setup() { source "$REPO_ROOT/scripts/lib/common.sh"; }
   contains "$output" "90%25 of the threshold" || fail "$output"
   contains "$output" "%0AFix: raise it" || fail "the newlines did not survive: $output"
 }
+# A probe for wait_until: fails until it has been called $1 times, counting its
+# calls in a file so the count survives however wait_until runs it.
+succeeds_on_try() {
+  local tries
+  printf 'try\n' >> "$BATS_TEST_TMPDIR/tries"
+  tries="$(wc -l < "$BATS_TEST_TMPDIR/tries" | tr -d ' ')"
+  [ "$tries" -ge "$1" ]
+}
+tries() { wc -l < "$BATS_TEST_TMPDIR/tries" | tr -d ' '; }
+@test "wait_until returns at once when the command succeeds on the first try" {
+  wait_until 30 1 succeeds_on_try 1 || fail "wait_until failed on a command that succeeded"
+  [ "$(tries)" -eq 1 ] || fail "ran the command $(tries) times"
+  [ "$wait_until_elapsed" -le 1 ] || fail "slept before returning: ${wait_until_elapsed}s"
+}
+@test "wait_until tries again every INTERVAL until the command succeeds, and reports the real time" {
+  wait_until 30 1 succeeds_on_try 3 || fail "wait_until gave up on a command that succeeded on try 3"
+  [ "$(tries)" -eq 3 ] || fail "ran the command $(tries) times"
+  # Two 1s intervals went by; a busy machine may add to that, never take away.
+  [ "$wait_until_elapsed" -ge 2 ] || fail "reported ${wait_until_elapsed}s for two intervals"
+}
+@test "wait_until gives up once SECONDS of real time have passed, not after a count of tries" {
+  # Each try costs 1s of its own on top of the 1s interval. A count of
+  # SECONDS/INTERVAL tries would wait 6s; the clock stops it at about 3.
+  slow_failure() { sleep 1; return 1; }
+  if wait_until 3 1 slow_failure; then fail "wait_until succeeded on a command that never did"; fi
+  [ "$wait_until_elapsed" -ge 3 ] || fail "gave up before the deadline: ${wait_until_elapsed}s"
+  [ "$wait_until_elapsed" -lt 6 ] || fail "waited a count of tries, not the deadline: ${wait_until_elapsed}s"
+}
+@test "wait_until never sleeps past the deadline when INTERVAL is longer than what is left" {
+  if wait_until 2 30 succeeds_on_try 99; then fail "wait_until succeeded on a command that never did"; fi
+  [ "$(tries)" -eq 2 ] || fail "expected a try at the start and one at the deadline, ran $(tries)"
+  [ "$wait_until_elapsed" -lt 30 ] || fail "slept a whole interval past a 2s deadline: ${wait_until_elapsed}s"
+}
+@test "wait_until with SECONDS 0 tries exactly once" {
+  if wait_until 0 1 succeeds_on_try 99; then fail "wait_until succeeded on a command that never did"; fi
+  [ "$(tries)" -eq 1 ] || fail "ran the command $(tries) times"
+}
+@test "wait_until runs the command in the caller's shell, so a probe can stop the script" {
+  run bash -c '
+    source "$1/scripts/lib/common.sh"
+    gone() { die "the server exited"; }
+    wait_until 30 1 gone
+    echo "carried on"
+  ' _ "$REPO_ROOT"
+  [ "$status" -eq 1 ] || fail "a probe that died did not stop the script: $status $output"
+  contains "$output" "::error::the server exited" || fail "output: $output"
+  not_contains "$output" "carried on" || fail "the script carried on: $output"
+}
+@test "wait_until refuses a SECONDS or INTERVAL that is not a whole number, a zero INTERVAL and no command" {
+  run wait_until soon 1 true
+  [ "$status" -eq 1 ] || fail "accepted SECONDS soon: $output"
+  contains "$output" "wait_until: SECONDS must be a whole number, got 'soon'" || fail "output: $output"
+  run wait_until 5 '' true
+  [ "$status" -eq 1 ] || fail "accepted an empty INTERVAL: $output"
+  contains "$output" "wait_until: INTERVAL must be a whole number, got ''" || fail "output: $output"
+  run wait_until 5 0 true
+  [ "$status" -eq 1 ] || fail "accepted INTERVAL 0: $output"
+  contains "$output" "wait_until: INTERVAL must be at least 1 second" || fail "output: $output"
+  run wait_until 5 1
+  [ "$status" -eq 1 ] || fail "accepted no command: $output"
+  contains "$output" "wait_until: no command to run" || fail "output: $output"
+}
 @test "gh_env_once appends key=value once, even called twice with the same GITHUB_ENV" {
   GITHUB_ENV="$BATS_TEST_TMPDIR/env"; export GITHUB_ENV
   : > "$GITHUB_ENV"

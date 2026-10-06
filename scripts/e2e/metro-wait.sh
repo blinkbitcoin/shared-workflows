@@ -20,25 +20,35 @@ tail_metro_log() {
   tail -50 "$WORKFLOWS_OUT/metro.log" >&2 || true
 }
 
-ready=false
-for i in $(seq 1 90); do
-  if curl -s --max-time 5 "$base/status" | grep -q packager-status:running; then
-    log "Metro is ready (after $((i * 2))s)"
-    ready=true
-    break
-  fi
+# How long Metro gets to report ready, in real seconds, polled every 2s. An
+# internal override: the tests shrink it, nothing in the workflows sets it.
+wait_seconds="${WORKFLOWS_METRO_WAIT_SECONDS:-180}"
+case "$wait_seconds" in '' | *[!0-9]*) die "WORKFLOWS_METRO_WAIT_SECONDS must be a whole number of seconds, got '$wait_seconds'" ;; esac
+
+# metro_ready - true once Metro reports packager-status:running. The body is
+# read whole rather than piped into `grep -q`, which can close the pipe early
+# and, under pipefail, fail a curl that got the right answer.
+metro_ready() {
+  local status pid
+  status="$(curl -s --max-time 5 "$base/status" || true)"
+  case "$status" in *packager-status:running*) return 0 ;; esac
   # Metro that died on a port clash or a config error is never coming back;
-  # waiting out the full 180s only hides the reason in a timeout message.
-  if [ -f "$WORKFLOWS_OUT/metro.pid" ] && ! kill -0 "$(cat "$WORKFLOWS_OUT/metro.pid")" 2>/dev/null; then
-    tail_metro_log
-    die "Metro (pid $(cat "$WORKFLOWS_OUT/metro.pid")) exited before becoming ready"
+  # waiting out the whole bound only hides the reason in a timeout message.
+  if [ -f "$WORKFLOWS_OUT/metro.pid" ]; then
+    pid="$(cat "$WORKFLOWS_OUT/metro.pid")" || return 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+      tail_metro_log
+      die "Metro (pid $pid) exited before becoming ready"
+    fi
   fi
-  sleep 2
-done
-if [ "$ready" != true ]; then
+  return 1
+}
+
+if ! wait_until "$wait_seconds" 2 metro_ready; then
   tail_metro_log
-  die "Metro did not report packager-status:running within 180s"
+  die "Metro did not report packager-status:running within ${wait_seconds}s (gave up after ${wait_until_elapsed}s)"
 fi
+log "Metro is ready (after ${wait_until_elapsed}s)"
 
 # Prewarming only pays off if it warms *the* graph the app then asks for. Metro
 # keys its transform cache on the full option set carried in the bundle URL

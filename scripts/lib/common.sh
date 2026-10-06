@@ -28,6 +28,44 @@ Contract: $url"
   printf '::error::%s\n' "$body" >&2
   exit 1
 }
+# wait_until SECONDS INTERVAL COMMAND [ARGUMENT...] - run COMMAND every INTERVAL
+# seconds until it succeeds, for at most SECONDS of real time. Returns 0 on the
+# first success and 1 once the deadline has passed (SECONDS 0 means one try).
+# Either way it sets wait_until_elapsed to the whole seconds that really went
+# by, so the caller's message reports what happened, not what a count assumed.
+#
+# A `for i in $(seq 1 N); do probe; sleep S; done` loop is bounded by N times
+# (S plus the probe's own time), not N*S: metro-wait.sh said 180s and could
+# wait 630s, because each 5s curl came on top of each 2s sleep. Reading the
+# clock is the only bound that holds whatever the probe costs. The last try
+# still runs to its end, so a slow probe can overrun SECONDS by one try at
+# most; give the probe a timeout of its own (curl --max-time) to keep that small.
+#
+# COMMAND runs in this shell, not a subshell, so a probe may `die` on something
+# that is never coming back (a server process that exited) and the script stops
+# at once; for the same reason the elapsed time is a variable, not output. It
+# runs as an `if` condition, where `set -e` does not reach: a probe function
+# that must stop on a failing step says so with `|| return 1`.
+wait_until() {
+  local seconds="${1:-}" interval="${2:-}" started remaining
+  case "$seconds" in '' | *[!0-9]*) die "wait_until: SECONDS must be a whole number, got '$seconds'" ;; esac
+  case "$interval" in '' | *[!0-9]*) die "wait_until: INTERVAL must be a whole number, got '$interval'" ;; esac
+  [ "$interval" -gt 0 ] || die "wait_until: INTERVAL must be at least 1 second"
+  shift 2
+  [ "$#" -gt 0 ] || die "wait_until: no command to run"
+  started=$SECONDS
+  while :; do
+    if "$@"; then
+      wait_until_elapsed=$((SECONDS - started))
+      return 0
+    fi
+    wait_until_elapsed=$((SECONDS - started))
+    remaining=$((seconds - wait_until_elapsed))
+    [ "$remaining" -gt 0 ] || return 1
+    # Never sleep past the deadline: one more try at it, not an interval after.
+    if [ "$remaining" -lt "$interval" ]; then sleep "$remaining"; else sleep "$interval"; fi
+  done
+}
 group() { printf '::group::%s\n' "$*"; }
 endgroup() { printf '::endgroup::\n'; }
 gh_output() { if [ -n "${GITHUB_OUTPUT:-}" ]; then printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; else printf '%s=%s\n' "$1" "$2"; fi; }
