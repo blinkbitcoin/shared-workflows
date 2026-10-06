@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { ADAPTERS, adapterFor, KEY_ENV, parseEffort, parseExtraParams } from './lib/llm.mjs';
+import * as anthropic from './lib/llm-anthropic.mjs';
+import * as openai from './lib/llm-openai.mjs';
+import { adapterFor, KEY_ENV, parseEffort, parseExtraParams } from './lib/llm.mjs';
 
 test('parseEffort defaults to max and refuses anything outside the vocabulary', () => {
   assert.equal(parseEffort(undefined, 'X'), 'max');
@@ -47,8 +49,8 @@ test('the value of a bad extra-parameters setting never reaches the error', () =
 });
 
 test('adapterFor knows the two providers and nothing else', () => {
-  assert.equal(adapterFor('anthropic'), ADAPTERS.anthropic);
-  assert.equal(adapterFor('openai'), ADAPTERS.openai);
+  assert.equal(adapterFor('anthropic'), anthropic);
+  assert.equal(adapterFor('openai'), openai);
   assert.equal(adapterFor(''), null);
   assert.equal(adapterFor('toString'), null);
   assert.deepEqual(KEY_ENV, { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY' });
