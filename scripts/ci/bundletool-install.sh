@@ -33,11 +33,7 @@ curl -fsSL --retry 3 --retry-delay 2 -o "$dest" "$url" ||
 [ -s "$dest" ] || die "bundletool download produced an empty file"
 
 if [ -n "${BUNDLETOOL_SHA256:-}" ]; then
-  if command -v shasum >/dev/null 2>&1; then
-    actual="$(shasum -a 256 "$dest" | cut -d' ' -f1)"
-  else
-    actual="$(sha256sum "$dest" | cut -d' ' -f1)"
-  fi
+  actual="$(sha256_file "$dest")"
   [ "$actual" = "$BUNDLETOOL_SHA256" ] ||
     die "bundletool sha256 mismatch: expected $BUNDLETOOL_SHA256, got $actual"
   log "sha256 verified"

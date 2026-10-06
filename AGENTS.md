@@ -160,7 +160,7 @@ Every row is a make target; nothing here is run through a package manager.
   - **What counts:**
     - A case in a shared suite (`plumbing.bats`, `fallback-gates.bats`) is welcome on top, but it is never the script's own test.
     - A file that only greps the script does not count.
-  - **"It needs Xcode" is not an exception.** A script that needs Xcode, a simulator, CocoaPods, Gradle, an emulator, Maestro or a network is run against fakes of those tools on `PATH` that record their calls. `test/app-launch.bats` and `test/native-ios-build.bats` show how. Eight scripts once sat on an allowlist as "cannot run from a test", and every one of them could.
+  - **"It needs Xcode" is not an exception.** A script that needs Xcode, a simulator, CocoaPods, Gradle, an emulator, Maestro or a network is run against fakes of those tools on `PATH` that record their calls. `stub_cmd NAME [BODY]` in `test/test_helper.bash` writes one (`stub_calls NAME` reads back what it was called with); `test/app-launch.bats` and `test/native-ios-build.bats` show the larger cases. Eight scripts once sat on an allowlist as "cannot run from a test", and every one of them could.
   - **Where tests live:** in `test/`, not beside the script, because `scripts/` is what callers check out and what shellcheck lints.
   - **Enforced:** `test/script-coverage.bats` fails naming every script without its own test, and fails if an allowlist comes back.
 - **Tests run in parallel, so each one stands alone.** `make test-unit` runs

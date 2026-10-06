@@ -136,7 +136,7 @@ if [ "$dry_run" -eq 1 ]; then
       printf '````markdown\n'
       cat "$updated"
       printf '````\n'
-    } >> "$GITHUB_STEP_SUMMARY"
+    } | gh_summary -
   fi
 elif [ "$unchanged" -eq 1 ]; then
   log "$subject: body unchanged, not editing"

@@ -176,6 +176,124 @@ after"
   contains "$output" '$GITHUB_OUTPUT' || fail "the message names the wrong channel: $output"
   [ ! -s "$GITHUB_OUTPUT" ] || fail "something was written anyway: $(cat "$GITHUB_OUTPUT")"
 }
+@test "warn prints one ::warning:: annotation on stderr, nothing on stdout, and returns 0" {
+  err="$(warn "two" "words" 2>&1 >/dev/null)" || fail "warn returned non-zero"
+  [ "$err" = "::warning::two words" ] || fail "stderr: $err"
+  out="$(warn "quiet" 2>/dev/null)" || fail "warn returned non-zero"
+  [ -z "$out" ] || fail "warn wrote to stdout: $out"
+}
+@test "gh_summary appends each argument as a line to GITHUB_STEP_SUMMARY, and prints nothing" {
+  GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"; export GITHUB_STEP_SUMMARY
+  printf 'before\n' > "$GITHUB_STEP_SUMMARY"
+  run gh_summary '## Title' '' 'a line with  two spaces'
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ -z "$output" ] || fail "printed with a summary file set: $output"
+  [ "$(cat "$GITHUB_STEP_SUMMARY")" = "before
+## Title
+
+a line with  two spaces" ] || fail "summary: $(cat "$GITHUB_STEP_SUMMARY")"
+}
+@test "gh_summary - appends stdin as it is, and so does gh_summary with no arguments" {
+  GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"; export GITHUB_STEP_SUMMARY
+  printf '| a |\n| b |\n\n' | gh_summary -
+  printf 'next\n' | gh_summary
+  [ "$(cat "$GITHUB_STEP_SUMMARY")" = "| a |
+| b |
+
+next" ] || fail "summary: $(cat "$GITHUB_STEP_SUMMARY")"
+  [ "$(tail -c 1 "$GITHUB_STEP_SUMMARY" | od -An -c | tr -d ' ')" = '\n' ] || fail "the trailing newline was lost"
+}
+@test "gh_summary prints to stdout when GITHUB_STEP_SUMMARY is unset, so a script runs on a laptop" {
+  unset GITHUB_STEP_SUMMARY
+  run gh_summary '## Title' 'body'
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "## Title
+body" ] || fail "output: $output"
+  run bash -c 'source "$1/scripts/lib/common.sh"; printf "piped\n" | gh_summary -' _ "$REPO_ROOT"
+  [ "$output" = "piped" ] || fail "stdin form: $output"
+}
+# A file with a known SHA-256, and fake hashing tools on a PATH of nothing else:
+# what is under test is which tool sha256_file asks and how it reads the answer.
+# The fakes print a digest that is not the file's, so the output proves which
+# tool answered.
+hello_file() { hello="$BATS_TEST_TMPDIR/hello.txt"; printf 'hello\n' > "$hello"; }
+HELLO_SHA256=5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+FAKE_SHASUM=1111111111111111111111111111111111111111111111111111111111111111
+FAKE_SHA256SUM=2222222222222222222222222222222222222222222222222222222222222222
+hash_on_stubs() { PATH="$BATS_TEST_TMPDIR/stub-bin" run "$BASH" -c 'source "$1/scripts/lib/common.sh"; sha256_file "$2"' _ "$REPO_ROOT" "$1"; }
+@test "sha256_file prints the lowercase hex SHA-256 of a file, with the tools this machine has" {
+  hello_file
+  run sha256_file "$hello"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "$HELLO_SHA256" ] || fail "digest: $output"
+}
+@test "sha256_file uses shasum -a 256 when it is the only tool, as on macOS" {
+  hello_file
+  stub_cmd shasum "printf '%s  -\n' $FAKE_SHASUM"
+  hash_on_stubs "$hello"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "$FAKE_SHASUM" ] || fail "digest: $output"
+  [ "$(stub_calls shasum)" = "-a 256" ] || fail "shasum was asked: $(stub_calls shasum)"
+}
+@test "sha256_file uses sha256sum when it is the only tool, as on a Linux image without perl" {
+  hello_file
+  stub_cmd sha256sum "printf '%s  -\n' $FAKE_SHA256SUM"
+  hash_on_stubs "$hello"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "$FAKE_SHA256SUM" ] || fail "digest: $output"
+  [ "$(stub_calls sha256sum)" = "" ] || fail "sha256sum was given arguments: $(stub_calls sha256sum)"
+}
+@test "sha256_file prefers shasum when both tools are there" {
+  hello_file
+  stub_cmd shasum "printf '%s  -\n' $FAKE_SHASUM"
+  stub_cmd sha256sum "printf '%s  -\n' $FAKE_SHA256SUM"
+  hash_on_stubs "$hello"
+  [ "$output" = "$FAKE_SHASUM" ] || fail "digest: $output"
+  [ -z "$(stub_calls sha256sum)" ] || fail "sha256sum was asked as well"
+}
+@test "sha256_file with neither tool dies naming both" {
+  hello_file
+  stub_cmd unrelated
+  hash_on_stubs "$hello"
+  [ "$status" -eq 1 ] || fail "exited $status: $output"
+  contains "$output" "::error::sha256_file: neither shasum nor sha256sum is on PATH" || fail "output: $output"
+}
+@test "sha256_file dies on a missing file, before asking any tool" {
+  stub_cmd shasum "printf '%s  -\n' $FAKE_SHASUM"
+  hash_on_stubs "$BATS_TEST_TMPDIR/absent.zip"
+  [ "$status" -eq 1 ] || fail "exited $status: $output"
+  contains "$output" "::error::sha256_file: cannot read $BATS_TEST_TMPDIR/absent.zip" || fail "output: $output"
+  [ -z "$(stub_calls shasum)" ] || fail "a tool was asked about a missing file"
+}
+@test "sha256_file dies on a directory, and with no file at all" {
+  run sha256_file "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "hashed a directory: $output"
+  contains "$output" "::error::sha256_file: cannot read $BATS_TEST_TMPDIR" || fail "output: $output"
+  run sha256_file
+  [ "$status" -eq 1 ] || fail "hashed nothing: $output"
+  contains "$output" "::error::sha256_file: no file given" || fail "output: $output"
+}
+@test "sha256_file dies on a file it cannot read" {
+  hello_file
+  chmod 000 "$hello"
+  # root reads a mode-000 file anyway, which leaves nothing to test.
+  if [ -r "$hello" ]; then chmod 644 "$hello"; skip "running as root"; fi
+  run sha256_file "$hello"
+  chmod 644 "$hello"
+  [ "$status" -eq 1 ] || fail "exited $status: $output"
+  contains "$output" "::error::sha256_file: cannot read $hello" || fail "output: $output"
+}
+@test "sha256_file dies when the tool fails, or answers with something that is not a SHA-256" {
+  hello_file
+  stub_cmd shasum 'echo "shasum: broken" >&2; exit 3'
+  hash_on_stubs "$hello"
+  [ "$status" -eq 1 ] || fail "a failing tool passed: $output"
+  contains "$output" "::error::sha256_file: shasum failed on $hello" || fail "output: $output"
+  stub_cmd shasum 'printf "ABC  -\n"'
+  hash_on_stubs "$hello"
+  [ "$status" -eq 1 ] || fail "a malformed digest passed: $output"
+  contains "$output" "::error::sha256_file: no SHA-256 for $hello (the hashing tool printed 'ABC')" || fail "output: $output"
+}
 @test "consumer_root honours WORKING_DIRECTORY" {
   GITHUB_WORKSPACE="$BATS_TEST_TMPDIR"; WORKING_DIRECTORY=app; export GITHUB_WORKSPACE WORKING_DIRECTORY
   mkdir -p "$BATS_TEST_TMPDIR/app"

@@ -87,7 +87,7 @@ bundle_ids_from_pbxproj() {
 }
 
 ios_bundle_id() {
-  local id ids count
+  local id ids count listed
   if [ -n "${IOS_BUNDLE_ID:-}" ]; then printf '%s\n' "$IOS_BUNDLE_ID"; return 0; fi
   id="$(bundle_id_from_xcodebuild)"
   if [ -n "$id" ]; then printf '%s\n' "$id"; return 0; fi
@@ -95,9 +95,10 @@ ios_bundle_id() {
   [ -n "$ids" ] || die_fix "no bundle identifier in $root/ios: xcodebuild did not answer and no project.pbxproj names a literal PRODUCT_BUNDLE_IDENTIFIER" \
     "set PRODUCT_BUNDLE_IDENTIFIER on the app target, or pass the ios-bundle-id input" "expo-or-bare"
   count="$(printf '%s\n' "$ids" | grep -c .)"
-  [ "$count" -eq 1 ] ||
-    printf '::warning::%s bundle identifiers in the project (%s); using the first. Pass the ios-bundle-id input to choose\n' \
-      "$count" "$(printf '%s\n' "$ids" | paste -sd' ' -)" >&2
+  if [ "$count" -ne 1 ]; then
+    listed="$(printf '%s\n' "$ids" | paste -sd' ' -)"
+    warn "$count bundle identifiers in the project ($listed); using the first. Pass the ios-bundle-id input to choose"
+  fi
   printf '%s\n' "$ids" | head -1
 }
 

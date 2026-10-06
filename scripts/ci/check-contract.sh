@@ -25,9 +25,9 @@ checker="$(cd "$(dirname "$0")/../.." && pwd)/packages/app-tooling/bin/check-con
 # green Checks that ran no gate is exactly the shape of result someone reads as
 # "it passed". So the run says what it was.
 if [ "${WORKFLOWS_CONTRACT_ONLY:-}" = "true" ]; then
-  printf '::warning::contract-only run: the contract was checked and NO gate ran. This is not a passing build.\n' >&2
+  warn 'contract-only run: the contract was checked and NO gate ran. This is not a passing build.'
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-    printf '> **Contract-only run.** No gate ran - this is not a passing build.\n\n' >> "$GITHUB_STEP_SUMMARY"
+    gh_summary '> **Contract-only run.** No gate ran - this is not a passing build.' ''
   fi
 fi
 

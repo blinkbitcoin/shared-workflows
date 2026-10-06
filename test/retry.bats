@@ -6,13 +6,7 @@ load test_helper
 # pick) or fails with FAKE_LIST_FAILS; `run rerun` fails with FAKE_RERUN_FAILS.
 # Every call is logged, so each case can assert exactly what reached GitHub.
 setup() {
-  fakebin="$BATS_TEST_TMPDIR/fakebin"
-  mkdir -p "$fakebin"
-  export GH_LOG="$BATS_TEST_TMPDIR/gh.log"
-  : > "$GH_LOG"
-  cat > "$fakebin/gh" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$GH_LOG"
+  stub_cmd gh - <<'EOF'
 if [ "$1 $2" = "run list" ]; then
   if [ -n "${FAKE_LIST_FAILS:-}" ]; then echo "HTTP 403: Resource not accessible by integration" >&2; exit 1; fi
   printf '%s\n' "${FAKE_RUN_ID:-}"
@@ -25,8 +19,7 @@ fi
 echo "unexpected gh invocation: $*" >&2
 exit 2
 EOF
-  chmod +x "$fakebin/gh"
-  export PATH="$fakebin:$PATH"
+  GH_LOG="$(stub_log gh)"
   export GH_TOKEN=fake GH_REPO=org/app WORKFLOW=cd-beta.yml HEAD_SHA=deadbeef
 }
 

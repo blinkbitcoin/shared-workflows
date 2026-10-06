@@ -45,8 +45,7 @@ case "$key" in
     # available, skip the comparison rather than make every caller pay for it.
     if cfg_name="$(expo_config ios.scheme-name 2>/dev/null)" &&
       [ -n "$cfg_name" ] && [ "$ws_name" != "$cfg_name" ]; then
-      printf '::warning::expo-config scheme-name (%s) disagrees with the generated workspace (%s); using the workspace name\n' \
-        "$cfg_name" "$ws_name" >&2
+      warn "expo-config scheme-name ($cfg_name) disagrees with the generated workspace ($ws_name); using the workspace name"
     fi
     printf '%s\n' "$ws_name"
     ;;

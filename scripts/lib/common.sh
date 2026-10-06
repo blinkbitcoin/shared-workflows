@@ -157,6 +157,32 @@ new_heredoc_delimiter() {
     *"$heredoc_delimiter"*) die "value for $1 contains the generated heredoc delimiter - refusing to write it to \$$3" ;;
   esac
 }
+# warn MESSAGE... - a ::warning:: annotation on stderr, the warning twin of die; returns 0.
+warn() { printf '::warning::%s\n' "$*" >&2; }
+# gh_summary LINE... | gh_summary - - append Markdown to the job summary: each
+# argument as a line, or stdin as it is for `-`. Without $GITHUB_STEP_SUMMARY
+# (a laptop) it goes to stdout, as gh_output does.
+gh_summary() {
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then gh_summary_text "$@" >> "$GITHUB_STEP_SUMMARY"; else gh_summary_text "$@"; fi
+}
+gh_summary_text() { if [ "$#" -eq 0 ] || [ "$*" = - ]; then cat; else printf '%s\n' "$@"; fi; }
+# sha256_file FILE - the lowercase hex SHA-256 of FILE, from shasum (macOS) or
+# sha256sum (Linux). Read the file on stdin, so no name escaping reaches the output.
+sha256_file() {
+  local file="${1:-}" sum
+  [ -n "$file" ] || die "sha256_file: no file given"
+  { [ -f "$file" ] && [ -r "$file" ]; } || die "sha256_file: cannot read $file (missing, not a regular file, or unreadable)"
+  if command -v shasum >/dev/null 2>&1; then
+    sum="$(shasum -a 256 < "$file")" || die "sha256_file: shasum failed on $file"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sum="$(sha256sum < "$file")" || die "sha256_file: sha256sum failed on $file"
+  else
+    die "sha256_file: neither shasum nor sha256sum is on PATH"
+  fi
+  sum="${sum%% *}"
+  [[ "$sum" =~ ^[0-9a-f]{64}$ ]] || die "sha256_file: no SHA-256 for $file (the hashing tool printed '$sum')"
+  printf '%s\n' "$sum"
+}
 # gh_env KEY VALUE - publish KEY for every later step in the job. A value that
 # would break the line-based form is routed through gh_env_multiline, so no
 # caller has to know whether its value can contain a newline.
