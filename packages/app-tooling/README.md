@@ -103,6 +103,9 @@ them, and two different values are an error here too.
 `contract.json` is the table it reads — what wants each thing, which workflow
 input switches it off, whether a fallback exists, and the fix. The consumer
 guide's tables are generated from the same file, so the two cannot disagree.
+Each row's `kind` names the check it gets, one entry per kind in the
+program's `CHECKERS`; a row of a kind the program has no check for fails the
+run before any rule is checked, so a typo cannot quietly switch a rule off.
 Its `no-copy` rows work the other way round: they block a repository that
 still holds its own copy of something this package or the workflows ship, such
 as a guard program or `resolve-version.sh`

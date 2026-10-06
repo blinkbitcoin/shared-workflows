@@ -35,9 +35,12 @@ import { pinProblems } from '../lib/pin.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** The contract, as `{ profiles, requirements }`. */
+/**
+ * The contract, as `{ profiles, requirements }`, refused when a requirement is
+ * of a kind this version has no check for (`validateContract`).
+ */
 export function readContract(file = path.join(HERE, '..', 'contract.json')) {
-  return JSON.parse(readFileSync(file, 'utf8'));
+  return validateContract(JSON.parse(readFileSync(file, 'utf8')));
 }
 
 // ---------------------------------------------------------------------------
@@ -659,178 +662,213 @@ export const WORKFLOWS_PRESETS = {
   'jest.config.ts': 'expo/jest',
 };
 
-/** `{ status, reason }` for one requirement. `status` is ok | missing | skip. */
-export function checkRequirement(req, consumer) {
-  const { io, root, scripts, deps } = consumer;
-  const has = (file) => io.exists(path.join(root, file));
+/** Whether `file` exists under the consumer's app directory. */
+const has = (consumer, file) => consumer.io.exists(path.join(consumer.root, file));
 
-  switch (req.kind) {
-    case 'package-script':
-      return scripts[req.target]
-        ? ok()
-        : missing(`no "${req.target}" script in package.json`);
-
-    case 'package-dep':
-      return deps[req.target]
-        ? ok()
-        : missing(`${req.target} is not a dependency`);
-
-    case 'file': {
-      const targets = req.target.map((file) => fastlanePath(file, consumer));
-      const found = targets.find(has);
-      return found ? ok(found) : missing(`none of ${targets.join(', ')} exists`);
-    }
-
-    case 'dir-nonempty':
-      return io.isNonEmptyDir(path.join(root, req.target))
-        ? ok()
-        : missing(`${req.target}/ is missing or empty`);
-
-    case 'pinned-tool': {
-      const { file, tools } = consumer.miseTools;
-      if (file === null) return missing('no mise config (.mise.toml)');
-      const absent = req.target.filter((tool) => !tools.has(tool));
-      return absent.length === 0 ? ok(file) : missing(`${file} pins no ${absent.join(' or ')}`);
-    }
-
-    case 'ignores-workflows':
-    case 'ignores-workflows-or-narrow': {
-      const text = consumer.io.read(path.join(root, req.target));
-      // A config this repository does not have is not a finding: the consumer
-      // does not use that tool, so nothing of ours can walk into its glob.
-      if (text === null) return skip(`no ${req.target}`);
-      if (text.includes('.workflows')) return ok();
-      // A configuration that takes the exclusion from this package's Expo
-      // preset names it nowhere itself. Which presets hold it is kept in the
-      // package's own tests, and check-ignored-directories loads the real
-      // configuration to confirm it.
-      const preset = WORKFLOWS_PRESETS[req.target];
-      if (preset && new RegExp(`@blinkbitcoin/app-tooling/${preset}(?:\\.json)?["'\`]`).test(text)) {
-        return ok(`through ${preset}`);
-      }
-      // The guide accepts a second answer for globbed tools: globs that never
-      // reach in. A config with no tree-wide `**/` pattern cannot walk into a
-      // sibling directory, so there is nothing for it to exclude. Checking this
-      // rather than demanding the entry keeps the report free of a finding the
-      // consumer would be right to ignore.
-      if (req.kind === 'ignores-workflows-or-narrow' && !/["'`]\*\*\//.test(text)) {
-        return ok('no tree-wide glob to exclude it from');
-      }
-      return missing(`${req.target} does not exclude .workflows`);
-    }
-
-    case 'caller-path': {
-      const unresolved = [];
-      for (const key of req.target) {
-        const value = consumer.inputs.get(key);
-        if (!value || value.includes('${{')) continue;
-        if (!has(value)) unresolved.push(`${key} names ${value}, which does not exist`);
-      }
-      return unresolved.length === 0 ? ok() : missing(unresolved.join('; '));
-    }
-
-    case 'no-copy': {
-      // The reverse of every other kind: something this family already ships,
-      // which a consumer must therefore not hold. A copy is compared with the
-      // original by nothing, so it drifts, and the next fix lands in one place
-      // and not the other. The template carried seven of these for months.
-      const found = req.target.filter(has);
-      return found.length === 0
-        ? ok()
-        : missing(`${found.join(', ')} ${found.length === 1 ? 'is a copy' : 'are copies'} of what this family ships`);
-    }
-
-    case 'one-pin': {
-      // One commit of shared-workflows everywhere: every workflow call, and each
-      // of this family's packages in package.json and the lockfile. A pin bump
-      // that moves one and not the others runs CI on one commit and a laptop on
-      // another, and the contract below is then read from neither.
-      const problems = pinProblems({
-        callers: consumer.callers,
-        pkg: consumer.pkg,
-        lockfile: io.read(path.join(root, 'pnpm-lock.yaml')),
-      });
-      return problems.length === 0 ? ok() : missing(problems.join('; '));
-    }
-
-    case 'tracked-dir':
-      // A bare app builds the ios/ and android/ it commits. One that is only
-      // on a laptop is a build that works there and nowhere else.
-      return io.tracked(root, req.target) ? ok() : missing(`git tracks nothing under ${req.target}/`);
-
-    case 'lane': {
-      // A textual scan of <fastlane-directory>/**.rb, not a Ruby parse: enough to catch a
-      // lane that was never written, and honest about being no more than that.
-      const text = laneRuby(path.join(root, consumer.fastlaneDirectory), consumer.io);
-      if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
-      // Named once each: the scan is not per platform, so a lane two platforms
-      // need is either there for both or absent for both.
-      const names = [...new Set(req.target.map((lane) => lane.split(':')[1]))];
-      const absent = names.filter((lane) => !text.includes(`lane :${lane}`));
-      return absent.length === 0
-        ? ok()
-        : missing(`${consumer.fastlaneDirectory}/ defines no lane named ${absent.join(', ')}`);
-    }
-
-    case 'make-ci-reaches-ci': {
-      // CI runs a gate `make ci` cannot reach: a developer has no one command
-      // that makes the same checks CI does.
-      const make = readMakefile(root, io);
-      if (make === null) return skip('no Makefile');
-      if (!make.rules.has(req.target)) return skip(`the Makefile has no ${req.target} target`);
-      const targets = make.reachable(req.target);
-      const recipes = [...targets].map((t) => make.rules.get(t)?.recipe ?? '').join('\n');
-      const unreached = [...consumer.ciScripts.on].filter((name) => {
-        const dashed = name.replaceAll(':', '-');
-        return !(recipes.includes(name) || recipes.includes(dashed) || targets.has(dashed));
-      });
-      return unreached.length === 0
-        ? ok()
-        : missing(`CI runs ${unreached.map((n) => `"${n}"`).join(', ')}, and \`make ${req.target}\` does not reach ${unreached.length === 1 ? 'it' : 'them'}`);
-    }
-
-    case 'ci-runs-make-ci': {
-      // The other direction: `make ci` runs a gate no CI step runs, so a green
-      // laptop claims coverage CI does not have. Every target it reaches with a
-      // recipe of its own must be a CI script by its dashed name, or run only
-      // pnpm scripts CI runs. An aggregate has no recipe; its prerequisites are
-      // visited on their own.
-      const make = readMakefile(root, io);
-      if (make === null) return skip('no Makefile');
-      if (!make.rules.has(req.target)) return skip(`the Makefile has no ${req.target} target`);
-      const inCi = consumer.ciScripts.maybe;
-      const dashed = new Set([...inCi].map((n) => n.replaceAll(':', '-')));
-      const orphans = [];
-      for (const target of make.reachable(req.target)) {
-        const recipe = make.rules.get(target)?.recipe ?? '';
-        if (recipe === '' || dashed.has(target)) continue;
-        const scripts = [...recipe.matchAll(/pnpm (?:run )?([A-Za-z0-9:_-]+)/g)].map((m) => m[1]);
-        if (scripts.length === 0) orphans.push(target);
-        for (const s of scripts) if (!inCi.has(s)) orphans.push(`${target} (pnpm ${s})`);
-      }
-      return orphans.length === 0
-        ? ok()
-        : missing(`\`make ${req.target}\` runs ${orphans.join(', ')}, and no CI step does`);
-    }
-
-    case 'lane-environment': {
-      // A lane reading an environment variable the lane workflow never passes
-      // gets an empty string, and fastlane uploads the empty value.
-      const text = laneRuby(path.join(root, consumer.fastlaneDirectory), io);
-      if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
-      const prefix = req.prefix;
-      const read = new Set(
-        [...text.matchAll(/ENV(?:\.fetch\(|\[)\s*['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]).filter((n) => n.startsWith(prefix)),
-      );
-      const unknown = [...read].filter((n) => !req.target.includes(n)).sort();
-      return unknown.length === 0
-        ? ok(`${read.size} ${prefix}* names`)
-        : missing(`the lanes read ${unknown.join(', ')}, which publish-store.yml does not pass`);
-    }
-
-    default:
-      return skip(`unknown kind: ${req.kind}`);
+/** One `.workflows` exclusion check, for both kinds that hold a configuration to it. */
+function ignoresWorkflows(req, consumer) {
+  const text = consumer.io.read(path.join(consumer.root, req.target));
+  // A config this repository does not have is not a finding: the consumer
+  // does not use that tool, so nothing of ours can walk into its glob.
+  if (text === null) return skip(`no ${req.target}`);
+  if (text.includes('.workflows')) return ok();
+  // A configuration that takes the exclusion from this package's Expo
+  // preset names it nowhere itself. Which presets hold it is kept in the
+  // package's own tests, and check-ignored-directories loads the real
+  // configuration to confirm it.
+  const preset = WORKFLOWS_PRESETS[req.target];
+  if (preset && new RegExp(`@blinkbitcoin/app-tooling/${preset}(?:\\.json)?["'\`]`).test(text)) {
+    return ok(`through ${preset}`);
   }
+  // The guide accepts a second answer for globbed tools: globs that never
+  // reach in. A config with no tree-wide `**/` pattern cannot walk into a
+  // sibling directory, so there is nothing for it to exclude. Checking this
+  // rather than demanding the entry keeps the report free of a finding the
+  // consumer would be right to ignore.
+  if (req.kind === 'ignores-workflows-or-narrow' && !/["'`]\*\*\//.test(text)) {
+    return ok('no tree-wide glob to exclude it from');
+  }
+  return missing(`${req.target} does not exclude .workflows`);
+}
+
+/**
+ * The check for each requirement kind, as `kind -> (req, consumer) => { status,
+ * reason }`, where `status` is ok | missing | skip. A new kind is one entry
+ * here and its description in contract.json's `$schema-notes`; a row of any
+ * other kind fails the run when the contract is read (`validateContract`).
+ */
+export const CHECKERS = Object.freeze({
+  'package-script': (req, consumer) =>
+    consumer.scripts[req.target]
+      ? ok()
+      : missing(`no "${req.target}" script in package.json`),
+
+  'package-dep': (req, consumer) =>
+    consumer.deps[req.target]
+      ? ok()
+      : missing(`${req.target} is not a dependency`),
+
+  file: (req, consumer) => {
+    const targets = req.target.map((file) => fastlanePath(file, consumer));
+    const found = targets.find((file) => has(consumer, file));
+    return found ? ok(found) : missing(`none of ${targets.join(', ')} exists`);
+  },
+
+  'dir-nonempty': (req, consumer) =>
+    consumer.io.isNonEmptyDir(path.join(consumer.root, req.target))
+      ? ok()
+      : missing(`${req.target}/ is missing or empty`),
+
+  'pinned-tool': (req, consumer) => {
+    const { file, tools } = consumer.miseTools;
+    if (file === null) return missing('no mise config (.mise.toml)');
+    const absent = req.target.filter((tool) => !tools.has(tool));
+    return absent.length === 0 ? ok(file) : missing(`${file} pins no ${absent.join(' or ')}`);
+  },
+
+  'ignores-workflows': ignoresWorkflows,
+  'ignores-workflows-or-narrow': ignoresWorkflows,
+
+  'caller-path': (req, consumer) => {
+    const unresolved = [];
+    for (const key of req.target) {
+      const value = consumer.inputs.get(key);
+      if (!value || value.includes('${{')) continue;
+      if (!has(consumer, value)) unresolved.push(`${key} names ${value}, which does not exist`);
+    }
+    return unresolved.length === 0 ? ok() : missing(unresolved.join('; '));
+  },
+
+  'no-copy': (req, consumer) => {
+    // The reverse of every other kind: something this family already ships,
+    // which a consumer must therefore not hold. A copy is compared with the
+    // original by nothing, so it drifts, and the next fix lands in one place
+    // and not the other. The template carried seven of these for months.
+    const found = req.target.filter((file) => has(consumer, file));
+    return found.length === 0
+      ? ok()
+      : missing(`${found.join(', ')} ${found.length === 1 ? 'is a copy' : 'are copies'} of what this family ships`);
+  },
+
+  'one-pin': (_req, consumer) => {
+    // One commit of shared-workflows everywhere: every workflow call, and each
+    // of this family's packages in package.json and the lockfile. A pin bump
+    // that moves one and not the others runs CI on one commit and a laptop on
+    // another, and the contract below is then read from neither.
+    const problems = pinProblems({
+      callers: consumer.callers,
+      pkg: consumer.pkg,
+      lockfile: consumer.io.read(path.join(consumer.root, 'pnpm-lock.yaml')),
+    });
+    return problems.length === 0 ? ok() : missing(problems.join('; '));
+  },
+
+  // A bare app builds the ios/ and android/ it commits. One that is only
+  // on a laptop is a build that works there and nowhere else.
+  'tracked-dir': (req, consumer) =>
+    consumer.io.tracked(consumer.root, req.target) ? ok() : missing(`git tracks nothing under ${req.target}/`),
+
+  lane: (req, consumer) => {
+    // A textual scan of <fastlane-directory>/**.rb, not a Ruby parse: enough to catch a
+    // lane that was never written, and honest about being no more than that.
+    const text = laneRuby(path.join(consumer.root, consumer.fastlaneDirectory), consumer.io);
+    if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
+    // Named once each: the scan is not per platform, so a lane two platforms
+    // need is either there for both or absent for both.
+    const names = [...new Set(req.target.map((lane) => lane.split(':')[1]))];
+    const absent = names.filter((lane) => !text.includes(`lane :${lane}`));
+    return absent.length === 0
+      ? ok()
+      : missing(`${consumer.fastlaneDirectory}/ defines no lane named ${absent.join(', ')}`);
+  },
+
+  'make-ci-reaches-ci': (req, consumer) => {
+    // CI runs a gate `make ci` cannot reach: a developer has no one command
+    // that makes the same checks CI does.
+    const make = readMakefile(consumer.root, consumer.io);
+    if (make === null) return skip('no Makefile');
+    if (!make.rules.has(req.target)) return skip(`the Makefile has no ${req.target} target`);
+    const targets = make.reachable(req.target);
+    const recipes = [...targets].map((t) => make.rules.get(t)?.recipe ?? '').join('\n');
+    const unreached = [...consumer.ciScripts.on].filter((name) => {
+      const dashed = name.replaceAll(':', '-');
+      return !(recipes.includes(name) || recipes.includes(dashed) || targets.has(dashed));
+    });
+    return unreached.length === 0
+      ? ok()
+      : missing(`CI runs ${unreached.map((n) => `"${n}"`).join(', ')}, and \`make ${req.target}\` does not reach ${unreached.length === 1 ? 'it' : 'them'}`);
+  },
+
+  'ci-runs-make-ci': (req, consumer) => {
+    // The other direction: `make ci` runs a gate no CI step runs, so a green
+    // laptop claims coverage CI does not have. Every target it reaches with a
+    // recipe of its own must be a CI script by its dashed name, or run only
+    // pnpm scripts CI runs. An aggregate has no recipe; its prerequisites are
+    // visited on their own.
+    const make = readMakefile(consumer.root, consumer.io);
+    if (make === null) return skip('no Makefile');
+    if (!make.rules.has(req.target)) return skip(`the Makefile has no ${req.target} target`);
+    const inCi = consumer.ciScripts.maybe;
+    const dashed = new Set([...inCi].map((n) => n.replaceAll(':', '-')));
+    const orphans = [];
+    for (const target of make.reachable(req.target)) {
+      const recipe = make.rules.get(target)?.recipe ?? '';
+      if (recipe === '' || dashed.has(target)) continue;
+      const scripts = [...recipe.matchAll(/pnpm (?:run )?([A-Za-z0-9:_-]+)/g)].map((m) => m[1]);
+      if (scripts.length === 0) orphans.push(target);
+      for (const s of scripts) if (!inCi.has(s)) orphans.push(`${target} (pnpm ${s})`);
+    }
+    return orphans.length === 0
+      ? ok()
+      : missing(`\`make ${req.target}\` runs ${orphans.join(', ')}, and no CI step does`);
+  },
+
+  'lane-environment': (req, consumer) => {
+    // A lane reading an environment variable the lane workflow never passes
+    // gets an empty string, and fastlane uploads the empty value.
+    const text = laneRuby(path.join(consumer.root, consumer.fastlaneDirectory), consumer.io);
+    if (text === null) return skip(`no ${consumer.fastlaneDirectory}/`);
+    const prefix = req.prefix;
+    const read = new Set(
+      [...text.matchAll(/ENV(?:\.fetch\(|\[)\s*['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]).filter((n) => n.startsWith(prefix)),
+    );
+    const unknown = [...read].filter((n) => !req.target.includes(n)).sort();
+    return unknown.length === 0
+      ? ok(`${read.size} ${prefix}* names`)
+      : missing(`the lanes read ${unknown.join(', ')}, which publish-store.yml does not pass`);
+  },
+});
+
+/** Whether this version has a check for `kind`. Own keys only, so `toString` is not a kind. */
+const knownKind = (kind) => Object.hasOwn(CHECKERS, kind);
+
+/** The one error line for requirements of a kind this version has no check for. */
+function unknownKindError(requirements) {
+  const each = requirements.map((r) => `${r.id ?? JSON.stringify(r.target)} (kind ${JSON.stringify(r.kind)})`).join(', ');
+  return new Error(
+    `::error::contract.json has a requirement of a kind this check-contract has no check for, which would otherwise check nothing: ${each} (known kinds: ${Object.keys(CHECKERS).join(', ')})`,
+  );
+}
+
+/**
+ * The contract, refused as a whole when any requirement's kind has no check.
+ * A typo in a kind, or a kind added to contract.json before its check, would
+ * otherwise switch that rule off for every consumer with nothing going red; so
+ * the run fails before any rule runs, naming each such requirement.
+ */
+export function validateContract(contract) {
+  const unknown = contract.requirements.filter((r) => !knownKind(r.kind));
+  if (unknown.length > 0) throw unknownKindError(unknown);
+  return contract;
+}
+
+/**
+ * `{ status, reason }` for one requirement, from its kind's check. A kind with
+ * no check throws the same error `validateContract` does: it is never skipped.
+ */
+export function checkRequirement(req, consumer) {
+  if (!knownKind(req.kind)) throw unknownKindError([req]);
+  return CHECKERS[req.kind](req, consumer);
 }
 
 /**
@@ -1090,27 +1128,28 @@ export function parseArgs(argv, cwd = process.cwd()) {
  * The whole program, returning its exit code. Everything it touches outside
  * itself arrives through the second argument, so the tests run every path of
  * it in-process; the defaults are the real process. `cwd` is the root checked
- * when there is no `--root`.
+ * when there is no `--root`, and `contractFile` the contract read, this
+ * package's own contract.json unless given.
  */
 export function main(
   argv,
-  { io = defaultIo, stdout = process.stdout, stderr = process.stderr, env = process.env, cwd = process.cwd() } = {},
+  { io = defaultIo, stdout = process.stdout, stderr = process.stderr, env = process.env, cwd = process.cwd(), contractFile } = {},
 ) {
   // Every throw below is already a finished ::error:: line - an unreadable
-  // package.json, an unknown argument. Printing the message and nothing else is
-  // the whole point of this file: a node stack trace here would be the same
-  // failure it exists to replace.
+  // package.json, an unknown argument, a contract row of an unknown kind.
+  // Printing the message and nothing else is the whole point of this file: a
+  // node stack trace here would be the same failure it exists to replace.
   try {
-    return run(argv, { io, stdout, stderr, env, cwd });
+    return run(argv, { io, stdout, stderr, env, cwd, contractFile });
   } catch (error) {
     stderr.write(`${error.message}\n`);
     return 1;
   }
 }
 
-function run(argv, { io, stdout, stderr, env, cwd }) {
+function run(argv, { io, stdout, stderr, env, cwd, contractFile }) {
   const options = parseArgs(argv, cwd);
-  const contract = readContract();
+  const contract = readContract(contractFile);
   // A profile name with a typo matches no requirement, so every check would be
   // skipped and the run would end "every requirement is satisfied" - a green
   // answer to a question nobody asked. Refuse it instead.

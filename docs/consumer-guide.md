@@ -275,7 +275,9 @@ Every requirement lives in
 [`packages/app-tooling/contract.json`](../packages/app-tooling/contract.json) —
 what wants it, which input switches it off, whether a fallback exists, and the
 fix. The tables in this document and the checker read the same file, so a
-requirement cannot be true in one and absent from the other.
+requirement cannot be true in one and absent from the other. A requirement of
+a kind the checker has no check for fails the contract check outright, naming
+it, rather than being skipped.
 
 ### No copies of this family
 

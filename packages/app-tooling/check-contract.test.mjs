@@ -17,6 +17,7 @@ import {
   check,
   checkCalls,
   checkRequirement,
+  CHECKERS,
   ciScripts,
   defaultIo,
   fastlaneInput,
@@ -39,6 +40,7 @@ import {
   summaryTable,
   resolved,
   toggleOn,
+  validateContract,
   workingDirectoryInput,
 } from './bin/check-contract.mjs';
 
@@ -85,26 +87,9 @@ const req = (id) => readContract().requirements.find((r) => r.id === id);
 // --- the contract itself -----------------------------------------------------
 
 test('every requirement declares the fields the report depends on', () => {
-  const kinds = new Set([
-    'package-script',
-    'package-dep',
-    'file',
-    'dir-nonempty',
-    'pinned-tool',
-    'ignores-workflows',
-    'ignores-workflows-or-narrow',
-    'caller-path',
-    'lane',
-    'make-ci-reaches-ci',
-    'ci-runs-make-ci',
-    'lane-environment',
-    'no-copy',
-    'one-pin',
-    'tracked-dir',
-  ]);
   const profiles = new Set(readContract().profiles);
   for (const r of readContract().requirements) {
-    assert.ok(kinds.has(r.kind), `${r.id}: unknown kind ${r.kind}`);
+    assert.ok(Object.hasOwn(CHECKERS, r.kind), `${r.id}: no check for kind ${r.kind}`);
     assert.ok(profiles.has(r.profile), `${r.id}: unknown profile ${r.profile}`);
     assert.ok(['required', 'degrades', 'optional'].includes(r.severity), `${r.id}: bad severity`);
     assert.ok(r.fix && r.fix.length > 20, `${r.id}: needs a fix that says what to do`);
@@ -115,6 +100,60 @@ test('every requirement declares the fields the report depends on', () => {
     assert.ok(r.workflow === undefined || [r.workflow].flat().every((name) => /^[a-z-]+\.yml$/.test(name)), `${r.id}: workflow must be a workflow file, or a list of them`);
     assert.ok(r.toggleValue === undefined || (r.toggleValue === 'script-name' && r.toggle), `${r.id}: toggleValue is script-name, on a toggle`);
   }
+});
+
+test('every kind has a check, used by a row of contract.json and described in its $schema-notes', () => {
+  const contract = readContract();
+  const used = new Set(contract.requirements.map((r) => r.kind));
+  const notes = contract['$schema-notes'].kind;
+  for (const kind of used) assert.ok(Object.hasOwn(CHECKERS, kind), `contract.json uses kind ${kind}, which has no check`);
+  for (const kind of Object.keys(CHECKERS)) {
+    assert.ok(used.has(kind), `the check for kind ${kind} is used by no row of contract.json`);
+    assert.match(notes, new RegExp(`(^|[ .])${kind}( and [a-z-]+)?:`), `$schema-notes does not describe kind ${kind}`);
+  }
+  assert.ok(Object.isFrozen(CHECKERS), 'the checks are fixed when the module loads');
+});
+
+/** The one error line for requirements of a kind with no check, as the program prints it. */
+const unknownKindLine = (each) =>
+  `::error::contract.json has a requirement of a kind this check-contract has no check for, which would otherwise check nothing: ${each} (known kinds: ${Object.keys(CHECKERS).join(', ')})`;
+
+test('a contract with a requirement of an unknown kind is refused whole, naming each such requirement and the known kinds', () => {
+  const contract = {
+    profiles: ['checks'],
+    requirements: [
+      { id: 'package-script.lint', kind: 'package-script', target: 'lint' },
+      { id: 'package-scripts.test', kind: 'package-scripts', target: 'test' },
+      { id: 'from-the-future.x', kind: 'from-the-future', target: 'x' },
+      { id: 'no-kind.x', target: 'x' },
+      { id: 'inherited.x', kind: 'toString', target: 'x' },
+    ],
+  };
+  assert.throws(() => validateContract(contract), {
+    message: unknownKindLine(
+      'package-scripts.test (kind "package-scripts"), from-the-future.x (kind "from-the-future"), no-kind.x (kind undefined), inherited.x (kind "toString")',
+    ),
+  });
+});
+
+test('a contract whose every kind has a check is returned as it is', () => {
+  const contract = { profiles: ['checks'], requirements: [{ id: 'package-script.lint', kind: 'package-script', target: 'lint' }] };
+  assert.equal(validateContract(contract), contract);
+  assert.equal(validateContract(readContract()).requirements.length, readContract().requirements.length);
+});
+
+test('reading a contract file validates it', () => {
+  const root = tree({ 'contract.json': JSON.stringify({ profiles: ['checks'], requirements: [{ id: 'typo.x', kind: 'files', target: ['x'] }] }) });
+  assert.throws(() => readContract(path.join(root, 'contract.json')), { message: unknownKindLine('typo.x (kind "files")') });
+});
+
+test('the program fails on a contract row of an unknown kind with one error line and exit 1, before any rule runs', () => {
+  const root = tree({ 'contract.json': JSON.stringify({ profiles: ['checks'], requirements: [{ id: 'typo.x', kind: 'files', target: ['x'] }] }) });
+  assert.deepEqual(runMain(['--root', tree()], { contractFile: path.join(root, 'contract.json') }), {
+    code: 1,
+    stdout: '',
+    stderr: `${unknownKindLine('typo.x (kind "files")')}\n`,
+  });
 });
 
 test('requirement ids are unique', () => {
@@ -677,10 +716,10 @@ function sink() {
 }
 
 /** Runs `main` against a real directory; the environment is empty unless given. */
-function runMain(argv, { env = {}, io, cwd = '/' } = {}) {
+function runMain(argv, { env = {}, io, cwd = '/', contractFile } = {}) {
   const stdout = sink();
   const stderr = sink();
-  const code = main(argv, { stdout, stderr, env, cwd, ...(io ? { io } : {}) });
+  const code = main(argv, { stdout, stderr, env, cwd, contractFile, ...(io ? { io } : {}) });
   return { code, stdout: stdout.text, stderr: stderr.text };
 }
 
@@ -889,10 +928,26 @@ test('every no-copy requirement lists paths, names what it copies and starts its
   }
 });
 
-test('a requirement of a kind this version does not know is skipped, naming the kind', () => {
-  assert.deepEqual(checkRequirement({ kind: 'from-the-future', target: 'x' }, consumer()), {
-    status: 'skip',
-    reason: 'unknown kind: from-the-future',
+test('a package-dep requirement passes on a dependency or a devDependency, and names the package it misses', () => {
+  const fingerprint = req('package-dep.fingerprint');
+  assert.deepEqual(checkRequirement(fingerprint, consumer({ pkg: { dependencies: { [fingerprint.target]: '1' } } })), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(fingerprint, consumer({ pkg: { devDependencies: { [fingerprint.target]: '1' } } })), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(fingerprint, consumer()), { status: 'missing', reason: `${fingerprint.target} is not a dependency` });
+});
+
+test('both gate-set rules skip a Makefile that has no target of the name they hold to CI', () => {
+  const c = { ...consumer({ files: { Makefile: 'lint:\n\tpnpm lint\n' } }), ciScripts: { on: new Set(['lint']), maybe: new Set(['lint']) } };
+  for (const kind of ['make-ci-reaches-ci', 'ci-runs-make-ci']) {
+    assert.deepEqual(checkRequirement({ kind, target: 'ci' }, c), { status: 'skip', reason: 'the Makefile has no ci target' }, kind);
+  }
+});
+
+test('a requirement of a kind this version does not know fails rather than being skipped, naming the kind', () => {
+  assert.throws(() => checkRequirement({ kind: 'from-the-future', target: 'x' }, consumer()), {
+    message: unknownKindLine('"x" (kind "from-the-future")'),
+  });
+  assert.throws(() => check({ profiles: ['checks'], requirements: [{ id: 'from-the-future.x', kind: 'from-the-future', profile: 'checks', target: 'x' }] }, consumer()), {
+    message: unknownKindLine('from-the-future.x (kind "from-the-future")'),
   });
 });
 
