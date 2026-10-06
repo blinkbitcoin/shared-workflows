@@ -20,6 +20,18 @@ test('every exported file is in the published file list', () => {
   for (const target of targets) assert.ok(published(target), target);
 });
 
+// npm packs a LICENSE only from the package directory, never through a symlink,
+// and a CHANGELOG.md only when `files` names it; release-please writes this
+// component's changelog here, so a consumer reading the installed package finds it.
+test('the package ships its README, CHANGELOG and LICENSE, the LICENSE the repository\'s own', () => {
+  for (const file of ['README.md', 'CHANGELOG.md', 'LICENSE']) {
+    assert.ok(pkg.files.includes(file), `${file} is not in the published file list`);
+    assert.ok(existsSync(new URL(`./${file}`, import.meta.url)), `${file} is missing`);
+  }
+  assert.equal(read('./LICENSE'), read('../../LICENSE'), 'the package LICENSE is not the repository\'s');
+  assert.match(read('./LICENSE'), new RegExp(`^${pkg.license} License\n`), `the LICENSE is not the ${pkg.license} license package.json names`);
+});
+
 test('each Expo preset module carries its type declarations', () => {
   const presets = readdirSync(new URL('./expo/', import.meta.url)).filter((name) => name.endsWith('.mjs'));
   assert.ok(presets.length > 0, 'no preset modules under expo/');
