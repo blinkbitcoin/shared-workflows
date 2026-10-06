@@ -2,8 +2,8 @@
 load test_helper
 
 # smoke-android-sdk.sh runs inside a JDK container in real use; here it runs on
-# the host against fakes of curl, sha1sum, jar and java that record their
-# calls, and a fake sdkmanager that the fake jar "unpacks".
+# the host against fakes of curl, sha1sum and jar that record their calls, and
+# a fake `android` CLI that the fake jar "unpacks".
 
 SCRIPT="$REPO_ROOT/scripts/self/smoke-android-sdk.sh"
 
@@ -27,40 +27,33 @@ line="\$(cat)"
 echo "sha1sum \$line" >> "$calls"
 [ -z "\${FAKE_SHA_BAD:-}" ]
 STUB
-  # jar xf lays out cmdline-tools/bin/sdkmanager without its exec bit, as a
-  # real jar does; FAKE_JAR_FAIL makes it fail.
+  # jar xf lays out cmdline-tools/bin/android without its exec bit, as a real
+  # jar does; FAKE_JAR_FAIL makes it fail.
   cat > "$bin/jar" <<STUB
 #!/usr/bin/env bash
 echo "jar \$*" >> "$calls"
 [ -z "\${FAKE_JAR_FAIL:-}" ] || exit 1
 mkdir -p cmdline-tools/bin
-cp "$BATS_TEST_TMPDIR/sdkmanager" cmdline-tools/bin/sdkmanager
-chmod -x cmdline-tools/bin/sdkmanager
+cp "$BATS_TEST_TMPDIR/android" cmdline-tools/bin/android
+chmod -x cmdline-tools/bin/android
 STUB
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$bin/java"
-  # sdkmanager: --licenses reads its answers and writes the licence file
-  # (FAKE_LICENSES=fail fails, =none writes nothing); --install creates the
-  # package's source.properties, failing the first FAKE_INSTALL_FAILS calls
-  # (FAKE_INSTALL_EMPTY=1 "succeeds" without installing anything).
-  cat > "$BATS_TEST_TMPDIR/sdkmanager" <<STUB
+  # android sdk install creates the package's source.properties and records
+  # its licence (FAKE_LICENSES=none records none), failing the first
+  # FAKE_INSTALL_FAILS calls (FAKE_INSTALL_EMPTY=1 "succeeds" without
+  # installing anything).
+  cat > "$BATS_TEST_TMPDIR/android" <<STUB
 #!/usr/bin/env bash
-echo "sdkmanager \$*" >> "$calls"
+echo "android \$*" >> "$calls"
 root=""
-for a in "\$@"; do case "\$a" in --sdk_root=*) root="\${a#--sdk_root=}" ;; esac; done
-case "\$*" in
-  *--licenses*)
-    head -c 2 >/dev/null
-    case "\${FAKE_LICENSES:-}" in fail) exit 1 ;; none) exit 0 ;; esac
-    mkdir -p "\$root/licenses"; echo hash > "\$root/licenses/android-sdk-license" ;;
-  *--install*)
-    count_file="$BATS_TEST_TMPDIR/install-count"
-    n=\$(( \$(cat "\$count_file" 2>/dev/null || echo 0) + 1 )); echo "\$n" > "\$count_file"
-    [ "\$n" -gt "\${FAKE_INSTALL_FAILS:-0}" ] || exit 1
-    [ -z "\${FAKE_INSTALL_EMPTY:-}" ] || exit 0
-    pkg="\${*: -1}"; dir="\$root/\${pkg//;//}"; mkdir -p "\$dir"; touch "\$dir/source.properties" ;;
-esac
+for a in "\$@"; do case "\$a" in --sdk=*) root="\${a#--sdk=}" ;; esac; done
+count_file="$BATS_TEST_TMPDIR/install-count"
+n=\$(( \$(cat "\$count_file" 2>/dev/null || echo 0) + 1 )); echo "\$n" > "\$count_file"
+[ "\$n" -gt "\${FAKE_INSTALL_FAILS:-0}" ] || exit 1
+[ -z "\${FAKE_INSTALL_EMPTY:-}" ] || exit 0
+pkg="\${*: -1}"; mkdir -p "\$root/\$pkg"; touch "\$root/\$pkg/source.properties"
+[ "\${FAKE_LICENSES:-}" = none ] || { mkdir -p "\$root/licenses"; echo hash > "\$root/licenses/android-sdk-license"; }
 STUB
-  chmod +x "$bin"/* "$BATS_TEST_TMPDIR/sdkmanager"
+  chmod +x "$bin"/* "$BATS_TEST_TMPDIR/android"
   export PATH="$bin:$PATH"
 }
 
@@ -70,17 +63,17 @@ STUB
   contains "$output" "ANDROID_HOME is not set" || fail "output: $output"
 }
 
-@test "installs the pinned, verified tools, accepts the licences and installs every package" {
+@test "installs the pinned, verified tools and every package, which records the licence" {
   source "$REPO_ROOT/scripts/lib/versions.sh"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
   grep -q "curl .*commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_BUILD}_latest.zip" "$calls" || fail "the pinned build was not downloaded: $(cat "$calls")"
   grep -q "sha1sum $ANDROID_CMDLINE_TOOLS_SHA1_LINUX " "$calls" || fail "the download was not checked against the pin: $(cat "$calls")"
-  [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] || fail "sdkmanager is not in place and executable"
+  [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/android" ] || fail "the android CLI is not in place and executable"
   [ -f "$ANDROID_HOME/licenses/android-sdk-license" ] || fail "no licence was recorded"
   for package in platform-tools $ANDROID_AGP_DEFAULT_PACKAGES; do
     [ -f "$ANDROID_HOME/$package/source.properties" ] || fail "$package was not installed"
-    grep -q -- "--install ${package//\//;}$" "$calls" || fail "$package was not asked for by its sdkmanager name: $(cat "$calls")"
+    grep -qx -- "android --no-metrics sdk install --sdk=$ANDROID_HOME $package" "$calls" || fail "$package was not installed into the SDK: $(cat "$calls")"
   done
   contains "$output" "ready in $ANDROID_HOME" || fail "output: $output"
 }
@@ -91,7 +84,7 @@ STUB
   run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
   ! grep -q '^curl' "$calls" || fail "the tools were downloaded again"
-  ! grep -q -- '--install' "$calls" || fail "a package was installed again: $(cat "$calls")"
+  ! grep -q -- 'sdk install' "$calls" || fail "a package was installed again: $(cat "$calls")"
   contains "$output" "command-line tools already in" || fail "output: $output"
   contains "$output" "platform-tools already installed" || fail "output: $output"
 }
@@ -115,13 +108,10 @@ STUB
   contains "$output" "could not unpack" || fail "output: $output"
 }
 
-@test "a failed licence acceptance stops it, and so does one that records nothing" {
-  FAKE_LICENSES=fail run bash "$SCRIPT"
-  [ "$status" -ne 0 ] || fail "output: $output"
-  contains "$output" "sdkmanager --licenses failed (status 1)" || fail "output: $output"
+@test "packages that install but record no licence stop it: Gradle could fetch nothing" {
   FAKE_LICENSES=none run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "output: $output"
-  contains "$output" "accepted no licence" || fail "output: $output"
+  contains "$output" "no licence was recorded" || fail "output: $output"
 }
 
 @test "a package that fails twice is retried, and one that fails three times stops it" {

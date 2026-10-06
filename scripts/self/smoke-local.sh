@@ -74,17 +74,17 @@ consent() {
   die "not confirmed: $1. Answer y in a terminal, or set WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1 to agree non-interactively."
 }
 android_args=()
-# The JDK sdkmanager runs in, as act's runner image has no Java of its own:
-# pinned by the digest of its multi-platform index.
+# The image the SDK is provisioned in (smoke-android-sdk.sh says why), pinned by
+# the digest of its multi-platform index.
 jdk_image="eclipse-temurin:21-jdk@sha256:3e3c176ffed168beb42c607be9bc1639b466cf00261a0fb04425562c9d0c5c2b"
 if [ "$android" = true ]; then
   sdk_volume="${WORKFLOWS_ACT_ANDROID_SDK_VOLUME:-smoke-local-android-sdk}"
   sdk_dir=/opt/android-sdk
   if ! docker run --rm -v "$sdk_volume:$sdk_dir" "$jdk_image" \
-    test -f "$sdk_dir/licenses/android-sdk-license" -a -x "$sdk_dir/cmdline-tools/latest/bin/sdkmanager" >/dev/null 2>&1; then
+    test -f "$sdk_dir/licenses/android-sdk-license" -a -x "$sdk_dir/cmdline-tools/latest/bin/android" >/dev/null 2>&1; then
     consent "Install the Android SDK into the Docker volume $sdk_volume, accepting its licences (https://developer.android.com/studio/terms)"
     log "act smoke: provisioning the Android SDK in $sdk_volume (once; about 2 GB)"
-    docker run --rm -e "ANDROID_HOME=$sdk_dir" -v "$sdk_volume:$sdk_dir" \
+    docker run --rm --platform linux/amd64 -e "ANDROID_HOME=$sdk_dir" -v "$sdk_volume:$sdk_dir" \
       -v "$PWD/scripts:/workflows-scripts:ro" "$jdk_image" \
       bash /workflows-scripts/self/smoke-android-sdk.sh ||
       die "could not provision the Android SDK in $sdk_volume (docker volume rm $sdk_volume starts it over)"

@@ -436,7 +436,8 @@ STUB
   git push -q origin feature
   WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1 run bash "$SCRIPT" --android
   [ "$status" -eq 0 ] || fail "output: $output"
-  grep -qx "run --rm -e ANDROID_HOME=/opt/android-sdk -v smoke-local-android-sdk:/opt/android-sdk -v $PWD/scripts:/workflows-scripts:ro $(jdk_image) bash /workflows-scripts/self/smoke-android-sdk.sh" \
+  # amd64: the command-line tools' android binary is x86-64 only.
+  grep -qx "run --rm --platform linux/amd64 -e ANDROID_HOME=/opt/android-sdk -v smoke-local-android-sdk:/opt/android-sdk -v $PWD/scripts:/workflows-scripts:ro $(jdk_image) bash /workflows-scripts/self/smoke-android-sdk.sh" \
     "$BATS_TEST_TMPDIR/docker.calls" || fail "provisioning did not run as expected: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
   contains "$output" "provisioning the Android SDK in smoke-local-android-sdk" || fail "output: $output"
   contains "$(cat "$BATS_TEST_TMPDIR/act.args")" "android=true" || fail "act did not run after provisioning"
