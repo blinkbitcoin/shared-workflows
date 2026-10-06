@@ -15,15 +15,6 @@
 #     guard that keeps an empty variable from turning the path into `/bin`.
 load test_helper
 
-# TEMPORARY. These files are being changed on other branches at the same time
-# as this check landed, so their bare checks could not be migrated here without
-# a merge conflict. Each entry is removed - and this list with it - once those
-# branches merge and the file moves to require_env. Nothing new is ever added:
-# a new script uses require_env from its first line.
-pending=(
-  scripts/release/release-assets.sh
-  scripts/release/reserve-tag.sh
-)
 
 bare_checks() {
   cd "$REPO_ROOT" || return 1
@@ -34,7 +25,6 @@ bare_checks() {
   local file
   while IFS= read -r file; do
     [ -n "$file" ] || continue
-    case " ${pending[*]} " in *" $file "*) continue ;; esac
     grep -nHE '\$\{[A-Z_][A-Z0-9_]*:\?' "$file" || true
   done <<<"$listed"
 }
@@ -43,15 +33,6 @@ bare_checks() {
   hits="$(bare_checks)"
   [ -z "$hits" ] || fail "use require_env (common.sh) so the failure is an ::error:: annotation naming every missing variable:
 $hits"
-}
-
-@test "every pending file still has a bare check, so the temporary list cannot go stale" {
-  local file
-  for file in "${pending[@]}"; do
-    [ -f "$REPO_ROOT/$file" ] || fail "$file is gone - drop it from the pending list"
-    grep -qE '\$\{[A-Z_][A-Z0-9_]*:\?' "$REPO_ROOT/$file" ||
-      fail "$file has no bare check left - drop it from the pending list"
-  done
 }
 
 @test "the search catches a bare check and lets the two deliberate forms through" {

@@ -170,6 +170,12 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
   ! grep -q -- "^release create" "$WORKFLOWS_TEST_LOG" || fail "created a release after a failed lookup: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
+@test "a missing TAG is an ::error:: annotation naming it" {
+  TAG="" release create-prerelease
+  [ "$status" -ne 0 ] || fail "an empty TAG must be refused"
+  contains "$output" "::error::missing required environment variable: TAG" || fail "$output"
+}
+
 @test "SHA256SUMS lists basenames and real digests" {
   assets
   TAG=v1.2.3 release create-prerelease

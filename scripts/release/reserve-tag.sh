@@ -20,7 +20,7 @@ source "$(dirname "$0")/../lib/common.sh"
 require_cmd gh
 tag="${1:?usage: reserve-tag.sh TAG SHA}"
 sha="${2:?usage: reserve-tag.sh TAG SHA}"
-: "${GH_REPO:?GH_REPO not set}"
+require_env GH_REPO:owner/name
 
 # A lookup that fails for any reason but a 404 is fatal inside gh_ref_exists:
 # reading a 401 or a 5xx as "absent" would go on to create the tag blind.

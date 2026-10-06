@@ -408,7 +408,7 @@ SH
   GH_REPO=""
   run gh_ref_exists tags/v1.2.3
   [ "$status" -ne 0 ] || fail "an empty GH_REPO must be refused"
-  contains "$output" "GH_REPO not set" || fail "$output"
+  contains "$output" "::error::missing required environment variable: GH_REPO (owner/name)" || fail "$output"
   [ ! -s "$WORKFLOWS_TEST_CALLS" ] || fail "gh was called: $(cat "$WORKFLOWS_TEST_CALLS")"
 }
 

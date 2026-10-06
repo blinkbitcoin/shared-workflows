@@ -42,7 +42,8 @@ source "$(dirname "$0")/../lib/body-section.sh"
 require_cmd gh
 
 mode="${1:?usage: release-assets.sh create-prerelease|promote|latest|append}"
-tag="${TAG:?release-assets.sh needs TAG}"
+require_env TAG
+tag="$TAG"
 assets_dir="${WORKFLOWS_ASSETS_DIR:-$WORKFLOWS_OUT/assets}"
 
 # The body scratch files sit in $RUNNER_TEMP and would die with the runner, but

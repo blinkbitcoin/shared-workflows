@@ -142,6 +142,7 @@ SH
   [ "$status" -ne 0 ] || fail "a missing sha must be a usage error"
   GH_REPO="" run bash "$RESERVE" v1.2.3-build.42 deadbeef
   [ "$status" -ne 0 ] || fail "an empty GH_REPO must be refused"
+  contains "$output" "::error::missing required environment variable: GH_REPO (owner/name)" || fail "$output"
 }
 
 # --- the pair, and the workflow that wires them -------------------------
