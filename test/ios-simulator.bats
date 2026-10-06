@@ -336,8 +336,11 @@ only_path() {
   run sim record start
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
   # Both xcrun calls are backgrounded, so the stub may not have logged its
-  # arguments by the time the script returns: give it a moment.
-  for _ in $(seq 1 50); do [ "$(grep -c . "$CALLS")" -ge 2 ] && break; sleep 0.1; done
+  # arguments by the time the script returns. With every core busy that took
+  # 1.6 to 4 seconds, and under a parallel `make check` more than 5, which the
+  # old 5-second bound turned into a failure. The loop stops at the second
+  # line, so only a run that is really broken waits out the 30 seconds.
+  for _ in $(seq 1 300); do [ "$(grep -c . "$CALLS")" -ge 2 ] && break; sleep 0.1; done
   grep -q "recordVideo" "$CALLS" || fail "no recordVideo call: $(cat "$CALLS")"
   grep -q "spawn SIM-UDID log stream" "$CALLS" || fail "no log stream call: $(cat "$CALLS")"
   [ -f "$WORKFLOWS_OUT/ios-record.pid" ] || fail "no recording pid file"
