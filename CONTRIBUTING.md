@@ -135,7 +135,7 @@ A count in a doc — how many scripts, how many tests — is marked so a test ca
 check it:
 
 ```markdown
-<sub><!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1817<!--/count--> tests</sub>
+<sub><!--count:scripts-->142<!--/count--> scripts · <!--count:tests-->1817<!--/count--> tests</sub>
 ```
 
 `test/docs-facts.bats` derives each one from the repository and fails when they
@@ -189,7 +189,7 @@ Linux half of a consumer's internal release here with [nektos/act]:
 
 ```sh
 make test-smoke-local           # Prepare, against the template at main
-make test-smoke-local-android   # Prepare, then the unsigned Android build (no Android SDK yet; see below)
+make test-smoke-local-android   # Prepare, then the unsigned Android build (about 25 minutes; see below)
 ```
 
 A warm Prepare takes about a minute and a quarter (73 seconds on an arm64
@@ -200,13 +200,26 @@ Gradle), kept by act's cache server in `~/.cache/actcache` between runs. Each
 run still starts in a fresh container, so what runs is what a consumer's
 runner runs, with warm caches.
 
-The Android leg is its own target and **does not pass under act yet**: the
-`catthehacker/ubuntu:act-latest` image has Java but no Android SDK (GitHub's
-`ubuntu-latest` ships one), so Gradle stops at configuration with "SDK
-location not found", about four minutes into the job. Giving it one means
-accepting the SDK licences, and on an arm64 Mac running x86_64-only build
-tools and NDK; until that is settled, a change to `build-android.yml` is
-proven on a `scratch/*` caller (below).
+The Android leg is its own target, for a change that reaches
+`build-android.yml` or the scripts it runs: about 25 minutes warm, 21 of them
+the Android job, and its release Gradle build about 18 and a half. GitHub's
+own runner does the same job in about 16 minutes (12 and a half of Gradle), so
+this is about 1.3 times CI, the price of emulation: the leg runs on amd64 on
+every host, emulated on an arm64 Mac, because Google publishes the Linux
+build-tools and NDK for x86_64 only. The first `--android` run on a machine
+takes about 35 minutes: it pulls the amd64 runner image, builds Gradle's cache
+cold, and provisions the SDK.
+
+act's runner image has no Android SDK (GitHub's `ubuntu-latest` ships one), so
+the script keeps one in the Docker volume `smoke-local-android-sdk`, mounts it
+into every job at `ANDROID_HOME`, and fills it once
+(`scripts/self/smoke-android-sdk.sh`, in a pinned amd64 JDK container): the
+pinned command-line tools, checked against their SHA-1, and the packages the
+Android Gradle Plugin falls back to. Installing them accepts their licences, so
+the first `--android` run asks first; answer `y`, or set
+`WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1` to agree without the prompt. The
+build fetches the rest of what the app asks for into the same volume.
+`docker volume rm smoke-local-android-sdk` starts it over.
 
 It needs Docker running and the current branch **pushed**: build-prepare checks
 this repository out into `.workflows` from GitHub at the local HEAD, so the
@@ -224,8 +237,9 @@ checkout's path, so the two would share them. When the run ends - passed,
 failed or interrupted - the script removes the checkout's act containers and
 volumes; a run killed outright leaves its lock behind, and the next run from
 that checkout clears what it left before starting. The runner image is pulled
-once, when it is missing (`docker pull catthehacker/ubuntu:act-latest` to
-refresh it), not on every run.
+once, when it is missing, once per platform, and kept as
+`smoke-local-runner:<platform>-<hash>` (remove that image to refresh it), not
+on every run.
 
 The jobs are Linux containers, so a Mac runs them too (arm64 natively; tested
 with OrbStack). act's artifact and cache servers listen on `127.0.0.1`, which

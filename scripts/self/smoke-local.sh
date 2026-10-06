@@ -86,7 +86,7 @@ if [ "$android" = true ]; then
   if ! docker run --rm --platform linux/amd64 -v "$sdk_volume:$sdk_dir" "$jdk_image" \
     test -f "$sdk_dir/licenses/android-sdk-license" -a -x "$sdk_dir/cmdline-tools/latest/bin/android" >/dev/null 2>&1; then
     consent "Install the Android SDK into the Docker volume $sdk_volume, accepting its licences (https://developer.android.com/studio/terms)"
-    log "act smoke: provisioning the Android SDK in $sdk_volume (once; about 2 GB)"
+    log "act smoke: provisioning the Android SDK in $sdk_volume (once; about 4.5 GB with what the first build adds)"
     docker run --rm --platform linux/amd64 -e "ANDROID_HOME=$sdk_dir" -v "$sdk_volume:$sdk_dir" \
       -v "$PWD/scripts:/workflows-scripts:ro" "$jdk_image" \
       bash /workflows-scripts/self/smoke-android-sdk.sh ||
