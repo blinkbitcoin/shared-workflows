@@ -68,6 +68,6 @@ EOF
   for var in TAG GH_REPO; do
     DISPATCHES='cd-beta.yml' run env -u "$var" bash "$SCRIPT"
     [ "$status" -ne 0 ] || fail "ran without $var: $output"
-    contains "$output" "$var not set" || fail "the missing $var was not named: $output"
+    contains "$output" "::error::missing required environment variable: $var" || fail "the missing $var was not named: $output"
   done
 }

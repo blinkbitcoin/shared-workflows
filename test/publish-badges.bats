@@ -407,15 +407,21 @@ HOOK
 @test "publish requires BRANCH" {
   run env -u BRANCH bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "publish ran without BRANCH: $output"
-  contains "$output" "BRANCH is required" || fail "unexpected error: $output"
+  contains "$output" "::error::missing required environment variable: BRANCH" || fail "unexpected error: $output"
   ! remote_has_gh_pages || fail "a publish without BRANCH still created gh-pages"
 }
 
 @test "publish requires SHA" {
   run env -u SHA BRANCH=main bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "publish ran without SHA: $output"
-  contains "$output" "SHA is required" || fail "unexpected error: $output"
+  contains "$output" "::error::missing required environment variable: SHA" || fail "unexpected error: $output"
   ! remote_has_gh_pages || fail "a publish without SHA still created gh-pages"
+}
+
+@test "publish names BRANCH and SHA together when both are missing" {
+  run env -u BRANCH -u SHA bash "$PUBLISH"
+  [ "$status" -eq 1 ] || fail "publish ran without BRANCH and SHA: $output"
+  contains "$output" "::error::missing required environment variables: BRANCH, SHA" || fail "both were not named at once: $output"
 }
 
 @test "publish gives each refused branch name its own diagnosis" {
@@ -427,7 +433,7 @@ HOOK
   contains "$output" "has characters that cannot be a gh-pages path" || fail "unexpected error: $output"
   BRANCH="" run bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "publish accepted an empty branch name: $output"
-  contains "$output" "BRANCH is required" || fail "unexpected error: $output"
+  contains "$output" "::error::missing required environment variable: BRANCH" || fail "unexpected error: $output"
 }
 
 @test "publish fails when the consumer directory does not exist" {

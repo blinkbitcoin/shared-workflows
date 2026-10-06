@@ -371,3 +371,74 @@ SH
   [ "$status" -eq 0 ] || fail "a name with quotes was not found; status $status: $output"
   [ ! -e "$BATS_TEST_TMPDIR/pwned" ] || fail "the name was evaluated"
 }
+@test "require_env returns quietly when every variable is set" {
+  WORKFLOWS_A=one WORKFLOWS_B=two run require_env WORKFLOWS_A "WORKFLOWS_B:a hint"
+  [ "$status" -eq 0 ] || fail "set variables were refused: $output"
+  [ -z "$output" ] || fail "expected no output: $output"
+}
+@test "require_env names the one missing variable in an ::error:: annotation" {
+  unset WORKFLOWS_A
+  WORKFLOWS_B=two run require_env WORKFLOWS_A WORKFLOWS_B
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  [ "$output" = "::error::missing required environment variable: WORKFLOWS_A" ] || fail "unexpected message: $output"
+}
+@test "require_env names every missing variable at once, each with its hint" {
+  unset WORKFLOWS_A WORKFLOWS_C WORKFLOWS_D
+  WORKFLOWS_B=two run require_env "WORKFLOWS_A:owner/name" WORKFLOWS_B WORKFLOWS_C "WORKFLOWS_D:the file, e.g. ci.yml: a colon stays"
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  [ "$(printf '%s\n' "$output" | grep -c '::error::')" -eq 1 ] || fail "expected one annotation: $output"
+  [ "$output" = "::error::missing required environment variables: WORKFLOWS_A (owner/name), WORKFLOWS_C, WORKFLOWS_D (the file, e.g. ci.yml: a colon stays)" ] ||
+    fail "unexpected message: $output"
+}
+@test "require_env counts a set but empty variable as missing" {
+  WORKFLOWS_A="" run require_env WORKFLOWS_A
+  [ "$status" -eq 1 ] || fail "an empty variable passed: $output"
+  [ "$output" = "::error::missing required environment variable: WORKFLOWS_A" ] || fail "unexpected message: $output"
+}
+@test "require_env stops a script under set -u, with no unbound-variable error" {
+  run env -u WORKFLOWS_A bash -c 'set -euo pipefail; source "$1"; require_env WORKFLOWS_A; echo REACHED' _ "$REPO_ROOT/scripts/lib/common.sh"
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" "::error::missing required environment variable: WORKFLOWS_A" || fail "unexpected message: $output"
+  not_contains "$output" "unbound variable" || fail "set -u tripped on the indirect read: $output"
+  not_contains "$output" "REACHED" || fail "the script carried on: $output"
+}
+@test "require_env and require_uint refuse a name that is not an identifier, without evaluating it" {
+  run require_env 'A[$(touch "$BATS_TEST_TMPDIR/ran")]'
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" "is not a variable name" || fail "unexpected message: $output"
+  [ ! -e "$BATS_TEST_TMPDIR/ran" ] || fail "the name was evaluated"
+  run require_uint '1BAD'
+  [ "$status" -eq 1 ] || fail "require_uint accepted a bad name: $output"
+  contains "$output" "::error::require_env: '1BAD' is not a variable name" || fail "unexpected message: $output"
+}
+@test "require_uint accepts non-negative integers, zero included" {
+  WORKFLOWS_A=0 WORKFLOWS_B=42 run require_uint WORKFLOWS_A WORKFLOWS_B
+  [ "$status" -eq 0 ] || fail "valid integers were refused: $output"
+  [ -z "$output" ] || fail "expected no output: $output"
+}
+@test "require_uint refuses an unset variable, naming it" {
+  unset WORKFLOWS_A
+  run require_uint WORKFLOWS_A
+  [ "$status" -eq 1 ] || fail "an unset variable passed: $output"
+  [ "$output" = "::error::WORKFLOWS_A must be a non-negative integer (got nothing: unset or empty)" ] || fail "unexpected message: $output"
+}
+@test "require_uint refuses an empty variable, with its hint" {
+  WORKFLOWS_A="" run require_uint "WORKFLOWS_A:the suite bound in minutes"
+  [ "$status" -eq 1 ] || fail "an empty variable passed: $output"
+  [ "$output" = "::error::WORKFLOWS_A (the suite bound in minutes) must be a non-negative integer (got nothing: unset or empty)" ] || fail "unexpected message: $output"
+}
+@test "require_uint refuses a negative, a non-numeric and a spaced value, naming each value" {
+  local value
+  for value in -1 abc '1 2' ' 3' 1.5; do
+    WORKFLOWS_A="$value" run require_uint WORKFLOWS_A
+    [ "$status" -eq 1 ] || fail "'$value' passed: $output"
+    [ "$output" = "::error::WORKFLOWS_A must be a non-negative integer (got '$value')" ] || fail "unexpected message for '$value': $output"
+  done
+}
+@test "require_uint names every bad variable in one annotation" {
+  unset WORKFLOWS_C
+  WORKFLOWS_A=x WORKFLOWS_B=7 run require_uint WORKFLOWS_A WORKFLOWS_B WORKFLOWS_C
+  [ "$status" -eq 1 ] || fail "expected exit 1: $output"
+  [ "$output" = "::error::WORKFLOWS_A must be a non-negative integer (got 'x'); WORKFLOWS_C must be a non-negative integer (got nothing: unset or empty)" ] ||
+    fail "unexpected message: $output"
+}

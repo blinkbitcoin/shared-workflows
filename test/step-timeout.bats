@@ -91,3 +91,11 @@ setup() {
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   [ "$output" = "minutes=35" ] || fail "expected the bound on standard output: $output"
 }
+@test "a bad timeout and a bad margin are named together in one annotation" {
+  WORKFLOWS_SUITE_TIMEOUT_MINUTES=x WORKFLOWS_STEP_TIMEOUT_MARGIN_MINUTES=-1 \
+    run bash "$REPO_ROOT/scripts/e2e/step-timeout.sh"
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  [ "$(printf '%s\n' "$output" | grep -c '::error::')" -eq 1 ] || fail "expected one annotation: $output"
+  contains "$output" "WORKFLOWS_SUITE_TIMEOUT_MINUTES must be a non-negative integer (got 'x'); WORKFLOWS_STEP_TIMEOUT_MARGIN_MINUTES must be a non-negative integer (got '-1')" ||
+    fail "both were not named: $output"
+}

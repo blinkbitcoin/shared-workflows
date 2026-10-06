@@ -397,5 +397,5 @@ Fixed
   unset GH_REPO
   pr_store_notes 53
   [ "$status" -ne 0 ] || fail "exited 0 without GH_REPO"
-  contains "$output" "GH_REPO" || fail "no message: $output"
+  contains "$output" "::error::missing required environment variable: GH_REPO (owner/name)" || fail "no message: $output"
 }

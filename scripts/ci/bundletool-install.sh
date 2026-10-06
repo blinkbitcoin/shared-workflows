@@ -17,7 +17,8 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd curl
 
-version="${BUNDLETOOL_VERSION:?bundletool-install.sh needs BUNDLETOOL_VERSION}"
+require_env "BUNDLETOOL_VERSION:build-android.yml's bundletool-version input, pinned in scripts/lib/versions.sh"
+version="$BUNDLETOOL_VERSION"
 dest="${RUNNER_TEMP:-/tmp}/bundletool.jar"
 url="https://github.com/google/bundletool/releases/download/${version}/bundletool-all-${version}.jar"
 

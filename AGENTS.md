@@ -133,6 +133,15 @@ Every row is a make target; nothing here is run through a package manager.
   variable before looping over it. Each of these once let a script carry on
   with an empty value (`ios-simulator.sh`, `workflows_app_id`,
   `workflows_fingerprint`, `smoke-local.sh`, `cancel-runs.sh`).
+- **A required environment variable is checked with `require_env`, never a
+  bare `${NAME:?}`.** The bare form exits with bash's own "parameter null or
+  not set" line: no `::error::` annotation on the run and no word on where the
+  value comes from. `require_env GH_REPO:owner/name TAG` (in
+  `scripts/lib/common.sh`) names every missing or empty variable at once, each
+  with its hint, and `require_uint NAME...` does the same for a non-negative
+  integer. A positional `${1:?usage: ...}` and the `rm -rf "${dir:?}/..."`
+  guard on a lower-case local stay as they are.
+  `test/no-bare-required-variable.bats` fails on a new bare check.
 - **Never set a locale as a command prefix in shell code.** Write
   `env LC_ALL=C sort`, not `LC_ALL=C sort`: with the prefix, bash itself
   switches locale for the one command, and a Homebrew bash on macOS doing that

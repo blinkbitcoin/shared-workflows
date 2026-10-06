@@ -11,9 +11,9 @@ setup() {
 }
 
 @test "fails without TAG set" {
-  run bash "$REPO_ROOT/scripts/self/tag-major.sh" --local
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"TAG"* ]] || fail "assertion failed; output: $output"
+  run env -u TAG bash "$REPO_ROOT/scripts/self/tag-major.sh" --local
+  [ "$status" -eq 1 ] || fail "ran without TAG: $output"
+  contains "$output" "::error::missing required environment variable: TAG (a release-please tag_name output, e.g. v0.1.0)" || fail "TAG was not named: $output"
 }
 
 @test "--local moves vN and vN.M to the tagged commit without pushing" {

@@ -4,9 +4,9 @@
 # scripts/release/unreserve-tag.sh: deletes the build tag reserve-tag.sh
 # created, when the release that reserved it fails. It *deletes a git tag*, so
 # the exact API path is asserted, and every way it can refuse is pinned: no
-# tag, no GH_REPO, no gh, and a delete the API rejects. It has no `die` site of
-# its own, which is unusual enough in this repository to be worth pinning
-# deliberately rather than leaving implicit.
+# tag, no GH_REPO, no gh, and a delete the API rejects. Its one `die` site is
+# common.sh's require_env; a rejected delete fails through gh's own exit status,
+# which is unusual enough in this repository to be worth pinning deliberately.
 #
 # `gh` is stubbed: each call appends its arguments to a log, and a DELETE
 # succeeds unless WORKFLOWS_TEST_FAIL is set. No network.
@@ -78,7 +78,8 @@ SH
 
   GH_REPO="" run bash "$UNRESERVE" v1.2.3-build.42
   [ "$status" -ne 0 ] || fail "an empty GH_REPO must be refused"
-  contains "$output" "GH_REPO" || fail "does not name the missing variable: $output"
+  contains "$output" "::error::missing required environment variable: GH_REPO (owner/name)" || fail "does not name the missing variable: $output"
+  [ ! -s "$CALLS" ] || fail "it called gh without GH_REPO: $(cat "$CALLS")"
 }
 
 @test "a failed delete is fatal rather than a silent success" {

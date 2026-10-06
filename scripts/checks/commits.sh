@@ -11,7 +11,8 @@
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 
-title="${PR_TITLE:?PR_TITLE not set}"
+require_env PR_TITLE
+title="$PR_TITLE"
 range="${PR_COMMITS_RANGE:-}"
 root="$(consumer_root)"
 

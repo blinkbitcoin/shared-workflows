@@ -126,6 +126,6 @@ EOF
   unset CI_WORKFLOW
   PRS_JSON='[{"headBranchName":"x"}]' run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "exited 0 without CI_WORKFLOW"
-  contains "$output" "CI_WORKFLOW not set" || fail "output: $output"
+  contains "$output" "::error::missing required environment variable: CI_WORKFLOW (the CI workflow file to start, e.g. ci.yml)" || fail "output: $output"
   [ ! -f "$BATS_TEST_TMPDIR/gh.args" ] || fail "gh was called anyway"
 }

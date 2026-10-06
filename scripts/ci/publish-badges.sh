@@ -26,7 +26,7 @@ source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/gh-pages-lib.sh"
 require_cmd git
 
-: "${BRANCH:?BRANCH is required}" "${SHA:?SHA is required}"
+require_env BRANCH SHA
 gh_pages_assert_branch "$BRANCH"
 
 root="$(consumer_root)"

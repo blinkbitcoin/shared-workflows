@@ -220,3 +220,53 @@ gh_ref_exists() {
   [ -n "$err" ] || err="gh api exited $rc with no message"
   die "could not check whether ref $ref exists in $GH_REPO: $err - refusing to guess. Check that GH_TOKEN is set and may read the repository's contents; if GitHub was rate limiting or unavailable, re-run the job."
 }
+
+# --- Required environment variables -----------------------------------------
+# require_env NAME[:HINT]...  - die naming every NAME that is unset or empty, in
+# one ::error:: annotation, each followed by its HINT (where the value comes
+# from) when one is given: `require_env GH_REPO:owner/name TAG`.
+# require_uint NAME[:HINT]... - die naming every NAME whose value is not a
+# non-negative integer (unset and empty included), with the value it had.
+# They replace a bare `:?` expansion, which exits with bash's own "parameter null
+# or not set" line: no annotation on the run, and no word on the fix. A name is
+# read through `${!name:-}`, which bash 3.2 (macOS /bin/bash) has and `set -u`
+# accepts, after checking it is an identifier, so a typo cannot be evaluated.
+require_env_name() {
+  [[ "$1" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die "require_env: '$1' is not a variable name"
+}
+require_env_label() {
+  local spec="$1" name="${1%%:*}"
+  if [ "$spec" = "$name" ]; then
+    printf '%s' "$name"
+  else
+    printf '%s (%s)' "$name" "${spec#*:}"
+  fi
+}
+require_env() {
+  local spec name missing="" count=0
+  for spec in "$@"; do
+    name="${spec%%:*}"
+    require_env_name "$name"
+    [ -n "${!name:-}" ] && continue
+    missing="${missing:+$missing, }$(require_env_label "$spec")"
+    count=$((count + 1))
+  done
+  [ "$count" -eq 0 ] && return 0
+  [ "$count" -eq 1 ] && die "missing required environment variable: $missing"
+  die "missing required environment variables: $missing"
+}
+require_uint() {
+  local spec name value bad=""
+  for spec in "$@"; do
+    name="${spec%%:*}"
+    require_env_name "$name"
+    value="${!name:-}"
+    case "$value" in
+      '') bad="${bad:+$bad; }$(require_env_label "$spec") must be a non-negative integer (got nothing: unset or empty)" ;;
+      *[!0-9]*) bad="${bad:+$bad; }$(require_env_label "$spec") must be a non-negative integer (got '$value')" ;;
+      *) ;;
+    esac
+  done
+  [ -z "$bad" ] || die "$bad"
+}
+# --- end of required environment variables ----------------------------------

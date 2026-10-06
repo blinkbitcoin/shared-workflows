@@ -32,7 +32,7 @@ EOF
 }
 
 @test "dies when E2E_SCRIPT is not set" {
-  run bash "$REPO_ROOT/scripts/web/playwright.sh"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"E2E_SCRIPT not set"* ]] || fail "assertion failed; output: $output"
+  run env -u E2E_SCRIPT bash "$REPO_ROOT/scripts/web/playwright.sh"
+  [ "$status" -eq 1 ] || fail "ran without E2E_SCRIPT: $output"
+  contains "$output" "::error::missing required environment variable: E2E_SCRIPT" || fail "E2E_SCRIPT was not named: $output"
 }

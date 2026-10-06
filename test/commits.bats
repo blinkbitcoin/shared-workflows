@@ -157,7 +157,7 @@ NPX_PINS="--yes -p @commitlint/cli@21 -p @commitlint/config-conventional@21 comm
 @test "no PR_TITLE is refused before anything runs" {
   run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "a missing title passed: $output"
-  contains "$output" "PR_TITLE not set" || fail "does not name the variable: $output"
+  contains "$output" "::error::missing required environment variable: PR_TITLE" || fail "does not name the variable: $output"
   [ ! -s "$CALLS" ] || fail "commitlint ran without a title: $(cat "$CALLS")"
 }
 

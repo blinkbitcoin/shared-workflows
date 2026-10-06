@@ -72,6 +72,6 @@ EOF
   for var in GH_TOKEN GH_REPO WORKFLOW HEAD_SHA; do
     run env -u "$var" bash "$REPO_ROOT/scripts/release/retry.sh"
     [ "$status" -ne 0 ] || fail "ran without $var: $output"
-    contains "$output" "$var not set" || fail "the missing $var was not named: $output"
+    contains "$output" "::error::missing required environment variable: $var" || fail "the missing $var was not named: $output"
   done
 }

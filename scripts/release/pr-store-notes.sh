@@ -55,7 +55,7 @@ esac
 # never uses: a fork's pull request has no token worth the name.
 if [ -z "$body_file" ] || [ "$dry_run" -eq 0 ]; then
   require_cmd gh
-  : "${GH_REPO:?GH_REPO not set (owner/name)}"
+  require_env GH_REPO:owner/name
 fi
 
 if [ -n "$pr" ]; then

@@ -31,7 +31,7 @@ require_cmd npx
 
 channel="${1:?usage: publish.sh CHANNEL ROLLOUT}"
 rollout="${2:?usage: publish.sh CHANNEL ROLLOUT}"
-: "${OTA_CLI_VERSION:?publish.sh needs OTA_CLI_VERSION pinned (never publish from an unpinned CLI)}"
+require_env "OTA_CLI_VERSION:the pinned eoas version - never publish from an unpinned CLI"
 
 if [ "${OTA_ENABLED:-false}" != "true" ]; then
   log "OTA_ENABLED is not 'true' - skipping publish to $channel"
