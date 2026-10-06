@@ -167,13 +167,19 @@ jobs:
       IOS_SCHEME: ${{ inputs.ios-scheme }}
     steps:
       - name: Checkout consumer
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
+          # Nothing in this job talks to the consumer's remote again: the lanes
+          # read and upload, match clones its own repository with
+          # MATCH_GIT_BASIC_AUTHORIZATION, and the release assets come through
+          # gh with GH_TOKEN. So the token is not left where git in this checkout
+          # finds it, for the signing steps or anything they run to read.
+          persist-credentials: false
       - name: Checkout shared-workflows
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
@@ -198,7 +204,7 @@ jobs:
           # fastlane's android lanes are Ruby, same as the iOS ones.
           ruby-enabled: 'true'
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           # Compared against the input, not a literal: a consumer whose default
           # branch is `master` never wrote the cache at all and paid a cold
@@ -233,7 +239,7 @@ jobs:
           BUNDLETOOL_SHA256: ${{ inputs.bundletool-sha256 }}
         run: bash "$WORKFLOWS_DIR/scripts/ci/bundletool-install.sh"
       - name: Download build-info
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ inputs.build-info-artifact }}
           path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
@@ -291,7 +297,7 @@ jobs:
           LANE_ARGS: ${{ !inputs.android-signing-enabled && 'skip_signing:true' || '' }}
         run: bash "$WORKFLOWS_DIR/scripts/release/fastlane.sh" android verify
       - name: Upload android-aab
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.aab-artifact }}
           # The build-info copy travels with the binaries it describes, under a
@@ -312,7 +318,7 @@ jobs:
         # The apk is the artifact a human installs to reproduce a store bug, so
         # it uploads even when verify failed.
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.apk-artifact }}
           path: ${{ env.WORKFLOWS_OUTPUT_DIR }}/*.apk
@@ -324,7 +330,7 @@ jobs:
         # Without the mapping file every Play crash report for this build is
         # permanently unreadable, so this is never conditional on success.
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.mapping-artifact }}
           path: ${{ inputs.working-directory }}/${{ inputs.mapping-path }}

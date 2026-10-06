@@ -11,8 +11,9 @@ name: Self smoke local
 # every job a full-scope token, so a `permissions` mistake looks fine here),
 # tag and ref rules, and anything on a macOS runner. scripts/self/smoke-local.sh
 # is the entry point and says the same; it also runs upload-artifact@v7 and
-# download-artifact@v8 as their last v4, which is what act's artifact server
-# understands - the workflows themselves keep the versions GitHub runs.
+# download-artifact@v8 as their last v4, at every ref the workflows name them
+# (the tag, and build-android's commit SHA pin), which is what act's artifact
+# server understands - the workflows themselves keep the versions GitHub runs.
 #
 # `./`, not `@v0`: act resolves a local path to the checkout it runs in, so the
 # workflow under test is this tree's. The `.workflows` checkout inside

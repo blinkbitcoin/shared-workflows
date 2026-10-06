@@ -1677,6 +1677,13 @@ directory and publishes only that file's path, which is why
 the base64 key content, so a path alone would make the Fastfile's `ENV.fetch`
 raise).
 
+**Your lane gets no git credential.** Every checkout in this job, and in
+`build-ios.yml` and `build-android.yml`, sets `persist-credentials: false`, so
+the job token is never left where git in the checkout can find it, beside the
+decoded signing keys. A lane of yours that pushes, tags or fetches over the checkout's remote fails
+with an authentication error; give that step its own token instead, as
+`match` already does with `MATCH_GIT_BASIC_AUTHORIZATION`.
+
 #### Dry-running a lane
 
 `dry-run: true` sets `DRY_RUN=1` for the "Fastlane lane" step. That variable is

@@ -174,6 +174,22 @@ Every row is a make target; nothing here is run through a package manager.
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`
   enforces this.
+- **Where the signing keys are, actions are pinned by commit SHA.**
+  `build-ios.yml`, `build-android.yml`, `publish-store.yml` and the composite
+  actions they call (`setup`, `native-key`) pin every third-party `uses:` to a
+  full 40-character commit SHA with its release beside it
+  (`actions/checkout@<sha> # v7.0.1`); resolve one with
+  `gh api repos/<owner>/<repository>/commits/<tag> --jq .sha`. A moving tag
+  there is code someone else can change between two runs, run in the job
+  that holds the keys. Everywhere else stays on tags (`.github/zizmor.yml`
+  says why). Dependabot moves the SHAs and their comments, the composite
+  actions included; `test/workflow-shape.bats` fails naming the file and line
+  of any tag pin, and `scripts/self/smoke-local.sh` substitutes the artifact
+  actions for act at every ref the workflows name. Every checkout in those
+  three workflows sets `persist-credentials: false`, the consumer's included:
+  no step there talks to a git remote with the checkout's token, so none is
+  left for the signing steps to find (and zizmor, which cannot read a
+  checkout's version from a SHA, has no `artipacked` finding to ignore).
 - **Tool versions live in `scripts/lib/versions.sh`**, mirrored into
   `.mise.toml` and into workflow input defaults. Never bump one copy alone;
   `make check-version-pins` is what catches it.
