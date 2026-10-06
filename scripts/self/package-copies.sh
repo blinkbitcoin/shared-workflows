@@ -74,6 +74,11 @@ copies=(
   scripts/e2e/maestro-suite.sh:e2e/maestro-suite.sh
   scripts/e2e/wait-for-http.sh:e2e/wait-for-http.sh
   scripts/lib/e2e-env.sh:lib/e2e-env.sh
+  scripts/lib/shared-env.sh:lib/shared-env.sh
+  scripts/lib/e2e-app.sh:lib/e2e-app.sh
+  scripts/lib/e2e-ios.sh:lib/e2e-ios.sh
+  scripts/lib/e2e-maestro.sh:lib/e2e-maestro.sh
+  scripts/lib/e2e-metro.sh:lib/e2e-metro.sh
   scripts/lib/expo-config.sh:lib/expo-config.sh
   scripts/lib/native-stack.sh:lib/native-stack.sh
   scripts/native/expo/app-config.sh:native/expo/app-config.sh
