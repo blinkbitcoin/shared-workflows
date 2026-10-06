@@ -101,7 +101,10 @@ literal one. The callers are read from the repository root, where GitHub reads
 them, and two different values are an error here too.
 
 `contract.json` is the table it reads — what wants each thing, which workflow
-input switches it off, whether a fallback exists, and the fix. The consumer
+input switches it off, whether a fallback exists, and the fix. Its `profiles`
+say which workflow switches on which group of rows, so a repository is checked
+only for the workflows it calls, and `contract.schema.json` (shipped beside it)
+is its shape. The consumer
 guide's tables are generated from the same file, so the two cannot disagree.
 Each row's `kind` names the check it gets, one entry per kind in the
 program's `CHECKERS`; a row of a kind the program has no check for fails the

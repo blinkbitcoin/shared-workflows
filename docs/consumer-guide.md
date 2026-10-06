@@ -173,7 +173,13 @@ repository can see:
 
 **It only reports what applies to you.** It reads your own `.github/workflows/`
 first: a repository that never calls `test-e2e.yml` is not told it is missing
-`.maestro/`, and a gate you passed `false` for is not a finding.
+`.maestro/`, and a gate you passed `false` for is not a finding. Which workflow
+switches on which group of requirements is data too: each of `contract.json`'s
+`profiles` lists the workflow files that switch it on (`checks` is `check.yml`,
+`release` is every build and publish workflow and the pipelines that call
+them), and a repository that calls none of them is held to the profiles marked
+`withoutCaller`, `checks` and `unit`. `contract.schema.json`, shipped beside
+it, is the file's shape.
 
 A toggle wired to an expression — `types: ${{ vars.TYPES }}` — is
 neither. This job gates the nine gate jobs in `check.yml`, so blocking all of

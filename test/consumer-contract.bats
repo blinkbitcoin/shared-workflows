@@ -294,14 +294,25 @@ on_block() {
 # checks/unit step runs, with the input that switches it. These cases hold it to
 # that, from this repository alone: no consumer checkout is involved.
 
-# `script<TAB>condition` for every check.yml/test-unit.yml step that runs a consumer
+# The workflows of the profiles contract.json marks makeCi (check.yml and
+# test-unit.yml), one file name per line: read from the contract, so these cases
+# follow the mapping the checker follows.
+make_ci_workflows() {
+  node -e '
+const c = require(process.argv[1]);
+console.log(Object.values(c.profiles).filter((p) => p.makeCi).flatMap((p) => p.workflows).join("\n"));
+' "$REPO_ROOT/packages/app-tooling/contract.json"
+}
+
+# `script<TAB>condition` for every step of those workflows that runs a consumer
 # script: SCRIPT_NAME for run-script.sh, the positional name for
 # run-consumer-or.sh and expo-only.sh (a third column, `expo`, for the latter). An expression SCRIPT_NAME (test-unit.yml) is resolved to the
 # defaults of the `*-script` inputs it names.
 ci_steps() {
-  local f
-  for f in check test-unit; do
-    yq -o=json '.' "$REPO_ROOT/.github/workflows/$f.yml"
+  local f files
+  files="$(make_ci_workflows)"
+  for f in $files; do
+    yq -o=json '.' "$REPO_ROOT/.github/workflows/$f"
   done | node -e '
 let buf = "";
 process.stdin.on("data", (d) => (buf += d)).on("end", () => {
@@ -358,7 +369,7 @@ $problems"
 const c = require(process.argv[1]);
 const names = new Set(process.env.NAMES.split("\n"));
 console.log(c.requirements
-  .filter((r) => ["package-script", "script-or-dep"].includes(r.kind) && ["checks", "unit"].includes(r.profile))
+  .filter((r) => ["package-script", "script-or-dep"].includes(r.kind) && c.profiles[r.profile].makeCi)
   .filter((r) => !names.has(r.target)).map((r) => r.id).join(" "));
 ' "$REPO_ROOT/packages/app-tooling/contract.json")"
   [ -z "$stale" ] || fail "contract.json requires scripts no checks/unit step runs: $stale"

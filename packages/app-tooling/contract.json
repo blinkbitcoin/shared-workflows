@@ -1,5 +1,6 @@
 {
-  "$comment": "The consumer contract, as data. Every id is <kind>.<the program, target or file it is about>. One entry per thing a reusable workflow reaches for in the calling repository. This table is the single source for three consumers: bin/check-contract.mjs, docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
+  "$schema": "./contract.schema.json",
+  "$comment": "The consumer contract, as data. Every id is <kind>.<the program, target or file it is about>. One entry per thing a reusable workflow reaches for in the calling repository. Its shape is contract.schema.json, which contract.test.mjs holds it to. This table is the single source for three consumers: bin/check-contract.mjs, docs/adopting-an-existing-repo.md (generated from it), and test/consumer-contract.bats (which holds it against docs/consumer-guide.md's own tables). Adding a requirement to a workflow without adding it here is the drift this file exists to prevent.",
 
   "$schema-notes": {
     "kind": "How to check it. package-script: package.json scripts[target]. package-dep: a dependency or devDependency named target. file: any one of target exists; a target under fastlane/ is looked for under the callers' fastlane-directory instead, when they pass one. dir-nonempty: target is a directory with at least one entry. pinned-tool: a mise config declares [tools] target. ignores-workflows: target's config text excludes the .workflows checkout. ignores-workflows-or-narrow: the same, but also satisfied when the config declares no tree-wide (**/) glob, so nothing of ours is in its reach to begin with. caller-path: an input in the caller names a consumer-relative path, which must then exist. one-pin: every shared-workflows call pins one full commit SHA with its # vX.Y.Z, and each of this family's packages in package.json and pnpm-lock.yaml is at that commit (target unused). lane: the Fastfile (fastlane/**.rb, or the callers' fastlane-directory) defines each lane in target, as platform:lane. lane-environment: the lanes (read from the same directory) read no environment variable with the row's prefix that is not in target. make-ci-reaches-ci and ci-runs-make-ci: `make <target>` and CI run the same gates, one direction each. no-copy: none of target exists, because this family already ships it and a consumer's own copy only drifts from it; the list names the paths a copy has had in a consumer and grows as each one is deleted. tracked-dir: git tracks at least one file under target. Each kind is one entry in CHECKERS in bin/check-contract.mjs; a row of any other kind, a typo above all, fails the whole check when this file is read, naming the row, rather than switching its rule off.",
@@ -8,10 +9,41 @@
     "stack": "Optional. expo or bare: the row applies only to a repository of that native stack (lib/native-stack.mjs resolves it: the callers' native-stack input, else expo when package.json lists expo and git tracks no ios/, else bare). A row without it applies to both.",
     "workflow": "Optional. The row applies only when the caller calls this workflow, or any of these when it is a list, for a requirement narrower than its profile (build-ios.yml and the pipeline that calls it, not every release workflow).",
     "severity": "required: the gate cannot run without it and the job dies. degrades: shared-workflows has a fallback, so the gate still runs but not as the consumer defined it. optional: nothing happens unless the consumer opts in.",
-    "guide": "Anchor in docs/consumer-guide.md."
+    "guide": "Anchor in docs/consumer-guide.md.",
+    "profiles": "The groups a requirement belongs to, by the reusable workflows that switch them on: a requirement is checked only when its profile is active. The check reads the repository's own callers, and a profile is active when any of them calls one of its workflows; --profile names the active profiles instead. This is the one place that says which workflow is which profile: bin/check-contract.mjs, the adoption doc's section titles and test/consumer-contract.bats all read it from here.",
+    "profiles.workflows": "The workflow files, under .github/workflows/ of this repository, whose call switches the profile on. Each belongs to one profile at most. The release profile lists the leaves and the pipelines that call them, because a repository that calls only a pipeline never names a leaf. An empty list is a profile no caller switches on, checked only when --profile names it.",
+    "profiles.withoutCaller": "Optional, true: the profile is checked when the repository calls none of these workflows at all, as one being checked before it has written a caller - what every consumer needs, rather than nothing.",
+    "profiles.makeCi": "Optional, true: the profile's package-script requirements are the gates `make ci` must run, and the only ones (make-ci-reaches-ci, ci-runs-make-ci). These are the static checks and unit tests a developer runs on a laptop; device, browser and release runs are not.",
+    "profiles.title": "Optional. How the adoption doc names the profile in its section title (\"If you call ...\"); without it, the profile's one workflow, in backticks."
   },
 
-  "profiles": ["checks", "unit", "e2e", "web", "badges", "code-scanning", "security", "release"],
+  "profiles": {
+    "checks": { "workflows": ["check.yml"], "withoutCaller": true, "makeCi": true },
+    "unit": { "workflows": ["test-unit.yml"], "withoutCaller": true, "makeCi": true },
+    "e2e": { "workflows": ["test-e2e.yml"] },
+    "web": { "workflows": ["build-web.yml"] },
+    "badges": { "workflows": ["publish-badges.yml"] },
+    "code-scanning": { "workflows": ["check-code-scanning.yml"] },
+    "security": {
+      "$comment": "No caller switches this on yet: check-security.yml is not listed, so a repository that calls it is checked for these rows only with --profile security.",
+      "workflows": [],
+      "title": "`check-security.yml`"
+    },
+    "release": {
+      "workflows": [
+        "build-prepare.yml",
+        "build-ios.yml",
+        "build-android.yml",
+        "publish-store.yml",
+        "publish-ota.yml",
+        "publish-internal.yml",
+        "publish-beta.yml",
+        "publish-production.yml",
+        "publish-store-listing.yml"
+      ],
+      "title": "the release workflows"
+    }
+  },
 
   "requirements": [
     {

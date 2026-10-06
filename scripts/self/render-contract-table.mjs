@@ -19,16 +19,14 @@ const ROOT = path.join(HERE, '..', '..');
 export const START = '<!-- contract-table:start -->';
 export const END = '<!-- contract-table:end -->';
 
-export const PROFILE_TITLE = {
-  checks: '`check.yml`',
-  unit: '`test-unit.yml`',
-  e2e: '`test-e2e.yml`',
-  web: '`build-web.yml`',
-  badges: '`publish-badges.yml`',
-  'code-scanning': '`check-code-scanning.yml`',
-  security: '`check-security.yml`',
-  release: 'the release workflows',
-};
+/**
+ * How a section names its profile, from the contract's own profile entry: its
+ * title, else its one workflow in backticks, else the profile's name.
+ */
+export function profileTitle(name, profile) {
+  if (profile.title) return profile.title;
+  return profile.workflows.length === 1 ? `\`${profile.workflows[0]}\`` : name;
+}
 
 export const STACK_TITLE = { expo: 'Expo apps only', bare: 'bare React Native apps only' };
 
@@ -79,10 +77,10 @@ export function targetOf(req) {
 
 export function renderTable(contract) {
   const lines = [];
-  for (const profile of contract.profiles) {
-    const rows = contract.requirements.filter((r) => r.profile === profile);
+  for (const [name, profile] of Object.entries(contract.profiles)) {
+    const rows = contract.requirements.filter((r) => r.profile === name);
     if (rows.length === 0) continue;
-    lines.push('', `### If you call ${PROFILE_TITLE[profile] ?? profile}`, '');
+    lines.push('', `### If you call ${profileTitle(name, profile)}`, '');
     lines.push('| What | You need | Why |', '| --- | --- | --- |');
     for (const req of rows) {
       lines.push(`| ${targetOf(req)} | ${need(req)} | ${req.neededBy} |`);

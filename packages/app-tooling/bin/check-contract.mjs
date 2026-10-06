@@ -617,38 +617,17 @@ export function resolved(req, inputs) {
 const offReason = (req) => `${req.toggle} is ${req.toggleValue === 'script-name' ? 'empty' : 'off'}`;
 
 /**
- * The workflows that put a repository on the release path: the leaves, and the
- * pipelines that call them (a caller of only a pipeline never names a leaf).
+ * The profiles to check: an explicit override, else every profile whose
+ * workflows the caller uses (contract.json's `profiles`, the one place that
+ * maps a workflow to its profile). A repository that calls none of them is
+ * checked against the profiles marked `withoutCaller`.
  */
-export const RELEASE_WORKFLOWS = [
-  'build-prepare.yml',
-  'build-ios.yml',
-  'build-android.yml',
-  'publish-store.yml',
-  'publish-ota.yml',
-  'publish-internal.yml',
-  'publish-beta.yml',
-  'publish-production.yml',
-  'publish-store-listing.yml',
-];
-
-/** The profiles to check: what the caller uses, or an explicit override. */
-export function activeProfiles(uses, override) {
+export function activeProfiles(contract, uses, override) {
   if (override && override.length > 0) return new Set(override);
-  const active = new Set();
-  if (uses.has('check.yml')) active.add('checks');
-  if (uses.has('test-unit.yml')) active.add('unit');
-  if (uses.has('test-e2e.yml')) active.add('e2e');
-  if (uses.has('build-web.yml')) active.add('web');
-  if (uses.has('publish-badges.yml')) active.add('badges');
-  if (uses.has('check-code-scanning.yml')) active.add('code-scanning');
-  for (const name of RELEASE_WORKFLOWS) {
-    if (uses.has(name)) active.add('release');
-  }
-  // No caller found at all: a repository being checked before it has written
-  // one. Check what every consumer needs rather than nothing.
-  if (active.size === 0) return new Set(['checks', 'unit']);
-  return active;
+  const profiles = Object.entries(contract.profiles);
+  const active = new Set(profiles.filter(([, profile]) => profile.workflows.some((name) => uses.has(name))).map(([name]) => name));
+  if (active.size > 0) return active;
+  return new Set(profiles.filter(([, profile]) => profile.withoutCaller).map(([name]) => name));
 }
 
 // ---------------------------------------------------------------------------
@@ -915,18 +894,18 @@ export function readMakefile(root, io = defaultIo) {
 
 /**
  * The package scripts CI runs for this caller, from the contract itself: every
- * script requirement of the check and test-unit workflows whose workflow is called
- * and whose toggle is on. `on` holds the toggles known to be on; `maybe` adds
+ * script requirement of an active profile marked `makeCi` (the check and
+ * test-unit workflows) whose toggle is on. `on` holds the toggles known to be on; `maybe` adds
  * the ones wired to an expression, so neither direction of the gate-set check
  * fails on a value it cannot read.
  */
 export function ciScripts(contract, uses, inputs, profiles, stack = null) {
-  const active = activeProfiles(uses, profiles);
+  const active = activeProfiles(contract, uses, profiles);
   const on = new Set();
   const maybe = new Set();
   for (const req of contract.requirements) {
     if (req.kind !== 'package-script') continue;
-    if (!['checks', 'unit'].includes(req.profile) || !active.has(req.profile)) continue;
+    if (!contract.profiles[req.profile].makeCi || !active.has(req.profile)) continue;
     if (req.stack && stack && req.stack !== stack) continue;
     const state = toggleOn(req, inputs);
     const { target } = resolved(req, inputs);
@@ -985,7 +964,7 @@ const skip = (reason) => ({ status: 'skip', reason });
 
 /** Every requirement, resolved against one consumer. */
 export function check(contract, consumer, { profiles } = {}) {
-  const active = activeProfiles(consumer.uses, profiles);
+  const active = activeProfiles(contract, consumer.uses, profiles);
   const { stack, reason } = consumer.stack;
   consumer.ciScripts = ciScripts(contract, consumer.uses, consumer.inputs, profiles, stack);
   return contract.requirements.map((row) => {
@@ -1153,9 +1132,9 @@ function run(argv, { io, stdout, stderr, env, cwd, contractFile }) {
   // A profile name with a typo matches no requirement, so every check would be
   // skipped and the run would end "every requirement is satisfied" - a green
   // answer to a question nobody asked. Refuse it instead.
-  const unknown = (options.profiles ?? []).filter((p) => !contract.profiles.includes(p));
+  const unknown = (options.profiles ?? []).filter((p) => !Object.hasOwn(contract.profiles, p));
   if (unknown.length > 0) {
-    throw new Error(`::error::unknown profile(s): ${unknown.join(', ')} (known: ${contract.profiles.join(', ')})`);
+    throw new Error(`::error::unknown profile(s): ${unknown.join(', ')} (known: ${Object.keys(contract.profiles).join(', ')})`);
   }
   const consumer = readConsumer(path.resolve(options.root), io, { nativeStack: options.nativeStack });
   const results = [...check(contract, consumer, { profiles: options.profiles }), ...checkCalls(consumer, readInterfaces())];
