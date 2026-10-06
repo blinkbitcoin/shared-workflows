@@ -188,7 +188,12 @@ Every row is a make target; nothing here is run through a package manager.
   dry run on every change, and `self-release.yml` runs it again before `v0`
   moves - see `self-store-notes.yml`.) The smoke
   runs the Linux jobs for real with act, against the template, from the
-  pushed branch. It cannot see the token a called workflow really receives,
+  pushed branch: Prepare in about a minute and a quarter once act's cache is
+  warm (three minutes the first time). Runs from different worktrees can
+  overlap, and each removes its containers when it ends. The Android leg
+  (`make test-smoke-local-android`) does not pass under act yet - the image
+  has no Android SDK - so `build-android.yml` is proven on a `scratch/*`
+  caller. It cannot see the token a called workflow really receives,
   tag rules, or macOS; for those, push a throwaway caller on a `scratch/*`
   branch and read the job's "Set up job" log before merging
   (CONTRIBUTING.md, "Running the release pipeline locally").
