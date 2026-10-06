@@ -6,8 +6,10 @@
 # WORKFLOWS_OTA_DIR, WORKFLOWS_ASSETS_DIR) to $GITHUB_ENV so a later `with:`
 # block can name them. Covered here: every directory published, each default
 # and where it sits, a caller-set directory, the log lines, publishing once per
-# job, a local run with no GITHUB_ENV, and an output directory that cannot be
-# created.
+# job, a local run with no GITHUB_ENV, an output directory that cannot be
+# created, and WORKFLOWS_DIR - which it does not publish - unset (logged as not
+# published yet), a directory (logged) and anything else (fails before
+# publishing anything).
 #
 # scripts/e2e/env-publish.sh shares the name; its test is e2e-env-publish.bats.
 
@@ -25,6 +27,8 @@ setup() {
   export GITHUB_OUTPUT GITHUB_ENV
   export RUNNER_TEMP="$BATS_TEST_TMPDIR/runner"
   mkdir -p "$RUNNER_TEMP"
+  # A runner that already ran the Setup action has it; each test sets its own.
+  unset WORKFLOWS_DIR
 }
 
 @test "the release env-publish puts every release directory in the environment" {
@@ -97,4 +101,43 @@ WORKFLOWS_ASSETS_DIR=$out/assets" ] || fail "unexpected environment file: $outpu
   WORKFLOWS_OUT="$BATS_TEST_TMPDIR/a-file/workflows" run bash "$REPO_ROOT/scripts/release/env-publish.sh"
   [ "$status" -ne 0 ] || fail "an uncreatable output directory must fail: $output"
   [ ! -s "$GITHUB_ENV" ] || fail "published a directory that does not exist: $(cat "$GITHUB_ENV")"
+}
+
+@test "an unset WORKFLOWS_DIR passes and the log names the step that publishes it" {
+  # Every release job runs this before Setup, so unset is the normal case here
+  # and must not fail.
+  run bash "$REPO_ROOT/scripts/release/env-publish.sh"
+  [ "$status" -eq 0 ] || fail "an unset WORKFLOWS_DIR must pass: $status $output"
+  contains "$output" "WORKFLOWS_DIR is not published yet" || fail "the log does not say WORKFLOWS_DIR is unpublished: $output"
+  contains "$output" "publishes only the release output directories" || fail "the log does not say what this step publishes: $output"
+  contains "$output" '"Export WORKFLOWS_DIR environment"' || fail "the log does not name the step that publishes WORKFLOWS_DIR: $output"
+  not_contains "$(cat "$GITHUB_ENV")" "WORKFLOWS_DIR=" || fail "published WORKFLOWS_DIR, which is not this step's: $(cat "$GITHUB_ENV")"
+}
+
+@test "a WORKFLOWS_DIR that is a directory passes and is logged" {
+  mkdir -p "$BATS_TEST_TMPDIR/.workflows"
+  WORKFLOWS_DIR="$BATS_TEST_TMPDIR/.workflows" run bash "$REPO_ROOT/scripts/release/env-publish.sh"
+  [ "$status" -eq 0 ] || fail "a WORKFLOWS_DIR that is a directory must pass: $status $output"
+  contains "$output" "WORKFLOWS_DIR=$BATS_TEST_TMPDIR/.workflows" || fail "WORKFLOWS_DIR is not logged: $output"
+  not_contains "$output" "not published yet" || fail "logged a set WORKFLOWS_DIR as unpublished: $output"
+  contains "$(cat "$GITHUB_ENV")" "WORKFLOWS_OUT=" || fail "the output directory was not published: $(cat "$GITHUB_ENV")"
+}
+
+@test "a WORKFLOWS_DIR that does not exist fails with the fix and publishes nothing" {
+  WORKFLOWS_DIR="$BATS_TEST_TMPDIR/no-such-directory" run bash "$REPO_ROOT/scripts/release/env-publish.sh"
+  [ "$status" -eq 1 ] || fail "a missing WORKFLOWS_DIR must fail: $status $output"
+  contains "$output" "::error::WORKFLOWS_DIR is '$BATS_TEST_TMPDIR/no-such-directory', which is not a directory" ||
+    fail "no error annotation naming the value: $output"
+  contains "$output" '%0AFix: WORKFLOWS_DIR belongs to scripts/ci/workflows-env.sh' || fail "the error carries no fix: $output"
+  contains "$output" '"Export WORKFLOWS_DIR environment"' || fail "the fix does not name the step that publishes WORKFLOWS_DIR: $output"
+  contains "$output" 'consumer-guide.md#gotchas-encoded' || fail "the error does not link the guide: $output"
+  [ ! -s "$GITHUB_ENV" ] || fail "published directories after a bad WORKFLOWS_DIR: $(cat "$GITHUB_ENV")"
+}
+
+@test "a WORKFLOWS_DIR that is a file fails too" {
+  : > "$BATS_TEST_TMPDIR/a-file"
+  WORKFLOWS_DIR="$BATS_TEST_TMPDIR/a-file" run bash "$REPO_ROOT/scripts/release/env-publish.sh"
+  [ "$status" -eq 1 ] || fail "a WORKFLOWS_DIR that is a file must fail: $status $output"
+  contains "$output" "which is not a directory" || fail "no error for a file: $output"
+  [ ! -s "$GITHUB_ENV" ] || fail "published directories after a bad WORKFLOWS_DIR: $(cat "$GITHUB_ENV")"
 }

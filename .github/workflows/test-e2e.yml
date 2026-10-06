@@ -215,7 +215,7 @@ jobs:
         run: bash ".workflows/scripts/ci/workflows-env.sh"
       # Puts WORKFLOWS_OUT in $GITHUB_ENV up front so the upload step's `path:` below
       # resolves even when an earlier step failed before any other script ran.
-      - name: Publish WORKFLOWS_OUT environment
+      - name: Publish the E2E output directory and run start
         run: bash ".workflows/scripts/e2e/env-publish.sh"
       - name: Native cache keys
         id: keys
@@ -344,7 +344,7 @@ jobs:
       # Before setup there is no $WORKFLOWS_DIR yet, so these two reach the scripts through
       # the plain checkout path. env-publish puts WORKFLOWS_OUT in $GITHUB_ENV so the
       # download-artifact and forensics `with:` blocks below can interpolate it.
-      - name: Publish WORKFLOWS_DIR environment
+      - name: Publish the E2E output directory and run start
         run: bash ".workflows/scripts/e2e/env-publish.sh"
       - name: Compute suite step timeout
         id: timeout
@@ -539,7 +539,7 @@ jobs:
           persist-credentials: false
       - name: Free disk space
         uses: ./.workflows/.github/actions/free-disk
-      - name: Publish WORKFLOWS_DIR environment
+      - name: Publish the E2E output directory and run start
         run: bash ".workflows/scripts/e2e/env-publish.sh"
       - name: Compute suite step timeout
         id: timeout

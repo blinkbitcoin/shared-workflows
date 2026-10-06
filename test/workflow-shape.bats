@@ -420,6 +420,40 @@ lane_step_count() {
     done <<<"$(yq -r '.jobs | keys | .[]' "$w")"
   done
 }
+# Ten steps that ran env-publish.sh were once named "Publish WORKFLOWS_DIR
+# environment" while publishing only the output directories, which sent anyone
+# chasing an empty WORKFLOWS_DIR (exit 127, the v0.6.0 class) to the wrong step.
+# A step's name says what it publishes: the env-publish steps carry the names
+# below, and a step named for WORKFLOWS_DIR runs workflows-env.sh, the one script
+# that publishes it. Every workflow and composite action, self-* included.
+@test "a step is named for what it publishes, and only workflows-env.sh steps are named for WORKFLOWS_DIR" {
+  local release_steps=0 e2e_steps=0
+  for f in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/actions/*/action.yml; do
+    # One line per step: runs-release|runs-e2e|runs-workflows-env|name.
+    while IFS='|' read -r release e2e workflows_env name; do
+      [ -n "$release" ] || continue
+      if [ "$release" = "true" ]; then
+        release_steps=$((release_steps + 1))
+        [ "$name" = "Publish the release output directories" ] ||
+          fail "$(basename "$f"): the step running scripts/release/env-publish.sh is named '$name', not 'Publish the release output directories'"
+      fi
+      if [ "$e2e" = "true" ]; then
+        e2e_steps=$((e2e_steps + 1))
+        [ "$name" = "Publish the E2E output directory and run start" ] ||
+          fail "$(basename "$f"): the step running scripts/e2e/env-publish.sh is named '$name', not 'Publish the E2E output directory and run start'"
+      fi
+      case "$name" in
+        *WORKFLOWS_DIR*)
+          [ "$workflows_env" = "true" ] ||
+            fail "$(basename "$f"): step '$name' is named for WORKFLOWS_DIR but does not run scripts/ci/workflows-env.sh, the script that publishes it"
+          ;;
+      esac
+    done <<<"$(yq -r '[.jobs[]?.steps[]?, .runs.steps[]?] | .[] | [((.run // "") | test("scripts/release/env-publish.sh")), ((.run // "") | test("scripts/e2e/env-publish.sh")), ((.run // "") | test("scripts/ci/workflows-env.sh")), (.name // .uses // "")] | join("|")' "$f")"
+  done
+  # Not vacuous: a yq expression that matched nothing would pass every check above.
+  [ "$release_steps" -ge 7 ] || fail "found $release_steps steps running scripts/release/env-publish.sh, expected at least 7"
+  [ "$e2e_steps" -ge 3 ] || fail "found $e2e_steps steps running scripts/e2e/env-publish.sh, expected at least 3"
+}
 
 # `merge-multiple: true` has no defined order, so two artifacts carrying
 # `build-info.json` would make the release's record a coin toss. The per-platform
