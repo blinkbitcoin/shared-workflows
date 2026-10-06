@@ -62,7 +62,7 @@ $hits"
 # have to agree, or the guide tells consumers to ignore a directory that is no
 # longer there.
 @test "the guide and the workflows agree on the checkout directory name" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   grep -qF '.workflows' "$REPO_ROOT/docs/consumer-guide.md" \
     || fail "the consumer guide no longer names the checkout directory"
   paths="$(yq -r '.jobs[].steps[]? | select(.uses? == "actions/checkout@v7") | .with.path // ""' \

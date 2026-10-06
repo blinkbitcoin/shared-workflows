@@ -164,6 +164,13 @@ Every row is a make target; nothing here is run through a package manager.
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`
   enforces this.
+- **A test that needs a tool `.mise.toml` pins opens with `require_cmd
+  <tool>`, never `command -v <tool> || skip`.** A missing pinned tool is a
+  broken setup: `require_cmd` (`test/test_helper.bash`) fails the test and
+  names the fix, where the skip once let a shell without yq report green with
+  every workflow shape and contract assertion skipped. A tool the toolchain
+  does not pin (python3, curl, jq, the claude CLI, mise itself) may still
+  skip. `test/require-cmd.bats` enforces this.
 - **Tool versions live in `scripts/lib/versions.sh`**, mirrored into
   `.mise.toml` and into workflow input defaults. Never bump one copy alone;
   `make check-version-pins` is what catches it.
@@ -363,6 +370,7 @@ that holds the rule, and the section of the app's `app-tooling.json` that tunes 
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test-unit` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test-unit` |
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test-unit` |
+| That a test needing a pinned tool fails without it rather than skipping, and `require_cmd` itself | `test/require-cmd.bats` | `make test-unit` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test-unit` |
 | That every script has its own test file that runs it, with no exceptions | `test/script-coverage.bats` | `make test-unit` |
 | `pr-store-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-store-notes.yml`, `scripts/self/check-store-notes-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |

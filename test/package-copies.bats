@@ -98,7 +98,7 @@ packaged_consumer() {
 }
 
 @test "the packaged i18n check runs from the package against a consumer that is current" {
-  command -v pnpm >/dev/null || skip "pnpm not installed"
+  require_cmd pnpm
   packaged_consumer "true"
   cd "$consumer"
   run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/generated.sh"
@@ -106,7 +106,7 @@ packaged_consumer() {
 }
 
 @test "the packaged i18n check fails, naming the fix, when extraction changes the catalogs" {
-  command -v pnpm >/dev/null || skip "pnpm not installed"
+  require_cmd pnpm
   packaged_consumer "echo changed >> src/i18n/locales/en.po"
   cd "$consumer"
   run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/generated.sh"

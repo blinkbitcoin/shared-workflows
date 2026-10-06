@@ -31,6 +31,29 @@ fail() {
 contains() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
 not_contains() { case "$1" in *"$2"*) return 1 ;; *) return 0 ;; esac; }
 
+# require_cmd TOOL... - fail the current test, naming every TOOL not on PATH
+# and the fix, instead of skipping it.
+#
+# Every tool this suite reads the workflows with (yq above all) is pinned in
+# .mise.toml, so a missing one is a broken setup, not a reason to skip. The
+# guard this replaced, `command -v yq >/dev/null || skip "yq not installed"`,
+# turned a shell without the pinned tools into a green run with the workflow
+# shape and contract assertions never executed. test/require-cmd.bats fails if
+# that guard comes back for a pinned tool.
+#
+# Named like scripts/lib/common.sh's require_cmd on purpose: the same contract
+# (every named command must exist), with a test failure in place of `die`.
+require_cmd() {
+  local tool missing=""
+  for tool in "$@"; do
+    command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+  done
+  if [ -n "$missing" ]; then
+    fail "missing command:$missing - this test needs it and fails rather than skips without it. Install the tools .mise.toml pins with 'mise install', then run the suite through 'make test-unit' (or 'mise exec -- bats test/<file>.bats')"
+    return 1
+  fi
+}
+
 # The three variables that decide *where* a script writes, cleared for every
 # test in every file.
 #

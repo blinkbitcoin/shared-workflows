@@ -77,7 +77,7 @@ setup() {
 # the caller's `paths-ignore`, which used to mask it, has been removed on
 # purpose, so the regression would now be silent AND unmasked.
 @test "check.yml classifies pushes too: BASE_SHA names both base.sha and event.before" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   expr=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
     "$REPO_ROOT/.github/workflows/check.yml")
   [ -n "$expr" ] || fail "no BASE_SHA env on check.yml's classify step"
@@ -97,7 +97,7 @@ setup() {
 # second one drifts. Comparing the two expressions is cheaper than restating the
 # right answer twice.
 @test "check-code-scanning.yml's BASE_SHA expression is byte-identical to check.yml's" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   read_base_sha() {
     yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
       "$REPO_ROOT/.github/workflows/$1.yml"
@@ -112,7 +112,7 @@ setup() {
 # The whole point of the changes job: a docs-only change analyses nothing, and
 # a scheduled run (no base at all) analyses everything.
 @test "check-code-scanning.yml's code-scanning job is gated on the classifier" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-code-scanning.yml"
   cond=$(yq -r '.jobs."code-scanning".if' "$f")
   [[ "$cond" == *"needs.changes.outputs.docs-only != 'true'"* ]] \
@@ -124,7 +124,7 @@ setup() {
 # build-web.yml runs the same classifier for the web class, and the same rule
 # holds: one spelling of the base sha.
 @test "build-web.yml's BASE_SHA expression is byte-identical to check.yml's" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   read_base_sha() {
     yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env.BASE_SHA // ""' \
       "$REPO_ROOT/.github/workflows/$1.yml"
@@ -139,7 +139,7 @@ setup() {
 # A web-irrelevant change builds nothing; `e2e` and `deploy` need `build`,
 # so they follow it. `!= 'false'`, so an output that never arrived builds.
 @test "build-web.yml's build job is gated on the web class, and the rest follow it" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/build-web.yml"
   [ "$(yq -r '.jobs.build.needs' "$f")" = "changes" ] || fail "build does not need changes"
   cond=$(yq -r '.jobs.build.if' "$f")
@@ -162,7 +162,7 @@ setup() {
 # reaches the script, the step output reaches the job output, and the job output
 # reaches the workflow output.
 @test "check.yml wires every suite class from input to workflow output" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check.yml"
   env=$(yq -r '.jobs.changes.steps[] | select(.id == "classify") | .env' "$f")
   for pair in "unit:UNIT" "e2e:E2E"; do
@@ -179,7 +179,7 @@ setup() {
 # The caller half. A skipped `unit` (a flows-only change) must not take `e2e`
 # down with it, and neither gate may read an empty output as "skip".
 @test "the fixture caller gates unit and e2e on their classes, and e2e survives a skipped unit" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   for f in "$FIXTURES/consumer-min/.github/workflows/ci.yml" "$FIXTURES/consumer-bare/.github/workflows/ci.yml"; do
   unit=$(yq -r '.jobs.unit.if' "$f")
   contains "$unit" "needs.checks.outputs.unit-changed != 'false'" || fail "unit's gate: $unit"
@@ -198,7 +198,7 @@ setup() {
 # the unnamed scopes to none - so dropping contents: read would break the
 # checkout rather than the upload. All three are asserted, and nothing more.
 @test "check-code-scanning.yml escalates permissions only on the code-scanning job" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-code-scanning.yml"
   [ "$(yq -r '.jobs."code-scanning".permissions.contents' "$f")" = "read" ] \
     || fail "code-scanning does not re-declare contents: read"
@@ -215,7 +215,7 @@ setup() {
 # The head half of the same range. changed-class.bats covers what the script
 # does when either end is absent from the consumer's checkout.
 @test "check.yml's classify step passes both ends of the range to the script" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   run yq -r '.jobs.changes.steps[] | select(.id == "classify") | .run' \
     "$REPO_ROOT/.github/workflows/check.yml"
   [ "$status" -eq 0 ]
@@ -468,7 +468,7 @@ lane_step_count() {
 # land (the lane reads that one directory), come after them and after Setup
 # (it runs a $WORKFLOWS_DIR script), and happen only when asked for.
 @test "publish-store downloads release assets into the artifacts' directory, after them, only when asked" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/publish-store.yml"
   for input in release-assets release-tag; do
     [ "$(yq -r ".on.workflow_call.inputs.\"$input\".default" "$f")" = "" ] || fail "$input does not default to empty"
@@ -492,7 +492,7 @@ lane_step_count() {
 # composed itself, without a job to upload them as an artifact. It has to reach
 # the script, where it wins over the notes file.
 @test "publish-github-release hands release-notes-text to the release step" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/publish-github-release.yml"
   [ "$(yq -r '.on.workflow_call.inputs."release-notes-text".default' "$f")" = "" ] || fail "release-notes-text does not default to empty"
   [ "$(yq -r '[.jobs.release.steps[] | select(.id == "assets")][0].env.RELEASE_NOTES_TEXT' "$f")" = '${{ inputs.release-notes-text }}' ] \
@@ -506,7 +506,7 @@ lane_step_count() {
 # nothing would start the caller's CI on every push, and one reading `pr`
 # instead of `prs` would miss the second package's PR.
 @test "pr-release starts CI on each release PR and the follow-ons at a cut tag, each only when it happened" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/pr-release.yml"
   for scope in contents pull-requests actions; do
     [ "$(yq -r ".jobs.release.permissions.\"$scope\"" "$f")" = "write" ] || fail "the release job does not ask for $scope: write"
@@ -534,7 +534,7 @@ lane_step_count() {
 # has to be wired from the step through the job to the workflow, or a
 # dry run reads an empty string and a consumer's check of it is vacuous.
 @test "pr-store-notes declares dry-run, body-file and an optional pr-number, and passes them to the script" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/pr-store-notes.yml"
   [ "$(yq -r '.on.workflow_call.inputs."dry-run".type' "$f")" = "boolean" ] || fail "dry-run is not a boolean input"
   [ "$(yq -r '.on.workflow_call.inputs."dry-run".default' "$f")" = "false" ] || fail "dry-run does not default to false"
@@ -550,7 +550,7 @@ lane_step_count() {
 }
 
 @test "pr-store-notes wires the section output from the step to the workflow, and keeps its write grant" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/pr-store-notes.yml"
   [ "$(yq -r '.on.workflow_call.outputs.section.value' "$f")" = '${{ jobs.draft.outputs.section }}' ] \
     || fail "the workflow's section output does not read the draft job"
@@ -574,7 +574,7 @@ lane_step_count() {
 # rather than through this input, and a step's own `env:` block wins over a
 # same-named value inherited from an earlier step's $GITHUB_ENV write.
 @test "publish-store declares dry-run (boolean, default false) and ORs it into the Fastlane lane step's DRY_RUN" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/publish-store.yml"
   [ "$(yq -r '.on.workflow_call.inputs."dry-run".type' "$f")" = "boolean" ] \
     || fail "dry-run is not declared as a boolean input"
@@ -601,7 +601,7 @@ lane_step_count() {
 # the version it needs, come before the gate - and before Setup, which they do
 # not need.
 @test "build-prepare reserves the build tag before the green gate and before Setup" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/build-prepare.yml"
   names="$(yq -r '.jobs.prepare.steps[].name' "$f")"
   order() { printf '%s\n' "$names" | grep -n -x "$1" | cut -d: -f1; }
@@ -690,7 +690,7 @@ lane_step_count() {
 #     catch: it looks like tidying and it re-arms that bug for any caller that
 #     sets a smaller value upstream.
 @test "check.yml's audit step keeps its timeout, its soft-on-PR expression and a step-level fetch timeout" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check.yml"
   # Across all jobs, not one named job: the gates are grouped by who acts on a
   # failure, and which group a step sits in is allowed to change.
@@ -933,7 +933,7 @@ lane_step_count() {
 # --- values a workflow advertises as configurable must not be baked in --------
 
 @test "every native cache key interpolates native-cache-version, none bakes in a literal" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   # The input's own description, build-ios.yml's, and docs/cache-keys.md all
   # promise that bumping this invalidates *every* native cache. The Android
   # system-image and AVD keys baked in `v1`, so someone chasing a stale-AVD
@@ -954,7 +954,7 @@ lane_step_count() {
 }
 
 @test "the Gradle cache write branch comes from an input, not a hardcoded main" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   # A consumer whose default branch is `master` never wrote the cache at all and
   # paid a cold Gradle on every run, including on its own default branch.
   for w in test-e2e build-android; do
@@ -971,7 +971,7 @@ lane_step_count() {
 }
 
 @test "the iOS and Android artifact uploads in test-e2e.yml guard on the build the same way" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   # The Android upload ran under always() with if-no-files-found: error, so a
   # failed build produced a second red step - a missing APK - stacked on top of
   # the real error. The iOS twin already had the right condition.
@@ -994,7 +994,7 @@ lane_step_count() {
 # change nobody notices in review. (The bundle scan, the other expensive one,
 # is check-security.yml's `bundle` job, off by default there.)
 @test "the expensive checks stay opt-in" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check.yml"
   for i in prebuild; do
     [ "$(yq -r ".on.workflow_call.inputs.\"$i\" | has(\"default\")" "$f")" = "true" ] \
@@ -1010,7 +1010,7 @@ lane_step_count() {
 
 # A gate whose step can hang without the job cap being a useful diagnosis.
 @test "the expensive check carries its own step timeout" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check.yml"
   for name in "Prebuild"; do
     t=$(yq -r ".jobs[].steps[]? | select(.name == \"$name\") | .\"timeout-minutes\" // \"\"" "$f")
@@ -1026,7 +1026,7 @@ lane_step_count() {
 # supported an unsigned mode; no workflow could reach it.
 
 @test "the platform builds can run without signing credentials" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   for pair in "build-ios|ios-signing-enabled" "build-android|android-signing-enabled"; do
     w="${pair%%|*}"
     input="${pair##*|}"
@@ -1043,7 +1043,7 @@ lane_step_count() {
 }
 
 @test "an unsigned iOS build does not try to upload an .ipa it never packaged" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/build-ios.yml"
   cond=$(yq -r '.jobs[].steps[] | select(.name == "Upload ios-ipa") | .if // ""' "$f")
   contains "$cond" "inputs.ios-signing-enabled" \
@@ -1060,7 +1060,7 @@ lane_step_count() {
 # The companion rule for steps ("every step has a name") has existed since the
 # beginning; jobs were simply never covered.
 @test "every job in every workflow has a name" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   for w in "$REPO_ROOT"/.github/workflows/*.yml; do
     unnamed=$(yq -r '.jobs | to_entries[] | select((.value.name // "") == "") | .key' "$w")
     [ -z "$unnamed" ] \
@@ -1073,7 +1073,7 @@ lane_step_count() {
 # fixed, and fastlane's own vocabulary stays out of every display name: a
 # reader of a run graph should not need to know what a lane is.
 @test "the store job has a fixed name and no display name says lane" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   n=$(yq -r '.jobs.lane.name' "$REPO_ROOT/.github/workflows/publish-store.yml")
   [ "$n" = "Store" ] || fail "publish-store's job is named '$n', expected 'Store'"
   for w in "$REPO_ROOT"/.github/workflows/*.yml; do
@@ -1095,7 +1095,7 @@ lane_step_count() {
 # than the one job that needs it. Naming `permissions:` also resets the unnamed
 # scopes to none, which is why contents: read is re-declared rather than assumed.
 @test "check-security.yml escalates permissions only on its verdict job" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   [ "$(yq -r '.jobs.verdict.permissions.contents' "$f")" = "read" ] \
     || fail "verdict does not re-declare contents: read, so its own checkouts would lose it"
@@ -1117,7 +1117,7 @@ lane_step_count() {
 SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review review-codebase"
 
 @test "check-security.yml's scanner jobs are the AND of the caller's input and the consumer's policy" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for job in $SECURITY_JOBS; do
     out="$(yq -r ".jobs.settings.outputs.\"$job\"" "$f")"
@@ -1155,7 +1155,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # own name under scripts/security/, and the Node modules live once, in the
 # package, where check-security on a laptop finds the same files.
 @test "check-security.yml runs this family's runners, one per job, and the modules live in the package" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for job in $SECURITY_JOBS; do
     line="$(yq -r ".jobs.\"$job\".steps[] | select(.id == \"scan\") | .run" "$f")"
@@ -1179,7 +1179,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # install: 'false', which ended in ERR_MODULE_NOT_FOUND while the modules were
 # still the consumer's.
 @test "every check-security.yml job installs the consumer's dependencies before its scripts run" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   # One Setup per job, and every one of them through the setup action.
   setups="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("workflows/.github/actions/setup"))] | length' "$f")"
@@ -1204,7 +1204,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # which also covers a fork, whose token could not upload anyway. The labelling
 # step runs under the same guard, since it exists only for the upload.
 @test "check-security.yml uploads SARIF from the default branch only, labelled, and says so elsewhere" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   upload="$(yq -r '.jobs.verdict.steps[] | select((.uses // "") | test("upload-sarif")) | .if' "$f")"
   [ -n "$upload" ] || fail "check-security.yml has no upload-sarif step"
@@ -1231,7 +1231,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # when the Verdict step failed on findings, told whether a scanner crashed, and
 # carried out through the job's and the workflow's `verdict` output.
 @test "check-security.yml hands its verdict out for the badge, even from a failed run" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   step() { yq -r ".jobs.verdict.steps[] | select(.name == \"Verdict output\") | $1" "$f"; }
   # .workflows/, not $WORKFLOWS_DIR: Setup exports that, and the output step
@@ -1258,7 +1258,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # label-sarif.sh carries the job names as a map, because a step cannot read its
 # own job's display name. The map and the workflow must name each job the same.
 @test "label-sarif.sh names each scanner exactly as check-security.yml names its job" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   command -v jq >/dev/null || skip "jq not installed"
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR/consumer"
@@ -1281,7 +1281,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # filenames differ by construction, which is the only reason merge-multiple is
 # safe - so both halves are pinned.
 @test "each scanner's SARIF travels under its own artifact name and its own filename" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   names="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.name | select(test("^security-sarif-"))] | join("\n")' "$f")"
   [ "$(grep -c . <<<"$names")" -eq 9 ] || fail "expected nine SARIF uploads, got: $names"
@@ -1308,7 +1308,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # any other step, is a key every script in that job - the setup action, the
 # artifact upload - can read.
 @test "check-security.yml hands the LLM keys to the review and OpenAnt scan steps and nowhere else" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for key in OPENAI_API_KEY ANTHROPIC_API_KEY; do
     [ "$(yq -r ".on.workflow_call.secrets.$key.required" "$f")" = "false" ] || fail "$key is not an optional secret"
@@ -1323,7 +1323,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # runner looks for them. Order matters: a scan before the download would find
 # no binaries and report skipped on every production dispatch.
 @test "check-security.yml fetches the release binaries, by tag, before the binaries scan" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   names="$(yq -r '.jobs.binaries.steps[].name' "$f")"
   fetch_at="$(grep -n 'Download the release binaries' <<<"$names" | cut -d: -f1)"
@@ -1340,7 +1340,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # The review diffs against a base commit or the last release tag, and neither
 # exists in a shallow clone.
 @test "check-security.yml's review checks out full history and knows its range" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   depth="$(yq -r '.jobs.review.steps[] | select(.name == "Checkout consumer") | .with."fetch-depth"' "$f")"
   [ "$depth" = "0" ] || fail "the review's checkout is shallow (fetch-depth: $depth)"
@@ -1354,7 +1354,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # what a runner does and what the verdict applies - so every job publishes it,
 # and before the setup action and any consumer script run.
 @test "every check-security.yml job publishes environment-variables before its Setup step" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for job in settings $SECURITY_JOBS verdict; do
     names="$(yq -r ".jobs.\"$job\".steps[].name" "$f")"
@@ -1369,7 +1369,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # existed before the release stage did, whose default stays what callers have
 # relied on since.
 @test "check-security.yml's release-stage inputs default to off" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   for input in dependencies code policy; do
     [ "$(yq -r ".on.workflow_call.inputs.$input.default" "$f")" = "true" ] || fail "$input no longer defaults to true"
@@ -1383,7 +1383,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # The native stack: one input, empty by default, read by exactly the steps whose
 # behaviour depends on it, each through NATIVE_STACK.
 @test "check.yml and check-security.yml take native-stack, empty by default, and hand it to the steps that read it" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   local f where
   for f in check check-security; do
     f="$REPO_ROOT/.github/workflows/$f.yml"
@@ -1399,7 +1399,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 }
 
 @test "check.yml's Expo health gate keeps its input on and runs through expo-only.sh" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check.yml"
   [ "$(yq -r '.on.workflow_call.inputs."expo-health".default' "$f")" = "true" ] || fail "expo-health no longer defaults to true"
   run="$(yq -r '.jobs.dependencies.steps[] | select(.name == "Expo health") | .run' "$f")"
@@ -1408,7 +1408,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 }
 
 @test "check.yml hands i18n-paths and graphql-paths, empty by default, to the generated gate" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check.yml"
   for input in i18n-paths graphql-paths; do
     [ "$(yq -r ".on.workflow_call.inputs.\"$input\".type" "$f")" = "string" ] || fail "$input is not a string input"
@@ -1424,7 +1424,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # scripts/lib/native-stack.sh reads it as WORKFLOWS_NATIVE_STACK_INPUT - the
 # native-key action's cache hash and the scripts alike.
 @test "every native workflow takes native-stack, empty by default, and hands it to every job" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   local wf f jobs job
   for wf in test-e2e build-ios build-android build-prepare; do
     f="$REPO_ROOT/.github/workflows/$wf.yml"
@@ -1444,7 +1444,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # app-config.sh read first: IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME. Empty
 # leaves the identifier to the app itself.
 @test "test-e2e takes ios-bundle-id, android-package and ios-scheme, empty by default, and every job exports them" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   local f="$REPO_ROOT/.github/workflows/test-e2e.yml" pair input variable jobs job
   jobs="$(yq -r '.jobs | keys | .[]' "$f")"
   [ -n "$jobs" ] || fail "test-e2e.yml: read no jobs"
@@ -1464,7 +1464,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # native-extra-globs matches - the same globs test-e2e.yml and build-ios.yml
 # fold into the cache key.
 @test "build-prepare hands native-extra-globs to the fingerprint as NATIVE_EXTRA_GLOBS" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/build-prepare.yml"
   [ "$(yq -r '.on.workflow_call.inputs."native-extra-globs".default' "$f")" = "" ] || fail "native-extra-globs does not default to empty"
   [ "$(yq -r '.jobs.prepare.env.NATIVE_EXTRA_GLOBS' "$f")" = '${{ inputs.native-extra-globs }}' ] || fail "NATIVE_EXTRA_GLOBS is not the input"
@@ -1475,7 +1475,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # WORKFLOWS_FASTLANE_DIRECTORY: fastlane.sh, the verify lanes and the store
 # notes generator all read it there.
 @test "every lane and store-notes workflow takes fastlane-directory, fastlane by default, and hands it to its jobs" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   local wf f job lanes
   for wf in build-ios build-android publish-store build-prepare pr-store-notes; do
     f="$REPO_ROOT/.github/workflows/$wf.yml"

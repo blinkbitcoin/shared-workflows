@@ -22,8 +22,9 @@ lefthook = "2.1.14"
 # Runs self-smoke-local.yml on a laptop (make test-smoke-local). Needs Docker.
 act = "0.2.89"
 # The Semgrep CLI: test/semgrep-rules.bats runs `semgrep --test` over the rules
-# check-security ships, and skips without it - which on a runner without it
-# meant the fixtures were never run. The version the template pins.
+# check-security ships. It once skipped without it, which on a runner without
+# it meant the fixtures were never run; it now fails (require_cmd in
+# test/test_helper.bash). The version the template pins.
 semgrep = "1.177.0"
 # The lanes in packages/app-tooling/fastlane are Ruby, and `make test-fastlane` runs
 # their tests. The major and minor the template pins.

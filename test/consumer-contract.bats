@@ -124,7 +124,7 @@ guide_yaml_block() {
 # The point of the fixture: every call it makes to a workflow that takes
 # native-stack names the bare stack, and its E2E launches plainly.
 @test "the bare fixture passes native-stack: bare to every workflow it calls that takes it, and dev-client: false" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   calls=0
   for f in "$BARE"/.github/workflows/*.yml; do
     while IFS=$'\t' read -r job called; do
@@ -229,7 +229,7 @@ on_block() {
 }
 
 @test "every workflow_call input is documented in the guide's table for that workflow" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   missing=()
   for wf in check test-unit test-e2e build-web publish-badges pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
@@ -255,7 +255,7 @@ on_block() {
   # The other direction. The case above catches an input added to a workflow and
   # never written down; this one catches a row left behind when an input is
   # removed or renamed - a phantom a reader would try to pass.
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   phantom=()
   for wf in check test-unit test-e2e build-web publish-badges pr-title check-code-scanning \
     check-security build-prepare build-ios build-android \
@@ -279,7 +279,7 @@ on_block() {
 }
 
 @test "pr-closed.yml really declares no workflow_call inputs" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   run yq -r '.on.workflow_call.inputs // "null"' "$REPO_ROOT/.github/workflows/pr-closed.yml"
   [ "$status" -eq 0 ]
   [ "$output" = "null" ]
@@ -327,7 +327,7 @@ process.stdin.on("data", (d) => (buf += d)).on("end", () => {
 }
 
 @test "every script a checks or unit step runs has a contract requirement gated on that step's input" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   steps="$(ci_steps)"
   [ "$(grep -c . <<<"$steps")" -ge 15 ] || fail "parsed only '$steps' - has the step shape changed?"
   problems="$(STEPS="$steps" node -e '
@@ -352,7 +352,7 @@ $problems"
 }
 
 @test "every checks or unit script requirement in the contract is run by some step" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   names="$(ci_steps | cut -f1 | sort -u)"
   stale="$(NAMES="$names" node -e '
 const c = require(process.argv[1]);
@@ -365,7 +365,7 @@ console.log(c.requirements
 }
 
 @test "the contract's App Review names are exactly the secrets publish-store.yml passes" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   declared="$(yq -r '.on.workflow_call.secrets | keys | .[] | select(test("^APP_REVIEW_"))' \
     "$REPO_ROOT/.github/workflows/publish-store.yml" | sort)"
   contract="$(node -e '
@@ -401,7 +401,7 @@ callee_permissions() {
 }
 
 @test "every fixture caller grants the write permissions its callee needs" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   for f in "$FIXTURES"/consumer-min/.github/workflows/*.yml "$BARE"/.github/workflows/*.yml; do
     while IFS=$'\t' read -r job called; do
       [ -n "$called" ] || continue

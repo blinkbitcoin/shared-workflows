@@ -4,14 +4,15 @@
 # comments in react-native-secrets.test.tsx), so a rule that stops matching, or
 # starts matching ordinary code, fails here before a consumer sees it.
 #
-# Skipped where semgrep is not installed; check-security.yml's own jobs, and
-# the mise toolchain a contributor installs, have it.
+# Fails where semgrep is not installed rather than skipping: it is pinned in
+# .mise.toml, so check-security.yml's own jobs, self-unit.yml and the mise
+# toolchain a contributor installs all have it (require_cmd, test_helper.bash).
 #
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 load test_helper
 
 @test "every rule passes its fixture" {
-  command -v semgrep >/dev/null 2>&1 || skip "semgrep is not installed (mise install)"
+  require_cmd semgrep
   run semgrep --test --metrics off "$REPO_ROOT/scripts/security/rules"
   [ "$status" -eq 0 ] || fail "semgrep --test: $output"
 }

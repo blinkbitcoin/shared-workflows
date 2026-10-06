@@ -125,7 +125,7 @@ run_it() {
 # that these particular gates stop being implemented twice, and a step quietly
 # reverting to its fallback-only form is the regression.
 @test "check.yml routes all five gates with a fallback through the seam" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check.yml"
   for pair in "check:generated|scripts/checks/generated.sh" \
     "check:expo-health|scripts/checks/expo-health.sh" \

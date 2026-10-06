@@ -89,7 +89,7 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 SELF_STORE_NOTES="$REPO_ROOT/.github/workflows/self-store-notes.yml"
 
 @test "self-store-notes.yml runs the local pr-store-notes.yml against the template in a dry run" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   [ "$(yq -r '.on | has("workflow_call")' "$SELF_STORE_NOTES")" = "true" ] || fail "self-store-notes.yml is not callable"
   [ "$(yq -r '.jobs."dry-run".name' "$SELF_STORE_NOTES")" = "Dry run" ] || fail "the dry run job was renamed"
   [ "$(yq -r '.jobs.draft.name' "$REPO_ROOT/.github/workflows/pr-store-notes.yml")" = "Draft" ] \
@@ -110,7 +110,7 @@ SELF_STORE_NOTES="$REPO_ROOT/.github/workflows/self-store-notes.yml"
 }
 
 @test "self-store-notes.yml checks the section output with its own script" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   [ "$(yq -r '.jobs."validate".name' "$SELF_STORE_NOTES")" = "Validate" ] || fail "the validate job was renamed"
   [ "$(yq -r '.jobs.validate.needs' "$SELF_STORE_NOTES")" = "dry-run" ] || fail "the section check does not wait on the dry run"
   [ "$(yq -r '.jobs.validate."timeout-minutes"' "$SELF_STORE_NOTES")" != "null" ] || fail "the section check has no timeout"
@@ -123,7 +123,7 @@ SELF_STORE_NOTES="$REPO_ROOT/.github/workflows/self-store-notes.yml"
 }
 
 @test "self-ci.yml runs the dry run on every change, with the grant the called job declares" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   [ "$(yq -r '.jobs."store-notes".uses' "$CI")" = "./.github/workflows/self-store-notes.yml" ] \
     || fail "self-ci.yml does not call self-store-notes.yml"
   [ "$(yq -r '.jobs."store-notes".name' "$CI")" = "Store notes" ] || fail "the store notes job was renamed"
@@ -136,7 +136,7 @@ SELF_STORE_NOTES="$REPO_ROOT/.github/workflows/self-store-notes.yml"
 # tag-major.sh force-moves `v0`, which every consumer resolves on its next run.
 # A release whose dry run failed must leave the tags where they were.
 @test "self-release.yml moves the major tag only after the release commit's dry run passed" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   [ "$(yq -r '.jobs."store-notes".uses' "$RELEASE")" = "./.github/workflows/self-store-notes.yml" ] \
     || fail "self-release.yml does not run the dry run"
   cond="$(yq -r '.jobs."store-notes".if' "$RELEASE")"
@@ -187,7 +187,7 @@ ci_make_targets() {
 }
 
 @test "every gate make check depends on is run by a self-CI job" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   local missing=()
   while IFS= read -r target; do
     ci_make_targets | grep -qx "$target" || missing+=("$target")
@@ -200,7 +200,7 @@ ci_make_targets() {
 # is a gate CI enforces and `make check` does not, so a green local run would
 # be a claim about coverage it does not have.
 @test "every make target a self-CI job runs is reachable from make check" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   local extra=()
   while IFS= read -r target; do
     check_prerequisites | grep -qx "$target" || extra+=("$target")
@@ -212,7 +212,7 @@ ci_make_targets() {
 # The extractors are the load-bearing part: one that silently found nothing
 # would make both cases above pass by vacuum.
 @test "the self-CI extractors find the gates and the jobs" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   [ "$(check_prerequisites | wc -l)" -ge 5 ] \
     || fail "check_prerequisites found almost nothing: $(check_prerequisites | tr '\n' ' ')"
   [ "$(ci_make_targets | wc -l)" -ge 5 ] \
@@ -230,7 +230,7 @@ CHECKS="$REPO_ROOT/.github/workflows/self-checks.yml"
 UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
 
 @test "self-ci.yml classifies with changed-gates.sh against the PR base only" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   step=$(yq -r '.jobs.changes.steps[] | select(.id == "classify")' "$CI")
   contains "$step" 'bash scripts/self/changed-gates.sh "$BASE_SHA" "$HEAD_SHA"' \
     || fail "the classify step does not run changed-gates.sh: $step"
@@ -243,7 +243,7 @@ UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
 }
 
 @test "self-ci.yml hands each class to its gate, reading an empty output as run" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   for pair in checks:ci checks:versions unit:package; do
     job="${pair%%:*}" class="${pair##*:}"
     [ "$(yq -r ".jobs.$job.needs" "$CI")" = "changes" ] || fail "$job does not need changes"
@@ -255,7 +255,7 @@ UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
 }
 
 @test "each narrow gate runs on its input, which defaults to true" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   for spec in "$CHECKS:ci:ci" "$CHECKS:versions:versions" "$UNIT:package:package"; do
     file="${spec%%:*}" rest="${spec#*:}"
     job="${rest%%:*}" input="${rest##*:}"
@@ -267,7 +267,7 @@ UNIT="$REPO_ROOT/.github/workflows/self-unit.yml"
 }
 
 @test "the gates that read the whole tree or history carry no class" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   for job in security docs; do
     [ "$(yq -r ".jobs.$job.if // \"\"" "$CHECKS")" = "" ] || fail "self-checks.yml $job gained an if"
   done
