@@ -1756,7 +1756,7 @@ Fingerprint gate → `expo export` → publish → manifest smoke check.
 | `environment` | `''` | GitHub Environment gating the publish |
 | `ota-cli-version` | `''` | Exact `eoas` version. Never leave this empty in a real caller: `scripts/ota/publish.sh` refuses to run unpinned |
 | `baseline-tag` | `''` | **Required whenever `ota-enabled` is true.** Release tag whose `build-info.json` asset is the fingerprint baseline for this channel — see [The OTA fingerprint gate](#the-ota-fingerprint-gate). `latest` is the newest published release that is neither a draft nor a pre-release: the store build a hotfix lands on |
-| `manifest-url` | `''` | Manifest URL fetched after publishing as a smoke check; empty skips it |
+| `manifest-url` | `''` | Manifest URL fetched after publishing as a smoke check; empty skips it. A request that gets no answer or a 5xx is made again, three times in all, 5 seconds apart; any other status is final |
 | `runtime-version` | `''` | Sent as the `expo-runtime-version` header in that check. Empty takes the baseline's iOS fingerprint: the gate only lets an update through when this commit fingerprints the same, and that fingerprint is the runtime version the update is served under |
 
 No outputs. Secrets: `consumer-token`, `OTA_PUBLISH_TOKEN` (both optional).
@@ -3717,6 +3717,7 @@ each one lives so a future edit doesn't quietly regress it.
 
 | Lesson | Encoded in |
 | --- | --- |
+| A network blip must not turn a release red, and only a step that is safe to repeat is run again | `scripts/lib/common.sh` `retry_command ATTEMPTS DELAY_SECONDS -- COMMAND` (logs each failed attempt, returns the last status), used by `scripts/native/pods.sh` (`pod install`, 3 attempts, 20 s apart) and `scripts/ota/smoke.sh` (the manifest GET, 3 attempts, 5 s apart, only on no answer or a 5xx). Never around `scripts/ota/publish.sh`: each publish creates a new update |
 | A hung Maestro driver must never eat the job twice | `scripts/e2e/maestro-bound.sh` (`bounded_maestro`, exit `124`) + `ios-maestro.sh`/`android-maestro.sh` (retry only on a real failure, never on `124`) |
 | The suite's own timeout must not race the step's `timeout-minutes` | `scripts/e2e/step-timeout.sh` (step timeout = `suite-timeout-minutes + 5`), consumed via `fromJSON(steps.timeout.outputs.minutes)` in `test-e2e.yml` |
 | Killing Metro must kill its whole process group, not just the wrapper pid | `scripts/e2e/README.md` notes `kill -TERM -"$(cat "$WORKFLOWS_OUT/metro.pid")"` (leading `-`), which `metro-start.sh` also logs when it starts Metro; nothing kills Metro itself — the job teardown reaps the process group |

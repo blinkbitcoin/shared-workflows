@@ -68,6 +68,51 @@ wait_until() {
 }
 group() { printf '::group::%s\n' "$*"; }
 endgroup() { printf '::endgroup::\n'; }
+# retry_command ATTEMPTS DELAY_SECONDS -- COMMAND [ARGUMENT...] - run COMMAND,
+# and run it again after DELAY_SECONDS while it exits non-zero, ATTEMPTS times
+# in all. Returns 0 on the first success, else the last attempt's exit status.
+#
+# For a network step a transient blip would otherwise turn red, and only for
+# one that is safe to repeat: a second run must not create a second of
+# anything. (Not to be confused with scripts/release/retry.sh, which re-runs
+# a release's failed jobs.) Each failed attempt is logged on stderr with its
+# number and exit status; the command's own stdout passes through untouched.
+#
+# WORKFLOWS_RETRY_DELAY_SECONDS, when set, replaces every caller's delay, so a
+# test can run the retries without waiting. COMMAND runs as the condition of
+# an `||`, where `set -e` does not apply, so a shell function passed as
+# COMMAND must return its own failures explicitly.
+retry_command() {
+  local usage="usage: retry_command ATTEMPTS DELAY_SECONDS -- COMMAND [ARGUMENT...]"
+  local attempts="${1:-}" delay="${2:-}"
+  case "$attempts" in
+    '' | *[!0-9]*) die "retry_command: ATTEMPTS must be a positive integer (got '$attempts') - $usage" ;;
+  esac
+  [ "$attempts" -ge 1 ] || die "retry_command: ATTEMPTS must be at least 1 (got '$attempts') - $usage"
+  case "$delay" in
+    '' | *[!0-9]*) die "retry_command: DELAY_SECONDS must be a whole number of seconds (got '$delay') - $usage" ;;
+  esac
+  [ "${3:-}" = "--" ] || die "retry_command: expected -- before the command - $usage"
+  shift 3
+  [ "$#" -gt 0 ] || die "retry_command: no command to run - $usage"
+  delay="${WORKFLOWS_RETRY_DELAY_SECONDS:-$delay}"
+  case "$delay" in
+    '' | *[!0-9]*) die "retry_command: WORKFLOWS_RETRY_DELAY_SECONDS must be a whole number of seconds (got '$delay')" ;;
+  esac
+  local attempt=1 status
+  while :; do
+    status=0
+    "$@" || status=$?
+    [ "$status" -ne 0 ] || return 0
+    if [ "$attempt" -ge "$attempts" ]; then
+      log "attempt $attempt of $attempts failed with exit status $status: $1 - giving up"
+      return "$status"
+    fi
+    log "attempt $attempt of $attempts failed with exit status $status: $1 - retrying in ${delay}s"
+    sleep "$delay"
+    attempt=$((attempt + 1))
+  done
+}
 gh_output() { if [ -n "${GITHUB_OUTPUT:-}" ]; then printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; else printf '%s=%s\n' "$1" "$2"; fi; }
 # gh_env_multiline KEY VALUE - append KEY to $GITHUB_ENV in the heredoc
 # delimiter form, the only form that is safe for a value the caller controls.

@@ -442,3 +442,89 @@ SH
   [ "$output" = "::error::WORKFLOWS_A must be a non-negative integer (got 'x'); WORKFLOWS_C must be a non-negative integer (got nothing: unset or empty)" ] ||
     fail "unexpected message: $output"
 }
+
+# retry_command: a counting command that fails its first $1 runs with status
+# $2, then prints and succeeds. The count lives in a file: `run` is a subshell.
+flaky() {
+  local runs
+  runs=$(( $(cat "$BATS_TEST_TMPDIR/runs" 2>/dev/null || printf 0) + 1 ))
+  printf '%s\n' "$runs" > "$BATS_TEST_TMPDIR/runs"
+  [ "$runs" -gt "$1" ] || return "$2"
+  printf 'done on run %s\n' "$runs"
+}
+runs() { cat "$BATS_TEST_TMPDIR/runs"; }
+# A sleep that records its argument instead of waiting.
+recording_sleep() {
+  bin="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$bin"
+  printf '#!/usr/bin/env bash\nprintf "sleep %%s\\n" "$*" >> "%s/sleeps"\n' "$BATS_TEST_TMPDIR" > "$bin/sleep"
+  chmod +x "$bin/sleep"
+}
+@test "retry_command runs a command that succeeds once, and keeps its stdout" {
+  run retry_command 3 0 -- flaky 0 1
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$(runs)" -eq 1 ] || fail "ran $(runs) times"
+  [ "$output" = "done on run 1" ] || fail "stdout changed: $output"
+}
+@test "retry_command runs the command again after a failure, logging each failed attempt" {
+  run retry_command 3 0 -- flaky 2 7
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$(runs)" -eq 3 ] || fail "ran $(runs) times"
+  contains "$output" "attempt 1 of 3 failed with exit status 7: flaky - retrying in 0s" || fail "$output"
+  contains "$output" "attempt 2 of 3 failed with exit status 7: flaky - retrying in 0s" || fail "$output"
+  contains "$output" "done on run 3" || fail "$output"
+}
+@test "retry_command gives up after ATTEMPTS and returns the last exit status" {
+  run retry_command 2 0 -- flaky 5 9
+  [ "$status" -eq 9 ] || fail "expected 9, got $status: $output"
+  [ "$(runs)" -eq 2 ] || fail "ran $(runs) times"
+  contains "$output" "attempt 2 of 2 failed with exit status 9: flaky - giving up" || fail "$output"
+  not_contains "$output" "done on run" || fail "$output"
+}
+@test "retry_command with one attempt runs once and does not retry" {
+  run retry_command 1 0 -- flaky 5 4
+  [ "$status" -eq 4 ] || fail "expected 4, got $status: $output"
+  [ "$(runs)" -eq 1 ] || fail "ran $(runs) times"
+}
+@test "retry_command sleeps DELAY_SECONDS between attempts, not after the last" {
+  recording_sleep
+  PATH="$bin:$PATH" run retry_command 3 4 -- flaky 5 1
+  [ "$status" -eq 1 ] || fail "status $status: $output"
+  [ "$(cat "$BATS_TEST_TMPDIR/sleeps")" = "$(printf 'sleep 4\nsleep 4')" ] || fail "sleeps: $(cat "$BATS_TEST_TMPDIR/sleeps")"
+  contains "$output" "retrying in 4s" || fail "$output"
+}
+@test "WORKFLOWS_RETRY_DELAY_SECONDS replaces the caller's delay" {
+  recording_sleep
+  WORKFLOWS_RETRY_DELAY_SECONDS=0 PATH="$bin:$PATH" run retry_command 2 30 -- flaky 1 1
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$(cat "$BATS_TEST_TMPDIR/sleeps")" = "sleep 0" ] || fail "sleeps: $(cat "$BATS_TEST_TMPDIR/sleeps")"
+}
+@test "retry_command refuses an ATTEMPTS that is not a positive integer" {
+  for bad in "" abc -1 1.5 0; do
+    run retry_command "$bad" 0 -- true
+    [ "$status" -eq 1 ] || fail "accepted ATTEMPTS '$bad': $output"
+    contains "$output" "::error::retry_command: ATTEMPTS must" || fail "ATTEMPTS '$bad': $output"
+    contains "$output" "usage: retry_command ATTEMPTS DELAY_SECONDS -- COMMAND" || fail "no usage for '$bad': $output"
+  done
+}
+@test "retry_command refuses a DELAY_SECONDS that is not a whole number" {
+  for bad in "" soon -2 0.5; do
+    run retry_command 3 "$bad" -- true
+    [ "$status" -eq 1 ] || fail "accepted DELAY_SECONDS '$bad': $output"
+    contains "$output" "::error::retry_command: DELAY_SECONDS must be a whole number of seconds" || fail "DELAY_SECONDS '$bad': $output"
+  done
+}
+@test "retry_command refuses a WORKFLOWS_RETRY_DELAY_SECONDS that is not a whole number" {
+  WORKFLOWS_RETRY_DELAY_SECONDS=later run retry_command 3 0 -- true
+  [ "$status" -eq 1 ] || fail "accepted the override: $output"
+  contains "$output" "::error::retry_command: WORKFLOWS_RETRY_DELAY_SECONDS must be a whole number of seconds (got 'later')" || fail "$output"
+}
+@test "retry_command needs -- before the command, and a command after it" {
+  run retry_command 3 0 flaky 0 1
+  [ "$status" -eq 1 ] || fail "ran without --: $output"
+  contains "$output" "::error::retry_command: expected -- before the command" || fail "$output"
+  [ ! -f "$BATS_TEST_TMPDIR/runs" ] || fail "ran the command anyway"
+  run retry_command 3 0 --
+  [ "$status" -eq 1 ] || fail "ran with no command: $output"
+  contains "$output" "::error::retry_command: no command to run" || fail "$output"
+}
