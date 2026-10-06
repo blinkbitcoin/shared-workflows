@@ -229,7 +229,10 @@ Every row is a make target; nothing here is run through a package manager.
   `release-please-config.json` rebuilds every open one on each push to
   `main`, so merging one never leaves the other conflicting. Each rebuild is a
   force push, which dismisses an approval: approve a release PR right
-  before merging it.
+  before merging it. The `publish-app-tooling` job runs the package's suites
+  (`make test-package`, `make test-fastlane`) again before `npm publish`, so a
+  merge that skipped or bypassed the release PR's CI still cannot publish
+  untested code.
 
   The chain, end to end:
 
@@ -252,7 +255,8 @@ Every row is a make target; nothing here is run through a package manager.
     rel->>tags: release-created, tag vX.Y.Z and its release
     rel->>rel: store-notes job runs pr-store-notes.yml against the template, dry run, from that commit
     rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after that dry run passed
-    rel->>tags: publish-app-tooling job publishes the npm package, when paths-released names it
+    rel->>rel: publish-app-tooling job runs make test-package and make test-fastlane, when paths-released names the package
+    rel->>tags: publish-app-tooling job publishes the npm package, only after those tests passed
     rel->>pr: the other component's open release PR is rebuilt on the new main, manifest included
   ```
 

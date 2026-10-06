@@ -68,6 +68,33 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
   [ -f "$REPO_ROOT/packages/app-tooling/package.json" ] || fail "packages/app-tooling moved; the gate names a path that is gone"
 }
 
+# The release PR's CI is the usual gate, but a merge that skipped or bypassed it
+# would publish code no test has seen. So the job runs the package's suites
+# itself, with self-unit.yml's toolchain, and only then publishes.
+@test "self-release.yml tests app-tooling before it publishes it" {
+  local job='.jobs."publish-app-tooling".steps'
+  step_index() { yq -r "$job | to_entries[] | select(.value.$1 == \"$2\") | .key" "$RELEASE"; }
+  local toolchain package lanes publish
+  toolchain="$(step_index uses jdx/mise-action@v4)"
+  package="$(step_index run 'make test-package')"
+  lanes="$(step_index run 'make test-fastlane')"
+  publish="$(step_index run 'npm publish')"
+  [ -n "$toolchain" ] || fail "publish-app-tooling does not set up mise the way self-unit.yml does"
+  [ -n "$package" ] || fail "publish-app-tooling does not run make test-package"
+  [ -n "$lanes" ] || fail "publish-app-tooling does not run make test-fastlane"
+  [ -n "$publish" ] || fail "publish-app-tooling no longer runs npm publish; update this test"
+  [ "$toolchain" -lt "$package" ] || fail "mise is set up at step $toolchain, after make test-package at step $package"
+  [ "$package" -lt "$publish" ] || fail "make test-package runs at step $package, after npm publish at step $publish"
+  [ "$lanes" -lt "$publish" ] || fail "make test-fastlane runs at step $lanes, after npm publish at step $publish"
+}
+
+@test "self-release.yml's publish job holds contents: read and packages: write, and nothing more" {
+  local grant
+  grant="$(yq -r '.jobs."publish-app-tooling".permissions | to_entries | map(.key + "=" + .value) | sort | join(",")' "$RELEASE")"
+  [ "$grant" = "contents=read,packages=write" ] \
+    || fail "publish-app-tooling grants '$grant', not contents=read,packages=write"
+}
+
 # One release PR per package, and both bump adjacent lines of the shared
 # manifest: merging one leaves the other conflicting. release-please rebuilds
 # an open PR only when its notes change - unless always-update is set, which

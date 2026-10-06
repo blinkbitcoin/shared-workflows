@@ -199,7 +199,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `self-store-notes.yml` | `Dry run`<br>`Validate` | `pr-store-notes.yml` run for real against the template in a dry run, then its `section` output checked. Called by `self-ci.yml` and `self-release.yml` |
 | `self-smoke.yml`   | `Checks`<br>`Unit`<br>`E2E`       | Runs the family against a real consumer repo. Weekly, and on dispatch                          |
 | `self-smoke-local.yml` | `Prepare`<br>`Build Android` | The Linux release jobs against the template, run on a laptop with act (`make test-smoke-local`). Dispatch-only, never run on GitHub |
-| `self-release.yml` | `Release PR`<br>`Store notes`<br>`Major tag`<br>`Publish app-tooling` | release-please maintains the version PR; on release, the store notes dry run runs from the release commit, then `v0` and `v0.<minor>` move and the npm package publishes |
+| `self-release.yml` | `Release PR`<br>`Store notes`<br>`Major tag`<br>`Publish app-tooling` | release-please maintains the version PR; on release, the store notes dry run runs from the release commit, then `v0` and `v0.<minor>` move and the npm package publishes once its tests pass |
 
 ## Repository layout
 
