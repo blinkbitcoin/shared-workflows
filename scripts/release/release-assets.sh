@@ -229,11 +229,12 @@ fi
 # `--target` creates the tag; a tag that already exists (reserved in Prepare,
 # see reserve-tag.sh) is used as it is, which creates no ref and so cannot be
 # refused by GitHub's rule about tags on commits whose workflow files differ
-# from the default branch tip.
-tag_exists() { gh api "repos/${GH_REPO:?GH_REPO not set}/git/ref/tags/$tag" >/dev/null 2>&1; }
+# from the default branch tip. A lookup that could not be made is fatal inside
+# gh_ref_exists rather than "no tag": passing --target on a guess is what this
+# check is here to prevent.
 target_args=()
 if [ -n "${TARGET_SHA:-}" ]; then
-  if tag_exists; then
+  if gh_ref_exists "tags/$tag"; then
     log "tag $tag already exists - creating the release on it, no --target"
   else
     target_args=(--target "$TARGET_SHA")

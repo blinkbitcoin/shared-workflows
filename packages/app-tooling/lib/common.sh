@@ -98,3 +98,40 @@ gh_env_once() {
 # consumer_root is canonical (pwd -P) on purpose: cache `path:` matching and tar operations need stable absolute paths.
 consumer_root() { local base="${GITHUB_WORKSPACE:-$PWD}"; local wd="${WORKING_DIRECTORY:-.}"; cd "$base/$wd" && pwd -P; }
 require_cmd() { local c; for c in "$@"; do command -v "$c" >/dev/null 2>&1 || die "missing command: $c"; done; }
+# gh_ref_exists REF
+#
+# Whether the git ref REF (`tags/v1.2.3`, `heads/main`) exists in $GH_REPO.
+# True when GitHub returns it, with the commit it points at left in
+# $gh_ref_sha; false only when GitHub answers 404. Every other failure - bad
+# credentials, a missing scope, a rate limit, a 5xx, no network - is fatal:
+# "we could not ask" must never be read as "it is not there", which once made a
+# release step pass --target for a tag that already existed.
+#
+# `gh api` exits 1 for every HTTP error alike and prints the error body on
+# stdout even under --jq, so the answer is read from its stderr, where it ends
+# each one with "(HTTP <status>)". A 404 also covers a repository the token
+# cannot see at all; GitHub gives no other answer for that, and the write the
+# caller makes next fails on its own.
+#
+# Call it as a condition (`if gh_ref_exists "tags/$tag"`), never through
+# $(...): the die below must end the script, not a subshell.
+gh_ref_exists() {
+  local ref="$1" err_file err rc=0
+  : "${GH_REPO:?GH_REPO not set}"
+  gh_ref_sha=""
+  err_file="$(mktemp)" || die "could not create a temporary file to look up ref $ref"
+  gh_ref_sha="$(gh api "repos/$GH_REPO/git/ref/$ref" --jq '.object.sha' 2>"$err_file")" || rc=$?
+  err="$(cat "$err_file")"
+  rm -f "$err_file"
+  if [ "$rc" -eq 0 ]; then
+    [ -n "$gh_ref_sha" ] || die "GitHub returned ref $ref of $GH_REPO without the commit it points at - refusing to guess"
+    return 0
+  fi
+  gh_ref_sha=""
+  case "$err" in
+    *'(HTTP 404)'*) return 1 ;;
+  esac
+  err="${err//$'\n'/ }"
+  [ -n "$err" ] || err="gh api exited $rc with no message"
+  die "could not check whether ref $ref exists in $GH_REPO: $err - refusing to guess. Check that GH_TOKEN is set and may read the repository's contents; if GitHub was rate limiting or unavailable, re-run the job."
+}

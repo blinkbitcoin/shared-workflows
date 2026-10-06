@@ -50,9 +50,22 @@ case "$1 $2" in
     ;;
   "release create") : > "$WORKFLOWS_TEST_EXISTS"; exit 0 ;;
   "api "*)
-    # `gh api repos/<r>/git/ref/tags/<tag>`: the tag exists when the marker does.
+    # `gh api repos/<r>/git/ref/tags/<tag>`: fails the way
+    # WORKFLOWS_TEST_TAG_LOOKUP_FAILS says (a status and gh's message), else the
+    # tag exists, with its commit on stdout, when the marker does, else a 404 -
+    # each in gh's own shape: error body on stdout, "(HTTP <status>)" on stderr.
     case "$*" in
-      *"/git/ref/tags/"*) [ -f "$WORKFLOWS_TEST_TAG_EXISTS" ] && exit 0; echo "Not Found" >&2; exit 1 ;;
+      *"/git/ref/tags/"*)
+        if [ -n "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS:-}" ]; then
+          printf '{"message":"%s"}\n' "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS#* }"
+          printf 'gh: %s (HTTP %s)\n' "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS#* }" "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS%% *}" >&2
+          exit 1
+        fi
+        [ -f "$WORKFLOWS_TEST_TAG_EXISTS" ] && { echo deadbeef; exit 0; }
+        echo '{"message":"Not Found"}'
+        echo "gh: Not Found (HTTP 404)" >&2
+        exit 1
+        ;;
     esac
     exit 0
     ;;
@@ -87,7 +100,7 @@ SH
   export PATH="$STUB:$PATH"
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" WORKFLOWS_ASSETS_DIR="$ASSETS" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   mkdir -p "$RUNNER_TEMP"
-  unset GITHUB_OUTPUT TITLE TARGET_SHA RELEASE_NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE
+  unset GITHUB_OUTPUT TITLE TARGET_SHA RELEASE_NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE WORKFLOWS_TEST_TAG_LOOKUP_FAILS
 }
 
 source_release() {
@@ -127,6 +140,34 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
   grep -q -- "release create v1.2.3 --prerelease" "$WORKFLOWS_TEST_LOG" || fail "no create: $(cat "$WORKFLOWS_TEST_LOG")"
   ! grep -q -- "--target" "$WORKFLOWS_TEST_LOG" || fail "--target passed for an existing tag, which would try to create it again: $(cat "$WORKFLOWS_TEST_LOG")"
   contains "$output" "already exists - creating the release on it" || fail "did not say why: $output"
+}
+
+@test "create-prerelease looks up exactly the tag's ref, and passes --target for a 404" {
+  assets
+  TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -qx -- "api repos/acme/app/git/ref/tags/v1.2.3 --jq .object.sha" "$WORKFLOWS_TEST_LOG" \
+    || fail "wrong tag lookup: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -q -- "release create v1.2.3 --prerelease .*--target deadbeef" "$WORKFLOWS_TEST_LOG" \
+    || fail "a tag GitHub answered 404 for got no --target: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "create-prerelease refuses to guess when the tag lookup is refused for bad credentials" {
+  # Read as "no tag", a 401 passed --target for a tag that may already exist.
+  assets
+  WORKFLOWS_TEST_TAG_LOOKUP_FAILS="401 Bad credentials" TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -ne 0 ] || fail "a failed tag lookup must be fatal"
+  contains "$output" "tags/v1.2.3" || fail "does not name the tag: $output"
+  contains "$output" "Bad credentials (HTTP 401)" || fail "does not carry gh's answer: $output"
+  ! grep -q -- "^release create" "$WORKFLOWS_TEST_LOG" || fail "created a release after a failed lookup: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "create-prerelease refuses to guess when the tag lookup hits a server error" {
+  assets
+  WORKFLOWS_TEST_TAG_LOOKUP_FAILS="500 Server Error" TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -ne 0 ] || fail "a failed tag lookup must be fatal"
+  contains "$output" "Server Error (HTTP 500)" || fail "$output"
+  ! grep -q -- "^release create" "$WORKFLOWS_TEST_LOG" || fail "created a release after a failed lookup: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
 @test "SHA256SUMS lists basenames and real digests" {
