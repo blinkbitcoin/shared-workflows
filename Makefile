@@ -75,8 +75,9 @@ check-secrets: ## Scan the whole git history for committed secrets (gitleaks)
 	$(MISE) gitleaks git --redact --no-banner .
 test: test-unit test-package test-scripts test-fastlane ## Every test suite: bats, the packages, the Node scripts and the Ruby lanes
 check: check-ci test-unit test-package test-scripts test-fastlane check-version-pins check-tool-versions check-spell check-secrets ## Everything self-ci runs
-# Not part of `check`: needs Docker, a pushed branch and a few minutes. See
-# CONTRIBUTING.md, "Running the release pipeline locally".
+# Not part of `check`: needs Docker and a pushed branch, and takes a few minutes
+# (the Android leg longer). See CONTRIBUTING.md, "Running the release pipeline
+# locally".
 test-smoke-local: ## Run Prepare against the template with act (the Linux jobs, in Docker; needs a pushed branch)
 	$(MISE) bash scripts/self/smoke-local.sh
 test-smoke-local-android: ## test-smoke-local, then the unsigned Android build
