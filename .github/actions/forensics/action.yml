@@ -24,6 +24,7 @@ runs:
         path: ${{ inputs.path != '' && inputs.path || format('{0}/forensics', env.WORKFLOWS_OUT) }}
         if-no-files-found: ignore
         retention-days: ${{ inputs.retention-days }}
+        overwrite: true
     - name: Summarize forensics artifact
       if: steps.up.outputs.artifact-url != ''
       shell: bash

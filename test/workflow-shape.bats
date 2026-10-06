@@ -1545,3 +1545,35 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   done
   [ -z "$bad" ] || fail "jobs that would run only to skip every step - add the toggle to the job's if:$bad"
 }
+
+# Without overwrite: true, upload-artifact refuses a name that already exists
+# in the run, so re-running a failed job, or a second upload under the same
+# name, fails on the leftover artifact instead of replacing it. Read step by
+# step from every workflow (self-* included) and every composite action; the
+# two counts keep the check from passing on a query that matches nothing.
+@test "every upload-artifact step, in every workflow and composite action, sets overwrite: true" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local f uploads missing step in_workflows=0 in_actions=0 bad=()
+  # Each step paired with where it sits: the job in a workflow, the action
+  # itself in a composite action. Step names repeat across jobs, so the job is
+  # what makes the failure message point at one step.
+  local steps='(((.jobs // {}) | to_entries[] | .key as $job | .value.steps[]? | {"where": "job " + $job, "step": .}),
+    (.runs.steps[]? | {"where": "action", "step": .}))
+    | select((.step.uses // "") | test("^actions/upload-artifact@"))'
+  for f in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/actions/*/action.yml; do
+    uploads="$(yq -r "[$steps] | length" "$f")"
+    case "$f" in
+      */.github/actions/*) in_actions=$((in_actions + uploads)) ;;
+      *) in_workflows=$((in_workflows + uploads)) ;;
+    esac
+    missing="$(yq -r "$steps | select(.step.with.overwrite != true) | .where + \", step '\" + (.step.name // .step.uses) + \"'\"" "$f")"
+    while IFS= read -r step; do
+      if [ -n "$step" ]; then
+        bad+=("${f#"$REPO_ROOT"/}: $step")
+      fi
+    done <<<"$missing"
+  done
+  [ "$in_workflows" -gt 0 ] || fail "found no upload-artifact step under .github/workflows: the step query is broken"
+  [ "$in_actions" -gt 0 ] || fail "found no upload-artifact step under .github/actions: the step query is broken"
+  [ "${#bad[@]}" -eq 0 ] || fail "upload-artifact steps without overwrite: true:$(printf '\n  %s' "${bad[@]}")"
+}
