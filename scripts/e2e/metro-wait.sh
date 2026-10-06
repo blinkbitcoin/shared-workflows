@@ -94,7 +94,7 @@ if [ "$stack" = bare ]; then
 elif path="$(manifest_bundle_path)"; then
   log "prewarming the manifest's launchAsset: $path"
 else
-  printf '::warning::could not read launchAsset.url from the %s manifest; prewarming the hand-built bundle URL, which may warm a different graph than the app requests\n' "$platform"
+  warn "could not read launchAsset.url from the $platform manifest; prewarming the hand-built bundle URL, which may warm a different graph than the app requests"
   path="$fallback"
 fi
 # The first bundle build of a cold app is minutes on a runner; do it here so a

@@ -79,7 +79,7 @@ run_maestro_suite() {
   # A hung driver is not retried - the second attempt would only run into the
   # step's timeout-minutes and cost another suite's worth of wall clock.
   if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
-    log "::warning::Maestro suite failed (status $status) - rerunning the suite once"
+    warn "Maestro suite failed (status $status) - rerunning the suite once"
     status=0
     group "maestro test ($display_name, retry)"
     bounded_maestro "$bound" maestro "${args[@]}" || status=$?

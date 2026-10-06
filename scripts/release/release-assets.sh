@@ -89,8 +89,11 @@ collect_assets() {
   return 0
 }
 
+# sha256_of FILE - one SHA256SUMS line for FILE: its digest, two spaces, its name.
 sha256_of() {
-  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"; else sha256sum "$1"; fi
+  local digest
+  digest="$(sha256_file "$1")" || return
+  printf '%s  %s\n' "$digest" "$1"
 }
 
 # `gh release view >/dev/null 2>&1` collapses three different answers into one
@@ -164,7 +167,9 @@ upload_assets() {
   )
   assets+=("$assets_dir/SHA256SUMS")
   group "upload ${#assets[@]} assets to $tag"
-  gh release upload "$tag" "${assets[@]}" --clobber
+  # --clobber replaces an asset already uploaded, so a repeat after a dropped
+  # connection overwrites rather than duplicates: safe to try again.
+  retry_command 3 15 -- gh release upload "$tag" "${assets[@]}" --clobber
   endgroup
 }
 
@@ -221,10 +226,7 @@ if [ -n "${BODY_NOTE:-}" ]; then
   # but someone looking at a green run wants to know there and then that it did
   # not do what a release run usually does, without opening the release.
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-    {
-      printf '### %s\n\n' "$tag"
-      printf '%s\n' "$BODY_NOTE"
-    } >> "$GITHUB_STEP_SUMMARY"
+    gh_summary "### $tag" "" "$BODY_NOTE"
   fi
 fi
 # `--target` creates the tag; a tag that already exists (reserved in Prepare,

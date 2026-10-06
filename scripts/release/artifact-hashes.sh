@@ -52,11 +52,6 @@ src="${BUILD_INFO_FILE:-$WORKFLOWS_RELEASE_META_DIR/build-info.json}"
 [ -f "$src" ] || die "no build-info.json at $src - run build-info.sh (build-prepare) first"
 dest="$WORKFLOWS_OUTPUT_DIR/build-info.json"
 
-sha256_of() {
-  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1
-  else sha256sum "$1" | cut -d' ' -f1; fi
-}
-
 # first_of GLOB - the single file matching GLOB, or empty. More than one match
 # is fatal: "the apk" has to be unambiguous for a digest to mean anything.
 first_of() {
@@ -80,7 +75,9 @@ shas=()
 pairs=()
 for i in "${!kinds[@]}"; do
   sha=""
-  [ -z "${files[$i]}" ] || sha="$(sha256_of "${files[$i]}")"
+  if [ -n "${files[$i]}" ]; then
+    sha="$(sha256_file "${files[$i]}")"
+  fi
   shas+=("$sha")
   pairs+=("${kinds[$i]}Sha256=$sha")
 done

@@ -273,7 +273,7 @@ require_cmd() { local c; for c in "$@"; do command -v "$c" >/dev/null 2>&1 || di
 # $(...): the die below must end the script, not a subshell.
 gh_ref_exists() {
   local ref="$1" err_file err rc=0
-  : "${GH_REPO:?GH_REPO not set}"
+  require_env GH_REPO:owner/name
   gh_ref_sha=""
   err_file="$(mktemp)" || die "could not create a temporary file to look up ref $ref"
   gh_ref_sha="$(gh api "repos/$GH_REPO/git/ref/$ref" --jq '.object.sha' 2>"$err_file")" || rc=$?

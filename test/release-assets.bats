@@ -82,6 +82,19 @@ case "$1 $2" in
     cp "$WORKFLOWS_TEST_SOURCE_ASSETS"/* "$dir"/ 2>/dev/null
     exit 0
     ;;
+  "release upload")
+    # WORKFLOWS_TEST_UPLOAD_FAILS uploads that drop before one gets through
+    # ("always" never does), counted in a file because each call is a process.
+    if [ -n "${WORKFLOWS_TEST_UPLOAD_FAILS:-}" ]; then
+      n=$(($(cat "$BATS_TEST_TMPDIR/uploads" 2>/dev/null || echo 0) + 1))
+      echo "$n" > "$BATS_TEST_TMPDIR/uploads"
+      if [ "$WORKFLOWS_TEST_UPLOAD_FAILS" = always ] || [ "$n" -le "$WORKFLOWS_TEST_UPLOAD_FAILS" ]; then
+        echo "error connecting to uploads.github.com" >&2
+        exit 1
+      fi
+    fi
+    exit 0
+    ;;
   "release delete") rm -f "$WORKFLOWS_TEST_SOURCE_EXISTS"; exit 0 ;;
   "release edit")
     # Mirror --notes-file into the stored body, so a second `append` sees the
@@ -100,7 +113,8 @@ SH
   export PATH="$STUB:$PATH"
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" WORKFLOWS_ASSETS_DIR="$ASSETS" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   mkdir -p "$RUNNER_TEMP"
-  unset GITHUB_OUTPUT TITLE TARGET_SHA RELEASE_NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE WORKFLOWS_TEST_TAG_LOOKUP_FAILS
+  unset GITHUB_OUTPUT TITLE TARGET_SHA RELEASE_NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE WORKFLOWS_TEST_TAG_LOOKUP_FAILS WORKFLOWS_TEST_UPLOAD_FAILS
+  export WORKFLOWS_RETRY_DELAY_SECONDS=0
 }
 
 source_release() {
@@ -130,6 +144,22 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
   contains "$upload" "SHA256SUMS" || fail "SHA256SUMS was not uploaded: $upload"
   not_contains "$upload" "unrelated.txt" || fail "a file outside the fixed set was uploaded: $upload"
   contains "$upload" "--clobber" || fail "upload is not idempotent (no --clobber): $upload"
+}
+
+@test "a dropped upload is tried again, and --clobber makes the repeat overwrite" {
+  assets
+  WORKFLOWS_TEST_UPLOAD_FAILS=1 TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -eq 0 ] || fail "one dropped upload must not fail the release; exited $status: $output"
+  [ "$(grep -c '^release upload' "$WORKFLOWS_TEST_LOG")" -eq 2 ] || fail "expected 2 uploads: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "attempt 1 of 3 failed" || fail "the failed attempt was not logged: $output"
+}
+
+@test "an upload that keeps failing fails the release after three attempts" {
+  assets
+  WORKFLOWS_TEST_UPLOAD_FAILS=always TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -ne 0 ] || fail "a release whose assets never uploaded must fail"
+  [ "$(grep -c '^release upload' "$WORKFLOWS_TEST_LOG")" -eq 3 ] || fail "expected 3 uploads: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "giving up" || fail "the last attempt did not say it gave up: $output"
 }
 
 @test "create-prerelease on a tag reserved in Prepare passes no --target" {
