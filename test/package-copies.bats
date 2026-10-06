@@ -9,7 +9,7 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (50 files)" || fail "output: $output"
+  contains "$output" "package copies ok (51 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
@@ -22,6 +22,7 @@ tree() {
   cp "$REPO_ROOT"/scripts/native/expo/{app-config,fingerprint}.sh "$tree/scripts/native/expo/"
   cp "$REPO_ROOT"/scripts/native/bare/{app-config,fingerprint}.sh "$tree/scripts/native/bare/"
   cp "$REPO_ROOT"/scripts/release/{resolve-version,build-info,verify-ios,verify-android}.sh "$tree/scripts/release/"
+  cp "$REPO_ROOT/scripts/release/build-info.mjs" "$tree/scripts/release/"
   cp "$REPO_ROOT/scripts/lib/verify-common.sh" "$tree/scripts/lib/"
   cp "$REPO_ROOT"/scripts/setup/{all,toolchain,android,ios,lib}.sh "$tree/scripts/setup/"
   cp "$REPO_ROOT"/scripts/checks/{generated,secrets,run-script,expo-health}.sh "$tree/scripts/checks/"
@@ -39,8 +40,8 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 50 files into packages/app-tooling" || fail "output: $output"
-  for rel in release/resolve-version.sh release/build-info.sh checks/generated.sh checks/secrets.sh \
+  contains "$output" "copied 51 files into packages/app-tooling" || fail "output: $output"
+  for rel in release/resolve-version.sh release/build-info.sh release/build-info.mjs checks/generated.sh checks/secrets.sh \
     checks/run-script.sh checks/expo-health.sh ci/check-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh security/scan.sh security/code.sh \
     security/review-codebase.sh security/lib/runner.sh security/rules/react-native-secrets.yaml security/semgrepignore release/verify-ios.sh release/verify-android.sh \

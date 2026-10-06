@@ -11,7 +11,8 @@
 # lib/native-stack.sh and each stack's app-config and fingerprint entry points
 # (native/expo/, native/bare/) ride along too. A consumer runs the same ones on a laptop (`make
 # version`, `make check`), where it has the package and not this repository.
-# The package therefore carries them, with the libraries they source, at the
+# The package therefore carries them, with the libraries they source and the
+# Node programs they run (build-info.sh's build-info.mjs), at the
 # same relative paths (release/, checks/, ci/, security/, setup/ and native/ beside lib/, as under
 # scripts/), so each copy runs unchanged. check-ci.sh's default zizmor policy,
 # .github/zizmor.yml here, rides along as zizmor.yml at the package root. Copies inside one repository,
@@ -30,6 +31,7 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 copies=(
   scripts/release/resolve-version.sh:release/resolve-version.sh
   scripts/release/build-info.sh:release/build-info.sh
+  scripts/release/build-info.mjs:release/build-info.mjs
   scripts/release/verify-ios.sh:release/verify-ios.sh
   scripts/release/verify-android.sh:release/verify-android.sh
   scripts/lib/verify-common.sh:lib/verify-common.sh

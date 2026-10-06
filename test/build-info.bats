@@ -218,15 +218,17 @@ tagged_repo() {
 # list plus both scripts; renaming one breaks every reader of the record.
 SCHEMA_KEYS='sha version buildNumber stage fingerprint expoSdk reactNative workflowRunId artifacts'
 
-# The object keys of the JSON literal in a build-info.sh, in source order. Both
-# scripts build the record as one object literal indented by two spaces inside a
-# node program, so the nested fingerprint members do not appear here.
+# The top-level keys of the record build-info.sh writes, in file order, read off
+# a record this copy actually wrote (build_info runs build-info.sh, which writes
+# it through build-info.mjs).
 schema_keys_of() {
-  grep -oE '^  [A-Za-z][A-Za-z0-9]*:' "$1" | tr -d ' :' | tr '\n' ' ' | sed 's/ $//'
+  node -e 'console.log(Object.keys(require(process.argv[1])).join(" "))' "$1"
 }
 
 @test "this copy emits exactly the documented schema" {
-  mine="$(schema_keys_of "$REPO_ROOT/scripts/release/build-info.sh")"
+  APP_VERSION=1.2.3 APP_BUILD_NUMBER=1 WORKFLOWS_SHA=x build_info
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  mine="$(schema_keys_of "$DEST")"
   [ "$mine" = "$SCHEMA_KEYS" ] || fail "this copy's keys drifted from the schema:
 --- found    ---
 $mine

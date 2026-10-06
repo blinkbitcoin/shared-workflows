@@ -127,14 +127,14 @@ SH
   run grep -cE '\.fingerprint\.\$platform' "$REPO_ROOT/scripts/ota/fingerprint-gate.sh"
   [ "$output" -gt 0 ] || fail "the gate no longer reads .fingerprint.<platform> from the baseline"
 
-  run grep -cE 'process\.env\.FINGERPRINT_IOS' "$REPO_ROOT/scripts/release/build-info.sh"
-  [ "$output" -gt 0 ] || fail "build-info.sh no longer reads FINGERPRINT_IOS"
-  run grep -cE 'process\.env\.FINGERPRINT_ANDROID' "$REPO_ROOT/scripts/release/build-info.sh"
-  [ "$output" -gt 0 ] || fail "build-info.sh no longer reads FINGERPRINT_ANDROID"
-
-  # And the record it writes is keyed the way the gate looks it up.
-  run grep -cE '^\s+fingerprint: \{' "$REPO_ROOT/scripts/release/build-info.sh"
-  [ "$output" -gt 0 ] || fail "build-info.sh no longer writes a fingerprint block"
+  # build-info.mjs writes build-info.sh's record: it has to take the two
+  # variables by name and key the record the way the gate looks it up.
+  local record="$BATS_TEST_TMPDIR/build-info.json"
+  run env FINGERPRINT_IOS=fp-i FINGERPRINT_ANDROID=fp-a \
+    node "$REPO_ROOT/scripts/release/build-info.mjs" "$record" "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ] || fail "build-info.mjs failed: $output"
+  run node -e 'const r = require(process.argv[1]); console.log(`${r.fingerprint.ios} ${r.fingerprint.android}`)' "$record"
+  [ "$output" = "fp-i fp-a" ] || fail "build-info.mjs no longer records FINGERPRINT_IOS / FINGERPRINT_ANDROID as fingerprint.ios / .android: $output"
 }
 
 # A bare app has no @expo/fingerprint: its two hashes come from the committed

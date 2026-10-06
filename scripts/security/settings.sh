@@ -14,6 +14,7 @@ require_cmd node
 
 # Resolved before the cd below: $0 may be a relative path.
 resolver="$(cd "$(dirname "$0")/../../packages/app-tooling/lib" && pwd -P)/security-settings.mjs"
+rows="$(cd "$(dirname "$0")" && pwd -P)/settings.mjs"
 root="$(consumer_root)"
 cd "$root"
 
@@ -23,17 +24,9 @@ json="$(node "$resolver" --json)"
 # failure, never "no jobs enabled".
 [ -n "$json" ] || die "$resolver printed nothing"
 
-# shellcheck disable=SC2016  # process.env.* below is JS, not shell expansion
-lines="$(SECURITY_SETTINGS_JSON="$json" node -e '
-const settings = JSON.parse(process.env.SECURITY_SETTINGS_JSON);
-const rows = [
-  ["enabled", settings.enabled],
-  ["severity", settings.severity],
-  ["fail-on", settings.failOn.join(",")],
-];
-for (const [name, on] of Object.entries(settings.jobs)) rows.push([name, on]);
-for (const [key, value] of rows) console.log(`${key}=${value}`);
-')" || die "$resolver printed something that is not the settings object: $json"
+# settings.mjs, beside this script, turns the settings object into one
+# `name=value` line per output, and fails on anything else.
+lines="$(node "$rows" "$json")" || die "$resolver printed something that is not the settings object: $json"
 
 while IFS='=' read -r key value; do
   [ -n "$key" ] || continue

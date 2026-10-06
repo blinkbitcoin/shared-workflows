@@ -11,7 +11,7 @@
 #
 # The real resolver answers every case it can produce. The resolver outputs it
 # never produces (nothing, not JSON, a nameless job) come from a copy of
-# settings.sh with a stand-in resolver where the real one would be.
+# settings.sh (and settings.mjs) with a stand-in resolver where the real one would be.
 #
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 load test_helper
@@ -37,13 +37,14 @@ consumer_with_settings() {
   printf '%s' "$dir"
 }
 
-# A copy of settings.sh and its library, with a stand-in resolver (read from
+# A copy of settings.sh, settings.mjs and their library, with a stand-in resolver (read from
 # stdin) where packages/app-tooling/lib/security-settings.mjs would be. Prints
 # the copy's settings.sh.
 layout_with_resolver() {
   local root="$BATS_TEST_TMPDIR/layout"
   mkdir -p "$root/scripts/security" "$root/scripts/lib" "$root/packages/app-tooling/lib"
   cp "$REPO_ROOT/scripts/security/settings.sh" "$root/scripts/security/settings.sh"
+  cp "$REPO_ROOT/scripts/security/settings.mjs" "$root/scripts/security/settings.mjs"
   cp "$REPO_ROOT/scripts/lib/common.sh" "$root/scripts/lib/common.sh"
   cat > "$root/packages/app-tooling/lib/security-settings.mjs"
   printf '%s' "$root/scripts/security/settings.sh"

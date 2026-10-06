@@ -931,7 +931,9 @@ beside them. Run them from the repository root (they read `build-info.json`,
 
 `release/resolve-version.sh` and `release/build-info.sh` are the scripts
 `build-prepare.yml` runs to decide a build's version and build number and to
-write its `build-info.json`, with the two libraries they source in `lib/`. A
+write its `build-info.json`, with the two libraries they source in `lib/` and
+`release/build-info.mjs`, the Node program `build-info.sh` assembles the record
+with. A
 consumer runs them on a laptop from the installed package, so `make version`
 there answers exactly what CI will build:
 
