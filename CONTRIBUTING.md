@@ -135,7 +135,7 @@ A count in a doc — how many scripts, how many tests — is marked so a test ca
 check it:
 
 ```markdown
-<sub><!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1817<!--/count--> tests</sub>
+<sub><!--count:scripts-->142<!--/count--> scripts · <!--count:tests-->1817<!--/count--> tests</sub>
 ```
 
 `test/docs-facts.bats` derives each one from the repository and fails when they
@@ -189,24 +189,67 @@ Linux half of a consumer's internal release here with [nektos/act]:
 
 ```sh
 make test-smoke-local           # Prepare, against the template at main
-make test-smoke-local-android   # Prepare, then the unsigned Android build (much longer)
+make test-smoke-local-android   # Prepare, then the unsigned Android build (about 25 minutes; see below)
 ```
 
-Allow a quarter of an hour: Setup installs every pinned tool into a fresh
-container on each run (15 minutes of a 16-minute Prepare on an arm64 Mac).
+A warm Prepare takes about a minute and a quarter (73 seconds on an arm64
+Mac, 42 of them `pnpm install` linking from the warm store); the first run on
+a machine fills act's cache and takes about three minutes. The caches are the
+ones the workflows already use (mise's tools, the gems, the pnpm store,
+Gradle), kept by act's cache server in `~/.cache/actcache` between runs. Each
+run still starts in a fresh container, so what runs is what a consumer's
+runner runs, with warm caches.
+
+The Android leg is its own target, for a change that reaches
+`build-android.yml` or the scripts it runs: about 25 minutes warm, 21 of them
+the Android job, and its release Gradle build about 18 and a half. GitHub's
+own runner does the same job in about 16 minutes (12 and a half of Gradle), so
+this is about 1.3 times CI, the price of emulation: the leg runs on amd64 on
+every host, emulated on an arm64 Mac, because Google publishes the Linux
+build-tools and NDK for x86_64 only. The first `--android` run on a machine
+takes about 35 minutes: it pulls the amd64 runner image, builds Gradle's cache
+cold, and provisions the SDK.
+
+act's runner image has no Android SDK (GitHub's `ubuntu-latest` ships one), so
+the script keeps one in the Docker volume `smoke-local-android-sdk`, mounts it
+into every job at `ANDROID_HOME`, and fills it once
+(`scripts/self/smoke-android-sdk.sh`, in a pinned amd64 JDK container): the
+pinned command-line tools, checked against their SHA-1, and the packages the
+Android Gradle Plugin falls back to. Installing them accepts their licences, so
+the first `--android` run asks first; answer `y`, or set
+`WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1` to agree without the prompt. The
+build fetches the rest of what the app asks for into the same volume.
+`docker volume rm smoke-local-android-sdk` starts it over.
+
 It needs Docker running and the current branch **pushed**: build-prepare checks
 this repository out into `.workflows` from GitHub at the local HEAD, so the
 working tree itself is not what runs, the pushed commit is. The script refuses
 an unpushed or detached HEAD rather than letting the job fail inside act.
 `WORKFLOWS_SMOKE_REPOSITORY` and `WORKFLOWS_SMOKE_REF` pick another consumer.
 
+Runs from different worktrees can overlap. act's artifact server would take
+the fixed port 34567 and a second run would die on "address already in use";
+the script gives each checkout its own starting port (34567-35566, from a hash
+of its path) and takes the first free one from there, or the one in
+`WORKFLOWS_ACT_ARTIFACT_PORT`. A second run from the *same* checkout is refused
+while the first is alive: act names its containers after the job and the
+checkout's path, so the two would share them. When the run ends - passed,
+failed or interrupted - the script removes the checkout's act containers and
+volumes; a run killed outright leaves its lock behind, and the next run from
+that checkout clears what it left before starting. The runner image is pulled
+once, when it is missing, once per platform, and kept as
+`smoke-local-runner:<platform>-<hash>` (remove that image to refresh it), not
+on every run.
+
 The jobs are Linux containers, so a Mac runs them too (arm64 natively; tested
-with OrbStack). act's artifact server listens on `127.0.0.1`, which the job
-reaches over the host network act gives it. act would otherwise pick the host's
-default-route address, and behind a VPN that is the tunnel's own address: the
-`build-info` upload then times out after every step before it has passed.
-A Docker that cannot reach the host's loopback from a host-network container
-takes another address through `WORKFLOWS_ACT_ARTIFACT_ADDR`.
+with OrbStack). act's artifact and cache servers listen on `127.0.0.1`, which
+the job reaches over the host network act gives it. act would otherwise pick
+the host's default-route address, and behind a VPN that is the tunnel's own
+address: the `build-info` upload then timed out after every step before it had
+passed, and every cache restore and save timed out at about four and a half
+minutes each, which was 19 of a 22-minute Prepare. A Docker that cannot reach
+the host's loopback from a host-network container takes another address
+through `WORKFLOWS_ACT_SERVER_ADDR`.
 
 What it shows: the steps of the Linux jobs, in order, with the real scripts.
 What it cannot show: the token a called workflow really receives (act hands

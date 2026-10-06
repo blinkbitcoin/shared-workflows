@@ -75,7 +75,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make check-spell` | typos over the whole repo |
 | `make check-secrets` | Scan the whole git history for committed secrets (gitleaks) |
 | `make test-smoke-local` | Prepare against the template with nektos/act — Docker and a pushed branch required; not part of `check` (CONTRIBUTING.md, "Running the release pipeline locally") |
-| `make test-smoke-local-android` | `test-smoke-local`, then the unsigned Android build |
+| `make test-smoke-local-android` | `test-smoke-local`, then the unsigned Android build, amd64 with a provisioned Android SDK |
 | `make help` | Show every target with its description |
 
 ## Rules of the road
@@ -188,7 +188,13 @@ Every row is a make target; nothing here is run through a package manager.
   dry run on every change, and `self-release.yml` runs it again before `v0`
   moves - see `self-store-notes.yml`.) The smoke
   runs the Linux jobs for real with act, against the template, from the
-  pushed branch. It cannot see the token a called workflow really receives,
+  pushed branch: Prepare in about a minute and a quarter once act's cache is
+  warm (three minutes the first time). Runs from different worktrees can
+  overlap, and each removes its containers when it ends. A change that
+  reaches `build-android.yml` or what it runs gets
+  `make test-smoke-local-android` too: about 25 minutes warm, amd64 under
+  emulation with an Android SDK the script provisions once (it asks before
+  accepting the SDK licences). It cannot see the token a called workflow really receives,
   tag rules, or macOS; for those, push a throwaway caller on a `scratch/*`
   branch and read the job's "Set up job" log before merging
   (CONTRIBUTING.md, "Running the release pipeline locally").
