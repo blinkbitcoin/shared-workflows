@@ -1,13 +1,18 @@
 #!/usr/bin/env node
-// Coverage rows with nothing to cover. A re-export barrel or a type-only module
-// has zero statements, so istanbul prints it as 0% in every column while the
-// totals stay at 100% — noise that reads as a hole, and a silent way to add an
-// untested file without moving the number. The house rule: such modules go in
-// `coveragePathIgnorePatterns` with a reason, and this check (run by
-// `make test-coverage`, after the Jest run) fails when one slips through.
+// Coverage rows with nothing to cover.
+//
+//   check-coverage-empty [SUMMARY]   (default: coverage/coverage-summary.json)
+//
+// A re-export barrel or a type-only module has zero statements, so istanbul
+// prints it as 0% in every column while the totals stay at 100% — noise that
+// reads as a hole, and a silent way to add an untested file without moving the
+// number. The house rule: such modules go in `coveragePathIgnorePatterns` with
+// a reason, and this check (run by `make test-coverage`, after the Jest run)
+// fails when one slips through.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 export const SUMMARY_PATH = 'coverage/coverage-summary.json';
 
@@ -51,6 +56,7 @@ export function main(
   summaryFile = SUMMARY_PATH,
   { log = console.log, error = console.error } = {},
 ) {
+  if (answerHelp([summaryFile], import.meta.url, log)) return 0;
   const { summary, error: unreadable } = readSummary(summaryFile);
   if (unreadable) {
     error(unreadable);

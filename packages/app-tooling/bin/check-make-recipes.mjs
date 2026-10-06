@@ -20,6 +20,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const CALL = /^[@-]*(?:bash \S+\.sh|node \S+\.m?js|pnpm exec [\w@/.:-]+|pnpm (?:run )?[\w:.-]+)(?: .*)?$/;
 const LOGIC = /&&|\|\||;|\||>|<|`|\$\(shell\b/;
@@ -121,6 +122,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), read = readOrNull } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

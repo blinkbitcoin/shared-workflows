@@ -139,3 +139,12 @@ test('as a program it fails on a tracked file that hardcodes a port, and passes 
   assert.equal(passed.status, 0);
   assert.match(passed.stdout, /^ports ok \(8080, 8081, 8082, 8083; 1 allowed\)/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-ports(?: |$)/m);
+  assert.deepEqual(err, []);
+});

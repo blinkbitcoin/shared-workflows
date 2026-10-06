@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { answerHelp } from '../lib/usage.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -83,6 +84,7 @@ export function main(
   argv,
   { table = readTable(), run = runTool, stdout = process.stdout, stderr = process.stderr } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, (text) => stdout.write(`${text}\n`))) return 0;
   const wanted = argv.length > 0 ? argv : Object.keys(table.tools);
   const results = checkTools(table, wanted, run);
   for (const result of results) stdout.write(`${formatResult(result)}\n`);

@@ -50,6 +50,7 @@ import { ConfigError, CONFIG_FILE, readSection, stringList, stringMap } from '..
 import { isProgram } from '../lib/is-program.mjs';
 import { readAtRef, readWorkingCopy, structuralManifests } from '../lib/manifest-structural.mjs';
 import { documentedTargets, expandIncludes } from '../lib/makefile.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -191,6 +192,7 @@ export function main(
     program = runProgram,
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

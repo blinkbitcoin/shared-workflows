@@ -145,3 +145,12 @@ describe('gen-coverage-badge main', () => {
     assert.ok(readFileSync(path.join(cwd, 'coverage/badge/coverage.svg'), 'utf8'));
   });
 });
+
+test('coverageMain answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await coverageMain(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +gen-coverage-badge(?: |$)/m);
+  assert.deepEqual(err, []);
+});

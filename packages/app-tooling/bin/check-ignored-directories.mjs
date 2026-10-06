@@ -52,6 +52,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isProgram } from '../lib/is-program.mjs';
 import { yamlList } from './check-code-scanning.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const DEFAULT_DIRECTORIES = ['.workflows', '.claude/worktrees'];
 // What check-security's code scan always excludes, whatever the app's own file says.
@@ -317,6 +318,7 @@ export function main(
     resolve = resolveFrom,
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

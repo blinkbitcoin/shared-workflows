@@ -34,6 +34,7 @@ import { isProgram } from '../lib/is-program.mjs';
 import { writeSecurityBadge } from '../lib/security-badge.mjs';
 import { BADGE_DIR, SUMMARY_PATH, writeCoverageBadge } from './gen-coverage-badge.mjs';
 import { writeStatusBadge } from './gen-status-badge.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** What to do about the coverage badge, given the Unit job's result. */
 export function coverageModeFor(unitResult) {
@@ -109,7 +110,8 @@ export function localEnvironment(env = process.env, read = readOrEmpty) {
 }
 
 /** Command-line entry; returns the exit code. */
-export function main(argv = process.argv.slice(2), env = process.env, { error = console.error } = {}) {
+export function main(argv = process.argv.slice(2), env = process.env, { log = console.log, error = console.error } = {}) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   const local = argv.includes('--local');
   const unexpected = argv.filter((arg) => arg !== '--local');
   if (unexpected.length > 0) {

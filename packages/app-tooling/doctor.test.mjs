@@ -267,3 +267,12 @@ test('as a program it checks the package requirements and fails when nothing is 
   assert.match(result.stdout, /^FAIL {2}node: not found\. Fix: bash node_modules\/@blinkbitcoin\/app-tooling\/setup\/toolchain\.sh$/m);
   assert.match(result.stdout, /problem\(s\)\. Fix them and run the doctor again\./);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { write: (text) => out.push(text), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +doctor(?: |$)/m);
+  assert.deepEqual(err, []);
+});

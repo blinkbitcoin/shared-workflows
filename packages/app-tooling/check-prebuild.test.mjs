@@ -215,3 +215,12 @@ test('as a program it copies the app, runs the configured command in the copy, a
   assert.equal(failed.status, 1);
   assert.match(failed.stderr, /check-prebuild \(default\): ios\/\*\/Info\.plist lacks "never written"/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-prebuild(?: |$)/m);
+  assert.deepEqual(err, []);
+});

@@ -83,3 +83,12 @@ test('as a command it runs in --root', () => {
   assert.ok(existsSync(path.join(dir, 'o.yml')));
   chmodSync(path.join(dir, 'o.yml'), 0o644);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +resolve-code-scanning-config(?: |$)/m);
+  assert.deepEqual(err, []);
+});

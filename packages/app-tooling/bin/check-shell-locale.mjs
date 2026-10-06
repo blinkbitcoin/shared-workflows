@@ -27,6 +27,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 // A locale variable assigned on a line where another word follows it: the
 // shape of a command prefix. A bare `LC_ALL=C` on its own line (or before a
@@ -115,6 +116,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), list, read } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

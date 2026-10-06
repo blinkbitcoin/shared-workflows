@@ -109,3 +109,12 @@ describe('gen-status-badge main', () => {
     assert.match(bad.stderr, /usage: gen-status-badge </);
   });
 });
+
+test('statusMain answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await statusMain(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +gen-status-badge(?: |$)/m);
+  assert.deepEqual(err, []);
+});

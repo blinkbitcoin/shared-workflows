@@ -161,3 +161,12 @@ test('as a command a tool that cannot start fails the step', () => {
   assert.equal(child.status, 1);
   assert.match(child.stderr, /the gems are not installed/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line), run: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-release(?: |$)/m);
+  assert.deepEqual(err, []);
+});

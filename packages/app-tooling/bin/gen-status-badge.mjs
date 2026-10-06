@@ -14,6 +14,7 @@ import path from 'node:path';
 import { BadgeError, renderBadgeJson, renderBadgeSvg, STATUS_RESULTS } from '../lib/badge.mjs';
 import { isProgram } from '../lib/is-program.mjs';
 import { argValue, BADGE_DIR } from './gen-coverage-badge.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** Write `<name>.svg` + `<name>.json` into `outDir`; returns the badge. */
 export function writeStatusBadge({ outDir = BADGE_DIR, name, label, result }) {
@@ -39,6 +40,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   const [name, label, result] = argv;
   try {
     const badge = writeStatusBadge({

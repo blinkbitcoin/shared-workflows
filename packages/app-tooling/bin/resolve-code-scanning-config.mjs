@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isProgram } from '../lib/is-program.mjs';
 import { mergeConfig } from '../lib/codeql-config.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const DEFAULTS = fileURLToPath(new URL('../codeql-config.yml', import.meta.url));
 const USAGE = 'pass --out FILE, and optionally --root DIR and --config FILE';
@@ -35,6 +36,7 @@ export function parseArgs(argv, cwd) {
 
 /** Command-line entry; returns the exit code. */
 export function main(argv = process.argv.slice(2), { log = console.log, error = console.error, cwd = process.cwd() } = {}) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

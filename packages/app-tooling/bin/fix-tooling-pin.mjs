@@ -4,12 +4,13 @@
 // cannot move a git dependency with them, so the contract's `one-pin` row stays
 // red until this runs.
 //
-// Usage: fix-tooling-pin [--root DIR]   (default: the working directory)
+//   fix-tooling-pin [--root DIR]   (default: the working directory)
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
 import { isCommit, pinProblems, sharedDeps, specFor, workflowsPin } from '../lib/pin.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** The consumer's workflow files, as `[{ name, text }]`. */
 export function readCallers(root) {
@@ -46,6 +47,7 @@ export function main(
   argv = [],
   { cwd = process.cwd(), log = console.log, error = console.error, exec = execFileSync } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   const args = parseArgs(argv, cwd);
   if (args.error) {
     error(args.error);

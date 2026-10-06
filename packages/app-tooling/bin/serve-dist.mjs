@@ -16,6 +16,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -84,6 +85,7 @@ export function main(
   argv = process.argv.slice(2),
   { env = process.env, cwd = process.cwd(), start = startServer, log = console.log, error = console.error } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   const dist = path.resolve(cwd, argv[0] ?? 'dist');
   const basePath = normalizeBasePath(env.EXPO_PUBLIC_BASE_URL);
   const port = Number(env.WEB_PREVIEW_PORT);

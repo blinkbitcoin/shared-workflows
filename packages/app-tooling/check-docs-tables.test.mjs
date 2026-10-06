@@ -241,3 +241,12 @@ test('docFiles takes a plain file, a directory of the cwd and a missing director
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-docs-tables(?: |$)/m);
+  assert.deepEqual(err, []);
+});

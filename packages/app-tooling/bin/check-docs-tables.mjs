@@ -6,6 +6,8 @@
 // `<br>`. This finds the cells that break it so `make check-docs` fails instead
 // of a reviewer noticing after the merge.
 //
+//   check-docs-tables [--max N] [file...]   (default: 120, over every doc)
+//
 // 120, not the 72 the sibling repos use: theirs is tuned for narrow package
 // READMEs on npm, while these tables are read on GitHub at full page width and
 // document long command lines. Measured against this repo, 72 flags 117 lines
@@ -13,6 +15,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 export const MAX_LINE = 120;
 
@@ -207,6 +210,7 @@ export function main(
     listDocs = docFiles,
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv);

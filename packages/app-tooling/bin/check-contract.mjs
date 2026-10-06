@@ -32,6 +32,7 @@ import { validateEnvJson } from '../lib/env-validate.mjs';
 import { expandIncludes } from '../lib/makefile.mjs';
 import { isTracked, resolveNativeStack } from '../lib/native-stack.mjs';
 import { pinProblems } from '../lib/pin.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1096,6 +1097,7 @@ export function main(
   argv,
   { io = defaultIo, stdout = process.stdout, stderr = process.stderr, env = process.env, cwd = process.cwd() } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, (text) => stdout.write(`${text}\n`))) return 0;
   // Every throw below is already a finished ::error:: line - an unreadable
   // package.json, an unknown argument. Printing the message and nothing else is
   // the whole point of this file: a node stack trace here would be the same

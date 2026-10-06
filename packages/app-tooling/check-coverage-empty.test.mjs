@@ -144,3 +144,12 @@ test('as a command it reads coverage/coverage-summary.json from the working dire
   assert.equal(empty.status, 1);
   assert.match(empty.stderr, /has no statements to cover/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main('--help', { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-coverage-empty(?: |$)/m);
+  assert.deepEqual(err, []);
+});

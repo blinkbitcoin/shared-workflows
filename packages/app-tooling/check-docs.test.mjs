@@ -604,3 +604,12 @@ test('as a command it runs from --root, outside any repository', () => {
   assert.equal(result.status, 1);
   assert.equal(result.stderr, 'AGENTS.md is missing: the command table is the agent-facing contract\n');
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-docs(?: |$)/m);
+  assert.deepEqual(err, []);
+});

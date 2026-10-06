@@ -130,3 +130,12 @@ test('as a command a suite killed by a signal is a failure, not a pass', (t) => 
   assert.equal(result.status, 1);
   assert.equal(result.stderr, 'skills: .claude/skills/alpha/tests/run.sh failed (exit 1)\n');
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line), run: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-skills(?: |$)/m);
+  assert.deepEqual(err, []);
+});

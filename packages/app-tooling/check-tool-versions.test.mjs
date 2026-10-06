@@ -223,3 +223,12 @@ test('run as a program, it reports and exits 1 for a tool the table does not kno
   assert.equal(result.stdout, '  unknown  not-a-tool is not in versions.json\n');
   assert.equal(result.stderr, '::error::tool versions disagree with the baseline: not-a-tool\n');
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { stdout: { write: (text) => out.push(text) }, stderr: { write: (text) => err.push(text) }, run: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-tool-versions(?: |$)/m);
+  assert.deepEqual(err, []);
+});

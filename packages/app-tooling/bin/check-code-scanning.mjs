@@ -29,6 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isProgram } from '../lib/is-program.mjs';
 import { mergeConfig, yamlList } from '../lib/codeql-config.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 export { yamlList };
 export const DEFAULT_CONFIG = fileURLToPath(new URL('../codeql-config.yml', import.meta.url));
@@ -187,6 +188,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), env = process.env } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

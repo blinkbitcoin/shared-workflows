@@ -162,3 +162,12 @@ test('as a command it reads the files of --root', () => {
   assert.equal(ok.status, 0, ok.stderr);
   assert.equal(ok.stdout, 'make target names ok (1 targets, 1 tools)\n');
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-make-target-names(?: |$)/m);
+  assert.deepEqual(err, []);
+});

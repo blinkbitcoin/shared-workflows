@@ -287,3 +287,12 @@ describe('render main', () => {
     assert.ok(readFileSync(path.join(cwd, 'out/e2e.svg'), 'utf8').includes('passing'));
   });
 });
+
+test('renderMain answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await renderMain(['--help'], {}, { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +gen-badges(?: |$)/m);
+  assert.deepEqual(err, []);
+});
