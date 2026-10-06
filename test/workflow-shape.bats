@@ -992,6 +992,34 @@ lane_step_count() {
   [ "$found" -ge 2 ] || fail "expected the setup-gradle steps of build-android.yml and test-e2e.yml, found $found"
 }
 
+@test "test-e2e.yml saves its caches only on the default branch" {
+  command -v yq >/dev/null || skip "yq not installed"
+  # A branch's saves land in that branch's own cache scope, which the default
+  # branch never reads, but they count against the same 10 GB. The release
+  # PR's CI saved the iOS app, Pods and a pnpm store there on every push to
+  # main, and pushed the default branch's own iOS app out. Restores still read
+  # the default branch's entries from any branch.
+  f="$REPO_ROOT/.github/workflows/test-e2e.yml"
+  gate='github.ref == inputs.default-branch'
+  combined=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^actions/cache@")) | .name] | join(", ")' "$f")
+  [ -z "$combined" ] || fail "test-e2e.yml uses actions/cache, which saves on any branch: $combined"
+  saves=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^actions/cache/save@"))] | length' "$f")
+  [ "$saves" -ge 5 ] || fail "expected the five saves (iOS app, Pods, APK, system image, AVD), found $saves"
+  ungated=$(yq -r "[.jobs[].steps[]? | select((.uses // \"\") | test(\"^actions/cache/save@\")) | select(((.if // \"\") | contains(\"$gate\")) | not) | .name] | join(\", \")" "$f")
+  [ -z "$ungated" ] || fail "test-e2e.yml saves without checking the default branch: $ungated"
+  # Every save writes a key some restore in the same job reads.
+  for j in $(yq -r '.jobs | keys | .[]' "$f"); do
+    for k in $(yq -r ".jobs.\"$j\".steps[]? | select((.uses // \"\") | test(\"^actions/cache/save@\")) | .with.key" "$f" | tr -d ' '); do
+      yq -r ".jobs.\"$j\".steps[]? | select((.uses // \"\") | test(\"^actions/cache/restore@\")) | .with.key" "$f" | tr -d ' ' | grep -qxF "$k" \
+        || fail "test-e2e.yml job $j saves $k, which no restore in that job reads"
+    done
+  done
+  maestro=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("/actions/maestro$"))] | length' "$f")
+  [ "$maestro" -ge 2 ] || fail "expected the ios and android jobs' maestro steps, found $maestro"
+  wrong=$(yq -r "[.jobs[].steps[]? | select((.uses // \"\") | test(\"/actions/maestro\$\")) | select(.with.\"save-cache\" != \"\${{ $gate }}\") | .name] | join(\", \")" "$f")
+  [ -z "$wrong" ] || fail "test-e2e.yml's maestro steps do not pass save-cache: \${{ $gate }}: $wrong"
+}
+
 @test "the iOS and Android artifact uploads in test-e2e.yml guard on the build the same way" {
   command -v yq >/dev/null || skip "yq not installed"
   # The Android upload ran under always() with if-no-files-found: error, so a
