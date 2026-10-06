@@ -407,7 +407,7 @@ STUB
   grep -qx 'ANDROID_SDK_ROOT=/opt/android-sdk' "$BATS_TEST_TMPDIR/act.args" || fail "args: $args"
   ! grep -q 'smoke-android-sdk.sh' "$BATS_TEST_TMPDIR/docker.calls" || fail "a provisioned SDK was provisioned again"
   # The check runs in the pinned JDK image, against the volume.
-  grep -q "^run --rm -v smoke-local-android-sdk:/opt/android-sdk $(jdk_image) test -f " "$BATS_TEST_TMPDIR/docker.calls" ||
+  grep -q "^run --rm --platform linux/amd64 -v smoke-local-android-sdk:/opt/android-sdk $(jdk_image) test -f " "$BATS_TEST_TMPDIR/docker.calls" ||
     fail "the SDK check did not run in the pinned JDK image: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
 }
 

@@ -74,13 +74,16 @@ consent() {
   die "not confirmed: $1. Answer y in a terminal, or set WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1 to agree non-interactively."
 }
 android_args=()
-# The image the SDK is provisioned in (smoke-android-sdk.sh says why), pinned by
-# the digest of its multi-platform index.
-jdk_image="eclipse-temurin:21-jdk@sha256:3e3c176ffed168beb42c607be9bc1639b466cf00261a0fb04425562c9d0c5c2b"
+# The image the SDK is provisioned in (smoke-android-sdk.sh says why): the
+# linux/amd64 manifest of eclipse-temurin:21-jdk, pinned by its own digest, not
+# the multi-platform index's. Docker keeps one platform per reference, so an
+# index digest already pulled for arm64 refuses the amd64 pull ("cannot
+# overwrite digest").
+jdk_image="eclipse-temurin:21-jdk@sha256:442a743d9272be15c9872915eab0f7a1b6bb45b7c16c613acf172e2d7483061d"
 if [ "$android" = true ]; then
   sdk_volume="${WORKFLOWS_ACT_ANDROID_SDK_VOLUME:-smoke-local-android-sdk}"
   sdk_dir=/opt/android-sdk
-  if ! docker run --rm -v "$sdk_volume:$sdk_dir" "$jdk_image" \
+  if ! docker run --rm --platform linux/amd64 -v "$sdk_volume:$sdk_dir" "$jdk_image" \
     test -f "$sdk_dir/licenses/android-sdk-license" -a -x "$sdk_dir/cmdline-tools/latest/bin/android" >/dev/null 2>&1; then
     consent "Install the Android SDK into the Docker volume $sdk_volume, accepting its licences (https://developer.android.com/studio/terms)"
     log "act smoke: provisioning the Android SDK in $sdk_volume (once; about 2 GB)"
