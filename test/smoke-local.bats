@@ -70,7 +70,9 @@ exit "\${FAKE_ACT_EXIT:-0}"
 STUB
   # docker records every call. Its containers are the lines of
   # \$BATS_TEST_TMPDIR/containers, "name working-directory"; the image is
-  # present unless FAKE_DOCKER_NO_IMAGE is set.
+  # present unless FAKE_DOCKER_NO_IMAGE is set. Of \`docker run\`, the check
+  # for a provisioned Android SDK passes when FAKE_SDK_READY is set, and the
+  # provisioning exits with FAKE_SDK_PROVISION_EXIT.
   cat > "$bin/docker" <<STUB
 #!/usr/bin/env bash
 printf '%s\\n' "\$*" >> "$BATS_TEST_TMPDIR/docker.calls"
@@ -80,6 +82,12 @@ case "\$1 \${2:-}" in
   "inspect --format") grep "^\${4} " "\$list" | cut -d' ' -f2-; exit 0 ;;
   "image inspect") [ -z "\${FAKE_DOCKER_NO_IMAGE:-}" ]; exit ;;
 esac
+if [ "\$1" = run ]; then
+  case "\$*" in
+    *" test -f "*) [ -n "\${FAKE_SDK_READY:-}" ]; exit ;;
+    *smoke-android-sdk.sh*) exit "\${FAKE_SDK_PROVISION_EXIT:-0}" ;;
+  esac
+fi
 exit 0
 STUB
   printf '#!/usr/bin/env bash\necho fake-token\n' > "$bin/gh"
@@ -90,6 +98,12 @@ STUB
   mkdir -p "$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" "$WORKFLOWS_ACT_CACHE/download-artifact-v4.3.0"
 }
 
+# The platform a run without --android uses: the host's own.
+host_platform() { case "$(uname -m)" in arm64 | aarch64) echo linux/arm64 ;; *) echo linux/amd64 ;; esac; }
+# The local tag the script keeps the runner image under, for a platform.
+runner_tag() { printf 'smoke-local-runner:%s-%s' "${1#linux/}" "$(printf '%s' "${2:-catthehacker/ubuntu:act-latest}" | cksum | cut -d' ' -f1)"; }
+# The JDK image the script pins, read from it.
+jdk_image() { sed -n 's/^jdk_image="\(.*\)"$/\1/p' "$SCRIPT"; }
 # The value act was given for a flag that takes one.
 act_arg() { grep -A1 -x -- "$1" "$BATS_TEST_TMPDIR/act.args" | tail -1; }
 # The run lock of the scratch checkout, named as the script names it.
@@ -117,7 +131,7 @@ teardown() {
 @test "refuses a branch that is not on origin, and says to push" {
   cd "$work"
   run bash "$SCRIPT"
-  [ "$status" -ne 0 ]
+  [ "$status" -ne 0 ] || fail "the run was not refused: $output"
   contains "$output" "push it first" || fail "output: $output"
   [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
 }
@@ -127,7 +141,7 @@ teardown() {
   git push -q origin feature
   git commit -q --allow-empty -m "feat: two"
   run bash "$SCRIPT"
-  [ "$status" -ne 0 ]
+  [ "$status" -ne 0 ] || fail "the run was not refused: $output"
   contains "$output" "push first" || fail "output: $output"
 }
 
@@ -136,7 +150,7 @@ teardown() {
   git push -q origin feature
   git checkout -q --detach
   run bash "$SCRIPT"
-  [ "$status" -ne 0 ]
+  [ "$status" -ne 0 ] || fail "the run was not refused: $output"
   contains "$output" "detached HEAD" || fail "output: $output"
 }
 
@@ -148,7 +162,10 @@ teardown() {
   args="$(cat "$BATS_TEST_TMPDIR/act.args")"
   contains "$args" "workflow_dispatch" || fail "args: $args"
   contains "$args" ".github/workflows/self-smoke-local.yml" || fail "args: $args"
-  contains "$args" "ubuntu-latest=catthehacker/ubuntu:act-latest" || fail "args: $args"
+  # The local, per-platform tag of the pinned image, on the host's platform.
+  contains "$args" "ubuntu-latest=$(runner_tag "$(host_platform)")" || fail "args: $args"
+  [ "$(act_arg --container-architecture)" = "$(host_platform)" ] || fail "args: $args"
+  ! contains "$args" "ANDROID_HOME" || fail "Prepare alone was given an Android SDK: $args"
   contains "$args" "--artifact-server-path" || fail "args: $args"
   # The run directory exists before the first upload lists it (act's server
   # panics on a missing one). The fake act ran while it was there; it is gone now.
@@ -223,16 +240,27 @@ teardown() {
   contains "$output" "no free artifact server port in $first-$((first + 49))" || fail "output: $output"
 }
 
-@test "the image is pulled once when it is missing, and act never pulls it" {
+@test "the image is pulled once per platform when it is missing, kept under its own tag, and act never pulls it" {
   cd "$work"
   git push -q origin feature
   run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
   ! grep -q '^pull ' "$BATS_TEST_TMPDIR/docker.calls" || fail "a present image was pulled again"
+  grep -qx "image inspect $(runner_tag "$(host_platform)")" "$BATS_TEST_TMPDIR/docker.calls" ||
+    fail "the per-platform tag was not what was looked for: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
   grep -qx -- '--pull=false' "$BATS_TEST_TMPDIR/act.args" || fail "act still pulls on every run: $(cat "$BATS_TEST_TMPDIR/act.args")"
   FAKE_DOCKER_NO_IMAGE=1 run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
-  grep -qx 'pull catthehacker/ubuntu:act-latest' "$BATS_TEST_TMPDIR/docker.calls" || fail "a missing image was not pulled: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+  grep -qx "pull --platform $(host_platform) catthehacker/ubuntu:act-latest" "$BATS_TEST_TMPDIR/docker.calls" ||
+    fail "a missing image was not pulled for the platform: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+  grep -qx "tag catthehacker/ubuntu:act-latest $(runner_tag "$(host_platform)")" "$BATS_TEST_TMPDIR/docker.calls" ||
+    fail "the pull was not kept under its platform's tag: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+  # Another image gets a tag of its own, not the pinned image's.
+  : > "$BATS_TEST_TMPDIR/docker.calls"
+  WORKFLOWS_ACT_IMAGE=example/runner:1 FAKE_DOCKER_NO_IMAGE=1 run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  grep -qx "tag example/runner:1 $(runner_tag "$(host_platform)" example/runner:1)" "$BATS_TEST_TMPDIR/docker.calls" ||
+    fail "WORKFLOWS_ACT_IMAGE shared the pinned image's tag: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
 }
 
 @test "a failed pull stops the smoke before act runs" {
@@ -241,7 +269,17 @@ teardown() {
   printf '#!/usr/bin/env bash\ncase "$1 $2" in "image inspect") exit 1 ;; "pull "*) exit 1 ;; esac\nexit 0\n' > "$bin/docker"
   run bash "$SCRIPT"
   [ "$status" -ne 0 ] || fail "output: $output"
-  contains "$output" "could not pull catthehacker/ubuntu:act-latest" || fail "output: $output"
+  contains "$output" "could not pull catthehacker/ubuntu:act-latest for $(host_platform)" || fail "output: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+}
+
+@test "a pull that cannot be tagged stops the smoke before act runs" {
+  cd "$work"
+  git push -q origin feature
+  printf '#!/usr/bin/env bash\ncase "$1 $2" in "image inspect") exit 1 ;; "tag "*) exit 1 ;; esac\nexit 0\n' > "$bin/docker"
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "output: $output"
+  contains "$output" "could not tag catthehacker/ubuntu:act-latest as smoke-local-runner:" || fail "output: $output"
   [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
 }
 
@@ -354,12 +392,89 @@ STUB
     fail "a half-cloned action was left in the cache, so the next run would skip the fetch"
 }
 
-@test "--android turns the Android build on; an unknown flag is refused" {
+@test "--android runs amd64 with the SDK volume mounted, and asks nothing once the SDK is there" {
   cd "$work"
   git push -q origin feature
-  bash "$SCRIPT" --android
-  contains "$(cat "$BATS_TEST_TMPDIR/act.args")" "android=true" || fail "args: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  FAKE_SDK_READY=1 run bash "$SCRIPT" --android
+  [ "$status" -eq 0 ] || fail "output: $output"
+  args="$(cat "$BATS_TEST_TMPDIR/act.args")"
+  contains "$args" "android=true" || fail "args: $args"
+  # amd64 on every host: the Linux build-tools and NDK exist for x86_64 only.
+  [ "$(act_arg --container-architecture)" = "linux/amd64" ] || fail "args: $args"
+  contains "$args" "ubuntu-latest=$(runner_tag linux/amd64)" || fail "args: $args"
+  [ "$(act_arg --container-options)" = "-v smoke-local-android-sdk:/opt/android-sdk" ] || fail "args: $args"
+  grep -qx 'ANDROID_HOME=/opt/android-sdk' "$BATS_TEST_TMPDIR/act.args" || fail "args: $args"
+  grep -qx 'ANDROID_SDK_ROOT=/opt/android-sdk' "$BATS_TEST_TMPDIR/act.args" || fail "args: $args"
+  ! grep -q 'smoke-android-sdk.sh' "$BATS_TEST_TMPDIR/docker.calls" || fail "a provisioned SDK was provisioned again"
+  # The check runs in the pinned JDK image, against the volume.
+  grep -q "^run --rm -v smoke-local-android-sdk:/opt/android-sdk $(jdk_image) test -f " "$BATS_TEST_TMPDIR/docker.calls" ||
+    fail "the SDK check did not run in the pinned JDK image: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+}
+
+@test "WORKFLOWS_ACT_ANDROID_SDK_VOLUME names the SDK volume" {
+  cd "$work"
+  git push -q origin feature
+  WORKFLOWS_ACT_ANDROID_SDK_VOLUME=my-sdk FAKE_SDK_READY=1 run bash "$SCRIPT" --android
+  [ "$status" -eq 0 ] || fail "output: $output"
+  [ "$(act_arg --container-options)" = "-v my-sdk:/opt/android-sdk" ] || fail "args: $(cat "$BATS_TEST_TMPDIR/act.args")"
+}
+
+@test "without an SDK and with no one to ask, --android is refused before anything is installed or run" {
+  cd "$work"
+  git push -q origin feature
+  run bash "$SCRIPT" --android </dev/null
+  [ "$status" -ne 0 ] || fail "output: $output"
+  contains "$output" "not confirmed: Install the Android SDK" || fail "output: $output"
+  contains "$output" "WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1" || fail "the way to agree was not named: $output"
+  ! grep -q 'smoke-android-sdk.sh' "$BATS_TEST_TMPDIR/docker.calls" || fail "the SDK was provisioned without consent"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+  [ ! -e "$(lock_file)" ] || fail "a refused run left a lock"
+}
+
+@test "agreeing through the environment provisions the SDK once, in the JDK image, with this checkout's scripts" {
+  cd "$work"
+  git push -q origin feature
+  WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1 run bash "$SCRIPT" --android
+  [ "$status" -eq 0 ] || fail "output: $output"
+  grep -qx "run --rm -e ANDROID_HOME=/opt/android-sdk -v smoke-local-android-sdk:/opt/android-sdk -v $PWD/scripts:/workflows-scripts:ro $(jdk_image) bash /workflows-scripts/self/smoke-android-sdk.sh" \
+    "$BATS_TEST_TMPDIR/docker.calls" || fail "provisioning did not run as expected: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+  contains "$output" "provisioning the Android SDK in smoke-local-android-sdk" || fail "output: $output"
+  contains "$(cat "$BATS_TEST_TMPDIR/act.args")" "android=true" || fail "act did not run after provisioning"
+}
+
+@test "an answer at the terminal decides: y provisions, anything else refuses" {
+  cd "$work"
+  git push -q origin feature
+  # A real terminal on stdin, which [ -t 0 ] needs: python's pty, fed the answer.
+  ask() {
+    printf '%s\n' "$1" | python3 -c 'import pty, sys; sys.exit(pty.spawn(sys.argv[1:]) >> 8)' bash "$SCRIPT" --android
+  }
+  run ask y
+  [ "$status" -eq 0 ] || fail "y was not taken as agreement: $output"
+  contains "$output" "[y/N]" || fail "nothing was asked: $output"
+  grep -q 'smoke-android-sdk.sh' "$BATS_TEST_TMPDIR/docker.calls" || fail "y did not provision the SDK"
+  : > "$BATS_TEST_TMPDIR/docker.calls"
+  rm -f "$BATS_TEST_TMPDIR/act.args"
+  run ask n
+  [ "$status" -ne 0 ] || fail "n was taken as agreement: $output"
+  contains "$output" "not confirmed" || fail "output: $output"
+  ! grep -q 'smoke-android-sdk.sh' "$BATS_TEST_TMPDIR/docker.calls" || fail "n provisioned the SDK"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+}
+
+@test "a failed provisioning stops the smoke, and says how to start it over" {
+  cd "$work"
+  git push -q origin feature
+  WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1 FAKE_SDK_PROVISION_EXIT=1 run bash "$SCRIPT" --android
+  [ "$status" -ne 0 ] || fail "output: $output"
+  contains "$output" "could not provision the Android SDK in smoke-local-android-sdk" || fail "output: $output"
+  contains "$output" "docker volume rm smoke-local-android-sdk" || fail "output: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+}
+
+@test "an unknown flag is refused" {
+  cd "$work"
   run bash "$SCRIPT" --ios
-  [ "$status" -ne 0 ]
+  [ "$status" -ne 0 ] || fail "an unknown flag was accepted: $output"
   contains "$output" "unknown argument" || fail "output: $output"
 }

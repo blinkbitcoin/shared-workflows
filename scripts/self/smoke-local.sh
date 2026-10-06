@@ -7,8 +7,13 @@
 # Usage: smoke-local.sh [--android]
 # Env:   WORKFLOWS_SMOKE_REPOSITORY / WORKFLOWS_SMOKE_REF - the consumer
 #        (default: the template at main)
-#        WORKFLOWS_ACT_IMAGE - runner image for ubuntu-latest (pulled once,
-#        when it is missing; `docker pull` it to refresh)
+#        WORKFLOWS_ACT_IMAGE - runner image for ubuntu-latest (pulled once per
+#        platform and kept as smoke-local-runner:<platform>-<hash>; remove
+#        that image to refresh it)
+#        WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1 - agree to the Android SDK
+#        licences without the prompt (--android, first run only)
+#        WORKFLOWS_ACT_ANDROID_SDK_VOLUME - the Docker volume holding the
+#        Android SDK (default smoke-local-android-sdk)
 #        WORKFLOWS_ACT_CACHE - where the substitute artifact actions and the
 #        per-checkout run locks are kept
 #        WORKFLOWS_ACT_SERVER_ADDR - where act's artifact and cache servers
@@ -47,11 +52,49 @@ remote_sha="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
 [ -n "$remote_sha" ] || die "branch '$branch' is not on origin - push it first (act clones this repository from GitHub at the local HEAD)"
 [ "$remote_sha" = "$local_sha" ] || die "branch '$branch' on origin is at ${remote_sha:0:7}, HEAD is ${local_sha:0:7} - push first"
 
-# arm64 hosts run the arm64 image natively; anything else takes act's default.
-arch_args=()
+# arm64 hosts run Prepare on the arm64 image natively. The Android leg is
+# amd64 everywhere, emulated on an arm64 host: Google publishes the Linux
+# build-tools (aapt2) and NDK for x86_64 only, and GitHub's runner is x86_64.
 case "$(uname -m)" in
-  arm64 | aarch64) arch_args=(--container-architecture linux/arm64) ;;
+  arm64 | aarch64) platform=linux/arm64 ;;
+  *) platform=linux/amd64 ;;
 esac
+[ "$android" = false ] || platform=linux/amd64
+
+# The licences of the Android SDK are the developer's to accept, once per
+# machine: the SDK lives in a Docker volume every later run reuses.
+consent() {
+  [ "${WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES:-0}" = 1 ] && return 0
+  if [ -t 0 ]; then
+    local answer
+    printf '%s [y/N] ' "$1" >&2
+    read -r answer || answer=""
+    case "$answer" in y | Y | yes | YES) return 0 ;; esac
+  fi
+  die "not confirmed: $1. Answer y in a terminal, or set WORKFLOWS_SMOKE_ACCEPT_ANDROID_LICENSES=1 to agree non-interactively."
+}
+android_args=()
+# The JDK sdkmanager runs in, as act's runner image has no Java of its own:
+# pinned by the digest of its multi-platform index.
+jdk_image="eclipse-temurin:21-jdk@sha256:3e3c176ffed168beb42c607be9bc1639b466cf00261a0fb04425562c9d0c5c2b"
+if [ "$android" = true ]; then
+  sdk_volume="${WORKFLOWS_ACT_ANDROID_SDK_VOLUME:-smoke-local-android-sdk}"
+  sdk_dir=/opt/android-sdk
+  if ! docker run --rm -v "$sdk_volume:$sdk_dir" "$jdk_image" \
+    test -f "$sdk_dir/licenses/android-sdk-license" -a -x "$sdk_dir/cmdline-tools/latest/bin/sdkmanager" >/dev/null 2>&1; then
+    consent "Install the Android SDK into the Docker volume $sdk_volume, accepting its licences (https://developer.android.com/studio/terms)"
+    log "act smoke: provisioning the Android SDK in $sdk_volume (once; about 2 GB)"
+    docker run --rm -e "ANDROID_HOME=$sdk_dir" -v "$sdk_volume:$sdk_dir" \
+      -v "$PWD/scripts:/workflows-scripts:ro" "$jdk_image" \
+      bash /workflows-scripts/self/smoke-android-sdk.sh ||
+      die "could not provision the Android SDK in $sdk_volume (docker volume rm $sdk_volume starts it over)"
+  fi
+  android_args=(
+    --container-options "-v $sdk_volume:$sdk_dir"
+    --env "ANDROID_HOME=$sdk_dir"
+    --env "ANDROID_SDK_ROOT=$sdk_dir"
+  )
+fi
 
 cache="${WORKFLOWS_ACT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/smoke-local}"
 # One number per checkout: it names the run lock and places the artifact port.
@@ -103,11 +146,16 @@ trap 'exit 143' TERM
 trap 'exit 129' HUP
 
 # act pulls the image on every run by default, a registry round trip per job.
-# Pulled once here, and act is told not to.
+# Pulled once here, per platform, and act is told not to. A tag holds one
+# platform at a time, so each platform's pull is kept under a tag of its own:
+# an Android run pulling amd64 would otherwise hand the next arm64 Prepare an
+# emulated image.
 image="${WORKFLOWS_ACT_IMAGE:-catthehacker/ubuntu:act-latest}"
-if ! docker image inspect "$image" >/dev/null 2>&1; then
-  log "act smoke: pulling $image (once; docker pull it to refresh)"
-  docker pull "$image" >/dev/null || die "could not pull $image"
+runner="smoke-local-runner:${platform#linux/}-$(printf '%s' "$image" | cksum | cut -d' ' -f1)"
+if ! docker image inspect "$runner" >/dev/null 2>&1; then
+  log "act smoke: pulling $image for $platform as $runner (once; docker image rm $runner to refresh)"
+  docker pull --platform "$platform" "$image" >/dev/null || die "could not pull $image for $platform"
+  docker tag "$image" "$runner" || die "could not tag $image as $runner"
 fi
 
 # act's artifact server speaks the v4 artifact protocol and rejects the
@@ -174,8 +222,9 @@ log "act smoke: branch $branch at ${local_sha:0:7}, android=$android, artifacts 
 # shellcheck disable=SC2086 # WORKFLOWS_ACT_ARGS is a deliberate word-split
 act workflow_dispatch \
   -W "$workflow" \
-  -P "ubuntu-latest=$image" \
-  "${arch_args[@]}" \
+  -P "ubuntu-latest=$runner" \
+  --container-architecture "$platform" \
+  ${android_args[@]+"${android_args[@]}"} \
   --pull=false \
   --rm \
   --artifact-server-path "$artifacts" \
