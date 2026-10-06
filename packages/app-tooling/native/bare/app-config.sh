@@ -2,7 +2,7 @@
 # The bare stack's app identifiers, read out of the committed native projects:
 # a bare app has no `expo config` to ask. scripts/lib/native-stack.sh
 # dispatches here; callers ask through workflows_app_config in
-# scripts/lib/e2e-env.sh.
+# scripts/lib/e2e-app.sh.
 #
 # Keys, and where each comes from - an explicit workflow input always wins
 # (IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME are what test-e2e.yml,

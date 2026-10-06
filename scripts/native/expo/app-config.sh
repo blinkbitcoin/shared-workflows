@@ -2,7 +2,7 @@
 # The Expo stack's app identifiers, out of the resolved Expo config
 # (scripts/lib/expo-config.sh, which caches `expo config --json --type public`
 # per commit). scripts/lib/native-stack.sh dispatches here; callers ask through
-# workflows_app_config in scripts/lib/e2e-env.sh.
+# workflows_app_config in scripts/lib/e2e-app.sh.
 #
 # Keys, and where each comes from - an explicit workflow input wins, as on the
 # bare stack (IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME, which test-e2e.yml

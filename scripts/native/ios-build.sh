@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Simulator build of the consumer app, Debug unless WORKFLOWS_IOS_CONFIGURATION
-# says Release (see e2e-env.sh for why a caller would). Generic destination on
+# says Release (see e2e-app.sh for why a caller would). Generic destination on
 # purpose: the build needs no concrete device (the app is installed on the
 # booted one later), and xcodebuild's device enumeration intermittently returns
 # only placeholders on fresh runners. Code signing is off - a simulator build

@@ -40,7 +40,9 @@ scripts/self/       this repo's own upkeep (check-version-pins, render-versions,
                     package-copies, render-contract-table, check-store-notes-section,
                     changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
-                    changed-files) and native-stack, the dispatch to scripts/native/<stack>/
+                    changed-files) and native-stack, the dispatch to scripts/native/<stack>/;
+                    e2e-env is one entry over shared-env (shared with release-env) and
+                    e2e-app, e2e-ios, e2e-maestro and e2e-metro
 test/               the bats suite + fixtures/ (consumer-min, the Expo caller the guide is held to;
                     consumer-bare, a bare React Native app; both kept byte-identical to the guide)
 plugins/            store-release, the Claude Code plugin apps install (four store skills, each

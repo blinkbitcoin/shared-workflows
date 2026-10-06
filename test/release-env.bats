@@ -179,6 +179,26 @@ android" ] || fail "an argument was not returned as given: $output"
   contains "$output" "(got '')" || fail "unexpected message: $output"
 }
 
+# The platform check is shared-env.sh's workflows_platform, the one e2e-env.sh
+# applies too, not a copy of it that can drift: replacing the shared function
+# changes what the release one answers.
+@test "the platform check is the shared one, workflows_platform from shared-env.sh" {
+  run release_env 'workflows_platform() { printf "shared:%s\n" "$1"; }; workflows_release_platform windows'
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "shared:windows" ] || fail "workflows_release_platform does not go through workflows_platform: $output"
+  run release_env 'workflows_release_platform windows'
+  contains "$output" "pass it as \$1 or set WORKFLOWS_PLATFORM" || fail "not the shared message: $output"
+}
+
+@test "WORKFLOWS_OUT is shared-env.sh's: release-env.sh and e2e-env.sh agree on it" {
+  run release_env 'printf "%s\n" "$WORKFLOWS_OUT"'
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  local release="$output"
+  run bash -c 'set -euo pipefail; source "$1/scripts/lib/common.sh"; source "$1/scripts/lib/shared-env.sh"; printf "%s\n" "$WORKFLOWS_OUT"' _ "$REPO_ROOT"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "$release" ] || fail "release-env.sh has '$release', shared-env.sh '$output'"
+}
+
 # --- workflows_fingerprint ------------------------------------------------------
 
 @test "a fingerprint passed down from an earlier step is used without running the CLI" {

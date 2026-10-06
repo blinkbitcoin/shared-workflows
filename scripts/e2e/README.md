@@ -93,7 +93,8 @@ metro-start.sh (expo start | react-native start) → metro-wait.sh android
 `@blinkbitcoin/app-tooling` ships copies of `ios-maestro.sh`,
 `android-maestro.sh`, `app-launch.sh`, `ios-simulator.sh`,
 `android-emulator.sh`, `collect-forensics.sh` and `maestro-bound.sh` under
-`e2e/` (with `lib/e2e-env.sh`, `lib/expo-config.sh`, `lib/native-stack.sh` and
+`e2e/` (with `lib/e2e-env.sh` and the `lib/shared-env.sh` and `lib/e2e-*.sh`
+files it sources, `lib/expo-config.sh`, `lib/native-stack.sh` and
 each stack's `native/<stack>/app-config.sh`), so an app runs the
 suite on a laptop with the scripts CI runs, from its own root:
 `ios-simulator.sh pick`, `app-launch.sh ios`, `ios-maestro.sh` on iOS, and

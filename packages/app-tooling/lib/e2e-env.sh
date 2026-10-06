@@ -2,201 +2,49 @@
 # Shared env contract for scripts/native and scripts/e2e. Source it after
 # common.sh; do not execute. Every variable is optional and has a default, so a
 # consumer only sets what it needs to override (see scripts/e2e/README.md).
+#
+# This file is the one entry point. It assembles the contract from one file
+# per responsibility, none of which touches the disk or $GITHUB_ENV when
+# sourced:
+#   shared-env.sh   WORKFLOWS_OUT, WORKFLOWS_LIB_DIR and the platform check,
+#                   shared with release-env.sh
+#   e2e-app.sh      the app under test: identifiers, build outputs, hooks
+#   e2e-ios.sh      the simulator a run addresses and its unified-log filter
+#   e2e-maestro.sh  flows, the suite bound, the driver-startup timeout and
+#                   the check that a suite ran
+#   e2e-metro.sh    Metro in the background and the mock API's port
+# and then makes the run's side effects once, in workflows_e2e_init.
 # shellcheck shell=bash
 
-WORKFLOWS_DEV_CLIENT="${WORKFLOWS_DEV_CLIENT:-true}"
-WORKFLOWS_MAESTRO_FLOWS="${WORKFLOWS_MAESTRO_FLOWS:-.maestro}"
-WORKFLOWS_SUITE_TIMEOUT_MINUTES="${WORKFLOWS_SUITE_TIMEOUT_MINUTES:-10}"
-WORKFLOWS_METRO_PORT="${WORKFLOWS_METRO_PORT:-8081}"
-# Host-side mock API the E2E setup hook starts. Reversed into the emulator so
-# the app's localhost URLs work unchanged; empty disables the reverse entirely.
-# 8082 is the template's port base (8080) plus its mock-API offset, beside
-# Metro's 8081 at offset 1: the template derives every port from one base so
-# two checkouts can run side by side, and its mock server moved from 4000.
-WORKFLOWS_MOCK_API_PORT="${WORKFLOWS_MOCK_API_PORT-8082}"
-WORKFLOWS_OUT="${WORKFLOWS_OUT:-${RUNNER_TEMP:-/tmp}/workflows}"
-export WORKFLOWS_DEV_CLIENT WORKFLOWS_MAESTRO_FLOWS WORKFLOWS_SUITE_TIMEOUT_MINUTES WORKFLOWS_METRO_PORT WORKFLOWS_MOCK_API_PORT WORKFLOWS_OUT
-mkdir -p "$WORKFLOWS_OUT"
+source "$(dirname "${BASH_SOURCE[0]}")/shared-env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/e2e-app.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/e2e-ios.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/e2e-maestro.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/e2e-metro.sh"
 
-# Immutable "the run started here" stamp. collect-forensics.sh needs a fixed
-# instant to select crash reports from, and metro.log cannot serve: it is
-# appended throughout the run, so its mtime is the last Metro write. Created by
-# whichever script sources this file first, then never touched again.
-WORKFLOWS_RUN_START="$WORKFLOWS_OUT/run-start"
-WORKFLOWS_RUN_START_FRESH=
-if [ ! -e "$WORKFLOWS_RUN_START" ]; then
-  : > "$WORKFLOWS_RUN_START" 2>/dev/null && WORKFLOWS_RUN_START_FRESH=1
-fi
-# WORKFLOWS_RUN_START_FRESH says "this process created the stamp", i.e. nothing ran
-# before it. A collector that stamps the run itself would select nothing at all,
-# so it falls back to a time window instead.
-export WORKFLOWS_RUN_START WORKFLOWS_RUN_START_FRESH
-
-# Publish WORKFLOWS_OUT/WORKFLOWS_RUN_START to $GITHUB_ENV so every later step in the job
-# (including composite actions, e.g. `forensics`'s default `path` input) can
-# see them without re-sourcing this file. gh_env_once's guard is file-based
-# (checks $GITHUB_ENV itself), so it dedupes across the many separate steps -
-# each its own process - that source this file within one job, not just
-# within one process.
-gh_env_once WORKFLOWS_OUT "$WORKFLOWS_OUT"
-gh_env_once WORKFLOWS_RUN_START "$WORKFLOWS_RUN_START"
-
-# Directory holding scripts/lib, resolved from this file so callers in any
-# subdirectory (scripts/native, scripts/e2e) find native-stack.sh.
-WORKFLOWS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export WORKFLOWS_LIB_DIR
-
-# workflows_platform [ARG] -> ios|android. Positional argument wins over WORKFLOWS_PLATFORM.
-workflows_platform() {
-  local p="${1:-${WORKFLOWS_PLATFORM:-}}"
-  case "$p" in
-    ios | android) printf '%s\n' "$p" ;;
-    *) die "platform must be ios or android (got '${p}'); pass it as \$1 or set WORKFLOWS_PLATFORM" ;;
-  esac
-}
-
-# workflows_app_config KEY -> one identifier of the app, from the consumer's
-# native stack: scripts/native/<stack>/app-config.sh, chosen by native-stack.sh.
-# KEY is ios-bundle-id, android-package, scheme (the URL scheme) or ios-scheme
-# (the Xcode scheme). The Expo stack reads `expo config`; the bare stack reads
-# the committed native projects.
-workflows_app_config() { bash "$WORKFLOWS_LIB_DIR/native-stack.sh" app-config "$1"; }
-
-# workflows_app_id PLATFORM -> the application id under test. WORKFLOWS_APP_ID wins; the
-# default comes from the stack's app-config. For Expo that is the resolved
-# config, which already carries any variant suffix (the template's
-# app.config.ts appends `.dev` itself), so nothing is appended here.
-workflows_app_id() {
-  if [ -n "${WORKFLOWS_APP_ID:-}" ]; then printf '%s\n' "$WORKFLOWS_APP_ID"; return 0; fi
-  # Read on its own line: a failing `$(...)` in a `case` word never stops the
-  # shell, so an unknown platform used to answer an empty id with status 0.
-  local platform
-  platform="$(workflows_platform "${1:-}")" || return
-  case "$platform" in
-    ios) workflows_app_config ios-bundle-id ;;
-    android) workflows_app_config android-package ;;
-  esac
-}
-
-# workflows_scheme -> the app's URL scheme (empty for a bare app that has none).
-workflows_scheme() { workflows_app_config scheme; }
-
-# workflows_ios_scheme -> the Xcode scheme/target name: the ios/*.xcworkspace
-# name, for both stacks (the Expo stack cross-checks it against the config).
-workflows_ios_scheme() { workflows_app_config ios-scheme; }
-
-# workflows_metro_background COMMAND [ARG...] - start Metro in the background,
-# the one contract both stacks' metro-start.sh share. nohup + a pid file so the
-# process survives the step that started it (each GitHub Actions step is its
-# own shell) and can be killed deterministically at the end of the job; CI=1 so
-# neither CLI waits on an interactive prompt.
-# Log: $WORKFLOWS_OUT/metro.log  Pid: $WORKFLOWS_OUT/metro.pid
-workflows_metro_background() {
-  local pid
-  # Job control on: the background job then leads its own process group, so
-  # `kill -TERM -$(cat metro.pid)` takes the whole tree down. Killing the pid
-  # alone only reaps the pnpm wrapper and leaves node holding the port.
-  set -m
-  CI=1 nohup "$@" > "$WORKFLOWS_OUT/metro.log" 2>&1 &
-  pid=$!
-  set +m
-  printf '%s\n' "$pid" > "$WORKFLOWS_OUT/metro.pid"
-  log "Metro starting (pid $pid, port $WORKFLOWS_METRO_PORT, log $WORKFLOWS_OUT/metro.log)"
-  log "stop it with: kill -TERM -$pid"
-}
-
-# workflows_driver_startup_timeout DEFAULT_MS -> the MAESTRO_DRIVER_STARTUP_TIMEOUT
-# to export, honouring an explicit environment value, and refusing one that is
-# not strictly below the suite bound. Maestro throws IOSDriverTimeoutException
-# ("iOS driver not ready in time") when this expires - a real, retryable failure
-# the maestro scripts rerun once. With the value at or above the bound the bound
-# fires first, exits 124, and 124 is never retried: a driver that failed to
-# launch (`TEST EXECUTE FAILED` in xctest_runner_*.log, seen at 77s on a loaded
-# runner) then costs the whole bound and zero flows run. Healthy runner startups
-# measured 86s and 144s; 300000 leaves 2x headroom and half the bound for flows.
-workflows_driver_startup_timeout() {
-  local default_ms="${1:?usage: workflows_driver_startup_timeout DEFAULT_MS}"
-  local ms="${MAESTRO_DRIVER_STARTUP_TIMEOUT:-$default_ms}"
-  local bound_ms=$((WORKFLOWS_SUITE_TIMEOUT_MINUTES * 60 * 1000))
-  case "$ms" in *[!0-9]* | '') die "MAESTRO_DRIVER_STARTUP_TIMEOUT must be milliseconds, got '$ms'" ;; esac
-  [ "$ms" -lt "$bound_ms" ] ||
-    die "MAESTRO_DRIVER_STARTUP_TIMEOUT=$ms is not below the suite bound (${bound_ms}ms): a driver that fails to start would burn the bound (exit 124, never retried) instead of failing fast and being retried"
-  printf '%s\n' "$ms"
-}
-
-# workflows_ios_unified_log_predicate -> the `log stream --predicate` that
-# ios-simulator.sh records next to the video. The app id (from the stack's
-# app-config, or WORKFLOWS_APP_ID) and its URL scheme narrow the firehose to the lines that
-# explain a deep link: SpringBoard presenting/dismissing the "Open in <app>?"
-# alert, the app's scene being deactivated behind it, and FrontBoard handing
-# the UIOpenURLAction to the app.
-workflows_ios_unified_log_predicate() {
-  local app_id scheme
-  app_id="$(workflows_app_id ios 2>/dev/null || printf '%s' "${WORKFLOWS_APP_ID:-}")"
-  scheme="$(workflows_scheme 2>/dev/null || true)"
-  printf '%s' "(process == \"SpringBoard\" AND (category == \"AlertItems\" OR category == \"AlertItemStack\" OR category == \"SceneDeactivation\"))"
-  printf '%s' " OR (subsystem == \"com.apple.FrontBoard\" AND category == \"SceneClient\")"
-  [ -n "$app_id" ] && printf '%s' " OR eventMessage CONTAINS \"$app_id\""
-  [ -n "$scheme" ] && printf '%s' " OR eventMessage CONTAINS \"$scheme://\""
-  printf '\n'
-}
-
-# Debug unless a caller asks for Release. Release is what makes an iOS E2E app
-# self-contained: the JS bundle is embedded and expo-dev-client's launcher is
-# not in the build, so the app runs on `simctl launch` alone - no Metro, no
-# deep link, no "Open in <app>?" prompt. Each of those is a step that has to
-# succeed on every run, and each has failed on a runner.
-WORKFLOWS_IOS_CONFIGURATION="${WORKFLOWS_IOS_CONFIGURATION:-Debug}"
-WORKFLOWS_IOS_PRODUCTS_DIR="ios/build/Build/Products/$WORKFLOWS_IOS_CONFIGURATION-iphonesimulator"
-WORKFLOWS_ANDROID_APK="android/app/build/outputs/apk/debug/app-debug.apk"
-export WORKFLOWS_IOS_CONFIGURATION WORKFLOWS_IOS_PRODUCTS_DIR WORKFLOWS_ANDROID_APK
-
-# The picked simulator is remembered in $WORKFLOWS_OUT so every later step addresses
-# it explicitly: `booted` is ambiguous on a developer Mac with several
-# simulators up, and GITHUB_ENV does not reach a local shell.
-workflows_sim_udid() {
-  if [ -n "${WORKFLOWS_SIM_UDID:-}" ]; then printf '%s\n' "$WORKFLOWS_SIM_UDID"; return 0; fi
-  [ -f "$WORKFLOWS_OUT/sim-udid" ] || die "no simulator selected - run ios-simulator.sh pick first"
-  cat "$WORKFLOWS_OUT/sim-udid"
-}
-
-# workflows_run_hook VAR_NAME - run a consumer-relative hook script when the variable
-# names one. Missing file is fatal: a silently skipped setup hook produces a
-# confusing suite failure later.
-workflows_run_hook() {
-  local var="$1" path="${!1:-}" root
-  [ -n "$path" ] || return 0
-  root="$(consumer_root)"
-  [ -f "$root/$path" ] || die "$var points at a missing file: $root/$path"
-  log "running $var: $path"
-  (cd "$root" && bash "$path")
-}
-
-# workflows_assert_suite_ran JUNIT_PATH PLATFORM - fail when the suite ran no tests.
+# workflows_e2e_init - create $WORKFLOWS_OUT, stamp the run's start and publish
+# both to $GITHUB_ENV. Called below, every time this file is sourced: each
+# step is a process of its own, and each guard is on the file system, so the
+# stamp is made and each variable published once per job.
 #
-# Maestro exits 0 when its flow selection matches nothing at all: a tag filter
-# that no flow carries, a renamed .maestro/flows directory, a config.yaml whose
-# includeTags stopped matching. The job then goes green having tested nothing,
-# which is the most expensive kind of pass - it is indistinguishable from a real
-# one, and it stays green until someone ships a broken build.
+# WORKFLOWS_RUN_START is an immutable "the run started here" stamp.
+# collect-forensics.sh needs a fixed instant to select crash reports from, and
+# metro.log cannot serve: it is appended throughout the run, so its mtime is
+# the last Metro write. Created by whichever script sources this file first,
+# then never touched again.
 #
-# The junit report Maestro already writes carries the count, so no extra run is
-# needed. Only the `tests` attribute is read here; whether individual tests
-# failed is already in Maestro's own exit status.
-workflows_assert_suite_ran() {
-  local junit="$1" platform="$2" tests
-  if [ ! -f "$junit" ]; then
-    die "$platform: Maestro reported success but wrote no junit report at $junit - the suite cannot be shown to have run"
+# WORKFLOWS_RUN_START_FRESH says "this process created the stamp", i.e. nothing
+# ran before it. A collector that stamps the run itself would select nothing at
+# all, so it falls back to a time window instead.
+workflows_e2e_init() {
+  workflows_out_init
+  WORKFLOWS_RUN_START="$WORKFLOWS_OUT/run-start"
+  WORKFLOWS_RUN_START_FRESH=
+  if [ ! -e "$WORKFLOWS_RUN_START" ]; then
+    : > "$WORKFLOWS_RUN_START" 2>/dev/null && WORKFLOWS_RUN_START_FRESH=1
   fi
-  # The attribute off the <testsuites>/<testsuite> element. sed rather than an
-  # XML parser: the runners have no xmllint guarantee, and this is one attribute
-  # in a file Maestro generates to a fixed shape.
-  tests="$(sed -n 's/.*[^a-zA-Z]tests="\([0-9][0-9]*\)".*/\1/p' "$junit" | head -1)"
-  if [ -z "$tests" ]; then
-    die "$platform: no tests= count in $junit - cannot confirm the suite ran"
-  fi
-  if [ "$tests" -eq 0 ]; then
-    die "$platform: Maestro exited 0 but ran 0 flows. Check the flows directory and the tag filters (WORKFLOWS_MAESTRO_INCLUDE_TAGS='${WORKFLOWS_MAESTRO_INCLUDE_TAGS:-}', WORKFLOWS_MAESTRO_EXCLUDE_TAGS='${WORKFLOWS_MAESTRO_EXCLUDE_TAGS:-}') - a suite that selects nothing passes without testing anything."
-  fi
-  log "$platform: Maestro ran $tests flow(s)"
+  export WORKFLOWS_RUN_START WORKFLOWS_RUN_START_FRESH
+  gh_env_once WORKFLOWS_RUN_START "$WORKFLOWS_RUN_START"
 }
+
+workflows_e2e_init
