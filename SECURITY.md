@@ -7,8 +7,7 @@ problem in a pull request.
 
 - Preferred: GitHub → **Security** → **Report a vulnerability** (private
   security advisory) on this repository.
-- Email: `security@blink.sv` *(placeholder — replace with the real address for
-  your fork before publishing this repository)*.
+- Email: `security@blink.sv`.
 
 Include the workflow, action or script involved, the ref you pin (`@v0`, a tag
 or a sha), and the smallest caller that reproduces it. Expect an
