@@ -11,6 +11,7 @@ import {
   load,
   main,
   OPTIONS,
+  outputRows,
   parseBoolean,
   parseTyped,
   resolve,
@@ -131,13 +132,29 @@ test('--json prints every setting', () => {
   assert.equal(JSON.parse(io.out[0]).severity, 'high');
 });
 
+test('--outputs prints the step outputs, the fixed three then one per job', () => {
+  const io = capture();
+  assert.equal(main(['--outputs'], { ...io, env: { SECURITY_FAIL_ON: 'deterministic,review', SECURITY_CODE: 'false' } }), 0);
+  assert.deepEqual(io.out.slice(0, 3), ['enabled=true', 'severity=high', 'fail-on=deterministic,review']);
+  assert.deepEqual(io.out.slice(3), outputRows(resolve({}, { SECURITY_CODE: 'false' })).slice(3).map(([n, v]) => `${n}=${v}`));
+  assert.ok(io.out.includes('code=false'), io.out.join(' '));
+});
+
+test('outputRows joins an empty fail-on list to an empty value', () => {
+  assert.deepEqual(outputRows({ enabled: false, severity: 'low', failOn: [], jobs: {} }), [
+    ['enabled', false],
+    ['severity', 'low'],
+    ['fail-on', ''],
+  ]);
+});
+
 test('an unknown key and a missing argument both exit 2', () => {
   const io = capture();
   assert.equal(main(['get', 'jobs.nope'], { ...io, env: {} }), 2);
   assert.equal(main([], { ...io, env: {} }), 2);
   assert.deepEqual(io.out, [
     'no such setting: jobs.nope',
-    'usage: security-settings.mjs get <dotted.key> | --json',
+    'usage: security-settings.mjs get <dotted.key> | --json | --outputs',
   ]);
 });
 
@@ -185,7 +202,7 @@ test('get handles deeply nested nonexistent paths', () => {
 test('get without a key argument exits 2', () => {
   const io = capture();
   assert.equal(main(['get'], { ...io, env: {} }), 2);
-  assert.equal(io.out[0], 'usage: security-settings.mjs get <dotted.key> | --json');
+  assert.equal(io.out[0], 'usage: security-settings.mjs get <dotted.key> | --json | --outputs');
 });
 
 test('Array.isArray branch in value output', () => {

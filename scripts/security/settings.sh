@@ -14,19 +14,16 @@ require_cmd node
 
 # Resolved before the cd below: $0 may be a relative path.
 resolver="$(cd "$(dirname "$0")/../../packages/app-tooling/lib" && pwd -P)/security-settings.mjs"
-rows="$(cd "$(dirname "$0")" && pwd -P)/settings.mjs"
 root="$(consumer_root)"
 cd "$root"
 
-json="$(node "$resolver" --json)"
+# --outputs prints one `name=value` line per step output, and fails on a
+# setting it cannot resolve.
+lines="$(node "$resolver" --outputs)" || die "$resolver could not resolve the security settings"
 # An empty read would switch the whole gate off in silence, which is the one
 # outcome this gate must never produce: a resolver that printed nothing is a
 # failure, never "no jobs enabled".
-[ -n "$json" ] || die "$resolver printed nothing"
-
-# settings.mjs, beside this script, turns the settings object into one
-# `name=value` line per output, and fails on anything else.
-lines="$(node "$rows" "$json")" || die "$resolver printed something that is not the settings object: $json"
+[ -n "$lines" ] || die "$resolver printed nothing"
 
 while IFS='=' read -r key value; do
   [ -n "$key" ] || continue
