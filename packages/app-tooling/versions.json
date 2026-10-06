@@ -17,6 +17,14 @@
     { "tool": "actionlint" },
     { "tool": "bats" },
     { "tool": "yq" },
+    {
+      "tool": "jq",
+      "version": "1.8.1",
+      "comment": [
+        "label-sarif.sh and release-pr-read.sh need jq (require_cmd jq), and so does a",
+        "workflow-shape test, which fails without it rather than skipping."
+      ]
+    },
     { "tool": "node" },
     {
       "tool": "pnpm",
@@ -53,8 +61,9 @@
       "version": "1.177.0",
       "comment": [
         "The Semgrep CLI: test/semgrep-rules.bats runs `semgrep --test` over the rules",
-        "check-security ships, and skips without it - which on a runner without it",
-        "meant the fixtures were never run. The version the template pins."
+        "check-security ships. It once skipped without it, which on a runner without",
+        "it meant the fixtures were never run; it now fails (require_cmd in",
+        "test/test_helper.bash). The version the template pins."
       ]
     },
     {

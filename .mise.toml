@@ -6,6 +6,9 @@ shellcheck = "0.11.0"
 actionlint = "1.7.12"
 bats = "1.14.0"
 yq = "4.53.6"
+# label-sarif.sh and release-pr-read.sh need jq (require_cmd jq), and so does a
+# workflow-shape test, which fails without it rather than skipping.
+jq = "1.8.1"
 node = "24"
 # This repo ships no package.json, but a dozen of its scripts shell out to pnpm
 # on the consumer's behalf - run-script.sh, web-export.sh, playwright.sh,

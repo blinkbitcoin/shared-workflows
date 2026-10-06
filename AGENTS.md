@@ -181,7 +181,7 @@ Every row is a make target; nothing here is run through a package manager.
   broken setup: `require_cmd` (`test/test_helper.bash`) fails the test and
   names the fix, where the skip once let a shell without yq report green with
   every workflow shape and contract assertion skipped. A tool the toolchain
-  does not pin (python3, curl, jq, the claude CLI, mise itself) may still
+  does not pin (python3, curl, the claude CLI, mise itself) may still
   skip. `test/require-cmd.bats` enforces this.
 - **Tool versions live in `packages/app-tooling/versions.json`**, the only
   file a version is edited in. `node scripts/self/render-versions.mjs --write`

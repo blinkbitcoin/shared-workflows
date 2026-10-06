@@ -9,7 +9,7 @@
 # so a shell without the pinned tools reported green with every workflow shape
 # and contract assertion skipped. yq, pnpm and semgrep are pinned, so a missing
 # one is a broken setup: require_cmd fails the test and names the fix. A tool
-# .mise.toml does not pin (python3, curl, jq, the claude CLI, mise itself) may
+# .mise.toml does not pin (python3, curl, the claude CLI, mise itself) may
 # still skip; the guard below only reads the pinned ones.
 #
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.

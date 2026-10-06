@@ -1293,7 +1293,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # own job's display name. The map and the workflow must name each job the same.
 @test "label-sarif.sh names each scanner exactly as check-security.yml names its job" {
   require_cmd yq
-  command -v jq >/dev/null || skip "jq not installed"
+  require_cmd jq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$GITHUB_WORKSPACE/.security"
