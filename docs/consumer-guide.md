@@ -467,8 +467,8 @@ Notes:
   is there so adding the `e2e:ios` label to an already-open PR triggers a new
   run that picks it up (a label change is not `synchronize`).
 - `concurrency` is the **caller's** job, not this repo's — none of the
-  reusable workflows set it (a called workflow's `concurrency` would fight the
-  caller's). Cancel in-flight runs on every branch except `main` (a `main`
+  reusable workflows sets a workflow-level one (a called workflow's
+  `concurrency` would fight the caller's). Cancel in-flight runs on every branch except `main` (a `main`
   push after a merge should never be cancelled by the next one).
 - `unit-changed` and `e2e-changed` (from `check.yml`'s `changes` job) let
   `unit` and `e2e` skip a change that cannot affect them: a Maestro flow edit
@@ -1401,7 +1401,8 @@ the store notes drafted into it, version/notes preparation, signed store builds,
 arbitrary fastlane lanes, the GitHub release, OTA publishing, and a retry for a
 promotion the green gate gave up on. They are strictly opt-in — nothing in `ci.yml` calls them — and
 they follow every rule the workflows above do: `permissions: contents: read` at
-the top, no `concurrency` (the caller owns it), self-checkout into `.workflows/`,
+the top, no workflow-level `concurrency` (the caller owns it; the one job-level
+group is `publish-ota.yml`'s, below), self-checkout into `.workflows/`,
 every `run:` a single `bash "$WORKFLOWS_DIR/scripts/..."` line, and **every secret
 declared `required: false`** so a caller only passes the ones its stage needs.
 
@@ -1752,6 +1753,19 @@ Fingerprint gate → `expo export` → publish → manifest smoke check.
 | `runtime-version` | `''` | Sent as the `expo-runtime-version` header in that check. Empty takes the baseline's iOS fingerprint: the gate only lets an update through when this commit fingerprints the same, and that fingerprint is the runtime version the update is served under |
 
 No outputs. Secrets: `consumer-token`, `OTA_PUBLISH_TOKEN` (both optional).
+
+**One publish per channel at a time.** The workflow's one job, which exports,
+publishes and smoke-checks, joins the job-level group
+`shared-workflows-publish-ota-<repository>-<channel>` with
+`cancel-in-progress: false`, so two runs publishing to the same channel queue
+instead of overlapping, and an older bundle can never finish last and replace
+the newer one users receive. Different channels still run side by side, and a
+running publish is never cancelled. GitHub keeps one *pending* job per group: a
+third publish queued behind a running one replaces the second, which for OTA is
+the right outcome, since the newest commit is the one users should get. The
+`shared-workflows-` prefix keeps the name apart from the caller's own group
+(`release`, `release-internal-<sha>`); do not name a caller's group after it, or
+the caller holds it while this job waits for it, forever.
 
 What is published is the export `scripts/ota/export.sh` wrote to `$WORKFLOWS_OTA_DIR`
 — the bytes the fingerprint gate vetted — not an export the CLI performs for
@@ -2558,7 +2572,9 @@ Rules that hold for all four:
   caller's token.
 - **The concurrency group stays in the caller**, because a reusable workflow
   cannot name one for its caller. The store jobs of `publish-internal.yml` join
-  the shared `release` queue on their own, as they did as caller jobs.
+  the shared `release` queue on their own, as they did as caller jobs, and
+  `publish-ota.yml`'s job queues per channel inside whichever queue its caller
+  holds (see [`publish-ota.yml`](#publish-otayml)).
 - **`github.*` is the caller's.** `github.sha`, `github.event_name` and the run id
   are those of the run that called the pipeline, so a dispatch's own values
   (`tag`, `action`, `platforms`) are passed as inputs.

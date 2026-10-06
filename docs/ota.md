@@ -37,7 +37,13 @@ flowchart TB
 ```
 
 The gate runs **before** the export, so an update that cannot be served never
-gets built. The rest of this page is the detail behind each box: the channel
+gets built. Publishes to one channel never overlap: the
+workflow's one job queues per repository and channel
+(`shared-workflows-publish-ota-<repository>-<channel>`, `cancel-in-progress:
+false`), so an older bundle cannot finish last and overwrite a newer one, and a
+third publish queued behind a running one replaces the pending second, leaving
+the newest commit to go out next. See
+[`publish-ota.yml`](consumer-guide.md#publish-otayml). The rest of this page is the detail behind each box: the channel
 per tier under [The channel model](#the-channel-model), the comparison itself
 under [The fingerprint gate](#the-fingerprint-gate), and the two dispatched
 paths under [Hotfix](#hotfix) and [Rollback](#rollback).
