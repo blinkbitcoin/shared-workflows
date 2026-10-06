@@ -554,6 +554,10 @@
         "sarif-upload-enabled": {
           "type": "boolean",
           "required": false
+        },
+        "artifact-prefix": {
+          "type": "string",
+          "required": false
         }
       },
       "secrets": {

@@ -136,6 +136,15 @@ on:
           still applies the threshold either way.
         type: boolean
         default: true
+      artifact-prefix:
+        description: >-
+          Name for this call's artifacts, for a caller that calls this workflow
+          more than once in one run: my-app makes them my-app-security-sarif-<job>
+          and my-app-security-sbom, and the verdict and the code scanning category
+          read this call's own only. Lowercase letters, digits and hyphens, not
+          containing security-sarif. Empty keeps the plain names.
+        type: string
+        default: ''
     secrets:
       consumer-token:
         description: PAT with read access to a private consumer repository; falls back to the caller's github.token (works for a public consumer)
@@ -183,6 +192,7 @@ jobs:
       review-codebase: ${{ steps.resolve.outputs.review-codebase }}
       severity: ${{ steps.resolve.outputs.severity }}
       fail-on: ${{ steps.resolve.outputs.fail-on }}
+      artifact-prefix: ${{ steps.artifact-prefix.outputs.artifact-prefix }}
     steps:
       - name: Checkout consumer
         uses: actions/checkout@v7
@@ -197,6 +207,14 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
+      # Before the settings, so a bad prefix fails here with no output written
+      # and every scanner job skipped: nothing is uploaded under a name that
+      # could make two calls in one run read each other's SARIF.
+      - name: Check the artifact prefix
+        id: artifact-prefix
+        env:
+          ARTIFACT_PREFIX: ${{ inputs.artifact-prefix }}
+        run: bash ".workflows/scripts/security/artifact-prefix.sh" "$ARTIFACT_PREFIX"
       # Before Setup and before any consumer script, in every job: a SECURITY_*
       # twin in environment-variables changes what the resolver returns, what a runner does
       # and what the verdict applies, so all of them have to see the same values.
@@ -267,11 +285,16 @@ jobs:
       # SARIF, and if-no-files-found: error would stack a second red step on top
       # of the real one. if-no-files-found stays `error` because a *successful*
       # scan with no SARIF is the silence run-job.sh already refuses.
+      #
+      # Every upload in this workflow is named after artifact-prefix (empty by
+      # default) and overwrites: a re-run of a failed job replaces the artifact
+      # its first attempt left, where without overwrite the upload fails on the
+      # name. A second call in the same run passes its own prefix.
       - name: Upload SARIF
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-dependencies
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-dependencies
           path: ${{ inputs.working-directory }}/.security/dependencies.sarif
           if-no-files-found: error
           retention-days: 7
@@ -322,7 +345,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-code
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-code
           path: ${{ inputs.working-directory }}/.security/code.sarif
           if-no-files-found: error
           retention-days: 7
@@ -368,7 +391,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-policy
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-policy
           path: ${{ inputs.working-directory }}/.security/policy.sarif
           if-no-files-found: error
           retention-days: 7
@@ -414,7 +437,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-sbom
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-sbom
           path: ${{ inputs.working-directory }}/.security/sbom.sarif
           if-no-files-found: error
           retention-days: 7
@@ -423,7 +446,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sbom
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sbom
           path: ${{ inputs.working-directory }}/.security/sbom.cdx.json
           if-no-files-found: error
           retention-days: 90
@@ -472,7 +495,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-bundle
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-bundle
           path: ${{ inputs.working-directory }}/.security/bundle.sarif
           if-no-files-found: error
           retention-days: 7
@@ -517,7 +540,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-mobile
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-mobile
           path: ${{ inputs.working-directory }}/.security/mobile.sarif
           if-no-files-found: error
           retention-days: 7
@@ -571,7 +594,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-binaries
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-binaries
           path: ${{ inputs.working-directory }}/.security/binaries.sarif
           if-no-files-found: error
           retention-days: 7
@@ -626,7 +649,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-review
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-review
           path: ${{ inputs.working-directory }}/.security/review.sarif
           if-no-files-found: error
           retention-days: 7
@@ -683,7 +706,7 @@ jobs:
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: security-sarif-review-codebase
+          name: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-review-codebase
           path: ${{ inputs.working-directory }}/.security/review-codebase.sarif
           if-no-files-found: error
           retention-days: 7
@@ -751,8 +774,11 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           # security-sarif-*, not security-*: the bill of materials is an
-          # artifact for people, and the verdict reads SARIF only.
-          pattern: security-sarif-*
+          # artifact for people, and the verdict reads SARIF only. The prefix
+          # leads the pattern, and the pattern matches the whole name, so a
+          # second call in the same run (another prefix, or none) is never
+          # merged in; artifact-prefix.sh refuses the prefixes that could be.
+          pattern: ${{ needs.settings.outputs.artifact-prefix }}security-sarif-*
           merge-multiple: true
           path: ${{ inputs.working-directory }}/.security
       - name: Verdict
@@ -787,7 +813,9 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ inputs.working-directory }}/.security
-          category: security
+          # Per call, like the artifacts: two uploads under one category for one
+          # commit replace each other's alerts. Empty prefix, the old `security`.
+          category: ${{ needs.settings.outputs.artifact-prefix }}security
       # Not a warning: leaving the upload to the default branch is the design,
       # and an annotation on every pull request would be noise of its own. The
       # summary says where the findings went instead.
