@@ -112,9 +112,12 @@ timeout_for() { # DEFAULT_MS, with the caller's environment
 # Both scripts route through the helper; a direct `export …=NNN` would silently
 # reintroduce the dead workflow env and the bound race.
 @test "both maestro scripts take the value from the helper, not a literal export" {
+  # The export lives in prepare_maestro_suite, which both platform scripts call.
+  grep -q 'workflows_driver_startup_timeout' "$REPO_ROOT/scripts/e2e/maestro-suite.sh" ||
+    fail "maestro-suite.sh does not call the helper"
   for s in ios android; do
     f="$REPO_ROOT/scripts/e2e/$s-maestro.sh"
-    grep -q 'workflows_driver_startup_timeout' "$f" || fail "$s-maestro.sh does not call the helper"
+    grep -q '^prepare_maestro_suite' "$f" || fail "$s-maestro.sh does not call prepare_maestro_suite"
     ! grep -qE '^export MAESTRO_DRIVER_STARTUP_TIMEOUT=[0-9]' "$f" || fail "$s-maestro.sh still hardcodes the timeout"
   done
 }
@@ -203,13 +206,15 @@ XML
   contains "$output" "cannot confirm" || fail "unexpected message: $output"
 }
 
-@test "both platform scripts call the guard, and only on success" {
+@test "both platform scripts run the suite that calls the guard, and only on success" {
+  # The suite run both share, run_maestro_suite, lives in maestro-suite.sh.
+  path="$REPO_ROOT/scripts/e2e/maestro-suite.sh"
+  grep -q 'workflows_assert_suite_ran' "$path" || fail "maestro-suite.sh does not assert the suite ran"
+  # Gated on status 0: on a real failure Maestro's own status is the answer,
+  # and an empty-report complaint would bury it.
+  grep -qF 'if [ "$status" -eq 0 ]; then' "$path" \
+    || fail "maestro-suite.sh calls the guard unconditionally; it must only run on success"
   for f in ios-maestro android-maestro; do
-    path="$REPO_ROOT/scripts/e2e/$f.sh"
-    grep -q 'workflows_assert_suite_ran' "$path" || fail "$f.sh does not assert the suite ran"
-    # Gated on status 0: on a real failure Maestro's own status is the answer,
-    # and an empty-report complaint would bury it.
-    grep -qF 'if [ "$status" -eq 0 ]; then' "$path" \
-      || fail "$f.sh calls the guard unconditionally; it must only run on success"
+    grep -q '^run_maestro_suite ' "$REPO_ROOT/scripts/e2e/$f.sh" || fail "$f.sh does not run the shared suite"
   done
 }

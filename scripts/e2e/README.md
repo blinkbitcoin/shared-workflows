@@ -14,7 +14,7 @@ for someone running these scripts directly.
 Two families, one env contract:
 
 - `scripts/native/*` turns a checkout into a runnable app (`prebuild.sh`, `pods.sh`, `ios-build.sh`, `ios-pack.sh`, `android-build.sh`). What differs between an Expo app and a bare React Native app lives under `scripts/native/expo/` and `scripts/native/bare/`, four entry points each (`prebuild.sh`, `app-config.sh`, `metro-start.sh`, `fingerprint.sh`); `scripts/lib/native-stack.sh` resolves the consumer's stack (`WORKFLOWS_NATIVE_STACK_INPUT`, the workflows' `native-stack` input, else detected) and runs the right one. `prebuild.sh` and `metro-start.sh` here are thin dispatchers to it.
-- `scripts/e2e/*` drives a device and the Maestro suite (`metro-start.sh`, `metro-wait.sh`, `ios-simulator.sh`, `android-emulator.sh`, `app-launch.sh`, `maestro-bound.sh`, `ios-maestro.sh`, `android-maestro.sh`, `collect-forensics.sh`), plus three that the workflows call around them: `env-publish.sh`, `run-hook.sh` (the consumer's setup/teardown hooks) and `step-timeout.sh` (the step bound derived from `suite-timeout-minutes`).
+- `scripts/e2e/*` drives a device and the Maestro suite (`metro-start.sh`, `metro-wait.sh`, `ios-simulator.sh`, `android-emulator.sh`, `app-launch.sh`, `maestro-bound.sh`, `maestro-suite.sh`, `ios-maestro.sh`, `android-maestro.sh`, `collect-forensics.sh`), plus three that the workflows call around them: `env-publish.sh`, `run-hook.sh` (the consumer's setup/teardown hooks) and `step-timeout.sh` (the step bound derived from `suite-timeout-minutes`).
 
 All of them run from the repo that hosts these scripts and act on the *consumer*
 checkout resolved by `consumer_root` (`$GITHUB_WORKSPACE/$WORKING_DIRECTORY`).
@@ -92,7 +92,7 @@ metro-start.sh (expo start | react-native start) → metro-wait.sh android
 
 `@blinkbitcoin/app-tooling` ships copies of `ios-maestro.sh`,
 `android-maestro.sh`, `app-launch.sh`, `ios-simulator.sh`,
-`android-emulator.sh`, `collect-forensics.sh` and `maestro-bound.sh` under
+`android-emulator.sh`, `collect-forensics.sh`, `maestro-bound.sh` and `maestro-suite.sh` under
 `e2e/` (with `lib/e2e-env.sh` and the `lib/shared-env.sh` and `lib/e2e-*.sh`
 files it sources, `lib/expo-config.sh`, `lib/native-stack.sh` and
 each stack's `native/<stack>/app-config.sh`), so an app runs the
@@ -113,6 +113,13 @@ here rather than in each app:
 - `maestro-bound.sh` is sourced, not executed: `bounded_maestro SECONDS CMD...`
   returns 124 on a timeout. It uses `timeout`/`gtimeout` when present and a
   pure-bash watchdog otherwise (a stock Mac has neither).
+- `maestro-suite.sh` is sourced too, and holds the suite run both platform
+  scripts share: `prepare_maestro_suite` (driver startup timeout, the consumer
+  root, the flows and output directories) and `run_maestro_suite PLATFORM
+  DISPLAY_NAME [DEVICE_ARGUMENT...] -- [MAESTRO_TEST_ARGUMENT...]` (the
+  `maestro test` command line, the bound, the retry and the check that flows
+  ran). `ios-maestro.sh` and `android-maestro.sh` keep only their own device
+  steps around those two calls.
 - The Maestro suite is retried once on a real failure, never after a 124: a hung
   driver only burns the step's `timeout-minutes` a second time.
 - `collect-forensics.sh` always exits 0.

@@ -66,7 +66,8 @@ runs from the same `if: always()` step that carries the diagnosis.
 
 ## Reading the Maestro debug output
 
-`ios-maestro.sh` / `android-maestro.sh` pass Maestro:
+`ios-maestro.sh` / `android-maestro.sh` pass Maestro (through `run_maestro_suite`
+in `maestro-suite.sh`, which both call):
 
 ```
 --debug-output "$WORKFLOWS_OUT/maestro" --flatten-debug-output --format junit --output "$WORKFLOWS_OUT/maestro/junit.xml"
@@ -102,7 +103,8 @@ quiet for the whole window, which is itself the confirmation.
 
 ## The suite retry and what it means for forensics
 
-Both platform scripts retry the suite exactly once on a **real** failure
+Both platform scripts retry the suite exactly once (`run_maestro_suite`, in
+`maestro-suite.sh`) on a **real** failure
 (`status != 0 && status != 124`) — a timeout (`124`, from `maestro-bound.sh`)
 is never retried, because a hung driver would just burn the timeout twice. The
 recording and forensics you get are from **whichever attempt is the exit

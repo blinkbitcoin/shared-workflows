@@ -3066,7 +3066,7 @@ paths**, not package.json script names, run via `bash` by
 `@blinkbitcoin/app-tooling` ships byte-identical copies of the scripts
 `test-e2e.yml` runs on the device (`e2e/ios-maestro.sh`, `android-maestro.sh`,
 `app-launch.sh`, `ios-simulator.sh`, `android-emulator.sh`,
-`collect-forensics.sh`, `maestro-bound.sh`, with `lib/e2e-env.sh`, the
+`collect-forensics.sh`, `maestro-bound.sh`, `maestro-suite.sh`, with `lib/e2e-env.sh`, the
 `lib/shared-env.sh` and `lib/e2e-*.sh` files it sources, and
 `lib/expo-config.sh`), so a local run launches the app and runs the flows the
 way CI does: the same deep link, the same retry, the same check that flows ran.
@@ -3719,7 +3719,7 @@ each one lives so a future edit doesn't quietly regress it.
 | Lesson | Encoded in |
 | --- | --- |
 | A network blip must not turn a release red, and only a step that is safe to repeat is run again | `scripts/lib/common.sh` `retry_command ATTEMPTS DELAY_SECONDS -- COMMAND` (logs each failed attempt, returns the last status), used by `scripts/native/pods.sh` (`pod install`, 3 attempts, 20 s apart) and `scripts/ota/smoke.sh` (the manifest GET, 3 attempts, 5 s apart, only on no answer or a 5xx). Never around `scripts/ota/publish.sh`: each publish creates a new update |
-| A hung Maestro driver must never eat the job twice | `scripts/e2e/maestro-bound.sh` (`bounded_maestro`, exit `124`) + `ios-maestro.sh`/`android-maestro.sh` (retry only on a real failure, never on `124`) |
+| A hung Maestro driver must never eat the job twice | `scripts/e2e/maestro-bound.sh` (`bounded_maestro`, exit `124`) + `scripts/e2e/maestro-suite.sh` (`run_maestro_suite`, which `ios-maestro.sh`/`android-maestro.sh` call: retry only on a real failure, never on `124`) |
 | The suite's own timeout must not race the step's `timeout-minutes` | `scripts/e2e/step-timeout.sh` (step timeout = `suite-timeout-minutes + 5`), consumed via `fromJSON(steps.timeout.outputs.minutes)` in `test-e2e.yml` |
 | Killing Metro must kill its whole process group, not just the wrapper pid | `scripts/e2e/README.md` notes `kill -TERM -"$(cat "$WORKFLOWS_OUT/metro.pid")"` (leading `-`), which `metro-start.sh` also logs when it starts Metro; nothing kills Metro itself — the job teardown reaps the process group |
 | The first app launch must not race a cold Metro bundle | `scripts/e2e/metro-wait.sh` pre-warms `/.expo/.virtual-metro-entry.bundle?platform=...` before `app-launch.sh` runs |
