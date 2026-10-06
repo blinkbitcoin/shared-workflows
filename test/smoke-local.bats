@@ -32,6 +32,13 @@ SCRIPT="$REPO_ROOT/scripts/self/smoke-local.sh"
     || fail "build-android must run unsigned"
 }
 
+@test "the Android build writes act's Gradle cache, so the next run builds warm" {
+  # build-android writes the cache only when github.ref is default-branch;
+  # under act github.ref is the local branch, never refs/heads/main.
+  [ "$(yq -r '.jobs."build-android".with."default-branch"' "$WF")" = '${{ github.ref }}' ] \
+    || fail "build-android's default-branch is not github.ref: setup-gradle would run read-only and every run would build cold"
+}
+
 @test "no job sets a macOS runner: the smoke is the Linux half only" {
   ! grep -qE 'macos' "$WF" || fail "self-smoke-local.yml mentions a macOS runner"
 }
@@ -55,14 +62,56 @@ setup() {
   cp "$WF" "$work/.github/workflows/"
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
-  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/act.args"\n' "$BATS_TEST_TMPDIR" > "$bin/act"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$bin/docker"
+  # act records its arguments and, when FAKE_ACT_EXIT is set, fails with it.
+  cat > "$bin/act" <<STUB
+#!/usr/bin/env bash
+printf '%s\\n' "\$@" > "$BATS_TEST_TMPDIR/act.args"
+exit "\${FAKE_ACT_EXIT:-0}"
+STUB
+  # docker records every call. Its containers are the lines of
+  # \$BATS_TEST_TMPDIR/containers, "name working-directory"; the image is
+  # present unless FAKE_DOCKER_NO_IMAGE is set.
+  cat > "$bin/docker" <<STUB
+#!/usr/bin/env bash
+printf '%s\\n' "\$*" >> "$BATS_TEST_TMPDIR/docker.calls"
+list="$BATS_TEST_TMPDIR/containers"
+case "\$1 \${2:-}" in
+  "ps -a") [ -f "\$list" ] && cut -d' ' -f1 "\$list"; exit 0 ;;
+  "inspect --format") grep "^\${4} " "\$list" | cut -d' ' -f2-; exit 0 ;;
+  "image inspect") [ -z "\${FAKE_DOCKER_NO_IMAGE:-}" ]; exit ;;
+esac
+exit 0
+STUB
   printf '#!/usr/bin/env bash\necho fake-token\n' > "$bin/gh"
   chmod +x "$bin/act" "$bin/docker" "$bin/gh"
   export PATH="$bin:$PATH"
   # The substitute artifact actions are "already fetched", so no clone runs.
   export WORKFLOWS_ACT_CACHE="$BATS_TEST_TMPDIR/cache"
   mkdir -p "$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" "$WORKFLOWS_ACT_CACHE/download-artifact-v4.3.0"
+}
+
+# The value act was given for a flag that takes one.
+act_arg() { grep -A1 -x -- "$1" "$BATS_TEST_TMPDIR/act.args" | tail -1; }
+# The run lock of the scratch checkout, named as the script names it.
+lock_file() { printf '%s/runs/%s.pid' "$WORKFLOWS_ACT_CACHE" "$(cd "$work" && printf '%s' "$PWD" | cksum | cut -d' ' -f1)"; }
+# Hold TCP ports on 127.0.0.1 open until the test ends, all in one process;
+# returns once the last one listens.
+hold_port() {
+  node -e 'for (const p of process.argv.slice(1)) require("net").createServer().listen(Number(p), "127.0.0.1")' "$@" &
+  local holder=$! last="${*: -1}" i
+  background "$holder"
+  for i in $(seq 1 100); do
+    (exec 3<>"/dev/tcp/127.0.0.1/$last") 2>/dev/null && return 0
+    sleep 0.1
+  done
+  kill "$holder"
+  fail "could not hold port(s) $*"
+}
+# Every helper process a test starts is stopped by teardown, quietly.
+background() { disown "$1"; echo "$1" >> "$BATS_TEST_TMPDIR/background"; }
+teardown() {
+  [ -f "$BATS_TEST_TMPDIR/background" ] || return 0
+  xargs kill 2>/dev/null < "$BATS_TEST_TMPDIR/background" || true
 }
 
 @test "refuses a branch that is not on origin, and says to push" {
@@ -91,7 +140,7 @@ setup() {
   contains "$output" "detached HEAD" || fail "output: $output"
 }
 
-@test "runs act on the smoke workflow with the pinned image, an artifact server and the token" {
+@test "runs act on the smoke workflow with the pinned image, its servers on loopback and the token" {
   cd "$work"
   git push -q origin feature
   run bash "$SCRIPT"
@@ -101,10 +150,16 @@ setup() {
   contains "$args" ".github/workflows/self-smoke-local.yml" || fail "args: $args"
   contains "$args" "ubuntu-latest=catthehacker/ubuntu:act-latest" || fail "args: $args"
   contains "$args" "--artifact-server-path" || fail "args: $args"
+  # The run directory exists before the first upload lists it (act's server
+  # panics on a missing one). The fake act ran while it was there; it is gone now.
+  printf '#!/usr/bin/env bash\n[ -d "$(grep -A1 -x -- --artifact-server-path <<<"$(printf "%%s\\n" "$@")" | tail -1)/1" ] || exit 7\n' > "$bin/act"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "the artifact server's run directory was missing when act started: $output"
   # Loopback, not act's default-route guess: behind a VPN that is a tunnel
-  # address the job cannot reach, and every upload times out.
-  grep -A1 -x -- '--artifact-server-addr' "$BATS_TEST_TMPDIR/act.args" | tail -1 | grep -qx '127.0.0.1' \
-    || fail "the artifact server is not on 127.0.0.1: $args"
+  # address the job cannot reach, and every upload - and every cache restore
+  # and save - times out.
+  [ "$(act_arg --artifact-server-addr)" = "127.0.0.1" ] || fail "the artifact server is not on 127.0.0.1: $args"
+  [ "$(act_arg --cache-server-addr)" = "127.0.0.1" ] || fail "the cache server is not on 127.0.0.1: $args"
   contains "$args" "GITHUB_TOKEN=fake-token" || fail "args: $args"
   contains "$args" "android=false" || fail "args: $args"
   # act's artifact server cannot take upload-artifact@v7 / download-artifact@v8
@@ -114,14 +169,166 @@ setup() {
   contains "$args" "repository=blinkbitcoin/react-native-mobile-template" || fail "args: $args"
 }
 
-@test "WORKFLOWS_ACT_ARTIFACT_ADDR moves the artifact server, and the log says where it is" {
+@test "WORKFLOWS_ACT_SERVER_ADDR moves both servers, and the log says where they are" {
   cd "$work"
   git push -q origin feature
-  WORKFLOWS_ACT_ARTIFACT_ADDR=192.0.2.10 run bash "$SCRIPT"
+  WORKFLOWS_ACT_SERVER_ADDR=127.0.0.2 run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
-  grep -A1 -x -- '--artifact-server-addr' "$BATS_TEST_TMPDIR/act.args" | tail -1 | grep -qx '192.0.2.10' \
-    || fail "the override did not reach act: $(cat "$BATS_TEST_TMPDIR/act.args")"
-  contains "$output" "artifacts at 192.0.2.10" || fail "the address was not logged: $output"
+  [ "$(act_arg --artifact-server-addr)" = "127.0.0.2" ] || fail "the override did not reach the artifact server: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  [ "$(act_arg --cache-server-addr)" = "127.0.0.2" ] || fail "the override did not reach the cache server: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  contains "$output" "artifacts at 127.0.0.2:" || fail "the address was not logged: $output"
+}
+
+@test "the artifact port is derived from the checkout, and a port in use is skipped" {
+  cd "$work"
+  git push -q origin feature
+  first=$((34567 + $(printf '%s' "$PWD" | cksum | cut -d' ' -f1) % 1000))
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  port="$(act_arg --artifact-server-port)"
+  # Another test, or a real run, may hold a port in the range: the first free
+  # one from $first is taken, never past the 50 probed.
+  [ "$port" -ge "$first" ] && [ "$port" -lt $((first + 50)) ] || fail "port $port is not in $first-$((first + 49))"
+  contains "$output" "artifacts at 127.0.0.1:$port" || fail "the port was not logged: $output"
+  hold_port "$port"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  next="$(act_arg --artifact-server-port)"
+  [ "$next" != "$port" ] || fail "the run took port $port, which is in use"
+  [ "$next" -gt "$port" ] && [ "$next" -lt $((first + 50)) ] || fail "port $next is not the next free one after $port"
+}
+
+@test "WORKFLOWS_ACT_ARTIFACT_PORT picks the port, and one in use is refused before act runs" {
+  cd "$work"
+  git push -q origin feature
+  WORKFLOWS_ACT_ARTIFACT_PORT=40123 run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  [ "$(act_arg --artifact-server-port)" = "40123" ] || fail "args: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  rm "$BATS_TEST_TMPDIR/act.args"
+  hold_port 40124
+  WORKFLOWS_ACT_ARTIFACT_PORT=40124 run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "a busy port was accepted: $output"
+  contains "$output" "40124 on 127.0.0.1 is in use" || fail "output: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+}
+
+@test "no free port in the probed range is a clear failure" {
+  cd "$work"
+  git push -q origin feature
+  # bash's /dev/tcp cannot be faked, so all 50 probed ports are really held.
+  first=$((34567 + $(printf '%s' "$PWD" | cksum | cut -d' ' -f1) % 1000))
+  hold_port $(seq "$first" $((first + 49)))
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "the run went ahead without a port: $output"
+  contains "$output" "no free artifact server port in $first-$((first + 49))" || fail "output: $output"
+}
+
+@test "the image is pulled once when it is missing, and act never pulls it" {
+  cd "$work"
+  git push -q origin feature
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  ! grep -q '^pull ' "$BATS_TEST_TMPDIR/docker.calls" || fail "a present image was pulled again"
+  grep -qx -- '--pull=false' "$BATS_TEST_TMPDIR/act.args" || fail "act still pulls on every run: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  FAKE_DOCKER_NO_IMAGE=1 run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  grep -qx 'pull catthehacker/ubuntu:act-latest' "$BATS_TEST_TMPDIR/docker.calls" || fail "a missing image was not pulled: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+}
+
+@test "a failed pull stops the smoke before act runs" {
+  cd "$work"
+  git push -q origin feature
+  printf '#!/usr/bin/env bash\ncase "$1 $2" in "image inspect") exit 1 ;; "pull "*) exit 1 ;; esac\nexit 0\n' > "$bin/docker"
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "output: $output"
+  contains "$output" "could not pull catthehacker/ubuntu:act-latest" || fail "output: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+}
+
+@test "this checkout's act containers and volumes are removed when the run ends, pass or fail, and no other checkout's" {
+  cd "$work"
+  git push -q origin feature
+  printf 'act-Prepare-mine %s\nact-Prepare-theirs /somewhere/else\n' "$PWD" > "$BATS_TEST_TMPDIR/containers"
+  for code in 0 1; do
+    : > "$BATS_TEST_TMPDIR/docker.calls"
+    FAKE_ACT_EXIT=$code run bash "$SCRIPT"
+    [ "$status" -eq "$code" ] || fail "act's status $code was not passed on: $status, $output"
+    calls="$(cat "$BATS_TEST_TMPDIR/docker.calls")"
+    # Twice: once as leftovers before the run (none were running), once after.
+    [ "$(grep -cx 'rm -f act-Prepare-mine' <<<"$calls")" -eq 2 ] || fail "act=$code: the container was not removed before and after: $calls"
+    grep -qx 'volume rm -f act-Prepare-mine act-Prepare-mine-env' <<<"$calls" || fail "act=$code: its volumes were left: $calls"
+    ! grep -qE '^(rm|volume rm) .*theirs' <<<"$calls" || fail "act=$code: another checkout's container was removed: $calls"
+    [ ! -e "$(lock_file)" ] || fail "act=$code: the run lock was left behind"
+  done
+  # act itself is also told to clean up after a failed job.
+  grep -qx -- '--rm' "$BATS_TEST_TMPDIR/act.args" || fail "args: $(cat "$BATS_TEST_TMPDIR/act.args")"
+}
+
+@test "a second run from the same checkout is refused while the first is alive, and leaves its containers alone" {
+  cd "$work"
+  git push -q origin feature
+  printf 'act-Prepare-mine %s\n' "$PWD" > "$BATS_TEST_TMPDIR/containers"
+  mkdir -p "$(dirname "$(lock_file)")"
+  sleep 300 &
+  holder=$!
+  background "$holder"
+  echo "$holder" > "$(lock_file)"
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "output: $output"
+  contains "$output" "already running (pid $holder)" || fail "output: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+  ! grep -q '^rm ' "$BATS_TEST_TMPDIR/docker.calls" || fail "the live run's container was removed: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+  [ "$(cat "$(lock_file)")" = "$holder" ] || fail "the live run's lock was taken over"
+}
+
+@test "a lock left by a run that is gone does not block, and its containers are cleared first" {
+  cd "$work"
+  git push -q origin feature
+  printf 'act-Prepare-mine %s\n' "$PWD" > "$BATS_TEST_TMPDIR/containers"
+  mkdir -p "$(dirname "$(lock_file)")"
+  # A pid that has exited: a run killed with SIGKILL leaves exactly this.
+  bash -c 'exit 0' & wait $!
+  echo $! > "$(lock_file)"
+  # act checks the container is gone before it starts.
+  cat > "$bin/act" <<STUB
+#!/usr/bin/env bash
+grep -qx 'rm -f act-Prepare-mine' "$BATS_TEST_TMPDIR/docker.calls" || { echo "leftover still there" >&2; exit 9; }
+printf '%s\\n' "\$@" > "$BATS_TEST_TMPDIR/act.args"
+STUB
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  contains "$output" "removing container act-Prepare-mine" || fail "output: $output"
+}
+
+@test "an interrupted run still removes its containers and its lock" {
+  cd "$work"
+  git push -q origin feature
+  printf 'act-Prepare-mine %s\n' "$PWD" > "$BATS_TEST_TMPDIR/containers"
+  # act that marks that it started, then stops on a signal the way act does:
+  # it ends its jobs and exits non-zero.
+  cat > "$bin/act" <<STUB
+#!/usr/bin/env bash
+trap 'kill \$! 2>/dev/null; exit 1' INT TERM HUP
+touch "$BATS_TEST_TMPDIR/act.started"
+sleep 30 & wait
+STUB
+  for signal in INT TERM HUP; do
+    rm -f "$BATS_TEST_TMPDIR/act.started"
+    : > "$BATS_TEST_TMPDIR/docker.calls"
+    # A job started with & ignores SIGINT, and bash cannot trap a signal it was
+    # started ignoring: perl puts the default back, as a terminal has it.
+    perl -e '$SIG{INT} = "DEFAULT"; exec @ARGV' bash "$SCRIPT" 2>/dev/null &
+    pid=$!
+    for i in $(seq 1 100); do [ -f "$BATS_TEST_TMPDIR/act.started" ] && break; sleep 0.1; done
+    [ -f "$BATS_TEST_TMPDIR/act.started" ] || fail "$signal: act never started"
+    # A terminal's Ctrl-C or hang-up reaches the script and act together.
+    kill -"$signal" "$pid" "$(pgrep -P "$pid")"
+    status=0; wait "$pid" || status=$?
+    [ "$status" -ne 0 ] || fail "$signal: an interrupted run reported success"
+    [ "$(grep -cx 'rm -f act-Prepare-mine' "$BATS_TEST_TMPDIR/docker.calls")" -eq 2 ] ||
+      fail "$signal: the container was not removed on the way out: $(cat "$BATS_TEST_TMPDIR/docker.calls")"
+    [ ! -e "$(lock_file)" ] || fail "$signal: the run lock was left behind"
+  done
 }
 
 @test "a failed fetch of a substitute action stops the smoke, and leaves no half-cloned cache" {

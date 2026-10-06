@@ -64,6 +64,11 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       stage: internal
+      # Under act, github.ref is the local branch, never refs/heads/main, so
+      # with the default setup-gradle would only ever read the Gradle cache and
+      # every run would build cold. The smoke's cache is act's own, on this
+      # machine, so letting each run write it costs nothing anywhere else.
+      default-branch: ${{ github.ref }}
       version: ${{ needs.prepare.outputs.version }}
       build-number: ${{ needs.prepare.outputs.build-number }}
       # The template's fixed identifiers (its IOS_SCHEME, IOS_BUNDLE_ID and
