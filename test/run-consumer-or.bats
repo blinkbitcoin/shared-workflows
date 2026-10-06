@@ -84,6 +84,27 @@ run_it() {
   grep -q 'fallback ran' "$WORKFLOWS_TEST_LOG" || fail "the fallback did not run: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
+@test "a package.json with no scripts key gets the fallback" {
+  printf '{"name":"c"}\n' > "$ROOT/package.json"
+  write_fallback
+  run_it 'check:audit'
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -q 'fallback ran' "$WORKFLOWS_TEST_LOG" || fail "the fallback did not run: $(cat "$WORKFLOWS_TEST_LOG")"
+  ! grep -q 'pnpm run' "$WORKFLOWS_TEST_LOG" || fail "it ran a consumer script that does not exist"
+}
+
+@test "a package.json that does not parse fails the step, and runs neither implementation" {
+  # It used to read as "no such script" and run the fallback in place of the
+  # consumer's own gate, from inside a subshell that swallowed the error.
+  printf '{"scripts":{"check:audit":"echo ran"},}\n' > "$ROOT/package.json"
+  write_fallback
+  run_it 'check:audit'
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" "::error::" || fail "not an annotation: $output"
+  contains "$output" "/consumer/package.json is not valid JSON: " || fail "the file and the cause are not named: $output"
+  [ ! -s "$WORKFLOWS_TEST_LOG" ] || fail "an implementation ran anyway: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
 @test "which implementation ran is in the log, both ways" {
   # The drift this seam exists to stop went unnoticed because no run log said
   # which of the two implementations had executed.

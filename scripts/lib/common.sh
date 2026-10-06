@@ -97,6 +97,53 @@ gh_env_once() {
 }
 # consumer_root is canonical (pwd -P) on purpose: cache `path:` matching and tar operations need stable absolute paths.
 consumer_root() { local base="${GITHUB_WORKSPACE:-$PWD}"; local wd="${WORKING_DIRECTORY:-.}"; cd "$base/$wd" && pwd -P; }
+# package_json_has SECTIONS NAME [DIRECTORY] - whether the package.json in
+# DIRECTORY (default: the current one) names NAME under one of the
+# comma-separated top-level SECTIONS (`scripts`, `dependencies,devDependencies`).
+#
+#   returns 0  it does, with a non-empty value
+#   returns 1  it does not: no such entry, no such section, or no package.json
+#              at all - a directory without one ships no scripts and depends on
+#              nothing, which is what every caller already did with it
+#   dies       package.json is there but cannot be read, is not valid JSON, or
+#              is not a JSON object; the annotation names the file and the error
+#
+# The third outcome is the point. The probe this replaces was
+# `require('./package.json')` with its stderr discarded, so a package.json that
+# did not parse read as "no such script", and the gate behind it was skipped or
+# swapped for a fallback instead of failing. `die` exits the calling shell, so
+# call this directly (`if package_json_has ...; then`), never inside `( )` or
+# `$( )`, where the die would only end the subshell and read as a 1.
+#
+# NAME and SECTIONS reach node through the environment, never the source text.
+package_json_has() {
+  local sections="$1" name="$2" directory="${3:-$PWD}" message status=0
+  # shellcheck disable=SC2016 # the single quotes hold JavaScript, not shell
+  message="$(PACKAGE_JSON_FILE="$directory/package.json" PACKAGE_JSON_SECTIONS="$sections" PACKAGE_JSON_NAME="$name" node -e '
+    const fs = require("fs");
+    const file = process.env.PACKAGE_JSON_FILE;
+    const fail = (why) => { process.stdout.write(`${file} ${why}`.replace(/\s*\n\s*/g, " ")); process.exit(2); };
+    let text;
+    try { text = fs.readFileSync(file, "utf8"); } catch (error) {
+      if (error.code === "ENOENT") process.exit(1);
+      fail(`could not be read: ${error.message}`);
+    }
+    let pkg;
+    try { pkg = JSON.parse(text); } catch (error) { fail(`is not valid JSON: ${error.message}`); }
+    if (pkg === null || typeof pkg !== "object" || Array.isArray(pkg)) fail("is not a JSON object");
+    const name = process.env.PACKAGE_JSON_NAME;
+    const found = process.env.PACKAGE_JSON_SECTIONS.split(",").some((key) => {
+      const section = Object.hasOwn(pkg, key) ? pkg[key] : undefined;
+      return section !== null && typeof section === "object" && Object.hasOwn(section, name) && Boolean(section[name]);
+    });
+    process.exit(found ? 0 : 1);')" || status=$?
+  case "$status" in
+    0) return 0 ;;
+    1) return 1 ;;
+    2) die "$message - fix it: without a readable package.json there is no telling whether it names \"$name\" under $sections" ;;
+    *) die "package_json_has: node exited $status reading $directory/package.json${message:+: $message}" ;;
+  esac
+}
 require_cmd() { local c; for c in "$@"; do command -v "$c" >/dev/null 2>&1 || die "missing command: $c"; done; }
 # gh_ref_exists REF
 #

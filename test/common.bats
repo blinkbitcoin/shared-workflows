@@ -231,3 +231,81 @@ SH
   contains "$output" "GH_REPO not set" || fail "$output"
   [ ! -s "$WORKFLOWS_TEST_CALLS" ] || fail "gh was called: $(cat "$WORKFLOWS_TEST_CALLS")"
 }
+
+# package_json_has: present 0, absent 1, no package.json 1, a broken one dies.
+@test "package_json_has finds a script, in the directory named or the current one" {
+  printf '{"scripts":{"check:lint":"eslint ."}}\n' > "$BATS_TEST_TMPDIR/package.json"
+  run package_json_has scripts check:lint "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ] || fail "a present script must return 0; status $status: $output"
+  cd "$BATS_TEST_TMPDIR"
+  run package_json_has scripts check:lint
+  [ "$status" -eq 0 ] || fail "the default directory is the current one; status $status: $output"
+}
+@test "package_json_has returns 1 for an absent, empty or inherited entry, and with no section" {
+  printf '{"scripts":{"other":"x","empty":""},"dependencies":["expo"]}\n' > "$BATS_TEST_TMPDIR/package.json"
+  for name in check:lint empty constructor toString; do
+    run package_json_has scripts "$name" "$BATS_TEST_TMPDIR"
+    [ "$status" -eq 1 ] || fail "$name must read as absent; status $status: $output"
+    [ -z "$output" ] || fail "absent must be silent: $output"
+  done
+  run package_json_has devDependencies expo "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "a missing section must return 1; status $status: $output"
+  run package_json_has dependencies expo "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "a section that is not an object must return 1; status $status: $output"
+}
+@test "package_json_has looks in each of the comma-separated sections, and only those" {
+  printf '{"devDependencies":{"expo":"^55"}}\n' > "$BATS_TEST_TMPDIR/package.json"
+  run package_json_has dependencies,devDependencies expo "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ] || fail "the second section was not searched; status $status: $output"
+  run package_json_has dependencies expo "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "a section not named was searched; status $status: $output"
+}
+@test "package_json_has returns 1 when there is no package.json at all" {
+  run package_json_has scripts check:lint "$BATS_TEST_TMPDIR/empty-directory"
+  [ "$status" -eq 1 ] || fail "no package.json must read as absent; status $status: $output"
+  [ -z "$output" ] || fail "absent must be silent: $output"
+}
+@test "package_json_has dies naming the file and the parse error for a package.json that does not parse" {
+  printf '{"scripts":{"check:lint":"eslint ."},}\n' > "$BATS_TEST_TMPDIR/package.json"
+  run package_json_has scripts check:lint "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "a broken package.json must die; status $status: $output"
+  contains "$output" "::error::$BATS_TEST_TMPDIR/package.json is not valid JSON: " || fail "no file or cause: $output"
+  contains "$output" 'names "check:lint" under scripts' || fail "the probe is not named: $output"
+  [ "${#lines[@]}" -eq 1 ] || fail "the annotation spans lines: $output"
+}
+@test "package_json_has dies for a package.json that is not an object, or cannot be read" {
+  printf 'null\n' > "$BATS_TEST_TMPDIR/package.json"
+  run package_json_has scripts x "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "null must die; status $status: $output"
+  contains "$output" "::error::$BATS_TEST_TMPDIR/package.json is not a JSON object" || fail "output: $output"
+  printf '["scripts"]\n' > "$BATS_TEST_TMPDIR/package.json"
+  run package_json_has scripts x "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "an array must die; status $status: $output"
+  contains "$output" "is not a JSON object" || fail "output: $output"
+  mkdir -p "$BATS_TEST_TMPDIR/directory/package.json"
+  run package_json_has scripts x "$BATS_TEST_TMPDIR/directory"
+  [ "$status" -eq 1 ] || fail "an unreadable package.json must die; status $status: $output"
+  contains "$output" "::error::$BATS_TEST_TMPDIR/directory/package.json could not be read: " || fail "output: $output"
+}
+@test "package_json_has dies when node itself fails, rather than reading it as absent" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/usr/bin/env bash\nexit 7\n' > "$BATS_TEST_TMPDIR/bin/node"
+  chmod +x "$BATS_TEST_TMPDIR/bin/node"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run package_json_has scripts x "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "a failed node must die; status $status: $output"
+  contains "$output" "::error::package_json_has: node exited 7 reading $BATS_TEST_TMPDIR/package.json" || fail "output: $output"
+}
+@test "package_json_has dies in the calling shell, so an if around it cannot swallow a broken file" {
+  printf '{' > "$BATS_TEST_TMPDIR/package.json"
+  run bash -c 'set -euo pipefail; source "$1/scripts/lib/common.sh"
+    if package_json_has scripts x "$2"; then echo present; else echo absent; fi' _ "$REPO_ROOT" "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] || fail "the die did not stop the caller; status $status: $output"
+  not_contains "$output" "absent" || fail "a broken file read as absent: $output"
+}
+@test "package_json_has takes the name as data, never as code" {
+  printf '{"scripts":{"a\\"b`$(touch pwned)":"x"}}\n' > "$BATS_TEST_TMPDIR/package.json"
+  cd "$BATS_TEST_TMPDIR"
+  run package_json_has scripts 'a"b`$(touch pwned)' "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ] || fail "a name with quotes was not found; status $status: $output"
+  [ ! -e "$BATS_TEST_TMPDIR/pwned" ] || fail "the name was evaluated"
+}

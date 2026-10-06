@@ -2921,7 +2921,10 @@ it locally is `check-<stem>` (`check-types`). Generators are `gen:<stem>`.
 `check:audit`, `check:ci` and `check:secrets` — go through
 `scripts/checks/run-consumer-or.sh NAME FALLBACK`: it runs your `NAME` script
 when you ship one, and this repo's own implementation when you do not. Which
-branch it took is in the run log.
+branch it took is in the run log. A `package.json` that does not parse fails
+the step with an annotation naming the file and the parse error, here and in
+every other check that asks which scripts or dependencies you have; it is never
+read as "no such script". No `package.json` at all is read that way.
 
 That seam exists because the two implementations had already drifted. `audit.sh`
 ran `pnpm audit` while the template's `check:audit` also checks lockfile

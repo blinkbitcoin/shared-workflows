@@ -13,7 +13,8 @@
 # the packages behind, an annotation under Actions), with a failing check that
 # lists no package, and skipped with no expo dependency; both doctor branches,
 # a pin under dependencies rather than devDependencies, a consumer with no
-# package.json, a failing doctor on each branch and after drift, no pnpm and
+# package.json, one that does not parse, a failing doctor on each branch and
+# after drift, no pnpm and
 # no node on PATH, and a working directory that does not exist.
 
 load test_helper
@@ -159,6 +160,18 @@ $root | exec expo-doctor | skip=1" ] || fail "calls: $output"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   [ "$(calls)" = "dlx expo-doctor@latest" ] || fail "expected the fetched doctor: $(calls)"
+}
+
+@test "a package.json that does not parse fails the gate naming the file, before anything runs" {
+  # It used to read as "no expo dependency": the drift check was skipped and
+  # the network doctor ran in place of the pinned one.
+  stub_pnpm
+  printf '{"dependencies":{"expo":"^55"},}\n' > "$CONSUMER/package.json"
+  run bash "$SCRIPT"
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" "::error::" || fail "not an annotation: $output"
+  contains "$output" "/consumer/package.json is not valid JSON: " || fail "the file and the cause are not named: $output"
+  [ ! -s "$CALLS" ] || fail "pnpm ran anyway: $(cat "$CALLS")"
 }
 
 @test "a failing pinned doctor fails the gate with its status" {
