@@ -320,5 +320,12 @@ component (the workflows and `@blinkbitcoin/app-tooling`), and every push to
 conflicting. Each rebuild dismisses an approval: approve a release PR right
 before merging it. When `@blinkbitcoin/app-tooling` releases, the
 `Publish app-tooling` job in `self-release.yml` runs `make test-package` and
-`make test-fastlane` before `npm publish`: the release PR's CI is the gate, and
-this is the one that still holds when a merge skipped it.
+`make test-fastlane` first: the release PR's CI is the gate, and this is the one
+that still holds when a merge skipped it.
+
+It then packs the package once (`scripts/self/pack-app-tooling.sh`), attests
+that tarball with `actions/attest-build-provenance`, and publishes the same
+tarball to GitHub Packages, so what installs is byte for byte what was
+attested. `npm publish --provenance` would be simpler, but it signs only for
+registry.npmjs.org. How a consumer verifies it is in the package's README
+([Verifying a release](packages/app-tooling/README.md#verifying-a-release)).
