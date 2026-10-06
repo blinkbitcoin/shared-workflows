@@ -33,9 +33,10 @@ scripts/security/   check-security.yml: one scanner runner per job and their lib
                     scan.sh (every job, then the verdict), and the CI bridges
                     (settings, run-job, verdict, label-sarif, binaries-fetch)
 scripts/setup/      a consumer's machine setup (toolchain, android, ios, all), pins in lib/versions.sh
+                    (generated from packages/app-tooling/versions.json)
 scripts/web/        web export, Playwright install and run
 scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
-scripts/self/       this repo's own upkeep (check-version-pins, tag-major, smoke-local,
+scripts/self/       this repo's own upkeep (check-version-pins, render-versions, tag-major, smoke-local,
                     package-copies, render-contract-table, check-store-notes-section,
                     changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
@@ -70,7 +71,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make test-package` | `node:test` over every package under `packages/`, 100% lines, branches and functions |
 | `make test-scripts` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
 | `make test-fastlane` | Unit tests of the Ruby lanes the package ships (`packages/app-tooling/fastlane`), under Bundler, gems in `.gems/` |
-| `make check-version-pins` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
+| `make check-version-pins` | Fail when `scripts/lib/versions.sh` or the `[tools]` block of `.mise.toml` is not what `packages/app-tooling/versions.json` generates, or a workflow default disagrees with it |
 | `make check-tool-versions` | Fail when an installed tool is not the version `packages/app-tooling/versions.json` pins |
 | `make check-spell` | typos over the whole repo |
 | `make check-secrets` | Scan the whole git history for committed secrets (gitleaks) |
@@ -180,9 +181,14 @@ Every row is a make target; nothing here is run through a package manager.
   every workflow shape and contract assertion skipped. A tool the toolchain
   does not pin (python3, curl, jq, the claude CLI, mise itself) may still
   skip. `test/require-cmd.bats` enforces this.
-- **Tool versions live in `scripts/lib/versions.sh`**, mirrored into
-  `.mise.toml` and into workflow input defaults. Never bump one copy alone;
-  `make check-version-pins` is what catches it.
+- **Tool versions live in `packages/app-tooling/versions.json`**, the only
+  file a version is edited in. `node scripts/self/render-versions.mjs --write`
+  generates `scripts/lib/versions.sh` (and its package copy) and the `[tools]`
+  block of `.mise.toml`, between its `# versions:start` / `# versions:end`
+  markers, from it; never edit those by hand. The workflow input defaults that
+  mirror a pin stay hand-written and move in the same change.
+  `make check-version-pins` fails on a generated file that has drifted and on a
+  default that disagrees.
 - **Jobs check this repo out into `.workflows/`** via `job.workflow_repository` /
   `job.workflow_sha`, and reference everything through `$WORKFLOWS_DIR`. Never reference
   a path under `scripts/` or `.github/actions/` from a consumer-visible

@@ -1,3 +1,6 @@
+# versions:start
+# Generated from packages/app-tooling/versions.json by scripts/self/render-versions.mjs - do not edit.
+# Change a version in versions.json, then run: node scripts/self/render-versions.mjs --write
 [tools]
 shellcheck = "0.11.0"
 actionlint = "1.7.12"
@@ -29,3 +32,4 @@ semgrep = "1.177.0"
 # The lanes in packages/app-tooling/fastlane are Ruby, and `make test-fastlane` runs
 # their tests. The major and minor the template pins.
 ruby = "3.3"
+# versions:end

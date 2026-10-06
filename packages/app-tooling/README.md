@@ -29,7 +29,10 @@ which node does without a flag from 22.12.
 
 `versions.json` is the one place a tool version is written down. Everything
 else — `.mise.toml` here, a `flake.nix` elsewhere, a workflow input default —
-is checked against it rather than trusted to match.
+is checked against it rather than trusted to match. In shared-workflows it is
+also the source `lib/versions.sh` and the `[tools]` block of `.mise.toml` are
+generated from: its `shell` and `mise` lists are that repository's own pins,
+and `check-tool-versions` reads only `tools`.
 
 ## `check-tool-versions`
 

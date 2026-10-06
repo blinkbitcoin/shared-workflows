@@ -24,8 +24,10 @@ every_gate='^Makefile$|^\.mise\.toml$|^\.github/workflows/self-(ci|checks|unit)\
 # .shellcheckrc), and the workflows, the composite actions and the linters'
 # own configuration under .github/ (actionlint and zizmor).
 ci_patterns="$every_gate"'|^scripts/.*\.sh$|^\.shellcheckrc$|^\.github/'
-# The files scripts/self/check-version-pins.sh compares, and the check-tool-versions check.
-versions_patterns="$every_gate"'|^scripts/lib/versions\.sh$|^scripts/self/check-version-pins\.sh$|^packages/app-tooling/versions\.json$|^packages/app-tooling/bin/check-tool-versions\.mjs$|^\.github/workflows/(test-e2e|build-android)\.yml$|^\.github/actions/maestro/'
+# The files scripts/self/check-version-pins.sh compares, the generator
+# render-versions.mjs and the package's copy of versions.sh it writes, and the
+# check-tool-versions check.
+versions_patterns="$every_gate"'|^scripts/lib/versions\.sh$|^packages/app-tooling/lib/versions\.sh$|^scripts/self/(check-version-pins\.sh|render-versions\.mjs)$|^packages/app-tooling/versions\.json$|^packages/app-tooling/bin/check-tool-versions\.mjs$|^\.github/workflows/(test-e2e|build-android)\.yml$|^\.github/actions/maestro/'
 package_patterns="$every_gate"'|^packages/'
 
 run_every_gate() {

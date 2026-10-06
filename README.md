@@ -9,7 +9,7 @@ React Native (Expo) apps, and the developer tooling every repo installs.
 [![Smoke](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml/badge.svg?branch=main)](https://github.com/blinkbitcoin/shared-workflows/actions/workflows/self-smoke.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-<sub><!--count:reusable-workflows-->22<!--/count--> reusable workflows · <!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1822<!--/count--> tests · one pinned tag · one tooling package</sub>
+<sub><!--count:reusable-workflows-->22<!--/count--> reusable workflows · <!--count:scripts-->141<!--/count--> scripts · <!--count:tests-->1824<!--/count--> tests · one pinned tag · one tooling package</sub>
 
 </div>
 
@@ -219,7 +219,7 @@ same sha, which is how a release refuses to build on a red `main`.
 | `scripts/hooks/`       | Git hooks a consumer installs from the package: the reinstall when the lockfile moved                                     |
 | `scripts/lib/`         | Shared bash: common helpers, env building and validation, the marker-delimited body section, git cleanliness, versions |
 | `scripts/self/`        | This repo's own upkeep: version agreement, the major tag, the local smoke, the release-PR dispatch, the adoption-doc table, the store notes dry run's section check, the self-CI change classifier |
-| `test/`                | <!--count:bats-files-->163<!--/count--> bats files, <!--count:tests-->1822<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
+| `test/`                | <!--count:bats-files-->163<!--/count--> bats files, <!--count:tests-->1824<!--/count--> tests, plus `fixtures/consumer-min/` and `fixtures/consumer-bare/` — the callers the docs are held to |
 | `packages/app-tooling/` | `@blinkbitcoin/app-tooling` — the pinned tool table, the contract a consumer is checked against, the repository guards, the badge renderer, the store notes generator, the security scanners, the store lanes (`fastlane/`), the shared app suites, the programs an app's Makefile calls (ports, prebuild check, script tests, doctor), the Maestro suite runners for a laptop and the web preview server; under `expo/`, the presets an Expo app extends: Jest, ESLint, Biome, Metro, Playwright, lefthook, fingerprint, TypeScript, commitlint |
 | `plugins/store-release/` | The Claude Code plugin an app installs for store setup: four skills (consoles, credentials, metadata, setup), each with its offline tests; `.claude-plugin/` at the root is the marketplace that offers it |
 | `deploy/ota/`          | A Docker Compose deployment of the self-hosted OTA update server, only needed when OTA is on                              |
@@ -244,11 +244,15 @@ npx --package=@blinkbitcoin/app-tooling check-tool-versions
 npx --package=@blinkbitcoin/app-tooling check-tool-versions typos shellcheck
 ```
 
-`make check-version-pins` binds `versions.json` to `scripts/lib/versions.sh` and
-`.mise.toml` for the seven tools the workflows install themselves (`actionlint`,
-`shellcheck`, `yq`, `typos`, `lefthook`, `zizmor`, `gitleaks`), and one-way for `bats`, `node` and
-`pnpm`. It is not a whole-file check: `act` is pinned in `.mise.toml` alone and
-is checked by nothing.
+In this repository `versions.json` is also the only file a version is edited
+in. Its `shell` and `mise` lists hold this repository's own pins (the Maestro
+release and its checksum, the Android setup pins, `act`, `semgrep`, `ruby`), and
+`scripts/self/render-versions.mjs --write` generates `scripts/lib/versions.sh`
+and the `[tools]` block of `.mise.toml` from it, taking each tool's version from
+`tools` so it is written once. `make check-version-pins` fails when a generated
+file has drifted from `versions.json`, and when a workflow or action input
+default (`maestro-version`, `android-api-level`, `bundletool-version`), which
+stays hand-written, disagrees with it.
 
 ## Pinning
 

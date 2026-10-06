@@ -240,9 +240,16 @@ job" log on GitHub before merging.
   consumer's own tests compare its copy with this one through `$WORKFLOWS_DIR`,
   so a change here that the consumer's copy does not follow turns the
   consumer's CI red on its next run.
-- **A tool version bump** moves `scripts/lib/versions.sh` *and* the mirrors in
-  `.mise.toml` and the workflow defaults; `make check-version-pins` is what fails
-  otherwise.
+- **A tool version bump** is an edit of `packages/app-tooling/versions.json`
+  alone, then `node scripts/self/render-versions.mjs --write`, which generates
+  `scripts/lib/versions.sh` (and the package's copy, `lib/versions.sh`) and the
+  `[tools]` block of `.mise.toml` between its `# versions:start` /
+  `# versions:end` markers. Never edit those by hand. A workflow or action input
+  default that mirrors a pin (`maestro-version`, `android-api-level`,
+  `bundletool-version`) is still hand-written and moves in the same change.
+  `make check-version-pins` fails on either: a generated file that is not what
+  `versions.json` generates, naming the file and the command, or a default that
+  disagrees.
 - **A change to an Expo preset** (`packages/app-tooling/expo/`) keeps its test green: the test
   evaluates the template's file as it was and the file it becomes
   (`packages/app-tooling/fixtures/template/<tool>/`), and the change has to

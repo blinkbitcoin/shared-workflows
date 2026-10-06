@@ -1,5 +1,5 @@
 {
-  "$comment": "The one pinned tool table for every repo on the baseline. scripts/self/check-version-pins.sh asserts scripts/lib/versions.sh and .mise.toml agree with this file, so a version lives in exactly one place. match: 'exact' means the whole version must agree; 'major' means only the major, for runtimes pinned loosely on purpose.",
+  "$comment": "The one pinned tool table for every repo on the baseline, and the only file in shared-workflows a version is edited in. `tools` is what check-tool-versions checks, here and in every consumer: match 'exact' means the whole version must agree; 'major' means only the major, for runtimes pinned loosely on purpose. `mise` and `shell` are shared-workflows' own: scripts/self/render-versions.mjs --write generates the [tools] block of its .mise.toml from `mise`, in order, and scripts/lib/versions.sh (with the package's copy, lib/versions.sh) from `shell`, in order. An entry with `tool` takes that tool's version from `tools`, so it is written once; an entry with `version` (mise) or `value` (shell) pins something only shared-workflows uses. `comment` lines are written above the entry, an empty line as a bare '#'. `make check-version-pins` fails when a generated file has drifted from this one.",
   "tools": {
     "actionlint": { "version": "1.7.12", "args": ["-version"], "match": "exact" },
     "shellcheck": { "version": "0.11.0", "args": ["--version"], "match": "exact" },
@@ -11,5 +11,138 @@
     "bats": { "version": "1.14.0", "args": ["--version"], "match": "exact" },
     "node": { "version": "24", "args": ["--version"], "match": "major" },
     "pnpm": { "version": "12", "args": ["--version"], "match": "major" }
-  }
+  },
+  "mise": [
+    { "tool": "shellcheck" },
+    { "tool": "actionlint" },
+    { "tool": "bats" },
+    { "tool": "yq" },
+    { "tool": "node" },
+    {
+      "tool": "pnpm",
+      "comment": [
+        "This repo ships no package.json, but a dozen of its scripts shell out to pnpm",
+        "on the consumer's behalf - run-script.sh, web-export.sh, playwright.sh,",
+        "expo-config.sh - and their tests exercise those paths. Without pnpm on PATH",
+        "every one of them fails `require_cmd pnpm`, which is what happened on the",
+        "first real runner: the whole suite passed on laptops, where pnpm is installed",
+        "globally, and twelve cases failed in CI. Major only, matching the template's",
+        "`pnpm = \"12\"`."
+      ]
+    },
+    { "tool": "typos" },
+    {
+      "tool": "zizmor",
+      "comment": [
+        "Security linter for the workflows (template injection, permissions, App",
+        "tokens, dangerous triggers). Policy in .github/zizmor.yml."
+      ]
+    },
+    {
+      "tool": "gitleaks",
+      "comment": ["Secret scanner: full history in CI, staged changes in the pre-commit hook."]
+    },
+    { "tool": "lefthook" },
+    {
+      "tool": "act",
+      "version": "0.2.89",
+      "comment": ["Runs self-smoke-local.yml on a laptop (make test-smoke-local). Needs Docker."]
+    },
+    {
+      "tool": "semgrep",
+      "version": "1.177.0",
+      "comment": [
+        "The Semgrep CLI: test/semgrep-rules.bats runs `semgrep --test` over the rules",
+        "check-security ships, and skips without it - which on a runner without it",
+        "meant the fixtures were never run. The version the template pins."
+      ]
+    },
+    {
+      "tool": "ruby",
+      "version": "3.3",
+      "comment": [
+        "The lanes in packages/app-tooling/fastlane are Ruby, and `make test-fastlane` runs",
+        "their tests. The major and minor the template pins."
+      ]
+    }
+  ],
+  "shell": [
+    { "name": "MAESTRO_VERSION", "value": "2.10.0" },
+    {
+      "name": "MAESTRO_SHA256",
+      "value": "29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991",
+      "comment": [
+        "SHA-256 of that release's maestro.zip (github.com/mobile-dev-inc/maestro,",
+        "tag cli-2.10.0): scripts/ci/maestro-install.sh refuses any other bytes. The",
+        "same value the consumer template's laptop installer checks."
+      ]
+    },
+    { "name": "ANDROID_API_LEVEL", "value": "34" },
+    { "name": "ACTIONLINT_VERSION", "tool": "actionlint" },
+    { "name": "SHELLCHECK_VERSION", "tool": "shellcheck" },
+    { "name": "YQ_VERSION", "tool": "yq" },
+    { "name": "TYPOS_VERSION", "tool": "typos" },
+    { "name": "LEFTHOOK_VERSION", "tool": "lefthook" },
+    { "name": "ZIZMOR_VERSION", "tool": "zizmor" },
+    { "name": "GITLEAKS_VERSION", "tool": "gitleaks" },
+    {
+      "name": "BUNDLETOOL_VERSION",
+      "value": "1.17.2",
+      "comment": [
+        "bundletool derives the universal APK from the .aab in the android build lane;",
+        "no runner image ships it, so scripts/ci/bundletool-install.sh downloads this",
+        "exact release."
+      ]
+    },
+    {
+      "name": "ANDROID_CMDLINE_TOOLS_BUILD",
+      "value": "16111833",
+      "comment": [
+        "Machine setup (scripts/setup/*.sh): the pins that take a blank Mac or Linux",
+        "box to one that builds and tests an Expo app. What is NOT here, on purpose:",
+        "compileSdk, build-tools and the NDK that React Native itself builds with.",
+        "scripts/setup/android.sh reads those from the app's",
+        "node_modules/react-native/gradle/libs.versions.toml, so a React Native upgrade",
+        "moves the SDK with it instead of drifting from a copy here.",
+        "",
+        "Android command-line tools (the `android` CLI, avdmanager). Build number and",
+        "SHA-1 come from https://dl.google.com/android/repository/repository2-3.xml",
+        "(remotePackage \"cmdline-tools;latest\"); Google publishes SHA-1 only."
+      ]
+    },
+    { "name": "ANDROID_CMDLINE_TOOLS_SHA1_DARWIN_ARM64", "value": "ad03dc49bfacfd52c110b14104ea548b8a07e830" },
+    { "name": "ANDROID_CMDLINE_TOOLS_SHA1_DARWIN_X86_64", "value": "112cf9618794a997ff273537d55bee02c22abffe" },
+    { "name": "ANDROID_CMDLINE_TOOLS_SHA1_LINUX", "value": "e025545c62a8e64c7559119566a569fb1dec5f60" },
+    {
+      "name": "ANDROID_AGP_DEFAULT_PACKAGES",
+      "value": "ndk/27.0.12077973 build-tools/35.0.0 cmake/3.22.1",
+      "comment": [
+        "Packages the Android Gradle Plugin (8.12, from React Native's catalogue)",
+        "falls back to for library modules that do not pin their own. Gradle would",
+        "fetch them mid-build, and a dropped connection there fails the whole build",
+        "ten minutes in, so they are installed up front, with retries."
+      ]
+    },
+    {
+      "name": "SETUP_ANDROID_API_LEVEL",
+      "value": "36",
+      "comment": [
+        "The emulator a laptop's local E2E suite runs on, which setup creates. Not",
+        "ANDROID_API_LEVEL above, the CI emulator's: API 36 is React Native 0.86's",
+        "target SDK; google_apis (not playstore) boots faster and needs no account."
+      ]
+    },
+    { "name": "SETUP_ANDROID_AVD_NAME", "value": "Pixel_10_API_36" },
+    { "name": "SETUP_ANDROID_AVD_DEVICE", "value": "pixel_10" },
+    {
+      "name": "COCOAPODS_VERSION",
+      "value": "1.17.0",
+      "comment": ["CocoaPods, installed into mise's Ruby (never the system Ruby)."]
+    },
+    {
+      "name": "IOS_SIMULATOR_DEVICE_TYPE_PREFIX",
+      "value": "com.apple.CoreSimulator.SimDeviceType.iPhone-",
+      "comment": ["The simulator `scripts/setup/ios.sh --boot` creates if none exists."]
+    }
+  ]
 }
