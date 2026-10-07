@@ -78,6 +78,38 @@ has_line() { grep -qxF "$1" <<<"$output"; }
   has_line "packages/app-tooling/x.json" || fail "the two-dot diff lost the added file: $output"
 }
 
+# The `changes` jobs check out with `filter: blob:none`: every commit and tree,
+# no file content. Rename detection reads the content of the added and deleted
+# files, which in a partial clone is a fetch from the remote mid-diff. The clone
+# here has had its remote taken away, so any content read fails the diff, and
+# the object count proves nothing was fetched.
+@test "changed_files lists a rename as both paths, from the trees alone, in a blob:none clone" {
+  mkdir -p "$repo/src"
+  seq 1 100 >"$repo/src/a.ts"
+  git -C "$repo" add src/a.ts
+  git -C "$repo" commit -q -m "add src/a.ts"
+  base=$(git -C "$repo" rev-parse HEAD)
+  mkdir -p "$repo/docs"
+  git -C "$repo" mv src/a.ts docs/a.md
+  echo "one more line" >>"$repo/docs/a.md"
+  git -C "$repo" commit -q -a -m "move it into the docs, edited"
+  head=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" config uploadpack.allowFilter true
+  partial="$BATS_TEST_TMPDIR/partial"
+  git clone -q --no-checkout --filter=blob:none "file://$repo" "$partial"
+  [ "$(git -C "$partial" config remote.origin.promisor)" = true ] || fail "the clone is not a partial clone"
+  git -C "$partial" remote set-url origin "file://$BATS_TEST_TMPDIR/gone"
+  missing() { git -C "$partial" rev-list --objects --all --missing=print | grep -c '^?'; }
+  before=$(missing)
+  [ "$before" -gt 0 ] || fail "the partial clone holds every blob already"
+  cd "$partial"
+  run changed_files "$base" "$head"
+  [ "$status" -eq 0 ] || fail "changed_files failed in a partial clone (it read file content): $output"
+  has_line "src/a.ts" || fail "the rename lost its old path: $output"
+  has_line "docs/a.md" || fail "the rename lost its new path: $output"
+  [ "$(missing)" = "$before" ] || fail "changed_files fetched file content: $before missing objects before, $(missing) after"
+}
+
 @test "changed_files returns 1 with a notice for each range it cannot read" {
   commit_file "a.txt"
   head=$(git -C "$repo" rev-parse HEAD)

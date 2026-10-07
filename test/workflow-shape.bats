@@ -223,6 +223,60 @@ setup() {
     || fail "classify must call changed-class.sh with BASE_SHA and HEAD_SHA: $output"
 }
 
+# checkout_with WORKFLOW JOB KEY - KEY of the job's "Checkout consumer" step,
+# `null` when the step does not set it.
+checkout_with() {
+  yq -r ".jobs.\"$2\".steps[] | select(.name == \"Checkout consumer\") | .with.\"$3\"" \
+    "$REPO_ROOT/.github/workflows/$1"
+}
+
+# These jobs diff two arbitrary commits, so they need every commit and tree
+# (fetch-depth: 0), but not every blob of the app's history: the classifiers
+# list paths, which trees answer, and the review reads only the base's copy of
+# each changed file. `filter: blob:none` makes the clone partial.
+@test "the change classifiers and the security review check out every commit but no older file content" {
+  require_cmd yq
+  for pair in check.yml:changes build-web.yml:changes check-code-scanning.yml:changes \
+    check-security.yml:review; do
+    w="${pair%%:*}" j="${pair##*:}"
+    [ "$(checkout_with "$w" "$j" fetch-depth)" = "0" ] \
+      || fail "$w $j: the consumer checkout is not fetch-depth: 0 (got $(checkout_with "$w" "$j" fetch-depth)); the diff needs every commit"
+    [ "$(checkout_with "$w" "$j" filter)" = "blob:none" ] \
+      || fail "$w $j: the consumer checkout is not filter: blob:none (got $(checkout_with "$w" "$j" filter)); it downloads every blob of the app's history"
+  done
+}
+
+# In a partial clone, reading a blob the checkout did not bring (the review's
+# diff against its base) is a fetch from the remote, with the credentials the
+# checkout left in the repository's git config. `persist-credentials: false`
+# takes them away and a private app's lazy fetch fails, which the review reports
+# as a skip, not a failure.
+@test "every partial-clone checkout keeps its credentials for the lazy fetch" {
+  require_cmd yq
+  found=0
+  for w in "${WORKFLOWS[@]}"; do
+    n=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^actions/checkout@")) | select(.with.filter != null)] | length' "$w")
+    found=$((found + n))
+    # Not `.key as $j | ... | select(...) | $j`: yq printed the key whether or
+    # not the select passed.
+    dropped=$(yq -r '.jobs | to_entries[] | select([.value.steps[]? | select((.uses // "") | test("^actions/checkout@")) | select((.with.filter != null) and (.with."persist-credentials" == false))] | length > 0) | .key' "$w")
+    [ -z "$dropped" ] || fail "$(basename "$w"): job(s) $dropped check out a partial clone with persist-credentials: false, so a lazy blob fetch has no token"
+  done
+  [ "$found" -ge 4 ] || fail "found $found partial-clone checkouts, expected at least the four classifier and review ones"
+}
+
+# The other side of the line. gitleaks scans the content of every commit
+# (`git log -p`), so it reads every blob of the history: in a partial clone each
+# one would come from the remote in a lazy fetch of its own, far slower than the
+# full clone, and a fetch that fails mid-scan is a commit left unscanned.
+@test "the secret scan's checkout stays a full clone, with no filter" {
+  require_cmd yq
+  [ "$(checkout_with check.yml secrets fetch-depth)" = "0" ] \
+    || fail "check.yml secrets: the consumer checkout is not fetch-depth: 0 (got $(checkout_with check.yml secrets fetch-depth)); gitleaks scans every commit"
+  [ "$(checkout_with check.yml secrets filter)" = "null" ] \
+    || fail "check.yml secrets: the consumer checkout sets filter: $(checkout_with check.yml secrets filter); gitleaks reads every blob and needs the full clone"
+}
+
 lane_step_count() {
   yq -r '[.jobs[].steps[]? | select((.run? // "") | test("release/fastlane.sh"))] | length' "$1"
 }
