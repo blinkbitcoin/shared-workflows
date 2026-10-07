@@ -74,12 +74,16 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
 @test "self-release.yml tests app-tooling before it publishes it" {
   local job='.jobs."publish-app-tooling".steps'
   step_index() { yq -r "$job | to_entries[] | select(.value.$1 == \"$2\") | .key" "$RELEASE"; }
-  local toolchain package lanes publish
-  toolchain="$(step_index uses jdx/mise-action@v4)"
+  local mise toolchain package lanes publish
+  # Read from self-unit.yml rather than spelled here, so a Dependabot bump of
+  # every self-* pin at once does not fail this test, and a bump of one alone does.
+  mise="$(yq -r '[.jobs[].steps[] | select((.uses // "") | test("^jdx/mise-action@")) | .uses] | unique | join(" ")' "$REPO_ROOT/.github/workflows/self-unit.yml")"
+  [[ -n "$mise" && "$mise" != *" "* ]] || fail "self-unit.yml should set up mise with exactly one mise-action ref, has: '$mise'"
+  toolchain="$(step_index uses "$mise")"
   package="$(step_index run 'make test-package')"
   lanes="$(step_index run 'make test-fastlane')"
   publish="$(yq -r "$job | to_entries[] | select((.value.run // \"\") | test(\"^npm publish\")) | .key" "$RELEASE" | head -1)"
-  [ -n "$toolchain" ] || fail "publish-app-tooling does not set up mise the way self-unit.yml does"
+  [ -n "$toolchain" ] || fail "publish-app-tooling does not set up mise the way self-unit.yml does ($mise)"
   [ -n "$package" ] || fail "publish-app-tooling does not run make test-package"
   [ -n "$lanes" ] || fail "publish-app-tooling does not run make test-fastlane"
   [ -n "$publish" ] || fail "publish-app-tooling no longer runs npm publish; update this test"
