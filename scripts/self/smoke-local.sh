@@ -217,13 +217,15 @@ else
 fi
 
 # The token is only read by the two checkouts (both public repositories) and,
-# with `reserve-tag: false`, never writes anything.
+# with `reserve-tag: false`, never writes anything. It reaches act through act's
+# environment, which `-s GITHUB_TOKEN` with no value reads: as an argument it
+# would sit in `ps` output for the whole run, readable by every local user.
 token="$(gh auth token)"
 
 log "act smoke: branch $branch at ${local_sha:0:7}, android=$android, artifacts at $server_addr:$artifact_port, cache at $server_addr"
 # Not `exec`: the EXIT trap has to run after act returns.
 # shellcheck disable=SC2086 # WORKFLOWS_ACT_ARGS is a deliberate word-split
-act workflow_dispatch \
+GITHUB_TOKEN="$token" act workflow_dispatch \
   -W "$workflow" \
   -P "ubuntu-latest=$runner" \
   --container-architecture "$platform" \
@@ -236,7 +238,7 @@ act workflow_dispatch \
   --cache-server-addr "$server_addr" \
   --local-repository "actions/upload-artifact@v7=$upload_v4" \
   --local-repository "actions/download-artifact@v8=$download_v4" \
-  -s GITHUB_TOKEN="$token" \
+  -s GITHUB_TOKEN \
   --input "repository=${WORKFLOWS_SMOKE_REPOSITORY:-blinkbitcoin/react-native-mobile-template}" \
   --input "ref=${WORKFLOWS_SMOKE_REF:-main}" \
   --input "android=$android" \
