@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
       # GNU parallel lets `make test-unit` run one bats job per core, as it does
       # on a laptop, so a test that only passes alone fails here too.
       - run: sudo apt-get install -y --no-install-recommends parallel
@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
       # Carries the 100% line, branch and function thresholds; see the comment
       # on the target in the Makefile for why they ratchet and never drop.
       - run: make test-package
@@ -53,5 +53,5 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
       - run: make test-fastlane

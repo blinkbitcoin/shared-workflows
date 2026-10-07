@@ -91,7 +91,7 @@ jobs:
       # node:test suites at 100% coverage (package.test.mjs also holds every
       # export to the `files` list), then the fastlane lanes the package ships.
       - name: Set up the toolchain
-        uses: jdx/mise-action@v4
+        uses: jdx/mise-action@v5
 
       - name: Test the package
         run: make test-package
