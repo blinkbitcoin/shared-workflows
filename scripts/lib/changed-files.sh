@@ -54,11 +54,19 @@ changed_files() {
   # after the PR branch forked don't leak into the diff and flip a docs-only PR
   # to false. Fall back to a plain two-dot diff only when merge-base can't be
   # computed (e.g. a shallow clone missing the common ancestor).
+  #
+  # --no-renames, so the list comes from the trees alone and no file content is
+  # read. The `changes` jobs check out with `filter: blob:none` (a partial clone:
+  # every commit and tree, no file content until something reads it), and
+  # git's rename detection reads the content of every added and deleted file to
+  # score their similarity, which there means a fetch from the remote mid-diff.
+  # A rename is also two changes to classify, not one: with detection on, moving
+  # src/a.ts to docs/a.md listed only docs/a.md and read as docs-only.
   if git merge-base "$base" "$head" >/dev/null 2>&1; then
-    files=$(git diff --name-only "$base...$head")
+    files=$(git diff --no-renames --name-only "$base...$head")
   else
     log "warning: git merge-base failed for $base..$head; falling back to two-dot diff (may include unrelated target-branch changes)"
-    files=$(git diff --name-only "$base" "$head")
+    files=$(git diff --no-renames --name-only "$base" "$head")
   fi
   # An empty range (a re-run on the base itself, an empty merge) has nothing to
   # classify, so it runs everything too.

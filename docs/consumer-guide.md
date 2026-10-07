@@ -643,6 +643,14 @@ jobs:
       repository: your-org/private-app
 ```
 
+The token is also what a partial clone fetches with later. The `Changes` jobs
+(`check.yml`, `check-code-scanning.yml`, `build-web.yml`) and `check-security.yml`'s
+`Review` check out every commit and tree but no older file content (`filter:
+blob:none`). The classifiers never read any; the review's diff fetches the
+base's copy of each changed file, through the credentials the checkout left in
+place. So those checkouts keep `persist-credentials` at its default, and a
+token that can read the repository for the checkout can read it for that fetch.
+
 `secrets: inherit` is never used anywhere in this family (Part B's release
 workflows follow the same rule for their own, larger secret sets) — every
 secret a reusable workflow needs is declared and passed explicitly.
@@ -847,6 +855,13 @@ The base of the diff is `github.event.pull_request.base.sha` on a
 that follows it are classified the same way — which is why a caller's `ci.yml`
 needs no `paths-ignore`. `LICENSE` matches anywhere in the tree, not just at
 the root, so a per-package copyright bump is docs too.
+
+The list of changed paths comes from the commits' trees alone (`git diff
+--no-renames --name-only`), so the `Changes` job checks out a partial clone:
+every commit and tree, no file content beyond the checked-out tip (`filter:
+blob:none`), however long the app's history. A rename is two changes, the path
+it left and the path it took: moving `src/a.ts` to `docs/a.md` is not
+docs-only.
 
 The classifier **fails open**: when the range cannot be read at all — no base,
 the all-zero base of a branch's first push, or a base made unreachable by a
@@ -1302,7 +1317,7 @@ that scans nothing while reporting green is worse than one that is red.
 | `bundle` | Allow the bundle scanner (`check-security bundle`), which reads what the JavaScript bundle gives away. Expo: `expo export` of every platform in `bundle.platforms`.<br>Bare: `react-native bundle` per platform, `--dev false`, minified only where the platform does not build with Hermes, as its release does. Default `false` |
 | `mobile` | Allow the native project scanner (`check-security mobile`, mobsfscan). Expo: over a fresh prebuild in a temporary copy, never the working tree's `ios/` and `android/`.<br>Bare: over the committed `ios/` and `android/`, in place, with no prebuild and no installed dependencies needed. Default `false` |
 | `binaries` | Allow the MASTG checks over the release's built binaries (`check-security binaries`). Needs `release-tag`. Default `false` |
-| `review` | Allow the LLM review of the change (`check-security review`). Gets full history and, on a pull request, its base. It reads the package's own `security-review.prompt.md`, then your repository's, if you have one, as an addendum. Default `false` |
+| `review` | Allow the LLM review of the change (`check-security review`). Gets every commit and tag and, on a pull request, its base, as a partial clone: the diff fetches the base's copy of each changed file, in one batch, with the checkout's token. It reads the package's own `security-review.prompt.md`, then your repository's, if you have one, as an addendum. Default `false` |
 | `review-codebase` | Allow the LLM security review of the whole codebase, with OpenAnt (`check-security review-codebase`). The build is cached, keyed on the OpenAnt commit `scripts/security/review-codebase.sh` pins. Default `false` |
 | `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |
@@ -1586,6 +1601,13 @@ No outputs. Secrets (all optional): `consumer-token`, `MATCH_PASSWORD`,
 `MATCH_GIT_URL`, `MATCH_GIT_BASIC_AUTHORIZATION`, `ASC_KEY_ID`,
 `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`.
 
+The job's bound is 90 minutes, and the three steps that hang carry their own:
+`Pod install` 10, `Fastlane ios build` 40 and `Fastlane ios verify` 10, about
+twice the slowest normal run measured on the template. A hang fails as
+`The action 'Pod install' has timed out after 10 minutes` (or the step it
+was) rather than as a job cancelled at 90 macOS minutes. They are not inputs: a build that
+legitimately needs longer is a change here, with the measurement.
+
 ### `build-android.yml`
 
 Prebuild → `fastlane android build` → `fastlane android verify`, on
@@ -1616,6 +1638,10 @@ No outputs. Secrets (all optional): `consumer-token`,
 `PLAY_SERVICE_ACCOUNT_JSON`. The apk and the mapping file upload with
 `if: !cancelled()` — without the mapping, every Play crash report for that
 build is permanently unreadable, so it must survive a failed `verify`.
+
+The job's bound is 60 minutes; as on iOS, the two lanes carry their own,
+`Fastlane android build` 40 and `Fastlane android verify` 10, so a stalled
+Gradle build fails on its step's name.
 
 ### `publish-store.yml`
 
@@ -3755,6 +3781,7 @@ each one lives so a future edit doesn't quietly regress it.
 | A network blip must not turn a release red, and only a step that is safe to repeat is run again | `scripts/lib/common.sh` `retry_command ATTEMPTS DELAY_SECONDS -- COMMAND` (logs each failed attempt, returns the last status), used by `scripts/native/pods.sh` (`pod install`, 3 attempts, 20 s apart), `scripts/release/release-assets.sh` (`gh release upload --clobber`, 3 attempts, 15 s apart, a repeat overwriting what a dropped one left) and `scripts/ota/smoke.sh` (the manifest GET, 3 attempts, 5 s apart, only on no answer or a 5xx). Never around `scripts/ota/publish.sh`: each publish creates a new update |
 | A hung Maestro driver must never eat the job twice | `scripts/e2e/maestro-bound.sh` (`bounded_maestro`, exit `124`) + `scripts/e2e/maestro-suite.sh` (`run_maestro_suite`, which `ios-maestro.sh`/`android-maestro.sh` call: retry only on a real failure, never on `124`) |
 | The suite's own timeout must not race the step's `timeout-minutes` | `scripts/e2e/step-timeout.sh` (step timeout = `suite-timeout-minutes + 5`), consumed via `fromJSON(steps.timeout.outputs.minutes)` in `test-e2e.yml` |
+| A hung pod install or lane must fail on its step, not burn the release build's whole 90 macOS minutes with no step named | `build-ios.yml` bounds `Pod install` (10), `Fastlane ios build` (40) and `Fastlane ios verify` (10), and `build-android.yml` its two lanes (40, 10): about twice the slowest run measured on the template, adding up to less than the job's bound so each can fire; `test/workflow-shape.bats` pins the values and holds every step bound below its job's |
 | Killing Metro must kill its whole process group, not just the wrapper pid | `scripts/e2e/README.md` notes `kill -TERM -"$(cat "$WORKFLOWS_OUT/metro.pid")"` (leading `-`), which `metro-start.sh` also logs when it starts Metro; nothing kills Metro itself — the job teardown reaps the process group |
 | The first app launch must not race a cold Metro bundle | `scripts/e2e/metro-wait.sh` pre-warms `/.expo/.virtual-metro-entry.bundle?platform=...` before `app-launch.sh` runs |
 | The native dependency hash must be computable before `pnpm install`, or a cache lookup blocks on an install | `scripts/ci/native-hash.sh` reads `pnpm-lock.yaml` directly via `yq` instead of `pnpm list` |

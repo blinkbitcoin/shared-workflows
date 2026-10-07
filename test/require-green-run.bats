@@ -123,6 +123,119 @@ SH
   [ -z "$(ls -A "$RUNNER_TEMP")" ] || fail "left files behind: $(ls -A "$RUNNER_TEMP")"
 }
 
+# --- reading the JSON: one parse per poll ------------------------------------
+# Each poll reads the run count, id, status and conclusion in a single yq call.
+# These cases hold the shapes that call must split into four fields without
+# shifting one into another's place, and the outputs it must read as no run.
+
+@test "parses gh's JSON once per poll" {
+  {
+    printf '%s\n' '[{"conclusion":null,"status":"queued","databaseId":11}]'
+    printf '%s\n' '[{"conclusion":null,"status":"in_progress","databaseId":11}]'
+    printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":11}]'
+  } > "$RESPONSES"
+  real_yq="$(command -v yq)" || fail "yq is not on PATH"
+  stub_cmd yq "exec $(printf '%q' "$real_yq") \"\$@\""
+  green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  polls="$(grep -c '^run list ' "$CALLS")" || fail "no gh run list call: $(cat "$CALLS")"
+  parses="$(stub_calls yq | grep -c .)" || fail "yq was never called"
+  [ "$polls" -eq 3 ] || fail "expected 3 polls, got $polls: $(cat "$CALLS")"
+  [ "$parses" -eq "$polls" ] || fail "expected one yq call per poll ($polls), got $parses: $(stub_calls yq)"
+}
+
+@test "a run in progress has a null conclusion, and is polled, not judged" {
+  {
+    printf '%s\n' '[{"conclusion":null,"status":"in_progress","databaseId":16}]'
+    printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":16}]'
+  } > "$RESPONSES"
+  REQUIRE_GREEN_DISPATCH_REF=v1.2.3 green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$output" "run 16 is in_progress; polling again" || fail "the fields shifted or the poll was not reported: $output"
+  not_contains "$output" "concluded" || fail "an unfinished run was judged: $output"
+  [ "$(grep -c '^workflow run' "$CALLS")" -eq 0 ] || fail "dispatched for a run still in progress: $(cat "$CALLS")"
+}
+
+@test "no runs yet ([]) is polled while the discovery window is open" {
+  {
+    printf '%s\n' '[]'
+    printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":17}]'
+  } > "$RESPONSES"
+  REQUIRE_GREEN_DISPATCH_REF=v1.2.3 green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$output" "no cd-internal.yml run for abc123 yet" || fail "an empty list was not read as no run: $output"
+  contains "$output" "run 17 for abc123 succeeded" || fail "unexpected message: $output"
+  [ "$(grep -c '^workflow run' "$CALLS")" -eq 0 ] || fail "dispatched inside the discovery window: $(cat "$CALLS")"
+}
+
+@test "unparsable output from a successful gh call reads as no run, not as a gh failure" {
+  printf '%s\n' '[{"conclusion":' > "$RESPONSES"
+  WORKFLOWS_GREEN_DISCOVERY_MINUTES=0 green
+  [ "$status" -ne 0 ] || fail "passed on unparsable output: $output"
+  contains "$output" "no cd-internal.yml run found for abc123 within 0m - it was never started" \
+    || fail "unparsable output was not read as no run: $output"
+  not_contains "$output" "every 'gh run list' failed" || fail "unparsable output was reported as a gh failure: $output"
+}
+
+@test "unparsable output is polled again, and a later run is still seen" {
+  {
+    printf '%s\n' 'not: [json'
+    printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":18}]'
+  } > "$RESPONSES"
+  green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$output" "no cd-internal.yml run for abc123 yet" || fail "unparsable output was not read as no run: $output"
+  contains "$output" "run 18 for abc123 succeeded" || fail "unexpected message: $output"
+}
+
+@test "unparsable output is dispatched like no run once the discovery window closes" {
+  {
+    printf '%s\n' '[{"conclusion":'
+    printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":19}]'
+  } > "$RESPONSES"
+  WORKFLOWS_GREEN_DISCOVERY_MINUTES=0 REQUIRE_GREEN_DISPATCH_REF=v1.2.3 green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  dispatched_once_at v1.2.3
+  contains "$output" "run 19 for abc123 succeeded" || fail "did not wait for the dispatched run: $output"
+}
+
+@test "a successful gh call that prints nothing reads as no run" {
+  printf '\n' > "$RESPONSES"
+  WORKFLOWS_GREEN_DISCOVERY_MINUTES=0 green
+  [ "$status" -ne 0 ] || fail "passed with no output at all: $output"
+  contains "$output" "it was never started" || fail "empty output was not read as no run: $output"
+  not_contains "$output" "every 'gh run list' failed" || fail "empty output was reported as a gh failure: $output"
+}
+
+@test "a missing conclusion does not shift the run id, and is fatal once completed" {
+  printf '%s\n' '[{"status":"completed","databaseId":22}]' > "$RESPONSES"
+  green
+  [ "$status" -ne 0 ] || fail "passed with no conclusion: $output"
+  contains "$output" "run 22 for abc123 concluded '' - refusing to continue" || fail "unexpected message: $output"
+}
+
+@test "a missing run id does not shift the status or conclusion" {
+  printf '%s\n' '[{"conclusion":"success","status":"completed"}]' > "$RESPONSES"
+  green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$output" "cd-internal.yml run  for abc123 succeeded" || fail "unexpected message: $output"
+}
+
+@test "a missing status is not read as completed" {
+  printf '%s\n' '[{"conclusion":"success","databaseId":23}]' > "$RESPONSES"
+  WORKFLOWS_GREEN_TIMEOUT_MINUTES=0 green
+  [ "$status" -ne 0 ] || fail "passed without a status: $output"
+  contains "$output" "run 23 is ; polling again" || fail "the fields shifted: $output"
+  contains "$output" "did not complete for abc123" || fail "unexpected message: $output"
+}
+
+@test "only the newest run is read when gh lists several" {
+  printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":25},{"conclusion":"failure","status":"completed","databaseId":24}]' > "$RESPONSES"
+  green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$output" "run 25 for abc123 succeeded" || fail "unexpected message: $output"
+}
+
 @test "writes the run id to GITHUB_OUTPUT" {
   printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":99}]' > "$RESPONSES"
   out="$BATS_TEST_TMPDIR/gh_output"

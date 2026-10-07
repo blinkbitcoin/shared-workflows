@@ -601,6 +601,12 @@ jobs:
           overwrite: true
   # History and tags, not a shallow clone: the review diffs against the pull
   # request's base, or against the last release tag on the release pull request.
+  # A partial clone (`filter: blob:none`), though: the review reads two ends,
+  # not every commit between them, so the only older content it needs is the
+  # base's copy of each changed file, which git fetches in one batch on the
+  # diff. That fetch is why the checkout keeps its credentials (no
+  # `persist-credentials: false`): on a private app the token it used is what
+  # lets the diff reach the repository again.
   review:
     name: Review
     needs: settings
@@ -615,6 +621,7 @@ jobs:
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
           fetch-depth: 0
+          filter: blob:none
       - name: Checkout shared-workflows
         uses: actions/checkout@v7
         with:

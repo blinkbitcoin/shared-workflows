@@ -103,6 +103,17 @@ testers (see [Huawei AppGallery](#huawei-appgallery)).
 Smoke the build on TestFlight internal / Play internal. Nothing further is
 automatic.
 
+**If a build step timed out.** `Pod install`, `Fastlane ios build`,
+`Fastlane ios verify` and the two Android lanes each have a bound of about
+twice their slowest normal run (the numbers are in the
+[consumer guide](consumer-guide.md#build-iosyml), under `build-ios.yml` and
+`build-android.yml`), so a hang shows on that step as
+`The action 'Fastlane ios build' has timed out after 40 minutes` or the like.
+Read that step's log for the last thing it did, then
+`gh run rerun <id> --failed`. A second timeout in the same step is not a
+flake: something in the app or on the runner image made it slower, and the
+bound is a change in shared-workflows, not a re-run.
+
 ### 2. Merge the open release PR
 
 release-please keeps one `chore(main): release X.Y.Z` PR open, with the
