@@ -201,7 +201,10 @@ real_jobs() {
     const real = new Map();
     for (const f of fs.readdirSync(wfDir)) {
       const text = fs.readFileSync(path.join(wfDir, f), "utf8");
-      for (const [, action, ver] of text.matchAll(/uses:\s+([a-z0-9-]+\/[A-Za-z0-9._-]+)@(v[0-9]+)/g)) {
+      // A tag pin (`@v7`), or a commit SHA pin with its release beside it
+      // (`@<40 hex> # v7.0.1`, the signing workflows), counted at its major.
+      for (const [, action, tag, sha] of text.matchAll(/uses:\s+([a-z0-9-]+\/[A-Za-z0-9._-]+)@(?:(v[0-9]+)\b|[0-9a-f]{40}\s+#\s+(v[0-9]+))/g)) {
+        const ver = tag || sha;
         if (!real.has(action)) real.set(action, new Set());
         real.get(action).add(ver);
       }

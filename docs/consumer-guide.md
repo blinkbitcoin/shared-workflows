@@ -1337,7 +1337,10 @@ and your `security-settings.json` still decides which of those actually run:
 **Call it once per workflow run.** Each scanner's SARIF travels as a run-scoped
 artifact named after the scanner (`security-sarif-<job>`), so a second call in
 the same run - two stages side by side in one workflow - has its verdict read the
-first call's SARIF as well as its own. The template calls it once from `ci.yml`
+first call's SARIF as well as its own, and where both calls run the same scanner
+the later upload silently replaces the earlier one (every upload sets
+`overwrite: true`, so a re-run job replaces its own artifact instead of failing
+on it). The template calls it once from `ci.yml`
 and once from `cd-production.yml`, which are separate runs.
 
 The release pull request's CI run is a `workflow_dispatch` on its branch, not a
@@ -1685,6 +1688,13 @@ directory and publishes only that file's path, which is why
 `ASC_KEY_P8_BASE64` is *also* handed to the lane step directly (the lanes read
 the base64 key content, so a path alone would make the Fastfile's `ENV.fetch`
 raise).
+
+**Your lane gets no git credential.** Every checkout in this job, and in
+`build-ios.yml` and `build-android.yml`, sets `persist-credentials: false`, so
+the job token is never left where git in the checkout can find it, beside the
+decoded signing keys. A lane of yours that pushes, tags or fetches over the checkout's remote fails
+with an authentication error; give that step its own token instead, as
+`match` already does with `MATCH_GIT_BASIC_AUTHORIZATION`.
 
 #### Dry-running a lane
 
@@ -2488,9 +2498,13 @@ request that does not exist and an empty body each fail with the reason.
 The provider adapters it uses are exported for an app's own LLM calls:
 `@blinkbitcoin/app-tooling/llm` (`adapterFor`, `KEY_ENV`, `EFFORTS`,
 `parseEffort`, `parseExtraParams`) and `@blinkbitcoin/app-tooling/llm-request`
-(`thinks`, `mergeRequest`, `unfence`). The release bodies and model answers its
-tests use are in `packages/app-tooling/fixtures/store-notes/`, at
-`$WORKFLOWS_DIR` in CI.
+(`thinks`, `mergeRequest`, `unfence`). With `/ports` and `/check-ports` they
+are the only modules the package exports for import, each with exactly the names
+its README lists under
+[What an app imports](../packages/app-tooling/README.md#what-an-app-imports);
+`gen-store-notes` and every other program is run, never imported. The release
+bodies and model answers its tests use are in
+`packages/app-tooling/fixtures/store-notes/`, at `$WORKFLOWS_DIR` in CI.
 
 ### Consumer-side release scripts
 

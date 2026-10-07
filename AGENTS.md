@@ -193,6 +193,22 @@ Every row is a make target; nothing here is run through a package manager.
   every workflow shape and contract assertion skipped. A tool the toolchain
   does not pin (python3, curl, the claude CLI, mise itself) may still
   skip. `test/require-cmd.bats` enforces this.
+- **Where the signing keys are, actions are pinned by commit SHA.**
+  `build-ios.yml`, `build-android.yml`, `publish-store.yml` and the composite
+  actions they call (`setup`, `native-key`) pin every third-party `uses:` to a
+  full 40-character commit SHA with its release beside it
+  (`actions/checkout@<sha> # v7.0.1`); resolve one with
+  `gh api repos/<owner>/<repository>/commits/<tag> --jq .sha`. A moving tag
+  there is code someone else can change between two runs, run in the job
+  that holds the keys. Everywhere else stays on tags (`.github/zizmor.yml`
+  says why). Dependabot moves the SHAs and their comments, the composite
+  actions included; `test/workflow-shape.bats` fails naming the file and line
+  of any tag pin, and `scripts/self/smoke-local.sh` substitutes the artifact
+  actions for act at every ref the workflows name. Every checkout in those
+  three workflows sets `persist-credentials: false`, the consumer's included:
+  no step there talks to a git remote with the checkout's token, so none is
+  left for the signing steps to find (and zizmor, which cannot read a
+  checkout's version from a SHA, has no `artipacked` finding to ignore).
 - **Tool versions live in `packages/app-tooling/versions.json`**, the only
   file a version is edited in. `node scripts/self/render-versions.mjs --write`
   generates `scripts/lib/versions.sh` (and its package copy) and the `[tools]`
@@ -253,7 +269,10 @@ Every row is a make target; nothing here is run through a package manager.
   `release-please-config.json` rebuilds every open one on each push to
   `main`, so merging one never leaves the other conflicting. Each rebuild is a
   force push, which dismisses an approval: approve a release PR right
-  before merging it.
+  before merging it. The `publish-app-tooling` job runs the package's suites
+  (`make test-package`, `make test-fastlane`) again before `npm publish`, so a
+  merge that skipped or bypassed the release PR's CI still cannot publish
+  untested code.
 
   The chain, end to end:
 
@@ -276,7 +295,8 @@ Every row is a make target; nothing here is run through a package manager.
     rel->>tags: release-created, tag vX.Y.Z and its release
     rel->>rel: store-notes job runs pr-store-notes.yml against the template, dry run, from that commit
     rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after that dry run passed
-    rel->>tags: publish-app-tooling job publishes the npm package, when paths-released names it
+    rel->>rel: publish-app-tooling job runs make test-package and make test-fastlane, when paths-released names the package
+    rel->>tags: publish-app-tooling job publishes the npm package, only after those tests passed
     rel->>pr: the other component's open release PR is rebuilt on the new main, manifest included
   ```
 

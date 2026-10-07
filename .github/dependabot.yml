@@ -3,7 +3,11 @@ updates:
   - package-ecosystem: github-actions
     # `/` alone reads .github/workflows/ and a root action.yml, never the
     # composite actions under .github/actions/, whose pins (ruby/setup-ruby,
-    # actions/cache, mise-action) every consumer job runs. Both are listed.
+    # actions/cache, mise-action) every consumer job runs. Both are listed. setup
+    # and native-key also run in the jobs that decode the signing keys, so their
+    # actions are pinned by commit SHA, and a SHA nothing moves is a pin that
+    # silently ages. Dependabot rewrites a SHA pin together with its `# vX.Y.Z`
+    # comment.
     directories:
       - /
       - /.github/actions/*

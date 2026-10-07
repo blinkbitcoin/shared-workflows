@@ -12,5 +12,13 @@ rules:
   # to the same rule so there is one policy to reason about. Dependabot moves
   # the tags. Decided 2026-09-22; revisit by switching this off, not by
   # ignoring findings one at a time.
+  #
+  # The one exception is where the signing keys are: build-ios.yml,
+  # build-android.yml, publish-store.yml and the composite actions they call
+  # (setup, native-key) pin every third-party action to a commit SHA with its
+  # `# vX.Y.Z`. That is not enforced here: this rule's policies key on the
+  # action, not on the file, `ignore` would have to name every other file (and
+  # every composite action is an `action.yml`), and this file is also the
+  # policy a consumer without its own gets. `test/workflow-shape.bats` holds it.
   unpinned-uses:
     disable: true

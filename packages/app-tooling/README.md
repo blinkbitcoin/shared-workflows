@@ -31,6 +31,25 @@ output and exits 0, before reading any other argument: `pnpm exec check-docs
 the usage a terminal prints and the one in the source are the same text; the
 sections below show the common calls.
 
+## What an app imports
+
+Every program here is run, never imported: `pnpm exec check-contract`, from the
+package's `bin`. An app imports only the modules below, the JSON tables
+(`versions.json`, `contract.json`, `interfaces.json`, `doctor.requirements.json`,
+`security-settings.json`) and the [Expo presets](#expo-presets). Each module
+exports exactly the names listed. Anything else a file under `bin/` or `lib/`
+exports is there for its own tests, and may change in any release.
+
+| Import | Exports |
+|---|---|
+| `@blinkbitcoin/app-tooling/ports` | `resolvePorts`, `baseFrom`, `portFrom`, `mockApiUrl`, `envLines`, `tableLines`, `BASE_VAR`, `BASE_DEFAULT`, `SERVICES`, `PortError` ([Ports and the web export](#ports-and-the-web-export)), typed |
+| `@blinkbitcoin/app-tooling/check-ports` | `main`: `check-ports` run in-process, `main(argv, io)` returning the exit code |
+| `@blinkbitcoin/app-tooling/llm` | `adapterFor`, `KEY_ENV`, `EFFORTS`, `parseEffort`, `parseExtraParams` ([`gen-store-notes`](#gen-store-notes)) |
+| `@blinkbitcoin/app-tooling/llm-request` | `thinks`, `mergeRequest`, `unfence` |
+
+`package.test.mjs` holds each module's exports to this table, so a name becomes
+public only by adding it here.
+
 ## The pinned tool table
 
 `versions.json` is the one place a tool version is written down. Everything

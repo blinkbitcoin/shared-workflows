@@ -183,6 +183,21 @@ substitute() {
 upload_v4="$(substitute upload-artifact v4.6.2)"
 download_v4="$(substitute download-artifact v4.3.0)"
 
+# act matches a substitute on the exact `owner/repo@ref` a step names, and the
+# workflows name each artifact action at more than one ref: build-prepare at
+# the moving tag, build-android at the commit SHA the signing workflows pin
+# (Dependabot moves that SHA). Every ref found gets the same substitute, so a
+# bumped pin cannot slip the real v7 past act.
+artifact_refs="$(grep -ohE 'actions/(upload|download)-artifact@[A-Za-z0-9._-]+' .github/workflows/*.yml | env LC_ALL=C sort -u || true)"
+substitutions=()
+for ref in $artifact_refs; do
+  case "$ref" in
+    actions/upload-artifact@*) substitutions+=(--local-repository "$ref=$upload_v4") ;;
+    actions/download-artifact@*) substitutions+=(--local-repository "$ref=$download_v4") ;;
+  esac
+done
+[ "${#substitutions[@]}" -gt 0 ] || die "no actions/upload-artifact or actions/download-artifact step found under .github/workflows - nothing for act to substitute"
+
 # act's artifact and cache servers each listen on, and hand the job, one
 # address: by default the host's default-route address. Behind a VPN that is
 # the tunnel's own address, which nothing reaches - the build-info upload timed
@@ -236,8 +251,7 @@ GITHUB_TOKEN="$token" act workflow_dispatch \
   --artifact-server-addr "$server_addr" \
   --artifact-server-port "$artifact_port" \
   --cache-server-addr "$server_addr" \
-  --local-repository "actions/upload-artifact@v7=$upload_v4" \
-  --local-repository "actions/download-artifact@v8=$download_v4" \
+  "${substitutions[@]}" \
   -s GITHUB_TOKEN \
   --input "repository=${WORKFLOWS_SMOKE_REPOSITORY:-blinkbitcoin/react-native-mobile-template}" \
   --input "ref=${WORKFLOWS_SMOKE_REF:-main}" \

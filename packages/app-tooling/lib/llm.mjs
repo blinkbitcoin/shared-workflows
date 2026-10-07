@@ -7,7 +7,7 @@
 import * as anthropic from './llm-anthropic.mjs';
 import * as openai from './llm-openai.mjs';
 
-export const ADAPTERS = { anthropic, openai };
+const ADAPTERS = { anthropic, openai };
 export const KEY_ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY' };
 export const EFFORTS = ['none', 'low', 'medium', 'high', 'max'];
 

@@ -153,7 +153,8 @@ number is not checked — marking one is how you opt in — but the counts the
 README leads with are marked and a case fails if a marker disappears.
 
 The same file holds job lists to `yq '.jobs[].name'` and any
-`owner/action@vN` a doc names to the version the workflows really pin. Both
+`owner/action@vN` a doc names to the version the workflows really pin (for a
+commit SHA pin, the major of its `# vX.Y.Z` comment). Both
 were wrong when it was written: the `Contract` job was in no table, and the
 guide quoted `create-github-app-token@v2` where the workflows pin `@v3`.
 
@@ -317,4 +318,7 @@ component (the workflows and `@blinkbitcoin/app-tooling`), and every push to
 `main` rebuilds each open one on that `main` (`always-update` in
 `release-please-config.json`), so merging one never leaves the other
 conflicting. Each rebuild dismisses an approval: approve a release PR right
-before merging it.
+before merging it. When `@blinkbitcoin/app-tooling` releases, the
+`Publish app-tooling` job in `self-release.yml` runs `make test-package` and
+`make test-fastlane` before `npm publish`: the release PR's CI is the gate, and
+this is the one that still holds when a merge skipped it.

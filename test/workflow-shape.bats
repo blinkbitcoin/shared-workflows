@@ -838,7 +838,7 @@ lane_step_count() {
     for j in $job_names; do
       has_run=$(yq -r "[.jobs.\"$j\".steps[]? | select(has(\"run\"))] | length" "$w")
       if [ "$has_run" -gt 0 ]; then
-        workflows_checkout=$(yq -r "[.jobs.\"$j\".steps[]? | select(.uses? == \"actions/checkout@v7\") | select(.with.path? == \".workflows\")] | length" "$w")
+        workflows_checkout=$(yq -r "[.jobs.\"$j\".steps[]? | select((.uses? // \"\") | test(\"^actions/checkout@\")) | select(.with.path? == \".workflows\")] | length" "$w")
         [ "$workflows_checkout" -gt 0 ]
       fi
     done
@@ -849,19 +849,123 @@ lane_step_count() {
   for w in "${WORKFLOWS[@]}"; do
     job_names=$(yq -r '.jobs | keys | .[]' "$w")
     for j in $job_names; do
-      workflows_step_count=$(yq -r "[.jobs.\"$j\".steps[]? | select(.uses? == \"actions/checkout@v7\") | select(.with.path? == \".workflows\")] | length" "$w")
+      workflows_step_count=$(yq -r "[.jobs.\"$j\".steps[]? | select((.uses? // \"\") | test(\"^actions/checkout@\")) | select(.with.path? == \".workflows\")] | length" "$w")
       if [ "$workflows_step_count" -gt 0 ]; then
-        repo=$(yq -r "[.jobs.\"$j\".steps[]? | select(.uses? == \"actions/checkout@v7\") | select(.with.path? == \".workflows\")][0].with.repository" "$w")
-        ref=$(yq -r "[.jobs.\"$j\".steps[]? | select(.uses? == \"actions/checkout@v7\") | select(.with.path? == \".workflows\")][0].with.ref" "$w")
+        repo=$(yq -r "[.jobs.\"$j\".steps[]? | select((.uses? // \"\") | test(\"^actions/checkout@\")) | select(.with.path? == \".workflows\")][0].with.repository" "$w")
+        ref=$(yq -r "[.jobs.\"$j\".steps[]? | select((.uses? // \"\") | test(\"^actions/checkout@\")) | select(.with.path? == \".workflows\")][0].with.ref" "$w")
         # persist-credentials: false is what keeps this repo's checkout token out
         # of the consumer workspace; it is as load-bearing as the ref pinning.
-        persist=$(yq -r "[.jobs.\"$j\".steps[]? | select(.uses? == \"actions/checkout@v7\") | select(.with.path? == \".workflows\")][0].with.\"persist-credentials\"" "$w")
+        persist=$(yq -r "[.jobs.\"$j\".steps[]? | select((.uses? // \"\") | test(\"^actions/checkout@\")) | select(.with.path? == \".workflows\")][0].with.\"persist-credentials\"" "$w")
         [ "$repo" = '${{ job.workflow_repository }}' ]
         [ "$ref" = '${{ job.workflow_sha }}' ]
         [ "$persist" = "false" ]
       fi
     done
   done
+}
+
+# --- commit SHA pins where the signing keys are ---------------------------
+
+# The workflows that decode signing keys (the iOS App Store Connect key and
+# match, the Android upload keystore, the Play service account) and every
+# composite action of this repository they call. A moving tag there is code
+# someone else can change between two runs, executed in the job that holds the
+# keys: a step before the decode can rewrite PATH, GITHUB_ENV or the tools the
+# lanes run, and a step after it can read the decoded files. Each third-party
+# `uses:` is pinned to a full commit SHA with the release it is beside, which
+# Dependabot keeps (`.github/dependabot.yml` lists `/.github/actions/*` so the
+# composite actions are moved too).
+SIGNING_WORKFLOWS=(build-ios build-android publish-store)
+
+# signing_pin_files - each signing workflow, then each composite action under
+# .github/actions/ it calls, one path per line.
+signing_pin_files() {
+  local w name
+  for w in "${SIGNING_WORKFLOWS[@]}"; do
+    printf '%s\n' "$REPO_ROOT/.github/workflows/$w.yml"
+  done
+  for w in "${SIGNING_WORKFLOWS[@]}"; do
+    grep -oE 'uses: \./\.workflows/\.github/actions/[A-Za-z0-9_-]+' "$REPO_ROOT/.github/workflows/$w.yml" || true
+  done | sed 's#.*/##' | sort -u | while read -r name; do
+    printf '%s\n' "$REPO_ROOT/.github/actions/$name/action.yml"
+  done
+}
+
+# signing_pin_offenders FILE... - print FILE:LINE: TEXT for every `uses:` that
+# is neither local (`./`) nor `owner/repo[/path]@<40 hex> # vX[.Y[.Z]]`.
+signing_pin_offenders() {
+  awk '
+    /^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]/ {
+      ref = $0
+      sub(/^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+/, "", ref)
+      if (ref ~ /^\.\//) next
+      if (ref ~ /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.\/-]+@[0-9a-f]{40} # v[0-9]+(\.[0-9]+)*$/) next
+      printf "%s:%d: %s\n", FILENAME, FNR, ref
+    }
+  ' "$@"
+}
+
+@test "the signing workflows and the composite actions they call are all found" {
+  files="$(signing_pin_files)"
+  for f in build-ios.yml build-android.yml publish-store.yml actions/setup/action.yml actions/native-key/action.yml; do
+    contains "$files" "/.github/$([ "${f%%/*}" = actions ] || printf 'workflows/')$f" \
+      || fail "signing_pin_files no longer lists $f: $files"
+  done
+  while read -r f; do
+    [ -f "$f" ] || fail "signing_pin_files lists a file that does not exist: $f"
+  done <<<"$files"
+}
+
+@test "every third-party uses: in the signing workflows and their composite actions is pinned to a commit SHA with its version" {
+  files=()
+  while read -r f; do files+=("$f"); done <<<"$(signing_pin_files)"
+  offenders="$(signing_pin_offenders "${files[@]}")"
+  [ -z "$offenders" ] \
+    || fail "pin these to a full commit SHA with a '# vX.Y.Z' comment (gh api repos/<owner>/<repo>/commits/<tag> --jq .sha): $offenders"
+}
+
+@test "Dependabot moves the SHA pins in the workflows and in the composite actions" {
+  dirs="$(yq -r '.updates[] | select(.["package-ecosystem"] == "github-actions") | .directories[]?' "$REPO_ROOT/.github/dependabot.yml")"
+  grep -qx '/' <<<"$dirs" || fail "Dependabot's github-actions update no longer reads the workflows: $dirs"
+  grep -qx '/.github/actions/\*' <<<"$dirs" \
+    || fail "Dependabot's github-actions update no longer reads .github/actions/*, so the composite actions' SHA pins would never move: $dirs"
+}
+
+# No step in these jobs talks to a git remote with the checkout's token, so no
+# checkout leaves it behind for the steps that hold the signing keys. This is
+# also what keeps zizmor's artipacked quiet: offline it cannot read a
+# checkout's version from a commit SHA and reports a persisted token at medium.
+@test "every checkout in the signing workflows sets persist-credentials: false" {
+  for w in "${SIGNING_WORKFLOWS[@]}"; do
+    f="$REPO_ROOT/.github/workflows/$w.yml"
+    checkouts="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^actions/checkout@"))] | length' "$f")"
+    [ "$checkouts" -ge 2 ] || fail "$w.yml has $checkouts checkouts, expected the consumer's and .workflows"
+    persisting="$(yq -r '.jobs[].steps[]? | select((.uses // "") | test("^actions/checkout@")) | select(.with."persist-credentials" != false) | .name' "$f")"
+    [ -z "$persisting" ] || fail "$w.yml leaves the checkout token in place in: $persisting"
+  done
+}
+
+@test "zizmor ignores no artipacked finding" {
+  [ "$(yq -r '.rules.artipacked // "absent"' "$REPO_ROOT/.github/zizmor.yml")" = "absent" ] \
+    || fail "zizmor.yml configures artipacked; set persist-credentials: false on the checkout instead"
+}
+
+@test "the SHA pin check names a tag pin, a short SHA and a missing version comment, and passes a local action" {
+  f="$BATS_TEST_TMPDIR/action.yml"
+  {
+    printf 'runs:\n  steps:\n'
+    printf '    - uses: ./.workflows/.github/actions/setup\n'
+    printf '    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n'
+    printf '      uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0\n'
+    printf '    - uses: actions/cache@v6\n'
+    printf '    - uses: actions/cache@55cc834 # v6.1.0\n'
+    printf '    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9\n'
+  } >"$f"
+  offenders="$(signing_pin_offenders "$f")"
+  [ "$(printf '%s\n' "$offenders" | wc -l | tr -d ' ')" -eq 3 ] || fail "expected three offenders: $offenders"
+  contains "$offenders" "$f:6: actions/cache@v6" || fail "the tag pin is not named with its line: $offenders"
+  contains "$offenders" "$f:7: actions/cache@55cc834 # v6.1.0" || fail "the short SHA is not named: $offenders"
+  contains "$offenders" "$f:8: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" || fail "the missing comment is not named: $offenders"
 }
 
 # The self-* workflows are excluded from WORKFLOWS above (they are not reusable),
@@ -1614,4 +1718,36 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
     done
   done
   [ -z "$bad" ] || fail "jobs that would run only to skip every step - add the toggle to the job's if:$bad"
+}
+
+# Without overwrite: true, upload-artifact refuses a name that already exists
+# in the run, so re-running a failed job, or a second upload under the same
+# name, fails on the leftover artifact instead of replacing it. Read step by
+# step from every workflow (self-* included) and every composite action; the
+# two counts keep the check from passing on a query that matches nothing.
+@test "every upload-artifact step, in every workflow and composite action, sets overwrite: true" {
+  require_cmd yq
+  local f uploads missing step in_workflows=0 in_actions=0 bad=()
+  # Each step paired with where it sits: the job in a workflow, the action
+  # itself in a composite action. Step names repeat across jobs, so the job is
+  # what makes the failure message point at one step.
+  local steps='(((.jobs // {}) | to_entries[] | .key as $job | .value.steps[]? | {"where": "job " + $job, "step": .}),
+    (.runs.steps[]? | {"where": "action", "step": .}))
+    | select((.step.uses // "") | test("^actions/upload-artifact@"))'
+  for f in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/actions/*/action.yml; do
+    uploads="$(yq -r "[$steps] | length" "$f")"
+    case "$f" in
+      */.github/actions/*) in_actions=$((in_actions + uploads)) ;;
+      *) in_workflows=$((in_workflows + uploads)) ;;
+    esac
+    missing="$(yq -r "$steps | select(.step.with.overwrite != true) | .where + \", step '\" + (.step.name // .step.uses) + \"'\"" "$f")"
+    while IFS= read -r step; do
+      if [ -n "$step" ]; then
+        bad+=("${f#"$REPO_ROOT"/}: $step")
+      fi
+    done <<<"$missing"
+  done
+  [ "$in_workflows" -gt 0 ] || fail "found no upload-artifact step under .github/workflows: the step query is broken"
+  [ "$in_actions" -gt 0 ] || fail "found no upload-artifact step under .github/actions: the step query is broken"
+  [ "${#bad[@]}" -eq 0 ] || fail "upload-artifact steps without overwrite: true:$(printf '\n  %s' "${bad[@]}")"
 }
