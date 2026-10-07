@@ -1541,3 +1541,33 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
       || fail "$(basename "$f") runs a lane or the store notes but takes no fastlane-directory"
   done
 }
+
+# A check.yml job whose every working step is gated on toggles that default
+# off used to run anyway under the default inputs: checkout, mise and pnpm install, then every
+# step skipped - runner minutes on every push, for every consumer. A job like
+# that names each of its step toggles in its own if:, so it is skipped
+# outright, which a required check reads as passing. App suites set the shape.
+@test "a check.yml job whose every working step is toggled off by default is skipped outright" {
+  wf="$REPO_ROOT/.github/workflows/check.yml"
+  # The plumbing every job runs before its own work.
+  plumbing='.name != "Checkout consumer" and .name != "Checkout shared-workflows" and .name != "Setup"'
+  bad=""
+  for job in $(yq -r '.jobs | keys | .[]' "$wf"); do
+    work="$(yq -o=json ".jobs[\"$job\"].steps | map(select($plumbing))" "$wf")"
+    [ "$(printf '%s' "$work" | yq -p=json 'length')" -gt 0 ] || continue
+    [ "$(printf '%s' "$work" | yq -p=json 'map(select(has("if") | not)) | length')" -eq 0 ] || continue
+    toggles="$(printf '%s' "$work" | yq -p=json -r '.[].if' | grep -oE 'inputs\.[a-z0-9-]+' | sort -u)"
+    # Only a job that has nothing to do under the default inputs: one toggle
+    # that defaults on means the job works on every push, as code and docs do.
+    default_on=0
+    for toggle in $toggles; do
+      [ "$(yq -r ".on.workflow_call.inputs[\"${toggle#inputs.}\"].default" "$wf")" = "false" ] || default_on=1
+    done
+    [ "$default_on" -eq 0 ] || continue
+    job_if="$(yq -r ".jobs[\"$job\"].if // \"\"" "$wf")"
+    for toggle in $toggles; do
+      contains "$job_if" "$toggle" || bad="$bad $job($toggle)"
+    done
+  done
+  [ -z "$bad" ] || fail "jobs that would run only to skip every step - add the toggle to the job's if:$bad"
+}

@@ -35,6 +35,13 @@ dispatch_ref="${REQUIRE_GREEN_DISPATCH_REF:-}"
 dispatched=false
 superseded_run_id=""
 
+# gh's stderr goes to a file of its own, never into the JSON on stdout: a
+# notice on stderr from a call that succeeded (an update hint, a deprecation)
+# made the JSON unparsable, which read as "no run" and dispatched a duplicate
+# or died "never started".
+gh_stderr_file="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/workflows-gh-run-list.XXXXXX")"
+trap 'rm -f "$gh_stderr_file"' EXIT
+
 now() { date +%s; }
 start="$(now)"
 deadline="$((start + timeout_minutes * 60))"
@@ -72,11 +79,14 @@ while :; do
   # run has started yet" produce the same empty result, and diagnosing an
   # outage as "the run was never started" sends the reader to the wrong repo.
   gh_failed=false
-  runs="$(gh run list --workflow "$workflow" --commit "$sha" --json conclusion,status,databaseId 2>&1)" || gh_failed=true
+  runs="$(gh run list --workflow "$workflow" --commit "$sha" --json conclusion,status,databaseId 2>"$gh_stderr_file")" || gh_failed=true
+  gh_stderr="$(tr '\n' ' ' < "$gh_stderr_file")"
   if [ "$gh_failed" = "true" ]; then
-    gh_error="$(printf '%s' "$runs" | tr '\n' ' ')"
+    gh_error="${gh_stderr:-$(printf '%s' "$runs" | tr '\n' ' ')}"
     runs=""
     log "gh run list failed: $gh_error"
+  elif [ -n "$gh_stderr" ]; then
+    log "gh run list succeeded with a notice: $gh_stderr"
   fi
   count=0
   if [ -n "$runs" ]; then

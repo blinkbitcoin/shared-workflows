@@ -7,7 +7,7 @@
 // object; a key that is not an environment variable name, with and without
 // lower-case keys allowed; every credential suffix and every name on the NEVER
 // list, in either case; every reserved prefix and name, in either case; and a
-// value that is not a scalar. Through the command-line entry, run as a child
+// value that is not a scalar, or that carries a NUL. Through the command-line entry, run as a child
 // process: the NUL-separated output, the exit status and message on a refusal,
 // the default label, the lower-case switch, and that importing the module runs
 // nothing.
@@ -193,6 +193,21 @@ test('JSON that is not a flat object is refused', () => {
 test('a value that is an object or an array is refused as not a scalar', () => {
   assert.equal(refusal('{"NESTED":{"A":1}}'), '::error::build-env value for NESTED must be a scalar');
   assert.equal(refusal('{"LIST":[1,2]}'), '::error::build-env value for LIST must be a scalar');
+});
+
+// The command line separates pairs with NUL, so a NUL inside a value would
+// start a second pair the reader publishes unchecked.
+test('a value carrying a NUL is refused, in either name mode', () => {
+  const raw = '{"APP":"x\\u0000PATH\\u0000/evil"}';
+  assert.equal(refusal(raw), '::error::build-env value for APP contains a NUL character');
+  assert.equal(
+    refusal(raw, 'env-json', { allowLowerCase: true }),
+    '::error::env-json value for APP contains a NUL character',
+  );
+});
+
+test('a key carrying a NUL is refused by the name rule before it reaches the output', () => {
+  assert.equal(refusal('{"A\\u0000PATH":"x"}'), '::error::build-env key is not an upper-case env name: A\0PATH');
 });
 
 // --- validateEnvJson: the key name ---------------------------------------------

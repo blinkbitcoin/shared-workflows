@@ -42,8 +42,8 @@ waits on a dependency install. It folds together:
 | --- | --- | --- | --- |
 | iOS app (`.app` + `ios/*.xcworkspace`) | `ios-app-{ver}-{os}-{arch}-xcode{x}-{hash}[-env{8hex}]-{configuration}` (exact; `{x}` is the `xcode-version` input or `default`; `-env{8hex}` is a digest of `environment-variables` and is absent when that input is empty, because the `.app` embeds `EXPO_PUBLIC_*` at bundle time; `test-e2e.yml` appends `ios-configuration`) | `native-key` action → `scripts/ci/native-keys.sh` (`ios-key` output) | `test-e2e.yml` job `build-ios`, `actions/cache/restore@v6` + `actions/cache/save@v6` |
 | Android debug APK | `android-apk-{ver}-{hash}` (exact) | `native-key` action → `scripts/ci/native-keys.sh` (`android-key` output) | `test-e2e.yml` job `build-android`, restore + save |
-| CocoaPods (`ios/Pods`, `~/Library/Caches/CocoaPods`) | `pods-{os}-{hash}`, restore-keys prefix `pods-{os}-` | `native-key` action → `scripts/ci/native-keys.sh` (`pods-key` output) | `test-e2e.yml` job `build-ios` and `build-ios.yml` job `build`, `actions/cache@v6` (a prefix hit is fine: `pod install` reconciles) |
-| pnpm store | `pnpm-{os}-{hashFiles('**/pnpm-lock.yaml')}`, restore-keys prefix `pnpm-{os}-` | `setup` action (path from `scripts/ci/pnpm-store-path.sh`) | every workflow that runs `setup` |
+| CocoaPods (`ios/Pods`, `~/Library/Caches/CocoaPods`) | `pods-{ver}-{os}-xcode{xcode}-{hash}`, restore-keys prefix `pods-{ver}-{os}-xcode{xcode}-` | `native-key` action → `scripts/ci/native-keys.sh` (`pods-key` and `pods-restore-key` outputs) | `test-e2e.yml` job `build-ios` and `build-ios.yml` job `build`, `actions/cache@v6` (a prefix hit is fine: `pod install` reconciles) |
+| pnpm store | `pnpm-{os}-{sha256 of the consumer's own pnpm-lock.yaml}` (`none` without one), restore-keys prefix `pnpm-{os}-` | `setup` action (path and `lock-hash` from `scripts/ci/pnpm-store-path.sh`) | every workflow that runs `setup` with `install: 'true'`; a job that does not install neither restores nor saves it |
 | Maestro CLI (`~/.maestro`, excluding `tests/` and `logs/`) | `maestro-{os}-{version}-v2` | `maestro` action (version = its `version` input, pinned to `MAESTRO_VERSION`) | `test-e2e.yml` jobs `ios`, `android` |
 | Android system image | `sysimg-{ver}-{api}-default-x86_64` | `test-e2e.yml` job `android` (`{api}` = `android-api-level`) | `actions/cache@v6` over `$ANDROID_SDK_DIR/system-images/android-{api}` |
 | AVD + adb keys | `avd-{ver}-{api}-x86_64-default-hidedialogs` | `test-e2e.yml` job `android` | `actions/cache@v6` over `~/.android/avd/*`, `~/.android/adb*`; a miss bakes a snapshot via `scripts/e2e/android-emulator.sh snapshot-bake` |
@@ -68,7 +68,11 @@ Notes:
   AVD keys used to bake `v1` in as a literal while this page and three input
   descriptions all promised the bump reached every native cache; they did not,
   so a stale AVD outlived the bump meant to clear it. `test/workflow-shape.bats`
-  now refuses any workflow cache key with a version baked in.
+  now refuses any workflow cache key with a version baked in. The Pods key had
+  the same gap from the other side: it carried no `{ver}` at all, and its
+  restore prefix `pods-{os}-` matched every older entry, so a bump restored the
+  old Pods anyway. Key and prefix now both carry `{ver}` and `{xcode}`, and the
+  prefix comes from `native-keys.sh` rather than being written in each workflow.
 - The Maestro CLI key's `-v2` is deliberately **not** `{ver}`: that cache holds
   the CLI, not build output, and nothing about a native rebuild invalidates it.
   It lives in a composite action rather than a workflow, which is also why the

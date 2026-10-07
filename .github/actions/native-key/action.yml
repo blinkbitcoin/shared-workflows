@@ -8,7 +8,7 @@ inputs:
     description: Cache key version prefix; bump to invalidate every native cache at once
     default: 'v1'
   xcode-version:
-    description: Xcode version folded into the iOS cache key ("default" is used when empty)
+    description: Xcode version folded into the iOS app and Pods cache keys ("default" is used when empty)
     default: ''
   native-extra-globs:
     description: Extra glob patterns folded into the native dependency hash
@@ -27,8 +27,11 @@ outputs:
     description: Exact cache key for the built Android APK
     value: ${{ steps.keys.outputs.android-key }}
   pods-key:
-    description: Cache key for CocoaPods (used with a restore-keys prefix)
+    description: Cache key for CocoaPods (used with pods-restore-key as its restore-keys prefix)
     value: ${{ steps.keys.outputs.pods-key }}
+  pods-restore-key:
+    description: Restore-keys prefix for CocoaPods; carries the cache and Xcode versions, so a bump never restores an older entry
+    value: ${{ steps.keys.outputs.pods-restore-key }}
 runs:
   using: composite
   steps:

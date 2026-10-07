@@ -373,6 +373,22 @@ test('main checks only the files it is given', () => {
   assert.equal(existsSync(result.runnerDir), false);
 });
 
+test('main refuses a flag it does not know rather than passing', () => {
+  for (const flag of ['--help', '-a', '--al']) {
+    const result = runMain([flag], { docs: { 'a.md': DIAGRAM } });
+    assert.equal(result.code, 1, flag);
+    assert.deepEqual(result.out, [], flag);
+    assert.deepEqual(result.err, [`::error::check-diagrams: unexpected ${flag}: pass --all and file paths`], flag);
+  }
+});
+
+test('main fails on a file it is named that does not exist, naming every one', () => {
+  const result = runMain(['a.md', 'gone.md', 'also-gone.md'], { docs: { 'a.md': DIAGRAM } });
+  assert.equal(result.code, 1);
+  assert.deepEqual(result.out, []);
+  assert.deepEqual(result.err, ['::error::check-diagrams: no such file: gone.md, also-gone.md']);
+});
+
 test('main --all checks the whole doc set, whatever changed', () => {
   const result = runMain(['--all'], {
     docs: { 'a.md': DIAGRAM, 'b.md': DIAGRAM },

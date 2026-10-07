@@ -24,11 +24,7 @@
     "web": { "workflows": ["build-web.yml"] },
     "badges": { "workflows": ["publish-badges.yml"] },
     "code-scanning": { "workflows": ["check-code-scanning.yml"] },
-    "security": {
-      "$comment": "No caller switches this on yet: check-security.yml is not listed, so a repository that calls it is checked for these rows only with --profile security.",
-      "workflows": [],
-      "title": "`check-security.yml`"
-    },
+    "security": { "workflows": ["check-security.yml"] },
     "release": {
       "workflows": [
         "build-prepare.yml",

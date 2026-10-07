@@ -4,7 +4,8 @@
 #
 #   ci        true when check-ci (shellcheck, actionlint, zizmor) has something new to read
 #   versions  true when check-version-pins or check-tool-versions has something new to read
-#   package   true when a package's suite (anything under packages/) has something new to read
+#   package   true when the Package job's suites have something new to read: a
+#             package's suite (anything under packages/), or test-scripts
 #
 # Include-based, unlike the consumer classifier (scripts/ci/changed-class.sh):
 # each of these gates is one make target whose inputs are known exactly, so
@@ -20,15 +21,21 @@ head="${2:?usage: changed-gates.sh BASE_SHA HEAD_SHA}"
 # What changes how every gate runs: the recipes, the pinned tools, the three
 # self workflows and this classifier itself. Any of them runs every gate.
 every_gate='^Makefile$|^\.mise\.toml$|^\.github/workflows/self-(ci|checks|unit)\.yml$|^scripts/self/changed-gates\.sh$|^scripts/lib/(common|changed-files)\.sh$'
-# `make check-ci` reads every script under scripts/ (shellcheck, and
-# .shellcheckrc), and the workflows, the composite actions and the linters'
+# `make check-ci` reads every script under scripts/ and plugins/ (shellcheck,
+# and .shellcheckrc), and the workflows, the composite actions and the linters'
 # own configuration under .github/ (actionlint and zizmor).
-ci_patterns="$every_gate"'|^scripts/.*\.sh$|^\.shellcheckrc$|^\.github/'
+ci_patterns="$every_gate"'|^(scripts|plugins)/.*\.sh$|^\.shellcheckrc$|^\.github/'
 # The files scripts/self/check-version-pins.sh compares, the generator
 # render-versions.mjs and the package's copy of versions.sh it writes, and the
 # check-tool-versions check.
 versions_patterns="$every_gate"'|^scripts/lib/versions\.sh$|^packages/app-tooling/lib/versions\.sh$|^scripts/self/(check-version-pins\.sh|render-versions\.mjs)$|^packages/app-tooling/versions\.json$|^packages/app-tooling/bin/check-tool-versions\.mjs$|^\.github/workflows/(test-e2e|build-android)\.yml$|^\.github/actions/maestro/'
-package_patterns="$every_gate"'|^packages/'
+# The Package job runs `make test-package` (everything under packages/; its
+# suites also read the workflow files) and `make test-scripts`: the Node
+# scripts under scripts/ and test/*.test.mjs, which evaluate the pipelines'
+# job graphs from .github/workflows/, run the release scripts (and the lib they
+# source) end to end, and hold the contract table in
+# docs/adopting-an-existing-repo.md to its generator.
+package_patterns="$every_gate"'|^packages/|^scripts/.*\.mjs$|^scripts/(release|lib)/|^test/[^/]+\.test\.mjs$|^test/lib/|^\.github/workflows/[^/]+\.yml$|^docs/adopting-an-existing-repo\.md$'
 
 run_every_gate() {
   gh_output ci true

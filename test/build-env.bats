@@ -103,6 +103,19 @@ gh_env_keys() {
   grep -qx 'PATH=/evil' "$GITHUB_ENV" || fail "the value was mangled: $(cat "$GITHUB_ENV")"
 }
 
+# The validator hands the reader key/value pairs separated by NUL, so a NUL
+# inside a value used to end it and start a pair of the caller's choosing -
+# PATH, or the WORKFLOWS_FINGERPRINT_IOS the OTA gate trusts - past every name rule.
+@test "a value containing a NUL cannot inject a second variable" {
+  for injected in PATH WORKFLOWS_FINGERPRINT_IOS; do
+    : > "$GITHUB_ENV"
+    WORKFLOWS_BUILD_ENV="{\"APP\":\"a\\u0000$injected\\u0000/evil\"}" publish
+    [ "$status" -ne 0 ] || fail "accepted a NUL that injects $injected: $output"
+    contains "$output" "contains a NUL character" || fail "unexpected message for $injected: $output"
+    [ ! -s "$GITHUB_ENV" ] || fail "wrote to GITHUB_ENV anyway: $(cat "$GITHUB_ENV")"
+  done
+}
+
 @test "a single-line value still uses the plain form" {
   WORKFLOWS_BUILD_ENV='{"OTA_ENABLED":"true"}' publish
   [ "$status" -eq 0 ] || fail "exited $status: $output"

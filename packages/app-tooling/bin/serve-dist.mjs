@@ -39,11 +39,19 @@ export function normalizeBasePath(raw) {
 
 /**
  * Maps a request path to a file under `dist`, or to the 404 page.
- * Returns { file, status } where file is absolute, or null when the path is
- * outside the base path (Pages would serve another site there).
+ * Returns { file, status } where file is absolute, null when the path is
+ * outside the base path (Pages would serve another site there), or
+ * { file: null, status: 400 } when the path is not valid percent-encoding.
  */
 export function resolveRequest(dist, basePath, urlPath) {
-  const decoded = decodeURIComponent(urlPath.split('?')[0]);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath.split('?')[0]);
+  } catch {
+    // A URIError thrown in the request handler used to stop the server, so one
+    // malformed request refused every request the test run made after it.
+    return { file: null, status: 400 };
+  }
   if (basePath && decoded !== basePath && !decoded.startsWith(`${basePath}/`)) return null;
   let rel = basePath ? decoded.slice(basePath.length) : decoded;
   if (rel === '' || rel === '/') rel = '/index.html';
@@ -60,6 +68,11 @@ export function resolveRequest(dist, basePath, urlPath) {
 export function startServer({ dist, basePath, port }) {
   const server = createServer((req, res) => {
     const hit = resolveRequest(dist, basePath, req.url ?? '/');
+    if (hit?.status === 400) {
+      res.writeHead(400, { 'content-type': 'text/plain' });
+      res.end('bad request');
+      return;
+    }
     if (!hit || !existsSync(hit.file)) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end('not found');

@@ -56,14 +56,41 @@ expect() {
   expect true false false
 }
 
-@test "a non-shell file under scripts/ does not run ci" {
+# A Node script under scripts/ is test-scripts' to check, at 100% coverage, and
+# that suite runs in the Package job: skipping it let a broken one merge.
+@test "a Node script under scripts/ runs package (test-scripts), not ci" {
   gates_for "scripts/self/render-contract-table.mjs"
-  expect false false false
+  expect false false true
 }
 
-@test "a reusable workflow change runs ci" {
-  gates_for ".github/workflows/test-unit.yml"
+@test "the node:test suites under test/ and their helpers run package" {
+  gates_for "test/pipelines.test.mjs"
+  expect false false true
+  gates_for "test/lib/workflow-graph.mjs"
+  expect false false true
+}
+
+@test "the contract table's document runs package, which holds it to its generator" {
+  gates_for "docs/adopting-an-existing-repo.md"
+  expect false false true
+}
+
+@test "a release script runs ci and package, whose store-notes chain runs it" {
+  gates_for "scripts/release/pr-store-notes.sh"
+  expect true false true
+}
+
+# make check-ci shellchecks plugins/ too.
+@test "a plugin's shell script runs ci" {
+  gates_for "plugins/store-release/skills/store-credentials/scripts/check.sh"
   expect true false false
+}
+
+# The Package job's suites read the workflows: test/pipelines.test.mjs walks the
+# pipelines' job graphs and check-contract's tests map each one to a profile.
+@test "a reusable workflow change runs ci and package" {
+  gates_for ".github/workflows/test-unit.yml"
+  expect true false true
 }
 
 @test "the shellcheck, actionlint and zizmor configuration run ci" {
@@ -81,25 +108,27 @@ expect() {
   expect true true false
 }
 
-@test "the workflows check-version-pins reads run ci and versions" {
+@test "the workflows check-version-pins reads run ci, versions and package" {
   gates_for ".github/workflows/test-e2e.yml"
-  expect true true false
+  expect true true true
   gates_for ".github/workflows/build-android.yml"
-  expect true true false
+  expect true true true
 }
 
 @test "the pinned versions run versions (and ci, for the shell file)" {
   gates_for "scripts/lib/versions.sh"
-  expect true true false
+  expect true true true
   gates_for "scripts/self/check-version-pins.sh"
   expect true true false
 }
 
-@test "the versions generator runs versions alone, and the package's copy it writes runs versions and package" {
+@test "the versions generator and the package's copy it writes run versions and package" {
   # make check-version-pins runs render-versions.mjs --check first; a change to
   # the generator, or a hand edit of the copy it writes, must reach that gate.
+  # The generator is also a Node script under scripts/, which make test-scripts
+  # covers, so it runs package too.
   gates_for "scripts/self/render-versions.mjs"
-  expect false true false
+  expect false true true
   gates_for "packages/app-tooling/lib/versions.sh"
   expect false true true
 }

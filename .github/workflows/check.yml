@@ -324,7 +324,7 @@ jobs:
   generated:
     name: Generated
     needs: contract
-    if: ${{ !inputs.contract-only }}
+    if: ${{ !inputs.contract-only && inputs.generated }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 15
     steps:
@@ -508,7 +508,7 @@ jobs:
   prebuild:
     name: Prebuild
     needs: contract
-    if: ${{ !inputs.contract-only }}
+    if: ${{ !inputs.contract-only && inputs.prebuild }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 30
     steps:
@@ -541,7 +541,7 @@ jobs:
   release:
     name: Release
     needs: contract
-    if: ${{ !inputs.contract-only }}
+    if: ${{ !inputs.contract-only && inputs.release }}
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 20
     steps:

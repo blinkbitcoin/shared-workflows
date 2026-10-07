@@ -215,7 +215,8 @@ resolve-code-scanning-config --out FILE     # the CodeQL configuration: the fami
   so nothing in a doc can decide whether the gate runs. Offline on a laptop it
   skips with a warning; under `CI` a toolchain that cannot render fails. With no
   files it checks the docs changed against `origin/main`; `--all` checks them
-  all. The mermaid CLI version is pinned in the module.
+  all. A named file that does not exist, or any other flag, fails rather than
+  passing. The mermaid CLI version is pinned in the module.
 - `check-shell-locale` reads every tracked shell file: scripts, bats files, the
   Makefile and the workflows' `run:` blocks. The prefix makes bash itself
   switch locale, which crashes a forked Homebrew bash on macOS now and then.

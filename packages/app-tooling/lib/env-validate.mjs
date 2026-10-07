@@ -106,6 +106,13 @@ export function validateEnvJson(raw, label, opts = {}) {
     if (v !== null && typeof v === 'object') {
       throw new Error(`::error::${label} value for ${k} must be a scalar`);
     }
+    // The command line below separates key and value with NUL, so a NUL inside
+    // a value would end it early and start a new key the reader publishes as
+    // given: {"A":"x\u0000PATH\u0000/evil"} becomes A=x and PATH=/evil, past
+    // every name rule above. A key cannot carry one: the name patterns refuse it.
+    if (typeof v === 'string' && v.includes('\0')) {
+      throw new Error(`::error::${label} value for ${k} contains a NUL character`);
+    }
     pairs.push([k, v === null ? '' : String(v)]);
   }
   return pairs;
