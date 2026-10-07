@@ -46,8 +46,7 @@ android() { run bash "$SCRIPT" "$@" </dev/null; }
 # the writer dies of SIGPIPE and pipefail reports the search as failed.
 long_list_after() {
   printf '%s\n' "$1"
-  local i
-  for i in $(seq 1 20000); do printf 'padding line %s\n' "$i"; done
+  seq -f 'padding line %g' 1 20000
 }
 
 BLANK_INSTALLS="platform-tools
