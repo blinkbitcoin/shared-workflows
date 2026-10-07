@@ -62,10 +62,12 @@ setup() {
   cp "$WF" "$work/.github/workflows/"
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
-  # act records its arguments and, when FAKE_ACT_EXIT is set, fails with it.
+  # act records its arguments and the token its environment hands it and,
+  # when FAKE_ACT_EXIT is set, fails with it.
   cat > "$bin/act" <<STUB
 #!/usr/bin/env bash
 printf '%s\\n' "\$@" > "$BATS_TEST_TMPDIR/act.args"
+printf '%s' "\${GITHUB_TOKEN-}" > "$BATS_TEST_TMPDIR/act.token"
 exit "\${FAKE_ACT_EXIT:-0}"
 STUB
   # docker records every call. Its containers are the lines of
@@ -177,7 +179,11 @@ teardown() {
   # and save - times out.
   [ "$(act_arg --artifact-server-addr)" = "127.0.0.1" ] || fail "the artifact server is not on 127.0.0.1: $args"
   [ "$(act_arg --cache-server-addr)" = "127.0.0.1" ] || fail "the cache server is not on 127.0.0.1: $args"
-  contains "$args" "GITHUB_TOKEN=fake-token" || fail "args: $args"
+  # The token goes through act's environment, never an argument, which any
+  # local user could read in `ps` for the whole run.
+  [ "$(act_arg -s)" = "GITHUB_TOKEN" ] || fail "act is not asked for GITHUB_TOKEN by name: $args"
+  [ "$(cat "$BATS_TEST_TMPDIR/act.token")" = "fake-token" ] || fail "act did not get the token in its environment"
+  ! contains "$args" "fake-token" || fail "the token is on act's command line: $args"
   contains "$args" "android=false" || fail "args: $args"
   # act's artifact server cannot take upload-artifact@v7 / download-artifact@v8
   # (nektos/act #6022): both are run as their last v4 from the cache.
