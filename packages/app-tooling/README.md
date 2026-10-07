@@ -7,7 +7,8 @@ specific: the pinned tool table, the checks that enforce it, the contract
 checker, the repository guards, the security scanners `check-security.yml`
 runs ([Security scanning](#security-scanning)), the CI badge renderer and the
 store notes generator the release workflows run ([`gen-store-notes`](#gen-store-notes)),
-and the E2E suite runners and web preview server a laptop runs ([End-to-end suites](#end-to-end-suites)). Under
+the E2E suite runners and web preview server a laptop runs ([End-to-end suites](#end-to-end-suites)),
+and the report of where a GitHub Actions run spent its time ([`trace-run`](#trace-run)). Under
 `expo/` are the presets an Expo app extends ([Expo presets](#expo-presets)).
 
 ```sh
@@ -679,6 +680,41 @@ gen-status-badge <name> <label> <success|failure|cancelled|skipped> [--out DIR]
 - An unknown job result, verdict or colour exits 1 rather than drawing a green
   badge.
 - `gen-coverage-badge` and `gen-status-badge` draw one badge each, with the same code.
+
+## `trace-run`
+
+```sh
+trace-run https://github.com/<owner>/<app>/actions/runs/<run-id>   # the run, its jobs, slowest steps, critical path
+trace-run <owner>/<app> <run-id> --logs                             # and each step's trace: phases, from the job logs
+trace-run <run URL> --compare <run-id> --json timing.json           # against another run; the whole tree as JSON
+```
+
+Where a run spent its time, read through `gh api` with the reader's own
+login: no workflow permission and nothing added to a workflow.
+
+- **Jobs:** each job's queue time (created to started) and run time (started
+  to completed), its result and runner, in the order the jobs finished or, with
+  `--sort run`, longest first. The run's wall clock is the first job created to
+  the last job finished.
+- **Slowest steps:** every step across the run, slowest first, the first
+  `--top N` (default 15).
+- **Critical path:** the job that finished last, then the job that finished
+  last before it started, and so on back, from the timestamps alone; the
+  workflow file is not read.
+- **`--logs`:** each finished job's log, and its `trace: <phase> <seconds>s`
+  lines (the line the workflows' scripts print as they close a log group),
+  filed under the step that was running when each was written. A log that
+  cannot be read is a warning.
+- **`--compare RUN`:** another run - a URL, a run id in the same repository,
+  or `owner/repository run-id` - lined up by job name and by job and step
+  name, the largest increase first.
+- **`--json FILE`:** run, jobs, steps, phases, critical path, slowest steps and
+  any comparison, as one JSON document.
+- **Pages:** `gh api --paginate` prints one JSON document per page with
+  nothing between them; `trace-run` splits them itself rather than ask for
+  `--slurp`, which only gh 2.48 and later have.
+- **Exit codes:** 2 on a usage error; 1 when `gh` is missing (install it and
+  run `gh auth login`) or fails, with its message.
 
 ## The checks CI runs, for a laptop
 
