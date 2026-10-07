@@ -289,7 +289,8 @@ Every row is a make target; nothing here is run through a package manager.
   enforced on top: adding or removing a `##`-documented make target without
   updating the command table above is a hard failure, and so is a
   `<!--count:...-->` marker that disagrees with the tree
-  (`test/docs-facts.bats`).
+  (`test/docs-facts.bats`; the counts that grow with ordinary PRs are round
+  floors, `1800+ tests`, which hold until the count crosses the next step).
 
 ## Rules every app of the family follows
 

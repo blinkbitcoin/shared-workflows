@@ -135,11 +135,16 @@ A count in a doc — how many scripts, how many tests — is marked so a test ca
 check it:
 
 ```markdown
-<sub><!--count:scripts-->142<!--/count--> scripts · <!--count:tests-->1817<!--/count--> tests</sub>
+<sub><!--count:scripts-->140<!--/count-->+ scripts · <!--count:tests-->1700<!--/count-->+ tests</sub>
 ```
 
 `test/docs-facts.bats` derives each one from the repository and fails when they
-disagree. The numbers above are made up: a marker inside a fenced block is an
+disagree. The counts ordinary PRs grow (`tests` in steps of 100, `scripts`,
+`shell-scripts` and `bats-files` in steps of 10) are claimed as a round floor
+followed by `+`: the claim holds while the real count is at most one step above
+it, so it only needs a bump when a PR crosses the next step. Exact counts on
+the same line made any two open PRs that added a test conflict once either
+merged. Every other count is exact. The numbers above are made up: a marker inside a fenced block is an
 example, and the extractor strips fences before it looks. HTML comments do not render, so the docs read normally. An unmarked
 number is not checked — marking one is how you opt in — but the counts the
 README leads with are marked and a case fails if a marker disappears.
