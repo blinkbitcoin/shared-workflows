@@ -519,6 +519,34 @@ expect() {
   contains "$output" "falling back to two-dot diff" || fail "no warning about the fallback: $output"
 }
 
+# The `changes` jobs check out with `filter: blob:none`, so the classifier runs
+# in a partial clone: every commit and tree, no file content. It has to answer
+# from the trees. The clone's remote is taken away, so a content read (rename
+# detection scoring an edited move) fails the diff and fails open, which the
+# answer below is chosen to tell apart: running everything says unit-changed=true.
+# A rename is also both its paths: with detection on, the move below listed
+# only docs/login.md and read as docs-only.
+@test "a rename in a blob:none clone classifies as both paths, read from the trees alone" {
+  mkdir -p "$repo/.maestro"
+  seq 1 100 >"$repo/.maestro/login.yaml"
+  git -C "$repo" add .maestro/login.yaml
+  git -C "$repo" commit -q -m "add a flow"
+  base=$(git -C "$repo" rev-parse HEAD)
+  mkdir -p "$repo/docs"
+  git -C "$repo" mv .maestro/login.yaml docs/login.md
+  echo "one more line" >>"$repo/docs/login.md"
+  git -C "$repo" commit -q -a -m "move the flow into the docs, edited"
+  head=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" config uploadpack.allowFilter true
+  partial="$BATS_TEST_TMPDIR/partial"
+  git clone -q --no-checkout --filter=blob:none "file://$repo" "$partial"
+  [ "$(git -C "$partial" config remote.origin.promisor)" = true ] || fail "the clone is not a partial clone"
+  git -C "$partial" remote set-url origin "file://$BATS_TEST_TMPDIR/gone"
+  cd "$partial" && run bash "$REPO_ROOT/scripts/ci/changed-class.sh" "$base" "$head"
+  # .maestro/login.yaml (deleted) runs E2E only; docs/login.md is docs.
+  expect false false true false
+}
+
 # One representative path per list entry is what the cases above walk. This
 # walks the spellings each entry has to accept - every extension the pattern
 # promises, the entry nested below the root where it is not anchored - and the

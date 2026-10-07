@@ -184,6 +184,16 @@ jobs:
         run: bash ".workflows/scripts/release/require-inputs.sh"
       - name: Publish the release output directories
         run: bash ".workflows/scripts/release/env-publish.sh"
+      # As soon as its path exists, before Setup: a wrong or missing
+      # build-info-artifact fails here in seconds instead of after Setup,
+      # prebuild and pod install have spent minutes of macOS time. Nothing in
+      # between touches $WORKFLOWS_RELEASE_META_DIR, which lives under
+      # $RUNNER_TEMP, outside the checkout.
+      - name: Download build-info
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.build-info-artifact }}
+          path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
       - name: Native cache keys
         id: keys
         uses: ./.workflows/.github/actions/native-key
@@ -196,6 +206,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java'
           # Ruby unconditionally here (unlike test-e2e.yml, which installs it only on
           # a cache miss): fastlane is the whole point of this job.
           ruby-enabled: 'true'
@@ -218,14 +229,25 @@ jobs:
           key: ${{ steps.keys.outputs.pods-key }}
           restore-keys: |
             ${{ steps.keys.outputs.pods-restore-key }}
+      # Pod install and the two lanes are the steps that hang (a pod resolve, an
+      # Xcode archive, a lane stuck on match or a tool), so each has a bound of
+      # its own: a hang fails at about twice that step's slowest normal run,
+      # with the step's name in the log, instead of burning the job's 90 macOS
+      # minutes. Measured over the template's 41 internal builds of 2026-09-24
+      # to 2026-10-03. The three add up to 60, and everything else in the job
+      # took 5 minutes at most there, so each bound can fire inside the 90.
+      #
+      # Pod install: 23-85s, median 41s, and the 85s was a run with no
+      # CocoaPods cache at all. pods.sh retries three times 20s apart, so a cold
+      # run that needs every attempt is about 5 minutes. Twice that is 10.
       - name: Pod install
+        timeout-minutes: 10
         run: bash "$WORKFLOWS_DIR/scripts/native/pods.sh"
-      - name: Download build-info
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ inputs.build-info-artifact }}
-          path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
+      # 7-18 minutes, median 11 (unsigned: the template builds without a store
+      # account). Signing adds a match clone and the .ipa export, a minute or
+      # two. Twice the slowest run is 37; 40.
       - name: Fastlane ios build
+        timeout-minutes: 40
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
           STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
@@ -253,8 +275,11 @@ jobs:
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
         run: bash "$WORKFLOWS_DIR/scripts/release/artifact-hashes.sh" ios
+      # 4-12s unsigned; a signed .ipa adds an unzip and a codesign check, both
+      # local. 10, the bound test-e2e.yml gives its short steps.
       - name: Fastlane ios verify
         if: ${{ inputs.verify }}
+        timeout-minutes: 10
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
           STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt

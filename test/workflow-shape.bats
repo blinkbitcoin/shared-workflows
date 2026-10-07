@@ -223,6 +223,60 @@ setup() {
     || fail "classify must call changed-class.sh with BASE_SHA and HEAD_SHA: $output"
 }
 
+# checkout_with WORKFLOW JOB KEY - KEY of the job's "Checkout consumer" step,
+# `null` when the step does not set it.
+checkout_with() {
+  yq -r ".jobs.\"$2\".steps[] | select(.name == \"Checkout consumer\") | .with.\"$3\"" \
+    "$REPO_ROOT/.github/workflows/$1"
+}
+
+# These jobs diff two arbitrary commits, so they need every commit and tree
+# (fetch-depth: 0), but not every blob of the app's history: the classifiers
+# list paths, which trees answer, and the review reads only the base's copy of
+# each changed file. `filter: blob:none` makes the clone partial.
+@test "the change classifiers and the security review check out every commit but no older file content" {
+  require_cmd yq
+  for pair in check.yml:changes build-web.yml:changes check-code-scanning.yml:changes \
+    check-security.yml:review; do
+    w="${pair%%:*}" j="${pair##*:}"
+    [ "$(checkout_with "$w" "$j" fetch-depth)" = "0" ] \
+      || fail "$w $j: the consumer checkout is not fetch-depth: 0 (got $(checkout_with "$w" "$j" fetch-depth)); the diff needs every commit"
+    [ "$(checkout_with "$w" "$j" filter)" = "blob:none" ] \
+      || fail "$w $j: the consumer checkout is not filter: blob:none (got $(checkout_with "$w" "$j" filter)); it downloads every blob of the app's history"
+  done
+}
+
+# In a partial clone, reading a blob the checkout did not bring (the review's
+# diff against its base) is a fetch from the remote, with the credentials the
+# checkout left in the repository's git config. `persist-credentials: false`
+# takes them away and a private app's lazy fetch fails, which the review reports
+# as a skip, not a failure.
+@test "every partial-clone checkout keeps its credentials for the lazy fetch" {
+  require_cmd yq
+  found=0
+  for w in "${WORKFLOWS[@]}"; do
+    n=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^actions/checkout@")) | select(.with.filter != null)] | length' "$w")
+    found=$((found + n))
+    # Not `.key as $j | ... | select(...) | $j`: yq printed the key whether or
+    # not the select passed.
+    dropped=$(yq -r '.jobs | to_entries[] | select([.value.steps[]? | select((.uses // "") | test("^actions/checkout@")) | select((.with.filter != null) and (.with."persist-credentials" == false))] | length > 0) | .key' "$w")
+    [ -z "$dropped" ] || fail "$(basename "$w"): job(s) $dropped check out a partial clone with persist-credentials: false, so a lazy blob fetch has no token"
+  done
+  [ "$found" -ge 4 ] || fail "found $found partial-clone checkouts, expected at least the four classifier and review ones"
+}
+
+# The other side of the line. gitleaks scans the content of every commit
+# (`git log -p`), so it reads every blob of the history: in a partial clone each
+# one would come from the remote in a lazy fetch of its own, far slower than the
+# full clone, and a fetch that fails mid-scan is a commit left unscanned.
+@test "the secret scan's checkout stays a full clone, with no filter" {
+  require_cmd yq
+  [ "$(checkout_with check.yml secrets fetch-depth)" = "0" ] \
+    || fail "check.yml secrets: the consumer checkout is not fetch-depth: 0 (got $(checkout_with check.yml secrets fetch-depth)); gitleaks scans every commit"
+  [ "$(checkout_with check.yml secrets filter)" = "null" ] \
+    || fail "check.yml secrets: the consumer checkout sets filter: $(checkout_with check.yml secrets filter); gitleaks reads every blob and needs the full clone"
+}
+
 lane_step_count() {
   yq -r '[.jobs[].steps[]? | select((.run? // "") | test("release/fastlane.sh"))] | length' "$1"
 }
@@ -405,6 +459,50 @@ lane_step_count() {
     || fail "the digest step is not between the build and verify lanes: $order"
   path="$(yq -r '.jobs[].steps[]? | select(.name == "Upload ios-ipa") | .with.path' "$f")"
   contains "$path" 'build-info.ios.json' || fail "the .ipa upload does not carry build-info.ios.json: $path"
+}
+
+# A wrong or missing build-info-artifact is a caller wiring mistake, and download-artifact
+# fails on it by name. It once ran after Setup, prebuild and (on iOS) pod install, so
+# the mistake surfaced only after minutes of runner time, macOS minutes on iOS. The
+# download needs only $WORKFLOWS_RELEASE_META_DIR, which the release output step
+# publishes, so it runs right after that step and before anything expensive.
+@test "the build workflows download build-info before Setup and prebuild" {
+  require_cmd yq
+  for platform in ios android; do
+    f="$REPO_ROOT/.github/workflows/build-$platform.yml"
+    names="$(yq -r '.jobs.build.steps[].name' "$f")"
+    publish_i="$(grep -nxF 'Publish the release output directories' <<<"$names" | cut -d: -f1)"
+    download_i="$(grep -nxF 'Download build-info' <<<"$names" | cut -d: -f1)"
+    setup_i="$(grep -nxF 'Setup' <<<"$names" | cut -d: -f1)"
+    prebuild_i="$(grep -nxF "Prebuild ($platform)" <<<"$names" | cut -d: -f1)"
+    lane_i="$(grep -nxF "Fastlane $platform build" <<<"$names" | cut -d: -f1)"
+    [ -n "$publish_i" ] && [ -n "$download_i" ] && [ -n "$setup_i" ] && [ -n "$prebuild_i" ] && [ -n "$lane_i" ] \
+      || fail "build-$platform.yml is missing a step this test orders: $names"
+    [ "$publish_i" -lt "$download_i" ] \
+      || fail "build-$platform.yml downloads build-info before WORKFLOWS_RELEASE_META_DIR is published: $names"
+    [ "$download_i" -lt "$setup_i" ] \
+      || fail "build-$platform.yml downloads build-info after Setup, so a wrong build-info-artifact fails late: $names"
+    [ "$download_i" -lt "$prebuild_i" ] \
+      || fail "build-$platform.yml downloads build-info after prebuild, so a wrong build-info-artifact fails late: $names"
+    [ "$download_i" -lt "$lane_i" ] \
+      || fail "build-$platform.yml downloads build-info after the lane that reads it: $names"
+  done
+}
+
+# bundletool needs nothing prebuild makes, and a wrong bundletool-version or
+# bundletool-sha256 should fail before prebuild is paid for. It stays after Setup:
+# it runs a $WORKFLOWS_DIR script, and checks the jar with the java Setup may pin.
+@test "build-android installs bundletool after Setup and before prebuild" {
+  require_cmd yq
+  f="$REPO_ROOT/.github/workflows/build-android.yml"
+  names="$(yq -r '.jobs.build.steps[].name' "$f")"
+  setup_i="$(grep -nxF 'Setup' <<<"$names" | cut -d: -f1)"
+  bundletool_i="$(grep -nxF 'Install bundletool' <<<"$names" | cut -d: -f1)"
+  prebuild_i="$(grep -nxF 'Prebuild (android)' <<<"$names" | cut -d: -f1)"
+  [ -n "$setup_i" ] && [ -n "$bundletool_i" ] && [ -n "$prebuild_i" ] \
+    || fail "build-android.yml is missing a step this test orders: $names"
+  [ "$setup_i" -lt "$bundletool_i" ] || fail "build-android.yml installs bundletool before Setup: $names"
+  [ "$bundletool_i" -lt "$prebuild_i" ] || fail "build-android.yml installs bundletool after prebuild: $names"
 }
 
 # $WORKFLOWS_DIR is published by the setup composite action, so it exists only
@@ -743,6 +841,58 @@ lane_step_count() {
     # the ios and the android job.
     bad=$(yq -r "[.jobs[].steps[]? | select(.name == \"$name\") | select(.\"timeout-minutes\" != $want)] | length" "$f")
     [ "$bad" -eq 0 ] || fail "$bad of the $found '$name' steps lack timeout-minutes: $want"
+  done
+}
+
+# The release builds' twin of the test above. Pod install and the two lanes are
+# the steps that hang; without a bound of their own, a hang in build-ios.yml
+# burns the job's whole 90 macOS minutes and the log names no step. The values
+# are about twice the slowest normal run measured in the template (the comments
+# beside them give the numbers), and named here so a renamed step cannot drop
+# its bound without this test noticing.
+@test "build-ios.yml's and build-android.yml's hang-prone steps each carry a step-level timeout-minutes" {
+  require_cmd yq
+  for spec in \
+    "build-ios.yml:Pod install:10" \
+    "build-ios.yml:Fastlane ios build:40" \
+    "build-ios.yml:Fastlane ios verify:10" \
+    "build-android.yml:Fastlane android build:40" \
+    "build-android.yml:Fastlane android verify:10"; do
+    file="${spec%%:*}"
+    rest="${spec#*:}"
+    name="${rest%:*}"
+    want="${rest##*:}"
+    f="$REPO_ROOT/.github/workflows/$file"
+    found=$(yq -r "[.jobs.build.steps[]? | select(.name == \"$name\")] | length" "$f")
+    [ "$found" -eq 1 ] || fail "$file's build job has $found steps named '$name', expected one - was it renamed?"
+    got=$(yq -r ".jobs.build.steps[] | select(.name == \"$name\") | .\"timeout-minutes\" // \"\"" "$f")
+    [ "$got" = "$want" ] || fail "$file's '$name' step has timeout-minutes '$got', expected $want"
+  done
+}
+
+# A step bound can only fire while the job is still alive. These two jobs hold
+# the stronger rule: their step bounds add up to less than the job's, so each
+# can fire whatever the others took. (test-e2e.yml's build-ios job does not:
+# its 20 and 45 add up to more than its 60.)
+@test "build-ios.yml's and build-android.yml's step timeouts add up to less than the job's" {
+  require_cmd yq
+  for file in build-ios.yml build-android.yml; do
+    f="$REPO_ROOT/.github/workflows/$file"
+    job=$(yq -r '.jobs.build."timeout-minutes"' "$f")
+    sum=$(yq -r '[.jobs.build.steps[] | select(has("timeout-minutes")) | ."timeout-minutes"] | .[] as $t ireduce (0; . + $t)' "$f")
+    [ "$sum" -gt 0 ] || fail "$file's build job has no step timeouts"
+    [ "$sum" -lt "$job" ] || fail "$file's step timeouts add up to $sum minutes, not less than the job's $job"
+  done
+}
+
+# Everywhere: a step bound at or above its job's can never fire, because the
+# job is cancelled first and the log names no step. Expressions (publish-store's
+# job, the Maestro suites' steps) are computed at run time and skipped here.
+@test "no step's timeout-minutes reaches its job's" {
+  require_cmd yq
+  for w in "${WORKFLOWS[@]}"; do
+    bad=$(yq -r '.jobs | to_entries[] | .key as $k | .value."timeout-minutes" as $j | select($j | tag == "!!int") | (.value.steps // [])[] | select(has("timeout-minutes") and (."timeout-minutes" | tag == "!!int") and ."timeout-minutes" >= $j) | $k + "/" + .name' "$w")
+    [ -z "$bad" ] || fail "$(basename "$w"): step timeout-minutes at or above the job's: $bad"
   done
 }
 
@@ -1842,4 +1992,44 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   [ "$in_workflows" -gt 0 ] || fail "found no upload-artifact step under .github/workflows: the step query is broken"
   [ "$in_actions" -gt 0 ] || fail "found no upload-artifact step under .github/actions: the step query is broken"
   [ "${#bad[@]}" -eq 0 ] || fail "upload-artifact steps without overwrite: true:$(printf '\n  %s' "${bad[@]}")"
+}
+
+# Every Setup leaves out the mise tools its job does not use. Most jobs run only
+# node and pnpm, so Java and Ruby were a download on every mise cache miss (a
+# Ruby compile on macOS) and weight in every restore. The jobs below keep Java
+# because something they run needs it; a new job that needs Java joins the list
+# here, and a job on the list that no longer exists fails it, so the list cannot
+# rot. Ruby is left out everywhere it is not needed or setup-ruby provides it
+# (ruby-enabled), except publish-store's lane: with ruby-enabled off, fastlane.sh
+# falls back to whatever `bundle` is on PATH.
+@test "every Setup skips the mise tools its job does not use" {
+  require_cmd yq
+  java_jobs="build-android.yml:build test-e2e.yml:ios test-e2e.yml:build-android test-e2e.yml:android check-security.yml:binaries publish-store.yml:lane"
+  ruby_kept="publish-store.yml:lane"
+  seen=""
+  for f in "${WORKFLOWS[@]}"; do
+    base="$(basename "$f")"
+    calls="$(yq -r '.jobs | to_entries[] | .key as $job | .value.steps[]? | select((.uses // "") | test("workflows/.github/actions/setup$")) | [$job, (.with."skip-tools" // ""), (.with."ruby-enabled" // "")] | join("|")' "$f")"
+    [ -n "$calls" ] || continue
+    while IFS='|' read -r job skip ruby_enabled; do
+      # yq prints an empty line for a job with no matching step.
+      [ -n "$job" ] || continue
+      id="$base:$job"
+      seen="$seen $id"
+      if [[ " $java_jobs " == *" $id "* ]]; then
+        [[ " $skip " != *" java "* ]] || fail "$id skips java, which it needs"
+      else
+        [[ " $skip " == *" java "* ]] || fail "$id installs java, which nothing in it uses: skip-tools is '$skip'"
+      fi
+      if [[ " $ruby_kept " == *" $id "* ]]; then
+        [[ " $skip " != *" ruby "* ]] || fail "$id skips ruby, which fastlane.sh can fall back to"
+      else
+        [[ " $skip " == *" ruby "* || "$ruby_enabled" == "true" ]] \
+          || fail "$id installs mise's ruby, which nothing in it uses: skip-tools is '$skip'"
+      fi
+    done <<<"$calls"
+  done
+  for id in $java_jobs $ruby_kept; do
+    [[ "$seen " == *" $id "* ]] || fail "$id is listed here but has no Setup step"
+  done
 }

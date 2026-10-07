@@ -203,7 +203,12 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
+          # Every commit and tree, so any two shas diff, but no file content
+          # beyond the checked-out tip: the classifier only lists paths
+          # (`git diff --no-renames --name-only`), which the trees answer, so a
+          # partial clone skips every older blob of the app's history.
           fetch-depth: 0
+          filter: blob:none
       # No setup here: changed-class.sh is pure git and doesn't need node/pnpm,
       # so this job skips it and reaches the script via the plain checkout path
       # (there's no $WORKFLOWS_DIR yet -- that's exported by setup, which never runs).
@@ -291,6 +296,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Types
         if: ${{ inputs.types }}
         env:
@@ -345,6 +351,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Generated
         if: ${{ inputs.generated }}
         env:
@@ -381,6 +388,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Docs
         if: ${{ inputs.docs }}
         env:
@@ -417,6 +425,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       # expo-only.sh resolves the stack first and passes with a notice on a bare
       # app, which has no Expo SDK to drift from: the input stays on by default
       # without turning a bare consumer's Dependencies job red.
@@ -493,6 +502,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       # Also gated here, though the job is skipped while the input is off: the
       # step's own `if:` is what ties the script to its input in contract.json.
       - name: App suites
@@ -529,6 +539,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Prebuild
         if: ${{ inputs.prebuild }}
         timeout-minutes: 20
@@ -562,6 +573,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Read pinned Ruby version
         id: rb
         if: ${{ inputs.release }}
@@ -602,6 +614,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: CI
         if: ${{ inputs.ci }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:ci' scripts/ci/check-ci.sh
@@ -632,6 +645,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Secrets
         if: ${{ inputs.secrets }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:secrets' scripts/checks/secrets.sh
@@ -662,6 +676,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Commits
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}

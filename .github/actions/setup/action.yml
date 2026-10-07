@@ -8,8 +8,11 @@ inputs:
     description: Run `pnpm install --frozen-lockfile` in the consumer directory
     default: 'true'
   ruby-enabled:
-    description: Install Ruby via ruby/setup-ruby (needed for fastlane/CocoaPods lanes)
+    description: Install Ruby via ruby/setup-ruby (needed for fastlane/CocoaPods lanes); mise then skips its own Ruby
     default: 'false'
+  skip-tools:
+    description: Space-separated tools from the consumer's .mise.toml that this job does not use, such as `java ruby`; mise leaves them out, and its cache key says so
+    default: ''
 runs:
   using: composite
   steps:
@@ -22,11 +25,28 @@ runs:
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: bash "${{ github.action_path }}/../../../scripts/ci/toolchain-preflight.sh"
+    # Most jobs run only node and pnpm, so Java and Ruby were a download on
+    # every cache miss (a Ruby compile on macOS) and dead weight in every
+    # restore; and where ruby-enabled is on, setup-ruby's Ruby is the one on
+    # PATH. MISE_DISABLE_TOOLS goes into the job's environment, so mise-action
+    # and every later `mise x` leave the same tools out.
+    - name: Choose the mise tools to skip
+      id: skip
+      shell: bash
+      env:
+        SKIP_TOOLS: ${{ inputs.skip-tools }}
+        RUBY_ENABLED: ${{ inputs.ruby-enabled }}
+      run: bash "${{ github.action_path }}/../../../scripts/ci/mise-skip-tools.sh"
     - name: Install mise-managed tools
       uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
       with:
         working_directory: ${{ inputs.working-directory }}
         cache: true
+        # The default key does not read MISE_DISABLE_TOOLS, so without the
+        # suffix a narrowed job and a full one would share an entry, holding
+        # whichever saved first. Nothing skipped is an empty suffix: the key
+        # is exactly the default.
+        cache_key: '{{default}}${{ steps.skip.outputs.cache-key-suffix }}'
     - name: Read pinned Ruby version
       id: rb
       if: inputs.ruby-enabled == 'true'

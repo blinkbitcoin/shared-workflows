@@ -197,12 +197,24 @@ jobs:
         run: bash ".workflows/scripts/release/require-inputs.sh"
       - name: Publish the release output directories
         run: bash ".workflows/scripts/release/env-publish.sh"
+      # As soon as its path exists, before Setup: a wrong or missing
+      # build-info-artifact fails here in seconds instead of after Setup,
+      # Gradle and prebuild. Nothing in between touches
+      # $WORKFLOWS_RELEASE_META_DIR, which lives under $RUNNER_TEMP, outside
+      # the checkout.
+      - name: Download build-info
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.build-info-artifact }}
+          path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
       - name: Setup
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
           # fastlane's android lanes are Ruby, same as the iOS ones.
           ruby-enabled: 'true'
+          # No skip-tools: Gradle, bundletool and apksigner all need Java, and
+          # ruby-enabled already leaves mise's Ruby out.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
@@ -227,23 +239,30 @@ jobs:
         env:
           WORKFLOWS_BUILD_ENV: ${{ inputs.environment-variables }}
         run: bash "$WORKFLOWS_DIR/scripts/release/build-env.sh"
-      - name: Prebuild (android)
-        run: bash "$WORKFLOWS_DIR/scripts/native/prebuild.sh" android
       # Before the lane, not inside it: the `android build` lane needs
       # bundletool to derive the universal APK from the .aab, and no runner
       # image ships it. Failing here costs seconds; failing inside the lane
-      # costs the whole Gradle build first.
+      # costs the whole Gradle build first. Before prebuild too, which it does
+      # not need: a wrong bundletool-version or bundletool-sha256 then fails
+      # before prebuild is paid for. Not before Setup: the java it checks the
+      # jar with may be one the consumer's mise pins.
       - name: Install bundletool
         env:
           BUNDLETOOL_VERSION: ${{ inputs.bundletool-version }}
           BUNDLETOOL_SHA256: ${{ inputs.bundletool-sha256 }}
         run: bash "$WORKFLOWS_DIR/scripts/ci/bundletool-install.sh"
-      - name: Download build-info
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ inputs.build-info-artifact }}
-          path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
+      - name: Prebuild (android)
+        run: bash "$WORKFLOWS_DIR/scripts/native/prebuild.sh" android
+      # The two lanes carry bounds of their own, as build-ios.yml's do: a Gradle
+      # build stalled on a dependency download or a wedged daemon fails with
+      # the step's name in the log, at about twice its slowest normal run,
+      # instead of as a job cancelled at 60. Measured over the template's 41
+      # internal builds of 2026-09-24 to 2026-10-03: the build took 9-18
+      # minutes, median 13, and twice the slowest is 36, so 40. Everything else
+      # in the job took at most 7 minutes, so both bounds (50 together) can
+      # fire inside the 60.
       - name: Fastlane android build
+        timeout-minutes: 40
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
           STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
@@ -273,8 +292,11 @@ jobs:
       # ANDROID_UPLOAD_CERT_SHA256 comes from environment-variables; the lane forwards it to
       # the package's verify-android.sh as --cert-sha256, which is what turns
       # "the aab is signed" into "the aab is signed by the expected key".
+      # 3-11s there (unsigned); the signature checks are local. 10, the bound
+      # test-e2e.yml gives its short steps.
       - name: Fastlane android verify
         if: ${{ inputs.verify }}
+        timeout-minutes: 10
         env:
           # The enriched copy, not build-info's: it carries
           # artifacts.apkSha256, which is what the verify-android your lane runs
