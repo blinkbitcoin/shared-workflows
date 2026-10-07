@@ -78,7 +78,7 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
   toolchain="$(step_index uses jdx/mise-action@v4)"
   package="$(step_index run 'make test-package')"
   lanes="$(step_index run 'make test-fastlane')"
-  publish="$(step_index run 'npm publish')"
+  publish="$(yq -r "$job | to_entries[] | select((.value.run // \"\") | test(\"^npm publish\")) | .key" "$RELEASE" | head -1)"
   [ -n "$toolchain" ] || fail "publish-app-tooling does not set up mise the way self-unit.yml does"
   [ -n "$package" ] || fail "publish-app-tooling does not run make test-package"
   [ -n "$lanes" ] || fail "publish-app-tooling does not run make test-fastlane"
@@ -88,11 +88,41 @@ RELEASE="$REPO_ROOT/.github/workflows/self-release.yml"
   [ "$lanes" -lt "$publish" ] || fail "make test-fastlane runs at step $lanes, after npm publish at step $publish"
 }
 
-@test "self-release.yml's publish job holds contents: read and packages: write, and nothing more" {
+# Attesting needs an OIDC token to sign with and the right to store the
+# attestation; publishing needs packages. A job-level block replaces the
+# top-level one, so contents: read is declared again here or checkout fails.
+# Nothing beyond those four: the job runs the package's code before it publishes.
+@test "publish-app-tooling may attest and publish, still reads contents, and holds nothing more" {
   local grant
   grant="$(yq -r '.jobs."publish-app-tooling".permissions | to_entries | map(.key + "=" + .value) | sort | join(",")' "$RELEASE")"
-  [ "$grant" = "contents=read,packages=write" ] \
-    || fail "publish-app-tooling grants '$grant', not contents=read,packages=write"
+  [ "$grant" = "attestations=write,contents=read,id-token=write,packages=write" ] \
+    || fail "publish-app-tooling grants '$grant', not attestations=write,contents=read,id-token=write,packages=write"
+}
+
+# `npm publish --provenance` works only against registry.npmjs.org, so the
+# provenance is an artifact attestation. It means something only if the file
+# attested is the file published: pack once, attest that tarball, publish it.
+@test "publish-app-tooling packs, attests that tarball, then publishes that tarball" {
+  steps='.jobs."publish-app-tooling".steps'
+  index() { yq -r "[$steps[] | .$1] | to_entries[] | select(.value != null and (.value | test(\"$2\"))) | .key" "$RELEASE" | head -1; }
+  pack="$(index run 'scripts/self/pack-app-tooling\\.sh')"
+  attest="$(index uses '^actions/attest-build-provenance@')"
+  publish="$(index run '^npm publish')"
+  [ -n "$pack" ] || fail "publish-app-tooling has no step running scripts/self/pack-app-tooling.sh"
+  [ -n "$attest" ] || fail "publish-app-tooling has no actions/attest-build-provenance step"
+  [ -n "$publish" ] || fail "publish-app-tooling has no npm publish step"
+  [ "$pack" -lt "$attest" ] || fail "the attest step ($attest) does not come after the pack step ($pack)"
+  [ "$attest" -lt "$publish" ] || fail "the publish step ($publish) does not come after the attest step ($attest)"
+
+  pack_id="$(yq -r "$steps[$pack].id" "$RELEASE")"
+  [ "$pack_id" != "null" ] || fail "the pack step has no id, so nothing can read its tarball output"
+  tarball="\${{ steps.$pack_id.outputs.tarball }}"
+  [ "$(yq -r "$steps[$attest].with.\"subject-path\"" "$RELEASE")" = "$tarball" ] \
+    || fail "the attest step does not attest the packed tarball: $(yq -r "$steps[$attest].with" "$RELEASE")"
+  [ "$(yq -r "$steps[$publish].run" "$RELEASE")" = 'npm publish "$TARBALL"' ] \
+    || fail "the publish step does not publish the packed tarball: $(yq -r "$steps[$publish].run" "$RELEASE")"
+  [ "$(yq -r "$steps[$publish].env.TARBALL" "$RELEASE")" = "$tarball" ] \
+    || fail "TARBALL is not the packed tarball: $(yq -r "$steps[$publish].env.TARBALL" "$RELEASE")"
 }
 
 # One release PR per package, and both bump adjacent lines of the shared

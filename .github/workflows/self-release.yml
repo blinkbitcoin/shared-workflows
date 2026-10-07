@@ -79,6 +79,8 @@ jobs:
     permissions:
       contents: read
       packages: write # publish @blinkbitcoin/app-tooling to GitHub Packages
+      id-token: write # sign the tarball's build provenance attestation (Sigstore)
+      attestations: write # store that attestation on this repository
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -107,8 +109,22 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: '@blinkbitcoin'
 
+      # `npm publish --provenance` signs only for registry.npmjs.org, so the
+      # provenance is a GitHub artifact attestation instead: pack once, attest
+      # that tarball, publish that tarball. What installs is byte for byte what
+      # was attested (`gh attestation verify`, packages/app-tooling/README.md).
+      - name: Pack @blinkbitcoin/app-tooling
+        id: pack
+        run: bash scripts/self/pack-app-tooling.sh packages/app-tooling "$RUNNER_TEMP/app-tooling"
+
+      - name: Attest the app-tooling tarball
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: ${{ steps.pack.outputs.tarball }}
+
       - name: Publish @blinkbitcoin/app-tooling
         working-directory: packages/app-tooling
-        run: npm publish
+        run: npm publish "$TARBALL"
         env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
