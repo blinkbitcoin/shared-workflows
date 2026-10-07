@@ -99,7 +99,10 @@ ios_bundle_id() {
     listed="$(printf '%s\n' "$ids" | paste -sd' ' -)"
     warn "$count bundle identifiers in the project ($listed); using the first. Pass the ios-bundle-id input to choose"
   fi
-  printf '%s\n' "$ids" | head -1
+  # The first line by expansion, not `| head -1`: under pipefail, head exiting
+  # after one line can kill printf with SIGPIPE before it has written the rest,
+  # and the whole function then fails with 141.
+  printf '%s\n' "${ids%%$'\n'*}"
 }
 
 # The debug build type's applicationIdSuffix in one Gradle file, or nothing.
