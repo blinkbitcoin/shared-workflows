@@ -59,7 +59,9 @@ setup() {
   git -C "$work" switch -qc feature 2>/dev/null || git -C "$work" checkout -qb feature
   git -C "$work" commit -q --allow-empty -m "feat: one"
   mkdir -p "$work/.github/workflows"
-  cp "$WF" "$work/.github/workflows/"
+  # Every workflow, not only the smoke's: the script reads the refs the
+  # artifact steps name from all of them, to substitute each one.
+  cp "$REPO_ROOT"/.github/workflows/*.yml "$work/.github/workflows/"
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
   # act records its arguments and the token its environment hands it and,
@@ -189,6 +191,14 @@ teardown() {
   # (nektos/act #6022): both are run as their last v4 from the cache.
   contains "$args" "actions/upload-artifact@v7=$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" || fail "args: $args"
   contains "$args" "actions/download-artifact@v8=$WORKFLOWS_ACT_CACHE/download-artifact-v4.3.0" || fail "args: $args"
+  # build-android pins both by commit SHA (the signing workflows' rule), and
+  # act matches the exact ref: each pinned SHA gets the same substitute.
+  upload_ref="$(grep -ohE 'actions/upload-artifact@[0-9a-f]{40}' "$REPO_ROOT/.github/workflows/build-android.yml" | head -1)"
+  download_ref="$(grep -ohE 'actions/download-artifact@[0-9a-f]{40}' "$REPO_ROOT/.github/workflows/build-android.yml" | head -1)"
+  [ -n "$upload_ref" ] || fail "build-android.yml no longer pins actions/upload-artifact by SHA"
+  [ -n "$download_ref" ] || fail "build-android.yml no longer pins actions/download-artifact by SHA"
+  contains "$args" "$upload_ref=$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" || fail "the SHA-pinned upload is not substituted: $args"
+  contains "$args" "$download_ref=$WORKFLOWS_ACT_CACHE/download-artifact-v4.3.0" || fail "the SHA-pinned download is not substituted: $args"
   contains "$args" "repository=blinkbitcoin/react-native-mobile-template" || fail "args: $args"
 }
 
@@ -488,4 +498,28 @@ STUB
   run bash "$SCRIPT" --ios
   [ "$status" -ne 0 ] || fail "an unknown flag was accepted: $output"
   contains "$output" "unknown argument" || fail "output: $output"
+}
+
+@test "every ref an artifact step names gets the substitute, once" {
+  cd "$work"
+  printf 'jobs:\n  a:\n    steps:\n      - uses: actions/upload-artifact@0123456789abcdef0123456789abcdef01234567 # v7.9.9\n      - uses: actions/upload-artifact@v7\n' \
+    > .github/workflows/extra.yml
+  git push -q origin feature
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ] || fail "output: $output"
+  args="$(cat "$BATS_TEST_TMPDIR/act.args")"
+  contains "$args" "actions/upload-artifact@0123456789abcdef0123456789abcdef01234567=$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" \
+    || fail "a new pinned ref is not substituted: $args"
+  [ "$(grep -cx "actions/upload-artifact@v7=$WORKFLOWS_ACT_CACHE/upload-artifact-v4.6.2" "$BATS_TEST_TMPDIR/act.args")" -eq 1 ] \
+    || fail "a ref named in two workflows is substituted more than once: $args"
+}
+
+@test "refuses to run act when no workflow names an artifact action" {
+  cd "$work"
+  find .github/workflows -name '*.yml' ! -name self-smoke-local.yml -delete
+  git push -q origin feature
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ] || fail "the smoke ran with nothing to substitute: $output"
+  contains "$output" "nothing for act to substitute" || fail "output: $output"
+  [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
 }
