@@ -1593,6 +1593,13 @@ No outputs. Secrets (all optional): `consumer-token`, `MATCH_PASSWORD`,
 `MATCH_GIT_URL`, `MATCH_GIT_BASIC_AUTHORIZATION`, `ASC_KEY_ID`,
 `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`.
 
+The job's bound is 90 minutes, and the three steps that hang carry their own:
+`Pod install` 10, `Fastlane ios build` 40 and `Fastlane ios verify` 10, about
+twice the slowest normal run measured on the template. A hang fails as
+`The action 'Pod install' has timed out after 10 minutes` (or the step it
+was) rather than as a job cancelled at 90 macOS minutes. They are not inputs: a build that
+legitimately needs longer is a change here, with the measurement.
+
 ### `build-android.yml`
 
 Prebuild → `fastlane android build` → `fastlane android verify`, on
@@ -1623,6 +1630,10 @@ No outputs. Secrets (all optional): `consumer-token`,
 `PLAY_SERVICE_ACCOUNT_JSON`. The apk and the mapping file upload with
 `if: !cancelled()` — without the mapping, every Play crash report for that
 build is permanently unreadable, so it must survive a failed `verify`.
+
+The job's bound is 60 minutes; as on iOS, the two lanes carry their own,
+`Fastlane android build` 40 and `Fastlane android verify` 10, so a stalled
+Gradle build fails on its step's name.
 
 ### `publish-store.yml`
 
@@ -3762,6 +3773,7 @@ each one lives so a future edit doesn't quietly regress it.
 | A network blip must not turn a release red, and only a step that is safe to repeat is run again | `scripts/lib/common.sh` `retry_command ATTEMPTS DELAY_SECONDS -- COMMAND` (logs each failed attempt, returns the last status), used by `scripts/native/pods.sh` (`pod install`, 3 attempts, 20 s apart), `scripts/release/release-assets.sh` (`gh release upload --clobber`, 3 attempts, 15 s apart, a repeat overwriting what a dropped one left) and `scripts/ota/smoke.sh` (the manifest GET, 3 attempts, 5 s apart, only on no answer or a 5xx). Never around `scripts/ota/publish.sh`: each publish creates a new update |
 | A hung Maestro driver must never eat the job twice | `scripts/e2e/maestro-bound.sh` (`bounded_maestro`, exit `124`) + `scripts/e2e/maestro-suite.sh` (`run_maestro_suite`, which `ios-maestro.sh`/`android-maestro.sh` call: retry only on a real failure, never on `124`) |
 | The suite's own timeout must not race the step's `timeout-minutes` | `scripts/e2e/step-timeout.sh` (step timeout = `suite-timeout-minutes + 5`), consumed via `fromJSON(steps.timeout.outputs.minutes)` in `test-e2e.yml` |
+| A hung pod install or lane must fail on its step, not burn the release build's whole 90 macOS minutes with no step named | `build-ios.yml` bounds `Pod install` (10), `Fastlane ios build` (40) and `Fastlane ios verify` (10), and `build-android.yml` its two lanes (40, 10): about twice the slowest run measured on the template, adding up to less than the job's bound so each can fire; `test/workflow-shape.bats` pins the values and holds every step bound below its job's |
 | Killing Metro must kill its whole process group, not just the wrapper pid | `scripts/e2e/README.md` notes `kill -TERM -"$(cat "$WORKFLOWS_OUT/metro.pid")"` (leading `-`), which `metro-start.sh` also logs when it starts Metro; nothing kills Metro itself — the job teardown reaps the process group |
 | The first app launch must not race a cold Metro bundle | `scripts/e2e/metro-wait.sh` pre-warms `/.expo/.virtual-metro-entry.bundle?platform=...` before `app-launch.sh` runs |
 | The native dependency hash must be computable before `pnpm install`, or a cache lookup blocks on an install | `scripts/ci/native-hash.sh` reads `pnpm-lock.yaml` directly via `yq` instead of `pnpm list` |

@@ -800,6 +800,58 @@ lane_step_count() {
   done
 }
 
+# The release builds' twin of the test above. Pod install and the two lanes are
+# the steps that hang; without a bound of their own, a hang in build-ios.yml
+# burns the job's whole 90 macOS minutes and the log names no step. The values
+# are about twice the slowest normal run measured in the template (the comments
+# beside them give the numbers), and named here so a renamed step cannot drop
+# its bound without this test noticing.
+@test "build-ios.yml's and build-android.yml's hang-prone steps each carry a step-level timeout-minutes" {
+  require_cmd yq
+  for spec in \
+    "build-ios.yml:Pod install:10" \
+    "build-ios.yml:Fastlane ios build:40" \
+    "build-ios.yml:Fastlane ios verify:10" \
+    "build-android.yml:Fastlane android build:40" \
+    "build-android.yml:Fastlane android verify:10"; do
+    file="${spec%%:*}"
+    rest="${spec#*:}"
+    name="${rest%:*}"
+    want="${rest##*:}"
+    f="$REPO_ROOT/.github/workflows/$file"
+    found=$(yq -r "[.jobs.build.steps[]? | select(.name == \"$name\")] | length" "$f")
+    [ "$found" -eq 1 ] || fail "$file's build job has $found steps named '$name', expected one - was it renamed?"
+    got=$(yq -r ".jobs.build.steps[] | select(.name == \"$name\") | .\"timeout-minutes\" // \"\"" "$f")
+    [ "$got" = "$want" ] || fail "$file's '$name' step has timeout-minutes '$got', expected $want"
+  done
+}
+
+# A step bound can only fire while the job is still alive. These two jobs hold
+# the stronger rule: their step bounds add up to less than the job's, so each
+# can fire whatever the others took. (test-e2e.yml's build-ios job does not:
+# its 20 and 45 add up to more than its 60.)
+@test "build-ios.yml's and build-android.yml's step timeouts add up to less than the job's" {
+  require_cmd yq
+  for file in build-ios.yml build-android.yml; do
+    f="$REPO_ROOT/.github/workflows/$file"
+    job=$(yq -r '.jobs.build."timeout-minutes"' "$f")
+    sum=$(yq -r '[.jobs.build.steps[] | select(has("timeout-minutes")) | ."timeout-minutes"] | .[] as $t ireduce (0; . + $t)' "$f")
+    [ "$sum" -gt 0 ] || fail "$file's build job has no step timeouts"
+    [ "$sum" -lt "$job" ] || fail "$file's step timeouts add up to $sum minutes, not less than the job's $job"
+  done
+}
+
+# Everywhere: a step bound at or above its job's can never fire, because the
+# job is cancelled first and the log names no step. Expressions (publish-store's
+# job, the Maestro suites' steps) are computed at run time and skipped here.
+@test "no step's timeout-minutes reaches its job's" {
+  require_cmd yq
+  for w in "${WORKFLOWS[@]}"; do
+    bad=$(yq -r '.jobs | to_entries[] | .key as $k | .value."timeout-minutes" as $j | select($j | tag == "!!int") | (.value.steps // [])[] | select(has("timeout-minutes") and (."timeout-minutes" | tag == "!!int") and ."timeout-minutes" >= $j) | $k + "/" + .name' "$w")
+    [ -z "$bad" ] || fail "$(basename "$w"): step timeout-minutes at or above the job's: $bad"
+  done
+}
+
 # The audit step's three-part policy, pinned because each part has already
 # failed somewhere in the family:
 #
