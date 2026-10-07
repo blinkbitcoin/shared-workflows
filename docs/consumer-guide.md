@@ -387,6 +387,14 @@ billing at ten times the Linux rate. `build-ios.yml`,
 `build-android.yml` and `publish-store.yml` now assert all five as their
 first step, naming the repository variable to set.
 
+**The `build-info` artifact is fetched before anything is installed.** A wrong
+or missing `build-info-artifact` used to fail only after Setup, prebuild and
+(on iOS) pod install had run. `build-ios.yml` and `build-android.yml` now
+download it right after publishing the release output directories, before
+Setup, so a wrong name fails in seconds. For the same reason
+`build-android.yml` installs bundletool before prebuild, so a wrong
+`bundletool-version` or `bundletool-sha256` fails before prebuild is paid for.
+
 ## Consumer `ci.yml`
 
 ```yaml
@@ -3780,7 +3788,8 @@ each one lives so a future edit doesn't quietly regress it.
 | A renamed App Review env name breaks the review form silently - deliver and pilot accept a smaller hash without erroring | `test/workflow-shape.bats` derives the names from the package's `fastlane/lanes/shared.rb` and compares both directions |
 | A non-secret value passed as a workflow input is public, so a credential smuggled through one leaks quietly | `scripts/lib/build-env.sh` refuses keys ending in `_KEY`/`_TOKEN`/`_PASSWORD`/`_SECRET`/… and logs key names only; `test/build-env.bats` (the key rules) and `test/lib-build-env.bats` (the library) |
 | An unset repo variable is `''`, which a `type: number` input rejects outright | The guide's `fromJSON(vars.X \|\| '1000')` idiom for `build-number-offset` and `rollout` |
-| No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs (version kept equal to `scripts/lib/versions.sh` by `check-version-pins.sh`) |
+| No runner image ships bundletool, and the `android build` lane needs it to derive the universal APK | `build-android.yml` installs the pinned jar via `scripts/ci/bundletool-install.sh` before the lane runs, and before prebuild, so a wrong version or checksum fails early (version kept equal to `scripts/lib/versions.sh` by `check-version-pins.sh`; the order held by `test/workflow-shape.bats`) |
+| A wrong or missing `build-info-artifact` failed the build only after Setup, prebuild and, on iOS, pod install, minutes of macOS time | `build-ios.yml` and `build-android.yml` download it right after "Publish the release output directories", before Setup; `test/workflow-shape.bats` holds that order |
 | A Release E2E build resolves `.env.production` at bundle time, so `EXPO_PUBLIC_*` from a dotenv file never reaches it; an exported variable beats the dotenv file, `NODE_ENV` does not (`@expo/env` assigns it from `--dev`) | `test-e2e.yml`'s `environment-variables` input, published before `Prebuild (ios)`; the template passes its mock API URL there |
 | A `.app` built against one `environment-variables` must not be restored for another, or the fix looks like it did nothing | `scripts/ci/native-keys.sh` folds a digest of `BUILD_ENV` into `ios-key` (`-env{8hex}`; empty leaves the key byte-identical); `test/native-keys.bats` |
 | A Release iOS app never asks Metro for a bundle, so starting Metro for it is pure wall clock — and a launch script must not demand `metro.log` on that path | `test-e2e.yml` `ios` job gates `Start Metro`/`Wait for Metro` on `ios-configuration != 'Release'`; `scripts/e2e/app-launch.sh` requires `metro.log` only when it will read it, and a local Metro started outside `metro-start.sh` counts when it answers on its port; `test/app-launch.bats` |
