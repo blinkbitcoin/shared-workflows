@@ -22,20 +22,19 @@ STUB
   unset WORKFLOWS_NATIVE_STACK_INPUT
 }
 
-# Waits for the background fake to write its line into the log (see
-# native-expo-metro-start.bats for why the budget is ten seconds).
-metro_log() {
-  local i
-  for i in $(seq 1 50); do
-    [ -s "$WORKFLOWS_OUT/metro.log" ] && break
-    sleep 0.2
-  done
-  cat "$WORKFLOWS_OUT/metro.log"
+# The background fake has written its whole line into the log: wait_for polls
+# this instead of reading the log once, which under a parallel run read it
+# before the fake had started.
+metro_logged() {
+  [ -s "$WORKFLOWS_OUT/metro.log" ] && [ -z "$(tail -c 1 "$WORKFLOWS_OUT/metro.log")" ]
 }
+
+metro_log() { cat "$WORKFLOWS_OUT/metro.log"; }
 
 @test "the Expo fixture gets expo start, with the log and PID recorded" {
   GITHUB_WORKSPACE="$FIXTURES/consumer-min" run bash "$REPO_ROOT/scripts/e2e/metro-start.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
+  wait_for 60 "the fake pnpm's line in metro.log" metro_logged
   [ "$(metro_log)" = "pnpm exec expo start --port 8081 --dev-client | CI=1" ] || fail "log: $(metro_log)"
   [ -s "$WORKFLOWS_OUT/metro.pid" ] || fail "no PID file"
 }
@@ -44,6 +43,7 @@ metro_log() {
   GITHUB_WORKSPACE="$FIXTURES/consumer-bare" run bash "$REPO_ROOT/scripts/e2e/metro-start.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "native stack: bare" || fail "the stack was not detected: $output"
+  wait_for 60 "the fake pnpm's line in metro.log" metro_logged
   [ "$(metro_log)" = "pnpm exec react-native start --port 8081 | CI=1" ] || fail "log: $(metro_log)"
   pid="$(cat "$WORKFLOWS_OUT/metro.pid")"
   contains "$output" "stop it with: kill -TERM -$pid" || fail "output: $output"
@@ -52,6 +52,7 @@ metro_log() {
 @test "the native-stack input overrides detection" {
   WORKFLOWS_NATIVE_STACK_INPUT=bare GITHUB_WORKSPACE="$FIXTURES/consumer-min" run bash "$REPO_ROOT/scripts/e2e/metro-start.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
+  wait_for 60 "the fake pnpm's line in metro.log" metro_logged
   [ "$(metro_log)" = "pnpm exec react-native start --port 8081 | CI=1" ] || fail "log: $(metro_log)"
 }
 
