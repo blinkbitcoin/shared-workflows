@@ -759,7 +759,7 @@ test('locale discovery falls back to en-US when the metadata has no locale direc
 test('the package publishes the program and the prompt it reads', () => {
   const pkg = JSON.parse(readFileSync(path.join(here, 'package.json'), 'utf8'));
   assert.equal(pkg.bin['gen-store-notes'], './bin/gen-store-notes.mjs');
-  assert.equal(pkg.exports['./gen-store-notes'], './bin/gen-store-notes.mjs');
+  assert.equal(pkg.exports['./gen-store-notes'], undefined, 'a program is run, not imported');
   assert.ok(pkg.files.includes(path.basename(DEFAULT_PROMPT_FILE)), 'the default prompt is not published');
   assert.equal(path.dirname(DEFAULT_PROMPT_FILE), here);
 });

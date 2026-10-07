@@ -2481,9 +2481,13 @@ request that does not exist and an empty body each fail with the reason.
 The provider adapters it uses are exported for an app's own LLM calls:
 `@blinkbitcoin/app-tooling/llm` (`adapterFor`, `KEY_ENV`, `EFFORTS`,
 `parseEffort`, `parseExtraParams`) and `@blinkbitcoin/app-tooling/llm-request`
-(`thinks`, `mergeRequest`, `unfence`). The release bodies and model answers its
-tests use are in `packages/app-tooling/fixtures/store-notes/`, at
-`$WORKFLOWS_DIR` in CI.
+(`thinks`, `mergeRequest`, `unfence`). With `/ports` and `/check-ports` they
+are the only modules the package exports for import, each with exactly the names
+its README lists under
+[What an app imports](../packages/app-tooling/README.md#what-an-app-imports);
+`gen-store-notes` and every other program is run, never imported. The release
+bodies and model answers its tests use are in
+`packages/app-tooling/fixtures/store-notes/`, at `$WORKFLOWS_DIR` in CI.
 
 ### Consumer-side release scripts
 

@@ -51,6 +51,54 @@ test('every Expo preset is exported under expo/, and nothing else is', () => {
 // The presets are CommonJS-loadable ES modules: an app's metro.config.js and
 // fingerprint.config.js `require()` them, which node does without a flag from
 // 22.12. One package, one floor, so the programs share it.
+/**
+ * The public modules as the README declares them, under "What an app imports":
+ * each row's import and the names it exports, a link's text left out.
+ */
+function declaredModules() {
+  const readme = read('./README.md');
+  const start = readme.indexOf('\n## What an app imports\n');
+  assert.notEqual(start, -1, 'the README has a "What an app imports" section');
+  const section = readme.slice(start, readme.indexOf('\n## ', start + 1));
+  const rows = [...section.matchAll(/^\| `@blinkbitcoin\/app-tooling\/([^`]+)` \| (.*) \|$/gm)];
+  assert.ok(rows.length > 0, 'the section has no table of imports');
+  return new Map(
+    rows.map(([, subpath, cell]) => {
+      const names = [...cell.replace(/\[[^\]]*\]\([^)]*\)/g, '').matchAll(/`([A-Za-z_$][\w$]*)`/g)].map(([, name]) => name);
+      return [`./${subpath}`, names.sort()];
+    }),
+  );
+}
+
+/** The code each export resolves to at run time, for the modules outside expo/. */
+const modules = Object.entries(pkg.exports)
+  .filter(([name]) => !name.startsWith('./expo/') && !name.endsWith('.json'))
+  .map(([name, target]) => [name, typeof target === 'string' ? target : target.default]);
+
+test('no program is an import: each one is run, from the bin map', () => {
+  for (const [name, file] of modules) assert.ok(!file.startsWith('./bin/'), `${name} -> ${file}`);
+  for (const file of Object.values(pkg.bin)) assert.ok(file.startsWith('./bin/'), file);
+});
+
+test('the modules an app imports are the ones the README declares, each exporting exactly its declared names', async () => {
+  const declared = declaredModules();
+  assert.deepEqual(modules.map(([name]) => name).sort(), [...declared.keys()].sort());
+  for (const [name, file] of modules) {
+    const actual = Object.keys(await import(new URL(file, import.meta.url).href)).sort();
+    assert.deepEqual(actual, declared.get(name), `${name} (${file}) exports what the README does not declare, or lacks what it does`);
+  }
+});
+
+test('a typed module declares the same names it exports', async () => {
+  for (const [name, target] of Object.entries(pkg.exports)) {
+    if (typeof target === 'string' || name.startsWith('./expo/')) continue;
+    const declarations = read(target.types);
+    const typed = [...declarations.matchAll(/^export (?:class|const|function) (\w+)/gm)].map(([, word]) => word).sort();
+    const actual = Object.keys(await import(new URL(target.default, import.meta.url).href)).sort();
+    assert.deepEqual(typed, actual, name);
+  }
+});
+
 test('the engines floor is the one the presets need', () => {
   assert.deepEqual(pkg.engines, { node: '>=22.12' });
 });
