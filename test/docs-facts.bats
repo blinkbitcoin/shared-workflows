@@ -60,15 +60,49 @@ real_count() {
   esac
 }
 
+# How precisely each count is claimed. The counts ordinary PRs grow - tests,
+# scripts, bats files - are claimed as a round floor ("1800+ tests"): every
+# one of them in the same hero line made any two open PRs that added a test
+# conflict with each other once either merged. A floor only moves when a count
+# crosses the next step, so it stays true without being touched by every PR,
+# and it still cannot drift more than a step. Everything else is exact.
+count_step() {
+  case "$1" in
+    tests) echo 100 ;;
+    scripts | shell-scripts | bats-files) echo 10 ;;
+    *) echo 1 ;;
+  esac
+}
+
+# Whether a claimed count holds for the real one: a multiple of the count's
+# step, at most the real count, and less than one step below it.
+count_holds() {
+  local step
+  step="$(count_step "$1")"
+  [ $(($2 % step)) -eq 0 ] && [ "$2" -le "$3" ] && [ "$3" -lt $(($2 + step)) ]
+}
+
 @test "every marked count in the docs matches the tree" {
   local wrong="" name claimed real
   while read -r name claimed; do
     [ -n "$name" ] || continue
     real="$(real_count "$name" | tr -d ' ')"
     [ "$real" != "UNKNOWN" ] || fail "a doc marks an unknown count: $name"
-    [ "$claimed" = "$real" ] || wrong="$wrong $name(doc=$claimed real=$real)"
+    count_holds "$name" "$claimed" "$real" || wrong="$wrong $name(doc=$claimed real=$real step=$(count_step "$name"))"
   done <<< "$(marked_counts)"
   [ -z "$wrong" ] || fail "documented counts disagree with the tree:$wrong"
+}
+
+@test "a floor holds within one step of the real count, and an exact count only at it" {
+  count_holds tests 1800 1848 || fail "1800 should hold for 1848 tests"
+  count_holds tests 1800 1800 || fail "1800 should hold for exactly 1800 tests"
+  ! count_holds tests 1848 1848 || fail "a floor must be round: 1848 is not a multiple of 100"
+  ! count_holds tests 1700 1848 || fail "1700 is more than a step stale for 1848 tests"
+  ! count_holds tests 1900 1848 || fail "1900 claims more tests than there are"
+  count_holds scripts 140 142 || fail "140 should hold for 142 scripts"
+  ! count_holds scripts 130 142 || fail "130 is more than a step stale for 142 scripts"
+  count_holds workflows 29 29 || fail "an exact count holds at its value"
+  ! count_holds workflows 28 29 || fail "an exact count must not hold one below"
 }
 
 @test "the counts this repo cares about are actually marked somewhere" {
