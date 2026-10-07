@@ -265,5 +265,5 @@ merge_release_fixture() {
   commit
   BUILD_NUMBER_OFFSET=abc resolve
   [ "$status" -ne 0 ] || fail "exited 0 on a bad offset: $output"
-  contains "$output" "::error::" || fail "no ::error:: annotation in: $output"
+  contains "$output" "::error::BUILD_NUMBER_OFFSET must be a non-negative integer (got 'abc')" || fail "no ::error:: annotation naming the offset in: $output"
 }

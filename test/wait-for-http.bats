@@ -46,6 +46,31 @@ teardown() {
   contains "$output" "nothing answered at http://127.0.0.1:$PORT/ within 1s" || fail "output: $output"
 }
 
+# A server that takes the connection and never answers costs each try its whole
+# 2s curl timeout. Bounded by a count of tries, 3 seconds meant 3 tries of 2s
+# each plus 1s between them, 9s; bounded by the clock it is one try past 3s.
+@test "wait-for-http gives up at the stated wait in real time, even when each try is slow" {
+  python3 -c '
+import socket, sys, time
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(16)
+time.sleep(60)
+' "$PORT" >/dev/null 2>&1 3>&- &
+  pid=$!
+  # Poll for the listener rather than sleeping a fixed time.
+  for _ in $(seq 1 50); do
+    python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 0.2).close()' "$PORT" 2>/dev/null && break
+    sleep 0.1
+  done
+  run bash "$WAIT" "http://127.0.0.1:$PORT/" 3
+  kill "$pid" 2>/dev/null || true
+  [ "$status" -ne 0 ] || fail "a server that never answered passed: $output"
+  contains "$output" "nothing answered at http://127.0.0.1:$PORT/ within 3s (gave up after " || fail "output: $output"
+  gave_up="$(sed -n 's/.*(gave up after \([0-9][0-9]*\)s).*/\1/p' <<<"$output")"
+  [ -n "$gave_up" ] && [ "$gave_up" -ge 3 ] || fail "gave up before the stated wait: $output"
+  [ "$gave_up" -lt 9 ] || fail "waited a count of tries, not the clock: $output"
+}
+
 @test "wait-for-http rejects a wait that is not a whole number, and a missing URL" {
   run bash "$WAIT" "http://127.0.0.1:$PORT/" soon
   [ "$status" -ne 0 ] || fail "accepted a non-number: $output"

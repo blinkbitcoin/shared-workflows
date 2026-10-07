@@ -13,7 +13,7 @@ COMMITLINT="$REPO_ROOT/commitlint.config.mjs"
 CI_COMMITLINT="$REPO_ROOT/scripts/checks/commits.sh"
 
 setup() {
-  command -v yq >/dev/null 2>&1 || skip "yq not on PATH (run through 'mise exec --')"
+  require_cmd yq
 }
 
 # Keys lefthook itself consumes; everything else at the top level is claimed to

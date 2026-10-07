@@ -5,7 +5,8 @@
 //
 //     node lib/security-settings.mjs get jobs.dependencies
 //
-// and CI reads the lot with `--json`. A value that is not a boolean throws
+// and CI reads the lot with `--json`, or as the `name=value` lines
+// scripts/security/settings.sh publishes as step outputs with `--outputs`. A value that is not a boolean throws
 // rather than reading as off: a typo must not quietly disable a scanner.
 import { readFileSync } from 'node:fs';
 import { isProgram } from './is-program.mjs';
@@ -240,6 +241,20 @@ const at = (settings, dotted) =>
     .split('.')
     .reduce((value, key) => (value === undefined ? undefined : value[key]), settings);
 
+/**
+ * The step outputs check-security.yml gates on, as `[name, value]` pairs in the
+ * order they are published: the three fixed ones, then one per job.
+ */
+export function outputRows(settings) {
+  const rows = [
+    ['enabled', settings.enabled],
+    ['severity', settings.severity],
+    ['fail-on', settings.failOn.join(',')],
+  ];
+  for (const [name, on] of Object.entries(settings.jobs)) rows.push([name, on]);
+  return rows;
+}
+
 /** Command-line entry; returns the exit code. */
 export function main(
   argv = process.argv.slice(2),
@@ -248,6 +263,10 @@ export function main(
   const settings = load('security-settings.json', env);
   if (argv[0] === '--json') {
     log(JSON.stringify(settings));
+    return 0;
+  }
+  if (argv[0] === '--outputs') {
+    for (const [name, value] of outputRows(settings)) log(`${name}=${value}`);
     return 0;
   }
   if (argv[0] === 'get' && argv[1]) {
@@ -259,7 +278,7 @@ export function main(
     log(Array.isArray(value) ? value.join(',') : String(value));
     return 0;
   }
-  error('usage: security-settings.mjs get <dotted.key> | --json');
+  error('usage: security-settings.mjs get <dotted.key> | --json | --outputs');
   return 2;
 }
 

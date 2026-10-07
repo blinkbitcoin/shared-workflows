@@ -24,9 +24,9 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   END,
-  PROFILE_TITLE,
   START,
   need,
+  profileTitle,
   renderTable,
   splice,
   targetOf,
@@ -181,7 +181,7 @@ test('the one-pin row reads as the agreement it checks, not its unused target', 
 
 test('each profile with requirements gets a titled section, one row per requirement', () => {
   const table = renderTable({
-    profiles: ['checks', 'unit'],
+    profiles: { checks: { workflows: ['check.yml'] }, unit: { workflows: ['test-unit.yml'] } },
     requirements: [
       { profile: 'checks', kind: 'package-script', target: 'lint', severity: 'required', toggle: null, neededBy: 'the lint job' },
       { profile: 'checks', kind: 'file', target: 'pnpm-lock.yaml', severity: 'degrades', neededBy: 'the install' },
@@ -191,7 +191,7 @@ test('each profile with requirements gets a titled section, one row per requirem
     table,
     [
       '',
-      `### If you call ${PROFILE_TITLE.checks}`,
+      '### If you call `check.yml`',
       '',
       '| What | You need | Why |',
       '| --- | --- | --- |',
@@ -202,21 +202,36 @@ test('each profile with requirements gets a titled section, one row per requirem
 });
 
 test('a profile with no requirements gets no section at all', () => {
-  const table = renderTable({ profiles: ['unit'], requirements: [] });
+  const table = renderTable({ profiles: { unit: { workflows: ['test-unit.yml'] } }, requirements: [] });
   assert.equal(table, '');
 });
 
-test('a profile with no title is headed by its own name', () => {
+test('a profile with no title and no single workflow is headed by its own name', () => {
   const table = renderTable({
-    profiles: ['nightly'],
+    profiles: { nightly: { workflows: ['nightly-ios.yml', 'nightly-android.yml'] } },
     requirements: [{ profile: 'nightly', kind: 'package-script', target: 'soak', severity: 'required', neededBy: 'soak' }],
   });
   assert.match(table, /^### If you call nightly$/m);
 });
 
-test('every profile in the real contract has a title', () => {
-  const untitled = CONTRACT.profiles.filter((profile) => !(profile in PROFILE_TITLE));
-  assert.deepEqual(untitled, []);
+test('a profile is titled by its title, else its one workflow, else its name', () => {
+  assert.equal(profileTitle('release', { workflows: ['a.yml', 'b.yml'], title: 'the release workflows' }), 'the release workflows');
+  assert.equal(profileTitle('web', { workflows: ['build-web.yml'] }), '`build-web.yml`');
+  assert.equal(profileTitle('security', { workflows: [] }), 'security');
+});
+
+test('every profile in the real contract is titled by a workflow, not by its bare name', () => {
+  const titles = Object.fromEntries(Object.entries(CONTRACT.profiles).map(([name, profile]) => [name, profileTitle(name, profile)]));
+  assert.deepEqual(titles, {
+    checks: '`check.yml`',
+    unit: '`test-unit.yml`',
+    e2e: '`test-e2e.yml`',
+    web: '`build-web.yml`',
+    badges: '`publish-badges.yml`',
+    'code-scanning': '`check-code-scanning.yml`',
+    security: '`check-security.yml`',
+    release: 'the release workflows',
+  });
 });
 
 // --- the splice ------------------------------------------------------------

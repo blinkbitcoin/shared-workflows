@@ -33,6 +33,7 @@
     "fastlane/Fastfile",
     "fastlane/lanes",
     "contract.json",
+    "contract.schema.json",
     "interfaces.json",
     "versions.json",
     "expo",
@@ -43,6 +44,7 @@
   "exports": {
     "./versions.json": "./versions.json",
     "./contract.json": "./contract.json",
+    "./contract.schema.json": "./contract.schema.json",
     "./interfaces.json": "./interfaces.json",
     "./llm": "./lib/llm.mjs",
     "./llm-request": "./lib/llm-request.mjs",

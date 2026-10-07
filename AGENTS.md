@@ -33,13 +33,16 @@ scripts/security/   check-security.yml: one scanner runner per job and their lib
                     scan.sh (every job, then the verdict), and the CI bridges
                     (settings, artifact-prefix, run-job, verdict, label-sarif, binaries-fetch)
 scripts/setup/      a consumer's machine setup (toolchain, android, ios, all), pins in lib/versions.sh
+                    (generated from packages/app-tooling/versions.json)
 scripts/web/        web export, Playwright install and run
 scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
-scripts/self/       this repo's own upkeep (check-version-pins, tag-major, smoke-local,
+scripts/self/       this repo's own upkeep (check-version-pins, render-versions, tag-major, smoke-local,
                     package-copies, render-contract-table, check-store-notes-section,
                     changed-gates)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
-                    changed-files) and native-stack, the dispatch to scripts/native/<stack>/
+                    changed-files) and native-stack, the dispatch to scripts/native/<stack>/;
+                    e2e-env is one entry over shared-env (shared with release-env) and
+                    e2e-app, e2e-ios, e2e-maestro and e2e-metro
 test/               the bats suite + fixtures/ (consumer-min, the Expo caller the guide is held to;
                     consumer-bare, a bare React Native app; both kept byte-identical to the guide)
 plugins/            store-release, the Claude Code plugin apps install (four store skills, each
@@ -70,7 +73,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make test-package` | `node:test` over every package under `packages/`, 100% lines, branches and functions |
 | `make test-scripts` | `node:test` for the Node scripts under `scripts/`, one test file each, 100% coverage |
 | `make test-fastlane` | Unit tests of the Ruby lanes the package ships (`packages/app-tooling/fastlane`), under Bundler, gems in `.gems/` |
-| `make check-version-pins` | Fail when a workflow default disagrees with `scripts/lib/versions.sh` |
+| `make check-version-pins` | Fail when `scripts/lib/versions.sh` or the `[tools]` block of `.mise.toml` is not what `packages/app-tooling/versions.json` generates, or a workflow default disagrees with it |
 | `make check-tool-versions` | Fail when an installed tool is not the version `packages/app-tooling/versions.json` pins |
 | `make check-spell` | typos over the whole repo |
 | `make check-secrets` | Scan the whole git history for committed secrets (gitleaks) |
@@ -143,6 +146,15 @@ Every row is a make target; nothing here is run through a package manager.
   variable before looping over it. Each of these once let a script carry on
   with an empty value (`ios-simulator.sh`, `workflows_app_id`,
   `workflows_fingerprint`, `smoke-local.sh`, `cancel-runs.sh`).
+- **A required environment variable is checked with `require_env`, never a
+  bare `${NAME:?}`.** The bare form exits with bash's own "parameter null or
+  not set" line: no `::error::` annotation on the run and no word on where the
+  value comes from. `require_env GH_REPO:owner/name TAG` (in
+  `scripts/lib/common.sh`) names every missing or empty variable at once, each
+  with its hint, and `require_uint NAME...` does the same for a non-negative
+  integer. A positional `${1:?usage: ...}` and the `rm -rf "${dir:?}/..."`
+  guard on a lower-case local stay as they are.
+  `test/no-bare-required-variable.bats` fails on a new bare check.
 - **Never set a locale as a command prefix in shell code.** Write
   `env LC_ALL=C sort`, not `LC_ALL=C sort`: with the prefix, bash itself
   switches locale for the one command, and a Homebrew bash on macOS doing that
@@ -161,7 +173,7 @@ Every row is a make target; nothing here is run through a package manager.
   - **What counts:**
     - A case in a shared suite (`plumbing.bats`, `fallback-gates.bats`) is welcome on top, but it is never the script's own test.
     - A file that only greps the script does not count.
-  - **"It needs Xcode" is not an exception.** A script that needs Xcode, a simulator, CocoaPods, Gradle, an emulator, Maestro or a network is run against fakes of those tools on `PATH` that record their calls. `test/app-launch.bats` and `test/native-ios-build.bats` show how. Eight scripts once sat on an allowlist as "cannot run from a test", and every one of them could.
+  - **"It needs Xcode" is not an exception.** A script that needs Xcode, a simulator, CocoaPods, Gradle, an emulator, Maestro or a network is run against fakes of those tools on `PATH` that record their calls. `stub_cmd NAME [BODY]` in `test/test_helper.bash` writes one (`stub_calls NAME` reads back what it was called with); `test/app-launch.bats` and `test/native-ios-build.bats` show the larger cases. Eight scripts once sat on an allowlist as "cannot run from a test", and every one of them could.
   - **Where tests live:** in `test/`, not beside the script, because `scripts/` is what callers check out and what shellcheck lints.
   - **Enforced:** `test/script-coverage.bats` fails naming every script without its own test, and fails if an allowlist comes back.
 - **Tests run in parallel, so each one stands alone.** `make test-unit` runs
@@ -174,6 +186,13 @@ Every row is a make target; nothing here is run through a package manager.
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`
   enforces this.
+- **A test that needs a tool `.mise.toml` pins opens with `require_cmd
+  <tool>`, never `command -v <tool> || skip`.** A missing pinned tool is a
+  broken setup: `require_cmd` (`test/test_helper.bash`) fails the test and
+  names the fix, where the skip once let a shell without yq report green with
+  every workflow shape and contract assertion skipped. A tool the toolchain
+  does not pin (python3, curl, the claude CLI, mise itself) may still
+  skip. `test/require-cmd.bats` enforces this.
 - **Where the signing keys are, actions are pinned by commit SHA.**
   `build-ios.yml`, `build-android.yml`, `publish-store.yml` and the composite
   actions they call (`setup`, `native-key`) pin every third-party `uses:` to a
@@ -190,9 +209,14 @@ Every row is a make target; nothing here is run through a package manager.
   no step there talks to a git remote with the checkout's token, so none is
   left for the signing steps to find (and zizmor, which cannot read a
   checkout's version from a SHA, has no `artipacked` finding to ignore).
-- **Tool versions live in `scripts/lib/versions.sh`**, mirrored into
-  `.mise.toml` and into workflow input defaults. Never bump one copy alone;
-  `make check-version-pins` is what catches it.
+- **Tool versions live in `packages/app-tooling/versions.json`**, the only
+  file a version is edited in. `node scripts/self/render-versions.mjs --write`
+  generates `scripts/lib/versions.sh` (and its package copy) and the `[tools]`
+  block of `.mise.toml`, between its `# versions:start` / `# versions:end`
+  markers, from it; never edit those by hand. The workflow input defaults that
+  mirror a pin stay hand-written and move in the same change.
+  `make check-version-pins` fails on a generated file that has drifted and on a
+  default that disagrees.
 - **Jobs check this repo out into `.workflows/`** via `job.workflow_repository` /
   `job.workflow_sha`, and reference everything through `$WORKFLOWS_DIR`. Never reference
   a path under `scripts/` or `.github/actions/` from a consumer-visible
@@ -398,11 +422,12 @@ that holds the rule, and the section of the app's `app-tooling.json` that tunes 
 | Workflow and action shape (inputs, permissions, step names) | `test/workflow-shape.bats`, `test/actions-shape.bats` | `make test-unit` |
 | The Linux release jobs, executed for real (Prepare, Android) | `.github/workflows/self-smoke-local.yml` via act | `make test-smoke-local` |
 | The consumer contract: guide ↔ fixtures ↔ `contract.json` ↔ the workflows | `test/consumer-contract.bats`, `test/contract-program.bats` | `make test-unit` |
-| The app-tooling programs and modules at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), the tool-version check, the store notes generator and its LLM adapters, and each program's flags, messages and exit codes | `packages/app-tooling/*.test.mjs` | `make test-package` |
+| The app-tooling programs and modules at 100% lines, branches and functions: the contract checker's rules (including a consumer's make-ci gate set against CI and the lane secret names), `contract.json` against `contract.schema.json` and its profiles against the workflow files, the tool-version check, the store notes generator and its LLM adapters, and each program's flags, messages and exit codes | `packages/app-tooling/*.test.mjs` | `make test-package` |
 | Each Expo preset (`expo/`) against the template: the template's file as it is and the file it becomes, evaluated under the same stand-ins and compared (lefthook through the real `lefthook dump`); the guide's examples are those files | `packages/app-tooling/*.test.mjs` | `make test-package` |
 | Failures at the contract boundary carry a fix, not just a cause | `test/contract-errors.bats` | `make test-unit` |
 | Hooks, the hook environment and the docs command table | `test/hooks.bats`, `test/git-env.bats`, `test/docs-contract.bats` | `make test-unit` |
 | That every zizmor command here names its policy with `--config` | `test/zizmor-config.bats` | `make test-unit` |
+| That a test needing a pinned tool fails without it rather than skipping, and `require_cmd` itself | `test/require-cmd.bats` | `make test-unit` |
 | The checkable facts in the docs (counts, job lists, action pins) | `test/docs-facts.bats` | `make test-unit` |
 | That every script has its own test file that runs it, with no exceptions | `test/script-coverage.bats` | `make test-unit` |
 | `pr-store-notes.yml` executed for real against the template, in a dry run, and its `section` output checked | `.github/workflows/self-store-notes.yml`, `scripts/self/check-store-notes-section.sh` | every PR (`self-ci.yml`), and before `v0` moves (`self-release.yml`) |

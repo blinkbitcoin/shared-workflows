@@ -22,6 +22,11 @@ for a in "$@"; do case "$a" in http*) url="$a" ;; esac; done
 case "$url" in
   */status)
     [ "${WORKFLOWS_TEST_METRO_DOWN:-}" = true ] && exit 7
+    # Not running yet for the first READY_AFTER-1 polls.
+    if [ -n "${WORKFLOWS_TEST_METRO_READY_AFTER:-}" ]; then
+      polls="$(grep -c '/status' "$WORKFLOWS_TEST_LOG")"
+      [ "$polls" -ge "$WORKFLOWS_TEST_METRO_READY_AFTER" ] || { printf 'packager-status:starting'; exit 0; }
+    fi
     printf 'packager-status:running'
     exit 0
     ;;
@@ -36,6 +41,10 @@ case "$url" in
 esac
 SH
   chmod +x "$STUB/curl"
+  # Run the stub once before the script does: macOS scans a new executable on
+  # its first run, for seconds, and the cases below time Metro's first poll.
+  "$STUB/curl" http://localhost/warm-up > /dev/null
+  : > "$WORKFLOWS_TEST_LOG"
   export PATH="$STUB:$PATH"
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out"
   mkdir -p "$WORKFLOWS_OUT"
@@ -106,6 +115,50 @@ prewarmed() { grep '^curl ' "$WORKFLOWS_TEST_LOG" | tail -1; }
   [ "$status" -ne 0 ] || fail "waited on a dead Metro: $output"
   contains "$output" "exited before becoming ready" || fail "unexpected message: $output"
   [ -z "$(prewarmed | grep bundle || true)" ] || fail "prewarmed anyway: $(prewarmed)"
+}
+
+status_polls() { grep -c '/status' "$WORKFLOWS_TEST_LOG" || true; }
+elapsed_in() { sed -n 's/.*Metro is ready (after \([0-9][0-9]*\)s).*/\1/p' <<<"$1"; }
+
+# The bound is real time, not a count of tries: a loop of 90 tries of a 5s curl
+# plus a 2s sleep said 180s and could wait 630s.
+@test "a Metro that is alive but never ready times out at the stated bound, naming it" {
+  # A pid that is alive for as long as the test runs: the test's own shell.
+  printf '%s\n' "$$" > "$WORKFLOWS_OUT/metro.pid"
+  printf 'still starting\n' > "$WORKFLOWS_OUT/metro.log"
+  WORKFLOWS_TEST_METRO_DOWN=true WORKFLOWS_METRO_WAIT_SECONDS=1 wait_for_metro ios
+  [ "$status" -ne 0 ] || fail "a Metro that never became ready passed: $output"
+  contains "$output" "did not report packager-status:running within 1s (gave up after " \
+    || fail "the message does not name the real bound: $output"
+  contains "$output" "still starting" || fail "no tail of metro.log: $output"
+  not_contains "$output" "exited before becoming ready" || fail "a live Metro was reported dead: $output"
+  gave_up="$(sed -n 's/.*(gave up after \([0-9][0-9]*\)s).*/\1/p' <<<"$output")"
+  [ -n "$gave_up" ] && [ "$gave_up" -ge 1 ] || fail "gave up before the deadline: $output"
+  [ -z "$(prewarmed | grep bundle || true)" ] || fail "prewarmed anyway: $(prewarmed)"
+}
+
+@test "a Metro ready on the first poll reports the real elapsed time, not a loop count" {
+  wait_for_metro ios
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  elapsed="$(elapsed_in "$output")"
+  # The loop-count message said 2s for the first poll; no time has passed.
+  [ -n "$elapsed" ] && [ "$elapsed" -le 1 ] || fail "expected about 0s: $output"
+  [ "$(status_polls)" -eq 1 ] || fail "polled more than once: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "a Metro ready after a few polls reports the seconds really waited" {
+  WORKFLOWS_TEST_METRO_READY_AFTER=2 wait_for_metro ios
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$(status_polls)" -eq 2 ] || fail "expected two polls: $(cat "$WORKFLOWS_TEST_LOG")"
+  elapsed="$(elapsed_in "$output")"
+  # One 2s interval between the polls; a busy machine may add to it, never take away.
+  [ -n "$elapsed" ] && [ "$elapsed" -ge 2 ] || fail "expected at least 2s: $output"
+}
+
+@test "a wait that is not a whole number of seconds is fatal" {
+  WORKFLOWS_METRO_WAIT_SECONDS=soon wait_for_metro ios
+  [ "$status" -ne 0 ] || fail "accepted a non-number: $output"
+  contains "$output" "WORKFLOWS_METRO_WAIT_SECONDS must be a whole number of seconds, got 'soon'" || fail "output: $output"
 }
 
 @test "a missing or bogus platform is fatal" {

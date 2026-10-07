@@ -8,8 +8,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd pnpm
 
-: "${EXPORT_SCRIPT:?EXPORT_SCRIPT not set}"
-: "${OUTPUT_DIR:?OUTPUT_DIR not set}"
+require_env EXPORT_SCRIPT OUTPUT_DIR
 args="${EXPORT_ARGS:-}"
 
 root="$(consumer_root)"

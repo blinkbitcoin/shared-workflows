@@ -2,7 +2,7 @@
 # The bare stack's app identifiers, read out of the committed native projects:
 # a bare app has no `expo config` to ask. scripts/lib/native-stack.sh
 # dispatches here; callers ask through workflows_app_config in
-# scripts/lib/e2e-env.sh.
+# scripts/lib/e2e-app.sh.
 #
 # Keys, and where each comes from - an explicit workflow input always wins
 # (IOS_BUNDLE_ID, ANDROID_PACKAGE and IOS_SCHEME are what test-e2e.yml,
@@ -87,7 +87,7 @@ bundle_ids_from_pbxproj() {
 }
 
 ios_bundle_id() {
-  local id ids count
+  local id ids count listed
   if [ -n "${IOS_BUNDLE_ID:-}" ]; then printf '%s\n' "$IOS_BUNDLE_ID"; return 0; fi
   id="$(bundle_id_from_xcodebuild)"
   if [ -n "$id" ]; then printf '%s\n' "$id"; return 0; fi
@@ -95,10 +95,14 @@ ios_bundle_id() {
   [ -n "$ids" ] || die_fix "no bundle identifier in $root/ios: xcodebuild did not answer and no project.pbxproj names a literal PRODUCT_BUNDLE_IDENTIFIER" \
     "set PRODUCT_BUNDLE_IDENTIFIER on the app target, or pass the ios-bundle-id input" "expo-or-bare"
   count="$(printf '%s\n' "$ids" | grep -c .)"
-  [ "$count" -eq 1 ] ||
-    printf '::warning::%s bundle identifiers in the project (%s); using the first. Pass the ios-bundle-id input to choose\n' \
-      "$count" "$(printf '%s\n' "$ids" | paste -sd' ' -)" >&2
-  printf '%s\n' "$ids" | head -1
+  if [ "$count" -ne 1 ]; then
+    listed="$(printf '%s\n' "$ids" | paste -sd' ' -)"
+    warn "$count bundle identifiers in the project ($listed); using the first. Pass the ios-bundle-id input to choose"
+  fi
+  # The first line by expansion, not `| head -1`: under pipefail, head exiting
+  # after one line can kill printf with SIGPIPE before it has written the rest,
+  # and the whole function then fails with 141.
+  printf '%s\n' "${ids%%$'\n'*}"
 }
 
 # The debug build type's applicationIdSuffix in one Gradle file, or nothing.

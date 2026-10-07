@@ -24,7 +24,7 @@ fi
 # so dying here would fail the very step that carries the diagnosis: warn and
 # emit the summary without counts instead.
 if [ -n "$junit" ] && [ ! -f "$junit" ]; then
-  printf '::warning::artifact-summary: no junit file at %s\n' "$junit" >&2
+  warn "artifact-summary: no junit file at $junit"
   junit=""
 fi
 
@@ -44,8 +44,4 @@ if [ -n "$junit" ]; then
 $passed passed, $failures failed"
 fi
 
-if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-  printf '%s\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
-else
-  printf '%s\n' "$summary"
-fi
+gh_summary "$summary"

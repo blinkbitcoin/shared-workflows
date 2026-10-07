@@ -49,8 +49,9 @@ install() { run bash "$REPO_ROOT/scripts/ci/bundletool-install.sh"; }
 
 @test "an unset version is fatal" {
   install
-  [ "$status" -ne 0 ] || fail "downloaded an unpinned bundletool: $output"
-  contains "$output" "BUNDLETOOL_VERSION" || fail "unexpected message: $output"
+  [ "$status" -eq 1 ] || fail "downloaded an unpinned bundletool: $output"
+  contains "$output" "::error::missing required environment variable: BUNDLETOOL_VERSION" || fail "unexpected message: $output"
+  [ ! -s "$WORKFLOWS_TEST_LOG" ] || fail "curl or java ran without a version: $(cat "$WORKFLOWS_TEST_LOG")"
 }
 
 # The lane fails much later, and far less obviously, without a JRE.

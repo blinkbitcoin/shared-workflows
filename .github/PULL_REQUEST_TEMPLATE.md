@@ -21,5 +21,5 @@ scope enum — see CONTRIBUTING.md.
 - [ ] `docs/consumer-guide.md` updated — a new or renamed input, output, secret or env var is a contract change
 - [ ] Every doc and diagram that shows what changed is updated in this PR (searched each changed name with and without `.yml`; mermaid, ASCII and SVG diagrams read)
 - [ ] Breaking for a consumer pinned at `@v0`? Say so here and mark the commit `!`
-- [ ] Version pins moved in `scripts/lib/versions.sh`, not only in a workflow default (`make check-version-pins`)
+- [ ] Version pins moved in `packages/app-tooling/versions.json` and regenerated (`node scripts/self/render-versions.mjs --write`), and any workflow default that mirrors one moved with it (`make check-version-pins`)
 - [ ] No secret, token or consumer-specific value hardcoded; nothing new reads `${{ secrets.* }}` outside a declared `secrets:` input

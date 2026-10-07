@@ -36,7 +36,13 @@ check-ci: ## Lint the scripts (shellcheck), the workflows and actions (actionlin
 BATS_JOBS := $(shell command -v parallel >/dev/null 2>&1 && (getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4) || echo 1)
 test-unit: ## bats over the scripts, the workflows' shape and the docs' facts, one job per core
 	$(MISE) bats --jobs $(BATS_JOBS) test/
-check-version-pins: ## Fail when workflow defaults disagree with scripts/lib/versions.sh
+# packages/app-tooling/versions.json is the one file a version is edited in;
+# scripts/lib/versions.sh (and its package copy) and the [tools] block of
+# .mise.toml are generated from it. First that nothing generated has drifted
+# (fix: node scripts/self/render-versions.mjs --write), then that the workflow
+# and action input defaults, which stay hand-written, agree with it.
+check-version-pins: ## Fail when versions.sh or .mise.toml is not what versions.json generates, or a workflow default disagrees
+	$(MISE) node scripts/self/render-versions.mjs --check
 	$(MISE) bash scripts/self/check-version-pins.sh
 check-tool-versions: ## Fail when an installed tool is not the version the baseline pins
 	$(MISE) node packages/app-tooling/bin/check-tool-versions.mjs

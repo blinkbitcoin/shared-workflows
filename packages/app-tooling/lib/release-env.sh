@@ -3,9 +3,10 @@
 # common.sh; do not execute.
 # shellcheck shell=bash
 
-# Where every release artifact this family produces is staged. Mirrors
-# scripts/lib/e2e-env.sh's WORKFLOWS_OUT so a job that does both keeps one directory.
-WORKFLOWS_OUT="${WORKFLOWS_OUT:-${RUNNER_TEMP:-/tmp}/workflows}"
+# Where every release artifact this family produces is staged: WORKFLOWS_OUT,
+# from shared-env.sh, the one scripts/lib/e2e-env.sh uses too, so a job that
+# does both keeps one directory.
+source "$(dirname "${BASH_SOURCE[0]}")/shared-env.sh"
 # Fastlane reads this to decide where to drop the .ipa/.aab it builds.
 WORKFLOWS_OUTPUT_DIR="${WORKFLOWS_OUTPUT_DIR:-$WORKFLOWS_OUT}"
 WORKFLOWS_RELEASE_META_DIR="${WORKFLOWS_RELEASE_META_DIR:-$WORKFLOWS_OUT/build-info}"
@@ -13,13 +14,13 @@ WORKFLOWS_OTA_DIR="${WORKFLOWS_OTA_DIR:-$WORKFLOWS_OUT/ota}"
 # Where the artifacts a release job downloads are staged for release-assets.sh.
 WORKFLOWS_ASSETS_DIR="${WORKFLOWS_ASSETS_DIR:-$WORKFLOWS_OUT/assets}"
 export WORKFLOWS_OUT WORKFLOWS_OUTPUT_DIR WORKFLOWS_RELEASE_META_DIR WORKFLOWS_OTA_DIR WORKFLOWS_ASSETS_DIR
-mkdir -p "$WORKFLOWS_OUT"
 
 # Publish the directories to $GITHUB_ENV so a later step's `with:` block can
 # interpolate ${{ env.WORKFLOWS_RELEASE_META_DIR }} without re-running a script.
 # gh_env_once's guard is file-based, so this dedupes across the separate
-# processes that each step in one job is.
-gh_env_once WORKFLOWS_OUT "$WORKFLOWS_OUT"
+# processes that each step in one job is. workflows_out_init creates
+# WORKFLOWS_OUT and publishes it first.
+workflows_out_init
 gh_env_once WORKFLOWS_OUTPUT_DIR "$WORKFLOWS_OUTPUT_DIR"
 gh_env_once WORKFLOWS_RELEASE_META_DIR "$WORKFLOWS_RELEASE_META_DIR"
 gh_env_once WORKFLOWS_OTA_DIR "$WORKFLOWS_OTA_DIR"
@@ -29,14 +30,9 @@ gh_env_once WORKFLOWS_ASSETS_DIR "$WORKFLOWS_ASSETS_DIR"
 # for a fingerprint must still find native-stack.sh beside this file.
 WORKFLOWS_RELEASE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# workflows_release_platform [ARG] -> ios|android
-workflows_release_platform() {
-  local p="${1:-${WORKFLOWS_PLATFORM:-}}"
-  case "$p" in
-    ios | android) printf '%s\n' "$p" ;;
-    *) die "platform must be ios or android (got '${p}')" ;;
-  esac
-}
+# workflows_release_platform [ARG] -> ios|android: shared-env.sh's
+# workflows_platform, the one platform check both envs apply.
+workflows_release_platform() { workflows_platform "$@"; }
 
 # workflows_fingerprint PLATFORM -> the native fingerprint for that platform:
 # the hash of everything a store build of it depends on natively, so an OTA

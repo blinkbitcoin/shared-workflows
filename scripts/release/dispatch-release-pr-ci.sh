@@ -27,8 +27,7 @@
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd gh jq
-: "${GH_REPO:?GH_REPO not set (owner/name)}"
-: "${CI_WORKFLOW:?CI_WORKFLOW not set (the CI workflow file to start, e.g. ci.yml)}"
+require_env GH_REPO:owner/name "CI_WORKFLOW:the CI workflow file to start, e.g. ci.yml"
 
 [ -n "${PRS_JSON:-}" ] || die "PRS_JSON is empty: release-please reported PRs but passed no prs output"
 jq -e 'type == "array"' >/dev/null 2>&1 <<<"$PRS_JSON" \

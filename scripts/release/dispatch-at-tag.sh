@@ -20,8 +20,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd gh
 
-: "${TAG:?TAG not set}"
-: "${GH_REPO:?GH_REPO not set (owner/name)}"
+require_env TAG GH_REPO:owner/name
 
 lines=()
 while IFS= read -r line || [ -n "$line" ]; do

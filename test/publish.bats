@@ -89,8 +89,8 @@ seed_export() { mkdir -p "$WORKFLOWS_OTA_DIR"; printf '{}\n' > "$WORKFLOWS_OTA_D
   stub_npx
   seed_export
   OTA_ENABLED=true publish beta 0
-  [ "$status" -ne 0 ] || fail "published from an unpinned CLI: $output"
-  contains "$output" "OTA_CLI_VERSION" || fail "unexpected message: $output"
+  [ "$status" -eq 1 ] || fail "published from an unpinned CLI: $output"
+  contains "$output" "::error::missing required environment variable: OTA_CLI_VERSION (the pinned eoas version - never publish from an unpinned CLI)" || fail "unexpected message: $output"
 }
 
 @test "a rollout that is not an integer percentage is fatal" {

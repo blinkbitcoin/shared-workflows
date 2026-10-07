@@ -22,8 +22,7 @@ if [ "${1:-}" = --summary-only ]; then
   shift
 fi
 reason="${1:?usage: sarif-upload-skipped.sh [--summary-only] REASON}"
-[ "$summary_only" = true ] || printf '::warning::Security findings were not uploaded to code scanning: %s. The verdict still applied the threshold - read the job summary and the Verdict step for the findings.\n' "$reason"
-{
-  printf '\n> Findings were **not** uploaded to code scanning: %s.\n' "$reason"
-  printf '> The verdict above still applied the threshold; the findings are in this summary and in the job log.\n'
-} >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+[ "$summary_only" = true ] || warn "Security findings were not uploaded to code scanning: $reason. The verdict still applied the threshold - read the job summary and the Verdict step for the findings."
+gh_summary '' \
+  "> Findings were **not** uploaded to code scanning: $reason." \
+  '> The verdict above still applied the threshold; the findings are in this summary and in the job log.'

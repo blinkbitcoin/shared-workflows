@@ -14,18 +14,14 @@ require_cmd git node
 
 root="$(consumer_root)"
 
-has_script() {
-  (cd "$root" && RUN_SCRIPT_NAME="$1" node -e \
-    "process.exit(require('./package.json').scripts?.[process.env.RUN_SCRIPT_NAME] ? 0 : 1)" \
-    2>/dev/null)
-}
-
 ran=0
 # check SCRIPT PATH... - run SCRIPT, then fail on any drift under the paths.
 check() {
   local script="$1"
   shift
-  if ! has_script "$script"; then
+  # package_json_has dies on a package.json that does not parse, rather than
+  # reading it as "no such script" and skipping the generator.
+  if ! package_json_has scripts "$script" "$root"; then
     log "generated: no \"$script\" script, so nothing of it to check"
     return 0
   fi

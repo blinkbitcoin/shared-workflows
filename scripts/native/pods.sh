@@ -11,12 +11,18 @@ root="$(consumer_root)"
 [ -d "$root/ios" ] || die "no ios/ in $root - run prebuild.sh ios first"
 cd "$root/ios"
 
+# Three attempts, 20 seconds apart: the specs CDN and the hosts a pod's source
+# is fetched from fail now and then for a few seconds, and that should not cost
+# a release. `pod install` is safe to repeat - it resolves against Podfile.lock
+# and rewrites Pods/ to match, whatever an interrupted run left there. A real
+# error (a broken Podfile) fails the same way three times, 40 seconds later.
+export COCOAPODS_DISABLE_STATS=1
 group "pod install"
 if [ -f "$root/Gemfile" ] && command -v bundle >/dev/null 2>&1; then
-  COCOAPODS_DISABLE_STATS=1 bundle exec pod install
+  retry_command 3 20 -- bundle exec pod install
 else
   require_cmd pod
-  COCOAPODS_DISABLE_STATS=1 pod install
+  retry_command 3 20 -- pod install
 fi
 endgroup
 

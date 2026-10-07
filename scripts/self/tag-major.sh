@@ -3,7 +3,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd git
 
-: "${TAG:?TAG not set (expected a release-please tag_name output, e.g. v0.1.0)}"
+require_env "TAG:a release-please tag_name output, e.g. v0.1.0"
 
 if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-.+$ ]]; then
   log "skipping prerelease tag '$TAG' (moving major/minor tags only track full releases)"

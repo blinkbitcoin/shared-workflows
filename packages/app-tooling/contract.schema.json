@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/blinkbitcoin/shared-workflows/packages/app-tooling/contract.schema.json",
+  "title": "The consumer contract",
+  "description": "The shape of contract.json: the profiles, each by the reusable workflows that switch it on, and one requirement per thing a reusable workflow reaches for in the calling repository. What each field means is in contract.json's $schema-notes; this file says what a well-formed one looks like, and contract.test.mjs holds contract.json to it.",
+  "type": "object",
+  "required": ["profiles", "requirements"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "$comment": { "type": "string" },
+    "$schema-notes": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "profiles": {
+      "type": "object",
+      "required": ["checks", "unit", "e2e", "web", "badges", "code-scanning", "security", "release"],
+      "propertyNames": { "$ref": "#/$defs/profileName" },
+      "additionalProperties": { "$ref": "#/$defs/profile" }
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/requirement" }
+    }
+  },
+  "$defs": {
+    "profileName": {
+      "description": "Every profile there is. A requirement naming any other is malformed, and so is a profile left out of contract.json's profiles.",
+      "enum": ["checks", "unit", "e2e", "web", "badges", "code-scanning", "security", "release"]
+    },
+    "kind": {
+      "description": "How a requirement is checked; one checker in bin/check-contract.mjs per kind.",
+      "enum": [
+        "package-script",
+        "package-dep",
+        "file",
+        "dir-nonempty",
+        "pinned-tool",
+        "ignores-workflows",
+        "ignores-workflows-or-narrow",
+        "caller-path",
+        "one-pin",
+        "lane",
+        "lane-environment",
+        "make-ci-reaches-ci",
+        "ci-runs-make-ci",
+        "no-copy",
+        "tracked-dir"
+      ]
+    },
+    "workflowFile": {
+      "description": "A reusable workflow of this repository, by its file name under .github/workflows/.",
+      "type": "string",
+      "pattern": "^[a-z0-9-]+\\.yml$"
+    },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "profile": {
+      "type": "object",
+      "required": ["workflows"],
+      "additionalProperties": false,
+      "properties": {
+        "$comment": { "type": "string" },
+        "workflows": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/workflowFile" }
+        },
+        "withoutCaller": { "const": true },
+        "makeCi": { "const": true },
+        "title": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "allOf": [
+        {
+          "$comment": "lane-environment names the prefix of the variables it holds to its target list.",
+          "if": { "required": ["kind"], "properties": { "kind": { "const": "lane-environment" } } },
+          "then": { "required": ["prefix"] }
+        }
+      ],
+      "required": ["id", "kind", "target", "profile", "neededBy", "toggle", "defaultOn", "severity", "fix", "guide"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "<kind>.<the program, target or file it is about>.",
+          "type": "string",
+          "pattern": "^[a-z-]+\\.[a-z0-9-]+$"
+        },
+        "kind": { "$ref": "#/$defs/kind" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "target": {
+          "description": "What the kind checks for: one name, a list of them, or null where the kind takes none (one-pin).",
+          "anyOf": [
+            { "$ref": "#/$defs/nonEmptyString" },
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/nonEmptyString" } },
+            { "type": "null" }
+          ]
+        },
+        "prefix": { "$ref": "#/$defs/nonEmptyString" },
+        "profile": { "$ref": "#/$defs/profileName" },
+        "stack": { "enum": ["expo", "bare"] },
+        "workflow": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/workflowFile" }
+        },
+        "neededBy": { "$ref": "#/$defs/nonEmptyString" },
+        "toggle": {
+          "description": "The workflow_call input that switches the row, as workflow.yml:input, or null for a row that is always on.",
+          "anyOf": [
+            { "type": "string", "pattern": "^[a-z0-9-]+\\.yml:[a-z0-9-]+$" },
+            { "type": "null" }
+          ]
+        },
+        "toggleValue": { "const": "script-name" },
+        "defaultOn": { "type": "boolean" },
+        "severity": { "enum": ["required", "degrades", "optional"] },
+        "fix": { "type": "string", "minLength": 21 },
+        "guide": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

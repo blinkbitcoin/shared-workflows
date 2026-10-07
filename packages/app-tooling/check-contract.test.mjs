@@ -7,7 +7,6 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   activeProfiles,
-  RELEASE_WORKFLOWS,
   callerCalls,
   callerInputs,
   flowMapping,
@@ -18,6 +17,7 @@ import {
   check,
   checkCalls,
   checkRequirement,
+  CHECKERS,
   ciScripts,
   defaultIo,
   fastlaneInput,
@@ -40,6 +40,7 @@ import {
   summaryTable,
   resolved,
   toggleOn,
+  validateContract,
   UNREADABLE_WITH,
   workingDirectoryInput,
 } from './bin/check-contract.mjs';
@@ -87,26 +88,9 @@ const req = (id) => readContract().requirements.find((r) => r.id === id);
 // --- the contract itself -----------------------------------------------------
 
 test('every requirement declares the fields the report depends on', () => {
-  const kinds = new Set([
-    'package-script',
-    'package-dep',
-    'file',
-    'dir-nonempty',
-    'pinned-tool',
-    'ignores-workflows',
-    'ignores-workflows-or-narrow',
-    'caller-path',
-    'lane',
-    'make-ci-reaches-ci',
-    'ci-runs-make-ci',
-    'lane-environment',
-    'no-copy',
-    'one-pin',
-    'tracked-dir',
-  ]);
-  const profiles = new Set(readContract().profiles);
+  const profiles = new Set(Object.keys(readContract().profiles));
   for (const r of readContract().requirements) {
-    assert.ok(kinds.has(r.kind), `${r.id}: unknown kind ${r.kind}`);
+    assert.ok(Object.hasOwn(CHECKERS, r.kind), `${r.id}: no check for kind ${r.kind}`);
     assert.ok(profiles.has(r.profile), `${r.id}: unknown profile ${r.profile}`);
     assert.ok(['required', 'degrades', 'optional'].includes(r.severity), `${r.id}: bad severity`);
     assert.ok(r.fix && r.fix.length > 20, `${r.id}: needs a fix that says what to do`);
@@ -117,6 +101,60 @@ test('every requirement declares the fields the report depends on', () => {
     assert.ok(r.workflow === undefined || [r.workflow].flat().every((name) => /^[a-z-]+\.yml$/.test(name)), `${r.id}: workflow must be a workflow file, or a list of them`);
     assert.ok(r.toggleValue === undefined || (r.toggleValue === 'script-name' && r.toggle), `${r.id}: toggleValue is script-name, on a toggle`);
   }
+});
+
+test('every kind has a check, used by a row of contract.json and described in its $schema-notes', () => {
+  const contract = readContract();
+  const used = new Set(contract.requirements.map((r) => r.kind));
+  const notes = contract['$schema-notes'].kind;
+  for (const kind of used) assert.ok(Object.hasOwn(CHECKERS, kind), `contract.json uses kind ${kind}, which has no check`);
+  for (const kind of Object.keys(CHECKERS)) {
+    assert.ok(used.has(kind), `the check for kind ${kind} is used by no row of contract.json`);
+    assert.match(notes, new RegExp(`(^|[ .])${kind}( and [a-z-]+)?:`), `$schema-notes does not describe kind ${kind}`);
+  }
+  assert.ok(Object.isFrozen(CHECKERS), 'the checks are fixed when the module loads');
+});
+
+/** The one error line for requirements of a kind with no check, as the program prints it. */
+const unknownKindLine = (each) =>
+  `::error::contract.json has a requirement of a kind this check-contract has no check for, which would otherwise check nothing: ${each} (known kinds: ${Object.keys(CHECKERS).join(', ')})`;
+
+test('a contract with a requirement of an unknown kind is refused whole, naming each such requirement and the known kinds', () => {
+  const contract = {
+    profiles: ['checks'],
+    requirements: [
+      { id: 'package-script.lint', kind: 'package-script', target: 'lint' },
+      { id: 'package-scripts.test', kind: 'package-scripts', target: 'test' },
+      { id: 'from-the-future.x', kind: 'from-the-future', target: 'x' },
+      { id: 'no-kind.x', target: 'x' },
+      { id: 'inherited.x', kind: 'toString', target: 'x' },
+    ],
+  };
+  assert.throws(() => validateContract(contract), {
+    message: unknownKindLine(
+      'package-scripts.test (kind "package-scripts"), from-the-future.x (kind "from-the-future"), no-kind.x (kind undefined), inherited.x (kind "toString")',
+    ),
+  });
+});
+
+test('a contract whose every kind has a check is returned as it is', () => {
+  const contract = { profiles: ['checks'], requirements: [{ id: 'package-script.lint', kind: 'package-script', target: 'lint' }] };
+  assert.equal(validateContract(contract), contract);
+  assert.equal(validateContract(readContract()).requirements.length, readContract().requirements.length);
+});
+
+test('reading a contract file validates it', () => {
+  const root = tree({ 'contract.json': JSON.stringify({ profiles: ['checks'], requirements: [{ id: 'typo.x', kind: 'files', target: ['x'] }] }) });
+  assert.throws(() => readContract(path.join(root, 'contract.json')), { message: unknownKindLine('typo.x (kind "files")') });
+});
+
+test('the program fails on a contract row of an unknown kind with one error line and exit 1, before any rule runs', () => {
+  const root = tree({ 'contract.json': JSON.stringify({ profiles: ['checks'], requirements: [{ id: 'typo.x', kind: 'files', target: ['x'] }] }) });
+  assert.deepEqual(runMain(['--root', tree()], { contractFile: path.join(root, 'contract.json') }), {
+    code: 1,
+    stdout: '',
+    stderr: `${unknownKindLine('typo.x (kind "files")')}\n`,
+  });
 });
 
 test('requirement ids are unique', () => {
@@ -185,18 +223,116 @@ concurrency:
 
 test('a profile is active only when the repository calls that workflow', () => {
   const uses = callersUse([{ name: 'ci.yml', text: CALLER }]);
-  const active = activeProfiles(uses);
+  const active = activeProfiles(readContract(), uses);
   assert.ok(active.has('checks') && active.has('unit') && active.has('e2e'));
   assert.ok(!active.has('web'), 'build-web.yml is not called, so web must not be checked');
   assert.ok(!active.has('release'));
 });
 
 test('a repository with no caller yet is checked against what every consumer needs', () => {
-  assert.deepEqual([...activeProfiles(new Set())].sort(), ['checks', 'unit']);
+  assert.deepEqual([...activeProfiles(readContract(), new Set())].sort(), ['checks', 'unit']);
 });
 
 test('an explicit --profile overrides what the callers say', () => {
-  assert.deepEqual([...activeProfiles(new Set(['check.yml']), ['release'])], ['release']);
+  assert.deepEqual([...activeProfiles(readContract(), new Set(['check.yml']), ['release'])], ['release']);
+  assert.deepEqual([...activeProfiles(readContract(), new Set(['check.yml']), [])], ['checks'], 'an empty override is no override');
+});
+
+// The mapping as bin/check-contract.mjs hardcoded it before contract.json held
+// it (check-security.yml included, since #212), kept here as the reference the
+// data must reproduce exactly.
+const LEGACY_RELEASE = [
+  'build-prepare.yml',
+  'build-ios.yml',
+  'build-android.yml',
+  'publish-store.yml',
+  'publish-ota.yml',
+  'publish-internal.yml',
+  'publish-beta.yml',
+  'publish-production.yml',
+  'publish-store-listing.yml',
+];
+function legacyActiveProfiles(uses) {
+  const active = new Set();
+  if (uses.has('check.yml')) active.add('checks');
+  if (uses.has('test-unit.yml')) active.add('unit');
+  if (uses.has('test-e2e.yml')) active.add('e2e');
+  if (uses.has('build-web.yml')) active.add('web');
+  if (uses.has('publish-badges.yml')) active.add('badges');
+  if (uses.has('check-code-scanning.yml')) active.add('code-scanning');
+  if (uses.has('check-security.yml')) active.add('security');
+  for (const name of LEGACY_RELEASE) if (uses.has(name)) active.add('release');
+  return active.size === 0 ? new Set(['checks', 'unit']) : active;
+}
+const sorted = (set) => [...set].sort();
+const WORKFLOW_FILES = readdirSync(new URL('../../.github/workflows/', import.meta.url)).filter((name) => name.endsWith('.yml'));
+
+test('the profiles read from the contract are exactly the ones the hardcoded mapping gave, for every workflow and every pair', () => {
+  const contract = readContract();
+  const cases = [new Set(), ...WORKFLOW_FILES.map((a) => new Set([a])), ...WORKFLOW_FILES.flatMap((a, i) => WORKFLOW_FILES.slice(i + 1).map((b) => new Set([a, b])))];
+  assert.ok(WORKFLOW_FILES.includes('check.yml') && cases.length > 400, `only ${cases.length} cases`);
+  for (const uses of cases) assert.deepEqual(sorted(activeProfiles(contract, uses)), sorted(legacyActiveProfiles(uses)), [...uses].join(' + '));
+  // One table row per workflow: what each one switches on, read off the data.
+  const table = {
+    'check.yml': ['checks'],
+    'test-unit.yml': ['unit'],
+    'test-e2e.yml': ['e2e'],
+    'build-web.yml': ['web'],
+    'publish-badges.yml': ['badges'],
+    'check-code-scanning.yml': ['code-scanning'],
+    'check-security.yml': ['security'],
+    ...Object.fromEntries(LEGACY_RELEASE.map((name) => [name, ['release']])),
+  };
+  for (const [workflow, profiles] of Object.entries(table)) assert.deepEqual(sorted(activeProfiles(contract, new Set([workflow]))), profiles, workflow);
+});
+
+test('the make ci gate set is the one the hardcoded checks-and-unit rule gave', () => {
+  const contract = readContract();
+  const legacy = (uses, inputs, stack) => {
+    const active = legacyActiveProfiles(uses);
+    const on = new Set();
+    const maybe = new Set();
+    for (const r of contract.requirements) {
+      if (r.kind !== 'package-script' || !['checks', 'unit'].includes(r.profile) || !active.has(r.profile)) continue;
+      if (r.stack && stack && r.stack !== stack) continue;
+      const state = toggleOn(r, inputs);
+      const { target } = resolved(r, inputs);
+      if (state === true) on.add(target);
+      if (state !== false) maybe.add(target);
+    }
+    return { on: sorted(on), maybe: sorted(maybe) };
+  };
+  const inputs = [
+    new Map(),
+    new Map([['check.yml:types', 'false'], ['test-unit.yml:coverage', '${{ vars.COVERAGE }}']]),
+    new Map([['test-unit.yml:scripts-script', 'test:tools'], ['check.yml:release', 'true']]),
+  ];
+  const uses = [new Set(), new Set(['check.yml']), new Set(['test-unit.yml']), new Set(['check.yml', 'test-unit.yml', 'test-e2e.yml']), new Set(['build-web.yml', 'publish-store.yml'])];
+  for (const u of uses) {
+    for (const i of inputs) {
+      for (const stack of [null, 'expo', 'bare']) {
+        const { on, maybe } = ciScripts(contract, u, i, null, stack);
+        assert.deepEqual({ on: sorted(on), maybe: sorted(maybe) }, legacy(u, i, stack), `${[...u].join('+')} ${[...i].join(',')} ${stack}`);
+      }
+    }
+  }
+});
+
+test('activeProfiles and ciScripts follow whatever the contract says, not a list of their own', () => {
+  const contract = {
+    profiles: {
+      lint: { workflows: ['lint.yml'], makeCi: true },
+      nightly: { workflows: ['nightly.yml', 'nightly-ios.yml'] },
+      baseline: { workflows: [], withoutCaller: true },
+    },
+    requirements: [
+      { id: 'package-script.lint', kind: 'package-script', target: 'lint', profile: 'lint', toggle: null, defaultOn: true },
+      { id: 'package-script.nightly', kind: 'package-script', target: 'nightly', profile: 'nightly', toggle: null, defaultOn: true },
+    ],
+  };
+  assert.deepEqual(sorted(activeProfiles(contract, new Set(['nightly-ios.yml', 'lint.yml']))), ['lint', 'nightly']);
+  assert.deepEqual(sorted(activeProfiles(contract, new Set(['check.yml']))), ['baseline'], 'no workflow of the contract called');
+  assert.deepEqual(sorted(ciScripts(contract, new Set(['lint.yml', 'nightly.yml']), new Map(), null).on), ['lint'], 'only a makeCi profile is a make ci gate');
 });
 
 // --- toggles -----------------------------------------------------------------
@@ -731,10 +867,10 @@ function sink() {
 }
 
 /** Runs `main` against a real directory; the environment is empty unless given. */
-function runMain(argv, { env = {}, io, cwd = '/' } = {}) {
+function runMain(argv, { env = {}, io, cwd = '/', contractFile } = {}) {
   const stdout = sink();
   const stderr = sink();
-  const code = main(argv, { stdout, stderr, env, cwd, ...(io ? { io } : {}) });
+  const code = main(argv, { stdout, stderr, env, cwd, contractFile, ...(io ? { io } : {}) });
   return { code, stdout: stdout.text, stderr: stderr.text };
 }
 
@@ -943,10 +1079,26 @@ test('every no-copy requirement lists paths, names what it copies and starts its
   }
 });
 
-test('a requirement of a kind this version does not know is skipped, naming the kind', () => {
-  assert.deepEqual(checkRequirement({ kind: 'from-the-future', target: 'x' }, consumer()), {
-    status: 'skip',
-    reason: 'unknown kind: from-the-future',
+test('a package-dep requirement passes on a dependency or a devDependency, and names the package it misses', () => {
+  const fingerprint = req('package-dep.fingerprint');
+  assert.deepEqual(checkRequirement(fingerprint, consumer({ pkg: { dependencies: { [fingerprint.target]: '1' } } })), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(fingerprint, consumer({ pkg: { devDependencies: { [fingerprint.target]: '1' } } })), { status: 'ok', detail: undefined });
+  assert.deepEqual(checkRequirement(fingerprint, consumer()), { status: 'missing', reason: `${fingerprint.target} is not a dependency` });
+});
+
+test('both gate-set rules skip a Makefile that has no target of the name they hold to CI', () => {
+  const c = { ...consumer({ files: { Makefile: 'lint:\n\tpnpm lint\n' } }), ciScripts: { on: new Set(['lint']), maybe: new Set(['lint']) } };
+  for (const kind of ['make-ci-reaches-ci', 'ci-runs-make-ci']) {
+    assert.deepEqual(checkRequirement({ kind, target: 'ci' }, c), { status: 'skip', reason: 'the Makefile has no ci target' }, kind);
+  }
+});
+
+test('a requirement of a kind this version does not know fails rather than being skipped, naming the kind', () => {
+  assert.throws(() => checkRequirement({ kind: 'from-the-future', target: 'x' }, consumer()), {
+    message: unknownKindLine('"x" (kind "from-the-future")'),
+  });
+  assert.throws(() => check({ profiles: { checks: { workflows: ['check.yml'], withoutCaller: true } }, requirements: [{ id: 'from-the-future.x', kind: 'from-the-future', profile: 'checks', target: 'x' }] }, consumer()), {
+    message: unknownKindLine('from-the-future.x (kind "from-the-future")'),
   });
 });
 
@@ -978,17 +1130,18 @@ test('a lane file that cannot be read counts as empty', () => {
 });
 
 test('each reusable workflow a repository calls switches on its own profile', () => {
-  const profileOf = (workflow) => [...activeProfiles(new Set([workflow]))];
+  const contract = readContract();
+  const profileOf = (workflow) => [...activeProfiles(contract, new Set([workflow]))];
   assert.deepEqual(profileOf('build-web.yml'), ['web']);
   assert.deepEqual(profileOf('publish-badges.yml'), ['badges']);
   assert.deepEqual(profileOf('check-code-scanning.yml'), ['code-scanning']);
   assert.deepEqual(profileOf('check-security.yml'), ['security']);
-  for (const workflow of RELEASE_WORKFLOWS) {
+  for (const workflow of contract.profiles.release.workflows) {
     assert.deepEqual(profileOf(workflow), ['release'], workflow);
   }
   // The pipelines are release callers too: a repository that calls only them never names a leaf.
   for (const pipeline of ['publish-internal.yml', 'publish-beta.yml', 'publish-production.yml', 'publish-store-listing.yml']) {
-    assert.ok(RELEASE_WORKFLOWS.includes(pipeline), pipeline);
+    assert.ok(contract.profiles.release.workflows.includes(pipeline), pipeline);
   }
 });
 
@@ -998,14 +1151,15 @@ test('each reusable workflow a repository calls switches on its own profile', ()
 test('every profile in the contract is switched on by at least one reusable workflow', () => {
   const workflowsDir = fileURLToPath(new URL('../../.github/workflows/', import.meta.url));
   const reusable = readdirSync(workflowsDir).filter((f) => f.endsWith('.yml') && !f.startsWith('self-'));
-  const reached = new Set(reusable.flatMap((workflow) => [...activeProfiles(new Set([workflow]))]));
-  for (const profile of readContract().profiles) {
+  const contract = readContract();
+  const reached = new Set(reusable.flatMap((workflow) => [...activeProfiles(contract, new Set([workflow]))]));
+  for (const profile of Object.keys(contract.profiles)) {
     assert.ok(reached.has(profile), `no reusable workflow switches on the ${profile} profile`);
   }
 });
 
 test('calling check.yml and check-security.yml together checks both profiles', () => {
-  const active = activeProfiles(new Set(['check.yml', 'check-security.yml']));
+  const active = activeProfiles(readContract(), new Set(['check.yml', 'check-security.yml']));
   assert.deepEqual([...active].sort(), ['checks', 'security']);
 });
 
@@ -1055,11 +1209,12 @@ test('the program refuses an unknown argument with one error line and exit 1', (
 });
 
 test('the program refuses an unknown profile, listing the known ones', () => {
-  const { profiles } = readContract();
+  const known = Object.keys(readContract().profiles);
+  assert.deepEqual(known, ['checks', 'unit', 'e2e', 'web', 'badges', 'code-scanning', 'security', 'release']);
   assert.deepEqual(runMain(['--root', tree(), '--profile', 'checks,nonesuch']), {
     code: 1,
     stdout: '',
-    stderr: `::error::unknown profile(s): nonesuch (known: ${profiles.join(', ')})\n`,
+    stderr: `::error::unknown profile(s): nonesuch (known: ${known.join(', ')})\n`,
   });
 });
 

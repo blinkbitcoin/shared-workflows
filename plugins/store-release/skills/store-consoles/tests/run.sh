@@ -87,7 +87,9 @@ ALL_OK=1
 while read -r id; do
   out=$(FAKE_GH_VARS="$VARS_PLACEHOLDER" "$CONSOLE_STEP" "$id" 2>&1) || { ALL_OK=0; break; }
   for field in "Console:" "URL:" "Click-path:" "Confirm:"; do
-    printf '%s\n' "$out" | grep -q "^$field" || { ALL_OK=0; break 2; }
+    # A here-string, not `printf | grep -q`: under pipefail grep -q exiting at
+    # its first match can kill printf with SIGPIPE, reading a hit as a miss.
+    grep -q "^$field" <<<"$out" || { ALL_OK=0; break 2; }
   done
 done <<<"$EXPECTED_IDS"
 check "every id from --list resolves with Console:/URL:/Click-path:/Confirm:" "yes" "$([ "$ALL_OK" -eq 1 ] && echo yes || echo no)"

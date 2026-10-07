@@ -50,31 +50,8 @@ require_cmd node
 group "merge build-info"
 log "base: $base"
 for f in "${overlays[@]}"; do log "overlay: $f"; done
-# shellcheck disable=SC2016  # process.env.* below is JS, not shell expansion
-BUILD_INFO_BASE="$base" node --input-type=module -e '
-import { readFileSync, writeFileSync } from "node:fs";
-const base = process.env.BUILD_INFO_BASE;
-// A file that is not JSON is a wrong artifact or a truncated download, and the
-// reader must say which file rather than answering with a node stack trace.
-const readJson = (f) => {
-  try {
-    return JSON.parse(readFileSync(f, "utf8"));
-  } catch (error) {
-    console.error(`::error::${f} is not readable as JSON: ${error.message}`);
-    process.exit(1);
-  }
-};
-const info = readJson(base);
-info.artifacts = { ...(info.artifacts ?? {}) };
-// slice(1): with `node -e`, argv is [execPath, ...args] - there is no script
-// path in it, so the usual slice(2) would silently drop the first overlay.
-for (const f of process.argv.slice(1)) {
-  const overlay = readJson(f);
-  // Only artifacts: see the header. A platform copy is a snapshot of the base
-  // record and must not be able to put a stale sha or stage back on it.
-  info.artifacts = { ...info.artifacts, ...(overlay.artifacts ?? {}) };
-}
-writeFileSync(base, JSON.stringify(info, null, 2) + "\n");
-' "${overlays[@]}"
+# The precedence rule above is merge-build-info.mjs's, beside this script: it
+# rewrites $base in place, and names the file when one is not JSON.
+node "$(dirname "$0")/merge-build-info.mjs" "$base" "${overlays[@]}"
 cat "$base" >&2
 endgroup

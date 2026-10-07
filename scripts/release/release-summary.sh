@@ -14,4 +14,4 @@ source "$(dirname "$0")/../lib/common.sh"
 
 line="paths released: ${PATHS_RELEASED:-none}"
 log "$line"
-[ -z "${GITHUB_STEP_SUMMARY:-}" ] || printf '%s\n' "$line" >> "$GITHUB_STEP_SUMMARY"
+[ -z "${GITHUB_STEP_SUMMARY:-}" ] || gh_summary "$line"

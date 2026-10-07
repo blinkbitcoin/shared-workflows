@@ -7,8 +7,9 @@
 # behaviour is failing when they disagree, so each comparison it makes is
 # broken here on its own, in a copy of the files it reads, and must fail the
 # gate with exit 1 and name what drifted. Also covered: the unmodified pins
-# pass silently, a missing yq stops it with a hint, and several disagreements
-# are all reported in one run.
+# pass silently, a missing yq stops it with a hint, several disagreements
+# are all reported in one run, and the make target runs the drift check of the
+# generated versions files (render-versions.mjs --check) before this script.
 
 load test_helper
 
@@ -174,4 +175,14 @@ errors() { grep -c '::error::' <<< "$output" || true; }
   contains "$output" "android-api-level default (12)" || fail "the first drift is missing: $output"
   contains "$output" "versions.json node (99)" || fail "the second drift is missing: $output"
   [ "$(errors)" -eq 2 ] || fail "expected two errors: $output"
+}
+
+@test "make check-version-pins first fails on a generated file that has drifted from versions.json, then runs this gate" {
+  # The generated half is scripts/self/render-versions.mjs --check, tested in
+  # test/render-versions.test.mjs; this holds the target to running both, in
+  # that order, so the CI job that runs the target runs the drift check too.
+  run make --no-print-directory -n -C "$REPO_ROOT" check-version-pins MISE=
+  [ "$status" -eq 0 ] || fail "make -n failed: $output"
+  [ "$output" = "node scripts/self/render-versions.mjs --check
+bash scripts/self/check-version-pins.sh" ] || fail "unexpected recipe: $output"
 }

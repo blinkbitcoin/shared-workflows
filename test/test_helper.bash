@@ -26,10 +26,65 @@ fail() {
   return 1
 }
 
+# stub_cmd NAME [BODY | -] - put a fake NAME first on PATH for this test.
+#
+# The fake appends its arguments, joined by spaces, as one line to its call log
+# (`stub_calls NAME` prints it, `stub_log NAME` names the file), then runs BODY
+# with the call's arguments in "$@": its output is the fake's output and its
+# exit status the fake's. No BODY exits 0 silently; `-` reads BODY from stdin,
+# for a heredoc. The fake runs under the bash running the test, named by path,
+# so it still runs when a case narrows PATH to the fakes alone. The fakes live
+# in $BATS_TEST_TMPDIR/stub-bin, so every test gets its own and parallel tests
+# never share one. Stubbing NAME again replaces the fake and keeps its log.
+stub_cmd() {
+  local name="$1" body="${2:-exit 0}" dir="$BATS_TEST_TMPDIR/stub-bin" log
+  [ "$body" != - ] || body="$(cat)"
+  log="$(stub_log "$name")"
+  mkdir -p "$dir" "${log%/*}"
+  [ -f "$log" ] || : > "$log"
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) export PATH="$dir:$PATH" ;;
+  esac
+  {
+    printf '#!%s\n' "$BASH"
+    printf 'printf '\''%%s\\n'\'' "$*" >> %q\n' "$log"
+    printf '%s\n' "$body"
+  } > "$dir/$name"
+  chmod +x "$dir/$name"
+}
+# stub_log NAME - the file the fake NAME logs its calls to, one line per call.
+stub_log() { printf '%s\n' "$BATS_TEST_TMPDIR/stub-calls/$1.log"; }
+# stub_calls NAME - every call the fake NAME received, one line each, oldest first.
+stub_calls() { cat "$(stub_log "$1")"; }
+
 # contains HAYSTACK NEEDLE / not_contains HAYSTACK NEEDLE - substring checks
 # that read as commands, so `|| fail` reads naturally at the call site.
 contains() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
 not_contains() { case "$1" in *"$2"*) return 1 ;; *) return 0 ;; esac; }
+
+# require_cmd TOOL... - fail the current test, naming every TOOL not on PATH
+# and the fix, instead of skipping it.
+#
+# Every tool this suite reads the workflows with (yq above all) is pinned in
+# .mise.toml, so a missing one is a broken setup, not a reason to skip. The
+# guard this replaced, `command -v yq >/dev/null || skip "yq not installed"`,
+# turned a shell without the pinned tools into a green run with the workflow
+# shape and contract assertions never executed. test/require-cmd.bats fails if
+# that guard comes back for a pinned tool.
+#
+# Named like scripts/lib/common.sh's require_cmd on purpose: the same contract
+# (every named command must exist), with a test failure in place of `die`.
+require_cmd() {
+  local tool missing=""
+  for tool in "$@"; do
+    command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+  done
+  if [ -n "$missing" ]; then
+    fail "missing command:$missing - this test needs it and fails rather than skips without it. Install the tools .mise.toml pins with 'mise install', then run the suite through 'make test-unit' (or 'mise exec -- bats test/<file>.bats')"
+    return 1
+  fi
+}
 
 # The three variables that decide *where* a script writes, cleared for every
 # test in every file.

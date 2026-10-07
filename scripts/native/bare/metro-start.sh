@@ -2,7 +2,7 @@
 # The bare stack's Metro, `react-native start` in the background, through the
 # consumer's own @react-native-community/cli (`pnpm exec`); scripts/e2e/metro-start.sh
 # dispatches here through scripts/lib/native-stack.sh. The log, pid and process
-# group contract is workflows_metro_background's, in scripts/lib/e2e-env.sh,
+# group contract is workflows_metro_background's, in scripts/lib/e2e-metro.sh,
 # the same one the Expo stack uses, so metro-wait.sh, app-launch.sh and the
 # forensics read both alike.
 #

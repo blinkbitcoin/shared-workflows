@@ -55,21 +55,13 @@ installed_version() {
   maestro_version "$bin"
 }
 
-sha256_of() {
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$1" | cut -d' ' -f1
-  else
-    sha256sum "$1" | cut -d' ' -f1
-  fi
-}
-
 if [ "$(installed_version || true)" != "$MAESTRO_VERSION" ]; then
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
   url="https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
   curl -fsSL --retry 3 --retry-delay 2 -o "$work/maestro.zip" "$url" ||
     die "could not download Maestro $MAESTRO_VERSION from $url"
-  actual="$(sha256_of "$work/maestro.zip")"
+  actual="$(sha256_file "$work/maestro.zip")"
   [ "$actual" = "$MAESTRO_SHA256" ] ||
     die "refusing an unverified Maestro download: sha256 $actual, expected $MAESTRO_SHA256"
   unzip -q "$work/maestro.zip" -d "$work" || die "the Maestro archive did not unzip"

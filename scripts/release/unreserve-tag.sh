@@ -9,6 +9,6 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd gh
 tag="${1:?usage: unreserve-tag.sh TAG}"
-: "${GH_REPO:?GH_REPO not set}"
+require_env GH_REPO:owner/name
 gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$tag" >/dev/null
 log "deleted tag $tag"

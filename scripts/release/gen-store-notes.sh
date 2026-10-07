@@ -47,11 +47,11 @@ generator_args+=(--fastlane-directory "${WORKFLOWS_FASTLANE_DIRECTORY:-fastlane}
 group "store notes"
 require_cmd node
 [ ! -f "scripts/release/notes.mjs" ] ||
-  printf '::warning::scripts/release/notes.mjs is not run: the store notes come from the gen-store-notes program in @blinkbitcoin/app-tooling. Delete it and its test, and keep what the app adds to the prompt in store-notes.prompt.md\n' >&2
+  warn 'scripts/release/notes.mjs is not run: the store notes come from the gen-store-notes program in @blinkbitcoin/app-tooling. Delete it and its test, and keep what the app adds to the prompt in store-notes.prompt.md'
 # The addendum's old name. Not read, so an app that kept it would lose its own
 # product, audience and tone from every LLM draft without a word.
 [ ! -f "release-notes.prompt.md" ] || [ -f "store-notes.prompt.md" ] ||
-  printf '::warning::release-notes.prompt.md is not read: the prompt addendum is store-notes.prompt.md. Rename it\n' >&2
+  warn 'release-notes.prompt.md is not read: the prompt addendum is store-notes.prompt.md. Rename it'
 if [ -n "${RELEASE_BODY_FILE:-}" ] && [ -f "$RELEASE_BODY_FILE" ]; then
   # --body-section: the body is a whole changelog entry (headings, links,
   # commit references); the generator takes the section a store listing can

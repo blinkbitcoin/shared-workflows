@@ -9,7 +9,7 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (51 files)" || fail "output: $output"
+  contains "$output" "package copies ok (58 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
@@ -18,10 +18,11 @@ tree() {
   mkdir -p "$tree/scripts/self" "$tree/scripts/lib" "$tree/scripts/release" "$tree/scripts/checks" "$tree/scripts/ci" "$tree/scripts/hooks" \
     "$tree/scripts/security/lib" "$tree/scripts/security/rules" "$tree/scripts/setup" "$tree/scripts/e2e" "$tree/scripts/native/expo" "$tree/scripts/native/bare" "$tree/.github"
   cp "$REPO_ROOT/scripts/self/package-copies.sh" "$tree/scripts/self/"
-  cp "$REPO_ROOT"/scripts/lib/{common,release-env,git-clean,versions,e2e-env,expo-config,native-stack}.sh "$tree/scripts/lib/"
+  cp "$REPO_ROOT"/scripts/lib/{common,release-env,shared-env,git-clean,versions,e2e-env,e2e-app,e2e-ios,e2e-maestro,e2e-metro,expo-config,native-stack}.sh "$tree/scripts/lib/"
   cp "$REPO_ROOT"/scripts/native/expo/{app-config,fingerprint}.sh "$tree/scripts/native/expo/"
   cp "$REPO_ROOT"/scripts/native/bare/{app-config,fingerprint}.sh "$tree/scripts/native/bare/"
   cp "$REPO_ROOT"/scripts/release/{resolve-version,build-info,verify-ios,verify-android}.sh "$tree/scripts/release/"
+  cp "$REPO_ROOT/scripts/release/build-info.mjs" "$tree/scripts/release/"
   cp "$REPO_ROOT/scripts/lib/verify-common.sh" "$tree/scripts/lib/"
   cp "$REPO_ROOT"/scripts/setup/{all,toolchain,android,ios,lib}.sh "$tree/scripts/setup/"
   cp "$REPO_ROOT"/scripts/checks/{generated,secrets,run-script,expo-health}.sh "$tree/scripts/checks/"
@@ -31,7 +32,7 @@ tree() {
   cp "$REPO_ROOT/scripts/security/lib/runner.sh" "$tree/scripts/security/lib/"
   cp "$REPO_ROOT/scripts/security/rules/react-native-secrets.yaml" "$tree/scripts/security/rules/"
   cp "$REPO_ROOT/scripts/security/semgrepignore" "$tree/scripts/security/"
-  cp "$REPO_ROOT"/scripts/e2e/{ios-maestro,android-maestro,app-launch,ios-simulator,android-emulator,collect-forensics,maestro-bound,wait-for-http}.sh "$tree/scripts/e2e/"
+  cp "$REPO_ROOT"/scripts/e2e/{ios-maestro,android-maestro,app-launch,ios-simulator,android-emulator,collect-forensics,maestro-bound,maestro-suite,wait-for-http}.sh "$tree/scripts/e2e/"
   cp "$REPO_ROOT/.github/zizmor.yml" "$tree/.github/"
   cp "$REPO_ROOT/LICENSE" "$tree/"
 }
@@ -40,13 +41,14 @@ tree() {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 51 files into packages/app-tooling" || fail "output: $output"
-  for rel in release/resolve-version.sh release/build-info.sh checks/generated.sh checks/secrets.sh \
+  contains "$output" "copied 58 files into packages/app-tooling" || fail "output: $output"
+  for rel in release/resolve-version.sh release/build-info.sh release/build-info.mjs checks/generated.sh checks/secrets.sh \
     checks/run-script.sh checks/expo-health.sh ci/check-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh security/scan.sh security/code.sh \
     security/review-codebase.sh security/lib/runner.sh security/rules/react-native-secrets.yaml security/semgrepignore release/verify-ios.sh release/verify-android.sh \
     lib/verify-common.sh setup/all.sh setup/lib.sh e2e/ios-maestro.sh e2e/android-maestro.sh e2e/app-launch.sh \
-    e2e/ios-simulator.sh e2e/android-emulator.sh e2e/collect-forensics.sh e2e/maestro-bound.sh e2e/wait-for-http.sh lib/e2e-env.sh \
+    e2e/ios-simulator.sh e2e/android-emulator.sh e2e/collect-forensics.sh e2e/maestro-bound.sh e2e/maestro-suite.sh e2e/wait-for-http.sh lib/e2e-env.sh \
+    lib/shared-env.sh lib/e2e-app.sh lib/e2e-ios.sh lib/e2e-maestro.sh lib/e2e-metro.sh \
     lib/expo-config.sh lib/native-stack.sh native/expo/app-config.sh native/expo/fingerprint.sh \
     native/bare/app-config.sh native/bare/fingerprint.sh; do
     cmp -s "$tree/scripts/$rel" "$tree/packages/app-tooling/$rel" || fail "packages/app-tooling/$rel is not a copy"
@@ -114,7 +116,7 @@ packaged_consumer() {
 }
 
 @test "the packaged i18n check runs from the package against a consumer that is current" {
-  command -v pnpm >/dev/null || skip "pnpm not installed"
+  require_cmd pnpm
   packaged_consumer "true"
   cd "$consumer"
   run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/generated.sh"
@@ -122,7 +124,7 @@ packaged_consumer() {
 }
 
 @test "the packaged i18n check fails, naming the fix, when extraction changes the catalogs" {
-  command -v pnpm >/dev/null || skip "pnpm not installed"
+  require_cmd pnpm
   packaged_consumer "echo changed >> src/i18n/locales/en.po"
   cd "$consumer"
   run env -u GITHUB_WORKSPACE -u WORKING_DIRECTORY bash "$REPO_ROOT/packages/app-tooling/checks/generated.sh"

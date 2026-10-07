@@ -36,9 +36,6 @@ printf '%s\n' "$report"
 # its findings - which the runner turns into annotations from the log above.
 # In the summary they would only be noise inside the report, so they stay out.
 summary="$(printf '%s\n' "$report" | grep -v '^::' || true)"
-{
-  printf '## Security\n\n'
-  # shellcheck disable=SC2016  # the backticks are a literal markdown code fence, not command substitution
-  printf '```\n%s\n```\n' "$summary"
-} >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+# shellcheck disable=SC2016  # the backticks are a literal markdown code fence, not command substitution
+gh_summary '## Security' '' '```' "$summary" '```'
 exit "$code"

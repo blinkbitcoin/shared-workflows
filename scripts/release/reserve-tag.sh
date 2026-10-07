@@ -20,10 +20,12 @@ source "$(dirname "$0")/../lib/common.sh"
 require_cmd gh
 tag="${1:?usage: reserve-tag.sh TAG SHA}"
 sha="${2:?usage: reserve-tag.sh TAG SHA}"
-: "${GH_REPO:?GH_REPO not set}"
+require_env GH_REPO:owner/name
 
-existing=""
-if existing="$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null)"; then
+# A lookup that fails for any reason but a 404 is fatal inside gh_ref_exists:
+# reading a 401 or a 5xx as "absent" would go on to create the tag blind.
+if gh_ref_exists "tags/$tag"; then
+  existing="$gh_ref_sha"
   if [ "$existing" = "$sha" ]; then
     log "tag $tag already points at $sha - nothing to reserve"
     gh_output reserved false

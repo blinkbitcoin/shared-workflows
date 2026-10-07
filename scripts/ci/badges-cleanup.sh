@@ -10,7 +10,7 @@ source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/gh-pages-lib.sh"
 require_cmd git
 
-: "${BRANCH:?BRANCH is required}"
+require_env BRANCH
 gh_pages_assert_branch "$BRANCH"
 
 # Two steps: a command substitution used as an argument does not propagate its

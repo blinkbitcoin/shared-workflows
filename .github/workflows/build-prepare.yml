@@ -170,7 +170,7 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .workflows
           persist-credentials: false
-      - name: Publish WORKFLOWS_DIR environment
+      - name: Publish the release output directories
         run: bash ".workflows/scripts/release/env-publish.sh"
       - name: Resolve target sha
         id: sha

@@ -6,8 +6,7 @@
 # environment override, the outputs on GITHUB_OUTPUT and on stdout without it,
 # the consumer found through WORKING_DIRECTORY and the script called by a
 # relative path, and each failure - no node, an invalid value, a resolver that
-# prints nothing, prints something that is not JSON, or prints JSON that is not
-# the settings object - plus the skipped row with no name.
+# prints nothing or fails - plus the skipped row with no name.
 #
 # The real resolver answers every case it can produce. The resolver outputs it
 # never produces (nothing, not JSON, a nameless job) come from a copy of
@@ -179,44 +178,27 @@ EOF
   [ ! -s "$GITHUB_OUTPUT" ] || fail "an empty answer still published outputs: $(cat "$GITHUB_OUTPUT")"
 }
 
-@test "settings.sh rejects resolver output that is not JSON" {
+@test "settings.sh fails, publishing nothing, when the resolver fails" {
   local script
   script="$(layout_with_resolver <<'EOF'
-console.log('not the settings object at all');
+console.log('enabled=true');
+process.exit(3);
 EOF
 )"
   GITHUB_WORKSPACE="$(consumer_with_settings broken < /dev/null)"
   export GITHUB_WORKSPACE
   export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/outputs"
   run bash "$script"
-  [ "$status" -eq 1 ] || fail "unreadable output was read as a valid answer: $status / $output"
-  contains "$output" 'printed something that is not the settings object: not the settings object at all' \
+  [ "$status" -eq 1 ] || fail "a failed resolver was read as a valid answer: $status / $output"
+  contains "$output" 'security-settings.mjs could not resolve the security settings' \
     || fail "the error does not say what was wrong: $output"
-  [ ! -s "$GITHUB_OUTPUT" ] || fail "a rejected answer still published outputs: $(cat "$GITHUB_OUTPUT")"
+  [ ! -s "$GITHUB_OUTPUT" ] || fail "a failed answer still published outputs: $(cat "$GITHUB_OUTPUT")"
 }
 
-@test "settings.sh rejects JSON that lacks the settings fields" {
+@test "settings.sh publishes no output for a row with an empty name" {
   local script
   script="$(layout_with_resolver <<'EOF'
-console.log(JSON.stringify({ enabled: true }));
-EOF
-)"
-  GITHUB_WORKSPACE="$(consumer_with_settings shapeless < /dev/null)"
-  export GITHUB_WORKSPACE
-  export GITHUB_OUTPUT="$BATS_TEST_TMPDIR/outputs"
-  run bash "$script"
-  [ "$status" -eq 1 ] || fail "JSON without failOn or jobs was read as a valid answer: $status / $output"
-  contains "$output" 'security-settings.mjs printed something that is not the settings object' \
-    || fail "the error does not say what was wrong: $output"
-  [ ! -s "$GITHUB_OUTPUT" ] || fail "a rejected answer still published outputs: $(cat "$GITHUB_OUTPUT")"
-}
-
-@test "settings.sh publishes no output for a job with an empty name" {
-  local script
-  script="$(layout_with_resolver <<'EOF'
-console.log(
-  JSON.stringify({ enabled: true, jobs: { '': true, dependencies: true }, severity: 'high', failOn: [] }),
-);
+for (const line of ['enabled=true', 'severity=high', 'fail-on=', '=true', 'dependencies=true']) console.log(line);
 EOF
 )"
   GITHUB_WORKSPACE="$(consumer_with_settings unnamed < /dev/null)"

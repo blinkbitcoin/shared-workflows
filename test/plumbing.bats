@@ -17,7 +17,7 @@ setup() {
 }
 
 @test "a job that runs both env-publish scripts keeps one output directory" {
-  # release-env.sh mirrors e2e-env.sh's WORKFLOWS_OUT on purpose: a job that
+  # release-env.sh and e2e-env.sh share shared-env.sh's WORKFLOWS_OUT on purpose: a job that
   # does both must stage everything in one directory, and publish it once.
   bash "$REPO_ROOT/scripts/e2e/env-publish.sh" 2>/dev/null
   bash "$REPO_ROOT/scripts/release/env-publish.sh" 2>/dev/null
