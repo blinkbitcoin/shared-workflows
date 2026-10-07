@@ -33,7 +33,7 @@ while [ "$#" -gt 1 ]; do [ "$1" = --output ] && out="$2"; shift; done
 read -r -a statuses <<< "${MAESTRO_STATUSES:-0}"
 exit "${statuses[$((n - 1))]:-0}"
 STUB
-  chmod +x "$bin/maestro"
+  as_fakes "$bin/maestro"
   export PATH="$bin:/usr/bin:/bin"
 }
 

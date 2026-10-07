@@ -1,0 +1,26 @@
+#!/bin/bash
+# The one executable behind the bats suite's fakes (as_fakes and stub_cmd in
+# test/test_helper.bash): each fake is a symbolic link to a read-only copy of
+# this file, and its text sits beside it as .<name>.fake. Run as <dir>/<name>,
+# it runs that text with the call's arguments: a bash fake in this bash, with
+# $0 the fake's own path as its own script had; any other under the
+# interpreter its first line names, given the text's path.
+#
+# One file rather than a fresh script per fake per test: macOS checks every
+# new executable the first time it runs, one at a time across the machine.
+fake="${0%/*}/.${0##*/}.fake"
+read -r first < "$fake"
+case "$first" in
+  '#!/usr/bin/env bash' | '#!/bin/bash' | '#!'*/bash)
+    # shellcheck disable=SC1090  # the fake's own text, named at run time
+    . "$fake"
+    ;;
+  '#!'*)
+    # shellcheck disable=SC2086  # "#!/usr/bin/env python3" is a command and its argument
+    exec ${first#\#!} "$fake" "$@"
+    ;;
+  *)
+    # shellcheck disable=SC1090
+    . "$fake"
+    ;;
+esac

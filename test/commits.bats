@@ -35,7 +35,7 @@ case "\$input" in *REJECT*) printf 'subject may not be REJECT\n' >&2; exit 1 ;; 
 case "\$*" in *--from*) [ -z "\${STUB_REJECT_RANGE:-}" ] || { printf 'a commit in the range is invalid\n' >&2; exit 1; } ;; esac
 exit 0
 SH
-    chmod +x "$STUB/$tool"
+    as_fakes "$STUB/$tool"
   done
   export PATH="$STUB:$PATH"
   export RUNNER_TEMP="$BATS_TEST_TMPDIR/runner-temp"

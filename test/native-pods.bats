@@ -26,7 +26,7 @@ printf '%s %s | stats=%s\n' "$tool" "\$*" "\${COCOAPODS_DISABLE_STATS:-}" >> "\$
 [ "\$(wc -l < "\$CALLS")" -gt "\${POD_FAIL_FIRST:-0}" ] || exit 1
 printf 'PODS:\n  - A\n  - B\n  - C\n  - D\n  - E\n  - F\n' > Podfile.lock
 STUB
-    chmod +x "$bin/$tool"
+    as_fakes "$bin/$tool"
   done
   export PATH="$bin:/usr/bin:/bin"
 }

@@ -32,7 +32,7 @@ components="${FAKE_COMPONENTS:-}"
 printf '{"bomFormat":"CycloneDX","components":%s}' "$components" > "$out"
 echo "pnpm's own chatter"
 STUB
-  chmod +x "$bin/pnpm"
+  as_fakes "$bin/pnpm"
 }
 
 bare_path() {

@@ -66,7 +66,7 @@ last_line() { printf '%s' "${lines[${#lines[@]}-1]}"; }
 # like from the caller's side.
 broken_grep() {
   printf '#!/bin/sh\necho "grep: broken" >&2\nexit 2\n' > "$bin/grep"
-  chmod +x "$bin/grep"
+  as_fakes "$bin/grep"
 }
 
 BADGING="package: name='sv.blink.reactnativemobiletemplate' versionCode='42' versionName='1.2.3' compileSdkVersion='36'
@@ -216,7 +216,7 @@ base/lib/x86_64/libhermes.so'"
 
 @test "a grep that fails silently still fails the scan, naming its status" {
   printf '#!/bin/sh\nexit 3\n' > "$bin/grep"
-  chmod +x "$bin/grep"
+  as_fakes "$bin/grep"
   printf 'x' > "$dir/main.jsbundle"
   lib "PATH='$bin':\$PATH; vc_dev_server_verdict '$dir/main.jsbundle' text"
   [ "$output" = 'FAIL could not scan the bundle: grep failed with status 3' ] || fail "text: $output"
@@ -275,7 +275,7 @@ base/lib/x86_64/libhermes.so'"
 printf 'LC_ALL=%s\n' "$LC_ALL"
 [ "$LC_ALL" = C ]
 STUB
-  chmod +x "$bin/grep"
+  as_fakes "$bin/grep"
   printf 'var API = "https://api.example.com/graphql";\n' > "$dir/main.jsbundle"
   export LC_ALL=en_US.UTF-8
   lib "PATH='$bin':\$PATH; vc_grep x '$dir/main.jsbundle'; printf '%s' \"\$VC_GREP_OUTPUT\""
@@ -727,7 +727,7 @@ FAIL min-sdk: aapt2 could not read it' ] || fail "$output"
 
 @test "an Android build tool on PATH wins over the SDK" {
   printf '#!/bin/sh\n' > "$bin/aapt2"
-  chmod +x "$bin/aapt2"
+  as_fakes "$bin/aapt2"
   export ANDROID_HOME="$BATS_TEST_TMPDIR/sdk"
   lib "PATH='$bin':\$PATH; vc_android_build_tool aapt2"
   [ "$output" = "$bin/aapt2" ] || fail "$output"
@@ -738,7 +738,7 @@ FAIL min-sdk: aapt2 could not read it' ] || fail "$output"
   for version in 34.0.0 35.0.0 9.0.0; do
     mkdir -p "$sdk/build-tools/$version"
     printf '#!/bin/sh\n' > "$sdk/build-tools/$version/aapt2"
-    chmod +x "$sdk/build-tools/$version/aapt2"
+    as_fakes "$sdk/build-tools/$version/aapt2"
   done
   export ANDROID_HOME="$sdk"
   lib_on "$(bare_path)" 'vc_android_build_tool aapt2'
@@ -768,12 +768,12 @@ FAIL min-sdk: aapt2 could not read it' ] || fail "$output"
 
 @test "bundletool is a command on PATH, else a jar run by java, else not found" {
   printf '#!/bin/sh\n' > "$bin/bundletool"
-  chmod +x "$bin/bundletool"
+  as_fakes "$bin/bundletool"
   lib_on "$bin:$(bare_path)" 'vc_find_bundletool && echo "${VC_BUNDLETOOL[*]}"'
   [ "$output" = 'bundletool' ] || fail "command: $output"
   rm "$bin/bundletool"
   printf '#!/bin/sh\n' > "$bin/java"
-  chmod +x "$bin/java"
+  as_fakes "$bin/java"
   : > "$dir/bundletool.jar"
   export BUNDLETOOL_JAR="$dir/bundletool.jar"
   lib_on "$bin:$(bare_path)" 'vc_find_bundletool && echo "${VC_BUNDLETOOL[*]}"'

@@ -52,7 +52,7 @@ printf '%s|%s\n' "$PWD" "$*" >> "$WORKFLOWS_TEST_CALLS"
 printf '%s' "${WORKFLOWS_TEST_FINGERPRINT_OUTPUT:-}"
 exit "${WORKFLOWS_TEST_FINGERPRINT_STATUS:-0}"
 SH
-  chmod +x "$STUB/npx"
+  as_fakes "$STUB/npx"
   export PATH="$STUB:$PATH"
 }
 

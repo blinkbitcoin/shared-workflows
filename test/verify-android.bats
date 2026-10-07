@@ -119,7 +119,7 @@ STUB
 printf 'java %s\n' "\$*" >> "\$CALLS"
 cat "$BATS_TEST_TMPDIR/manifest.xml"
 STUB
-  chmod +x "$at/aapt2" "$at/bundletool" "$at/apksigner" "$at/java"
+  as_fakes "$at/aapt2" "$at/bundletool" "$at/apksigner" "$at/java"
 }
 
 # A PATH with the ordinary tools the gate needs, less the ones named in $@.

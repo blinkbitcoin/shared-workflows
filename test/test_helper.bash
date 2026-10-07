@@ -32,10 +32,11 @@ fail() {
 # (`stub_calls NAME` prints it, `stub_log NAME` names the file), then runs BODY
 # with the call's arguments in "$@": its output is the fake's output and its
 # exit status the fake's. No BODY exits 0 silently; `-` reads BODY from stdin,
-# for a heredoc. The fake runs under the bash running the test, named by path,
-# so it still runs when a case narrows PATH to the fakes alone. The fakes live
-# in $BATS_TEST_TMPDIR/stub-bin, so every test gets its own and parallel tests
+# for a heredoc. The fake runs under /bin/bash, named by path, so it still runs
+# when a case narrows PATH to the fakes alone. The fakes live in
+# $BATS_TEST_TMPDIR/stub-bin, so every test gets its own and parallel tests
 # never share one. Stubbing NAME again replaces the fake and keeps its log.
+# Like every fake made by as_fakes, it is a link to the shared runner.
 stub_cmd() {
   local name="$1" body="${2:-exit 0}" dir="$BATS_TEST_TMPDIR/stub-bin" log
   [ "$body" != - ] || body="$(cat)"
@@ -46,17 +47,51 @@ stub_cmd() {
     *":$dir:"*) ;;
     *) export PATH="$dir:$PATH" ;;
   esac
+  rm -f "$dir/$name"
   {
-    printf '#!%s\n' "$BASH"
+    printf '#!/bin/bash\n'
     printf 'printf '\''%%s\\n'\'' "$*" >> %q\n' "$log"
     printf '%s\n' "$body"
   } > "$dir/$name"
-  chmod +x "$dir/$name"
+  as_fakes "$dir/$name"
 }
 # stub_log NAME - the file the fake NAME logs its calls to, one line per call.
 stub_log() { printf '%s\n' "$BATS_TEST_TMPDIR/stub-calls/$1.log"; }
 # stub_calls NAME - every call the fake NAME received, one line each, oldest first.
 stub_calls() { cat "$(stub_log "$1")"; }
+
+# as_fakes FILE... - turn each script FILE a test just wrote into a fake that
+# costs no fresh executable: its text moves to .<name>.fake beside it and FILE
+# becomes a link to one runner (test/fixtures/fake-runner), which runs that
+# text with the call's arguments - a bash fake with FILE as $0, any other under
+# the interpreter its `#!` line names. Use it where a test would `chmod +x` a
+# fake it wrote.
+#
+# macOS checks the first run of every newly written executable, one at a time
+# across the whole machine (about 90 ms each, never in parallel), so a parallel
+# suite writing fresh fakes in every test queued behind itself for minutes. A
+# link to an executable that already ran costs nothing. The runner is a
+# read-only copy made once per bats run, so a test that writes to a fake's path
+# afterwards fails at once instead of rewriting every other test's fakes.
+as_fakes() {
+  local runner file
+  runner="$(fake_runner)" || return
+  for file in "$@"; do
+    [ -f "$file" ] && [ ! -L "$file" ] || { fail "as_fakes: $file is not a script the test wrote"; return 1; }
+    mv -f "$file" "${file%/*}/.${file##*/}.fake"
+    ln -s "$runner" "$file"
+  done
+}
+# fake_runner - the path of this bats run's read-only copy of the runner,
+# made by the first test that needs it; a rename makes it whole at once.
+fake_runner() {
+  local runner="$BATS_RUN_TMPDIR/fake-runner" staging
+  if [ ! -x "$runner" ]; then
+    staging="$(mktemp "$BATS_RUN_TMPDIR/fake-runner.XXXXXX")" || return
+    cp "$REPO_ROOT/test/fixtures/fake-runner" "$staging" && chmod 555 "$staging" && mv -f "$staging" "$runner" || return
+  fi
+  printf '%s\n' "$runner"
+}
 
 # contains HAYSTACK NEEDLE / not_contains HAYSTACK NEEDLE - substring checks
 # that read as commands, so `|| fail` reads naturally at the call site.

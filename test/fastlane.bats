@@ -33,7 +33,7 @@ printf 'gemfile: %s\n' "${BUNDLE_GEMFILE-unset}" >> "$WORKFLOWS_TEST_LOG"
 shift 2  # `exec fastlane`
 exec fastlane "$@"
 SH
-  chmod +x "$STUB/fastlane" "$STUB/bundle"
+  as_fakes "$STUB/fastlane" "$STUB/bundle"
   export PATH="$STUB:$PATH"
   export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR" WORKING_DIRECTORY=app
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"

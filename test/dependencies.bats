@@ -30,7 +30,7 @@ while [ $# -gt 0 ]; do [ "$1" = --output-file ] && out="$2"; shift; done
 printf '{"version":"2.1.0","runs":[]}' > "$out"
 exit "${FAKE_EXIT:-0}"
 STUB
-  chmod +x "$bin/osv-scanner"
+  as_fakes "$bin/osv-scanner"
 }
 
 # A PATH with node and the basics a runner needs, and no scanner - so "missing"

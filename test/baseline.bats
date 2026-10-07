@@ -39,7 +39,7 @@ for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done
 printf '%s' "$WORKFLOWS_TEST_ASSET_BODY" > "$out"
 exit 0
 SH
-  chmod +x "$STUB/gh"
+  as_fakes "$STUB/gh"
   export WORKFLOWS_TEST_ASSET_MISSING="$BATS_TEST_TMPDIR/asset-missing"
   export WORKFLOWS_TEST_ASSET_BODY='{"sha":"abc","fingerprint":{"ios":"fp"}}'
 }

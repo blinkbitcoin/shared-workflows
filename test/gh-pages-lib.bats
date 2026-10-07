@@ -100,7 +100,7 @@ git --git-dir="$REMOTE" update-ref refs/heads/gh-pages $1 || exit 3
 echo "another publish landed first" >&2
 exit 1
 EOF
-  chmod +x "$hook"
+  as_fakes "$hook"
 }
 
 # reject_every_push - the remote refuses every push from now on.
@@ -110,7 +110,7 @@ reject_every_push() {
 cat >/dev/null
 exit 1
 HOOK
-  chmod +x "$REMOTE/hooks/pre-receive"
+  as_fakes "$REMOTE/hooks/pre-receive"
 }
 
 # load_library - source the library the way the scripts do, from inside the

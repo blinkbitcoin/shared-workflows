@@ -64,7 +64,7 @@ while [ \$# -gt 0 ]; do
 done
 printf '%s' '$content' > "\$out"
 STUB
-  chmod +x "$file"
+  as_fakes "$file"
   printf '%s' "$file"
 }
 
@@ -89,7 +89,7 @@ for p in "\${platforms[@]}"; do
   printf 'not a bundle' > "\$out/_expo/static/js/\$p/entry.map"
 done
 STUB
-  chmod +x "$file"
+  as_fakes "$file"
   printf '%s' "$file"
 }
 
@@ -177,7 +177,7 @@ bundle() { run bash "$REPO_ROOT/scripts/security/bundle.sh"; }
 
 @test "an export that wrote no bundle fails the job" {
   printf '#!/usr/bin/env bash\nexit 0\n' > "$bin/expo"
-  chmod +x "$bin/expo"
+  as_fakes "$bin/expo"
   export SECURITY_EXPO_BIN="$bin/expo"
   bundle
   [ "$status" -eq 1 ] || fail "an empty export passed with $status: $output"
@@ -186,7 +186,7 @@ bundle() { run bash "$REPO_ROOT/scripts/security/bundle.sh"; }
 
 @test "an export that fails fails the job" {
   printf '#!/usr/bin/env bash\necho "metro: cannot resolve module" >&2\nexit 7\n' > "$bin/expo"
-  chmod +x "$bin/expo"
+  as_fakes "$bin/expo"
   export SECURITY_EXPO_BIN="$bin/expo"
   bundle
   [ "$status" -ne 0 ] || fail "a failed export passed: $output"
@@ -307,7 +307,7 @@ bundle() { run bash "$REPO_ROOT/scripts/security/bundle.sh"; }
 @test "a react-native bundle that wrote nothing fails the job" {
   bare_app
   printf '#!/usr/bin/env bash\nexit 0\n' > "$bin/react-native"
-  chmod +x "$bin/react-native"
+  as_fakes "$bin/react-native"
   export SECURITY_REACT_NATIVE_BIN="$bin/react-native"
   bundle
   [ "$status" -eq 1 ] || fail "an empty bundle passed with $status: $output"
@@ -317,7 +317,7 @@ bundle() { run bash "$REPO_ROOT/scripts/security/bundle.sh"; }
 @test "a react-native bundle that fails fails the job" {
   bare_app
   printf '#!/usr/bin/env bash\necho "metro: cannot resolve module" >&2\nexit 7\n' > "$bin/react-native"
-  chmod +x "$bin/react-native"
+  as_fakes "$bin/react-native"
   export SECURITY_REACT_NATIVE_BIN="$bin/react-native"
   bundle
   [ "$status" -ne 0 ] || fail "a failed bundle passed: $output"

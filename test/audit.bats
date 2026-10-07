@@ -37,7 +37,7 @@ case " $* " in
 esac
 exit 0
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   export PATH="$STUB:$PATH"
 }
 
@@ -90,7 +90,7 @@ bare_path() {
 #!/usr/bin/env bash
 printf '%s\n' "$PWD" >> "$WORKFLOWS_TEST_CALLS"
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   cd "$BATS_TEST_TMPDIR"
   PATH="$STUB:$PATH" run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
@@ -103,7 +103,7 @@ SH
 #!/usr/bin/env bash
 exit 7
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   PATH="$STUB:$PATH" run bash "$SCRIPT"
   [ "$status" -eq 7 ] || fail "expected pnpm's status 7, got $status: $output"
 }

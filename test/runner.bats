@@ -133,7 +133,7 @@ sarif_note() {
 @test "sec_require returns when the tool is on PATH" {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   printf '#!/usr/bin/env bash\n' > "$BATS_TEST_TMPDIR/bin/some-scanner"
-  chmod +x "$BATS_TEST_TMPDIR/bin/some-scanner"
+  as_fakes "$BATS_TEST_TMPDIR/bin/some-scanner"
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" in_runner 'sec_require some-scanner code; echo REACHED'
   [ "$status" -eq 0 ] || fail "status $status: $output"
   contains "$output" REACHED || fail "a present tool did not return: $output"
@@ -178,14 +178,14 @@ build_tools() {
   for version in "$@"; do
     mkdir -p "$sdk/build-tools/$version"
     printf '#!/usr/bin/env bash\n' > "$sdk/build-tools/$version/fake-build-tool"
-    chmod +x "$sdk/build-tools/$version/fake-build-tool"
+    as_fakes "$sdk/build-tools/$version/fake-build-tool"
   done
 }
 
 @test "sec_android_build_tool prefers the tool on PATH" {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   printf '#!/usr/bin/env bash\n' > "$BATS_TEST_TMPDIR/bin/fake-build-tool"
-  chmod +x "$BATS_TEST_TMPDIR/bin/fake-build-tool"
+  as_fakes "$BATS_TEST_TMPDIR/bin/fake-build-tool"
   build_tools "$BATS_TEST_TMPDIR/sdk" 34.0.0
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" ANDROID_HOME="$BATS_TEST_TMPDIR/sdk" in_runner 'sec_android_build_tool fake-build-tool'
   [ "$status" -eq 0 ] || fail "status $status: $output"

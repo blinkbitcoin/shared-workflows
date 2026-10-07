@@ -109,7 +109,7 @@ case "$1 $2" in
 esac
 exit 0
 SH
-  chmod +x "$STUB/gh"
+  as_fakes "$STUB/gh"
   export PATH="$STUB:$PATH"
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" WORKFLOWS_ASSETS_DIR="$ASSETS" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   mkdir -p "$RUNNER_TEMP"

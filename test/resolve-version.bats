@@ -13,7 +13,7 @@ setup() {
   STUB="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$STUB"
   printf '#!/usr/bin/env bash\nexit 1\n' > "$STUB/gh"
-  chmod +x "$STUB/gh"
+  as_fakes "$STUB/gh"
   PATH="$STUB:$PATH"
   REPO="$BATS_TEST_TMPDIR/repo"
   mkdir -p "$REPO"

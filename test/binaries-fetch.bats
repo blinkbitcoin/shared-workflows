@@ -35,7 +35,7 @@ fi
 echo "unexpected gh invocation: $*" >&2
 exit 2
 GH
-  chmod +x "$bin/gh"
+  as_fakes "$bin/gh"
   export PATH="$bin:$PATH"
   export GITHUB_ENV="$BATS_TEST_TMPDIR/github-env"
   : > "$GITHUB_ENV"

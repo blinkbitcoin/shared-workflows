@@ -17,7 +17,7 @@ setup() {
 #!/usr/bin/env bash
 printf 'pnpm %s | CI=%s | cwd=%s\n' "$*" "${CI:-}" "$PWD"
 STUB
-  chmod +x "$bin/pnpm"
+  as_fakes "$bin/pnpm"
   export PATH="$bin:$PATH"
 }
 

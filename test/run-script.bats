@@ -18,7 +18,7 @@ EOF
 #!/usr/bin/env bash
 touch knipfake.marker
 EOF
-  chmod +x "$consumer/node_modules/.bin/knipfake"
+  as_fakes "$consumer/node_modules/.bin/knipfake"
   export GITHUB_WORKSPACE="$consumer"
 }
 
@@ -45,7 +45,7 @@ EOF
 stub_pnpm() {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "pnpm $*" >> "%s/calls"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/pnpm"
-  chmod +x "$BATS_TEST_TMPDIR/bin/pnpm"
+  as_fakes "$BATS_TEST_TMPDIR/bin/pnpm"
   : > "$BATS_TEST_TMPDIR/calls"
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }

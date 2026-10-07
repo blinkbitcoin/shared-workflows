@@ -47,7 +47,7 @@ case "$1 $2" in
 esac
 echo "unexpected gh $*" >&2; exit 1
 SH
-  chmod +x "$STUB/gh"
+  as_fakes "$STUB/gh"
   export PATH="$STUB:$PATH"
   # The generator: every markdown bullet becomes a notes line, so the test can
   # see exactly which bullets the script fed it. With $WORKFLOWS_TEST_NOTES
@@ -71,7 +71,7 @@ else
 fi
 printf '{}\n' > "$out/store-notes.json"
 SH
-  chmod +x "$STUB/node"
+  as_fakes "$STUB/node"
   cat > "$WORKFLOWS_TEST_BODY" <<'EOF'
 :robot: I have created a release *beep* *boop*
 ---

@@ -40,7 +40,7 @@ case "$url" in
     ;;
 esac
 SH
-  chmod +x "$STUB/curl"
+  as_fakes "$STUB/curl"
   # Run the stub once before the script does: macOS scans a new executable on
   # its first run, for seconds, and the cases below time Metro's first poll.
   "$STUB/curl" http://localhost/warm-up > /dev/null

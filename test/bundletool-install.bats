@@ -26,7 +26,7 @@ SH
 printf 'java %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
 exit "${WORKFLOWS_TEST_JAVA_STATUS:-0}"
 SH
-  chmod +x "$STUB/curl" "$STUB/java"
+  as_fakes "$STUB/curl" "$STUB/java"
   export PATH="$STUB:$PATH"
   export RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp" GITHUB_ENV="$BATS_TEST_TMPDIR/env"
   mkdir -p "$RUNNER_TEMP"

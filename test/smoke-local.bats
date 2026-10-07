@@ -220,14 +220,17 @@ teardown() {
   contains "$args" "repository=blinkbitcoin/react-native-mobile-template" || fail "args: $args"
 }
 
+# The other address is localhost, not 127.0.0.2: macOS configures only
+# 127.0.0.1 on its loopback, so each port the script probes on 127.0.0.2 waits
+# out a 75-second connect timeout there, where Linux refuses it at once.
 @test "WORKFLOWS_ACT_SERVER_ADDR moves both servers, and the log says where they are" {
   cd "$work"
   git push -q origin feature
-  WORKFLOWS_ACT_SERVER_ADDR=127.0.0.2 run bash "$SCRIPT"
+  WORKFLOWS_ACT_SERVER_ADDR=localhost run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "output: $output"
-  [ "$(act_arg --artifact-server-addr)" = "127.0.0.2" ] || fail "the override did not reach the artifact server: $(cat "$BATS_TEST_TMPDIR/act.args")"
-  [ "$(act_arg --cache-server-addr)" = "127.0.0.2" ] || fail "the override did not reach the cache server: $(cat "$BATS_TEST_TMPDIR/act.args")"
-  contains "$output" "artifacts at 127.0.0.2:" || fail "the address was not logged: $output"
+  [ "$(act_arg --artifact-server-addr)" = "localhost" ] || fail "the override did not reach the artifact server: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  [ "$(act_arg --cache-server-addr)" = "localhost" ] || fail "the override did not reach the cache server: $(cat "$BATS_TEST_TMPDIR/act.args")"
+  contains "$output" "artifacts at localhost:" || fail "the address was not logged: $output"
 }
 
 @test "the artifact port is derived from the checkout, and a port in use is skipped" {
