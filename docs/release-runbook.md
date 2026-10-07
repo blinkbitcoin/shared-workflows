@@ -312,7 +312,10 @@ and takes Play to 100%. `action: halt` stops both. See
   files differ from main's tip, and by publish time a later merge may have
   changed one. A tag with no release behind it means a run reserved it and
   then failed; the run deletes it on a red gate, and `gh run rerun --failed`
-  finishes the rest.
+  finishes the rest. Both Prepare and the publish step look the tag up first,
+  and only GitHub's 404 counts as "no tag": a lookup refused for credentials, a
+  rate limit or a GitHub outage stops the job with GitHub's own message rather
+  than creating, or passing `--target` for, a tag that may already exist.
 - **Raise `BUILD_NUMBER_OFFSET`, never lower it.** App Store Connect and Play
   both reject a build number that goes backwards, permanently.
 - **A non-numeric `BUILD_NUMBER_OFFSET` is refused** by both copies of the

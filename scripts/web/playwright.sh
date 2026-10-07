@@ -14,7 +14,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd pnpm
 
-: "${E2E_SCRIPT:?E2E_SCRIPT not set}"
+require_env E2E_SCRIPT
 export PLAYWRIGHT_SKIP_EXPORT="${PLAYWRIGHT_SKIP_EXPORT:-1}"
 
 root="$(consumer_root)"

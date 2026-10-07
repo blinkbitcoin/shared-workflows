@@ -182,7 +182,7 @@ jobs:
       # only after prebuild and pod install have already been paid for.
       - name: Check the lane inputs
         run: bash ".workflows/scripts/release/require-inputs.sh"
-      - name: Publish WORKFLOWS_DIR environment
+      - name: Publish the release output directories
         run: bash ".workflows/scripts/release/env-publish.sh"
       - name: Native cache keys
         id: keys
@@ -244,6 +244,15 @@ jobs:
           # fastlane.sh appends $LANE_ARGS to the lane arguments.
           LANE_ARGS: ${{ !inputs.ios-signing-enabled && 'skip_signing:true' || '' }}
         run: bash "$WORKFLOWS_DIR/scripts/release/fastlane.sh" ios build
+      # Between build and verify, as in build-android.yml: the digest describes
+      # the .ipa the lane just produced (an unsigned build packages none, which
+      # is recorded as absent). The enriched copy travels with the .ipa as
+      # build-info.ios.json, and publish-github-release.yml folds its
+      # `artifacts` back into the release's build-info.json.
+      - name: Record artifact hashes
+        env:
+          BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
+        run: bash "$WORKFLOWS_DIR/scripts/release/artifact-hashes.sh" ios
       - name: Fastlane ios verify
         if: ${{ inputs.verify }}
         env:
@@ -273,7 +282,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.ipa-artifact }}
-          path: ${{ env.WORKFLOWS_OUTPUT_DIR }}/*.ipa
+          # build-info.ios.json under its platform name for the reason the
+          # Android aab upload gives: two artifacts carrying build-info.json
+          # would make the release's record depend on download order.
+          path: |
+            ${{ env.WORKFLOWS_OUTPUT_DIR }}/*.ipa
+            ${{ env.WORKFLOWS_OUTPUT_DIR }}/build-info.ios.json
           # An .ipa is already a zip; re-compressing it costs minutes and saves
           # nothing.
           compression-level: 0

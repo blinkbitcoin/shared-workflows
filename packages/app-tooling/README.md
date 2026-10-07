@@ -71,7 +71,10 @@ the commit it names is what you trust there.
 
 `versions.json` is the one place a tool version is written down. Everything
 else — `.mise.toml` here, a `flake.nix` elsewhere, a workflow input default —
-is checked against it rather than trusted to match.
+is checked against it rather than trusted to match. In shared-workflows it is
+also the source `lib/versions.sh` and the `[tools]` block of `.mise.toml` are
+generated from: its `shell` and `mise` lists are that repository's own pins,
+and `check-tool-versions` reads only `tools`.
 
 ## `check-tool-versions`
 
@@ -143,8 +146,14 @@ literal one. The callers are read from the repository root, where GitHub reads
 them, and two different values are an error here too.
 
 `contract.json` is the table it reads — what wants each thing, which workflow
-input switches it off, whether a fallback exists, and the fix. The consumer
+input switches it off, whether a fallback exists, and the fix. Its `profiles`
+say which workflow switches on which group of rows, so a repository is checked
+only for the workflows it calls, and `contract.schema.json` (shipped beside it)
+is its shape. The consumer
 guide's tables are generated from the same file, so the two cannot disagree.
+Each row's `kind` names the check it gets, one entry per kind in the
+program's `CHECKERS`; a row of a kind the program has no check for fails the
+run before any rule is checked, so a typo cannot quietly switch a rule off.
 Its `no-copy` rows work the other way round: they block a repository that
 still holds its own copy of something this package or the workflows ship, such
 as a guard program or `resolve-version.sh`
@@ -965,7 +974,9 @@ beside them. Run them from the repository root (they read `build-info.json`,
 
 `release/resolve-version.sh` and `release/build-info.sh` are the scripts
 `build-prepare.yml` runs to decide a build's version and build number and to
-write its `build-info.json`, with the two libraries they source in `lib/`. A
+write its `build-info.json`, with the two libraries they source in `lib/` and
+`release/build-info.mjs`, the Node program `build-info.sh` assembles the record
+with. A
 consumer runs them on a laptop from the installed package, so `make version`
 there answers exactly what CI will build:
 

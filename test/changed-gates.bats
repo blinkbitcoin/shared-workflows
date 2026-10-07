@@ -122,6 +122,17 @@ expect() {
   expect true true false
 }
 
+@test "the versions generator and the package's copy it writes run versions and package" {
+  # make check-version-pins runs render-versions.mjs --check first; a change to
+  # the generator, or a hand edit of the copy it writes, must reach that gate.
+  # The generator is also a Node script under scripts/, which make test-scripts
+  # covers, so it runs package too.
+  gates_for "scripts/self/render-versions.mjs"
+  expect false true true
+  gates_for "packages/app-tooling/lib/versions.sh"
+  expect false true true
+}
+
 @test "the baseline's versions run versions and package" {
   gates_for "packages/app-tooling/versions.json"
   expect false true true

@@ -42,7 +42,8 @@ source "$(dirname "$0")/../lib/body-section.sh"
 require_cmd gh
 
 mode="${1:?usage: release-assets.sh create-prerelease|promote|latest|append}"
-tag="${TAG:?release-assets.sh needs TAG}"
+require_env TAG
+tag="$TAG"
 assets_dir="${WORKFLOWS_ASSETS_DIR:-$WORKFLOWS_OUT/assets}"
 
 # The body scratch files sit in $RUNNER_TEMP and would die with the runner, but
@@ -88,8 +89,11 @@ collect_assets() {
   return 0
 }
 
+# sha256_of FILE - one SHA256SUMS line for FILE: its digest, two spaces, its name.
 sha256_of() {
-  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"; else sha256sum "$1"; fi
+  local digest
+  digest="$(sha256_file "$1")" || return
+  printf '%s  %s\n' "$digest" "$1"
 }
 
 # `gh release view >/dev/null 2>&1` collapses three different answers into one
@@ -163,7 +167,9 @@ upload_assets() {
   )
   assets+=("$assets_dir/SHA256SUMS")
   group "upload ${#assets[@]} assets to $tag"
-  gh release upload "$tag" "${assets[@]}" --clobber
+  # --clobber replaces an asset already uploaded, so a repeat after a dropped
+  # connection overwrites rather than duplicates: safe to try again.
+  retry_command 3 15 -- gh release upload "$tag" "${assets[@]}" --clobber
   endgroup
 }
 
@@ -220,20 +226,18 @@ if [ -n "${BODY_NOTE:-}" ]; then
   # but someone looking at a green run wants to know there and then that it did
   # not do what a release run usually does, without opening the release.
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-    {
-      printf '### %s\n\n' "$tag"
-      printf '%s\n' "$BODY_NOTE"
-    } >> "$GITHUB_STEP_SUMMARY"
+    gh_summary "### $tag" "" "$BODY_NOTE"
   fi
 fi
 # `--target` creates the tag; a tag that already exists (reserved in Prepare,
 # see reserve-tag.sh) is used as it is, which creates no ref and so cannot be
 # refused by GitHub's rule about tags on commits whose workflow files differ
-# from the default branch tip.
-tag_exists() { gh api "repos/${GH_REPO:?GH_REPO not set}/git/ref/tags/$tag" >/dev/null 2>&1; }
+# from the default branch tip. A lookup that could not be made is fatal inside
+# gh_ref_exists rather than "no tag": passing --target on a guess is what this
+# check is here to prevent.
 target_args=()
 if [ -n "${TARGET_SHA:-}" ]; then
-  if tag_exists; then
+  if gh_ref_exists "tags/$tag"; then
     log "tag $tag already exists - creating the release on it, no --target"
   else
     target_args=(--target "$TARGET_SHA")

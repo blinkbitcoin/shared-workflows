@@ -10,8 +10,9 @@
 #
 # Covered here: both generators clean, a modified and an untracked output of
 # each, a generator that fails, a consumer with only one generator, one with
-# neither, the path overrides (one path and several), no git or node on PATH,
-# and a working directory that does not exist.
+# neither, one with no scripts key or no package.json, one whose package.json
+# does not parse, the path overrides (one path and several), no git or node on
+# PATH, and a working directory that does not exist.
 
 load test_helper
 
@@ -167,6 +168,32 @@ run gen:graphql" ] || fail "expected 'pnpm run gen:i18n' then 'pnpm run gen:grap
   [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
   contains "$output" 'neither a "gen:i18n" nor a "gen:graphql" script' || fail "does not name the missing scripts: $output"
   contains "$output" "generated: false" || fail "does not name the switch: $output"
+  [ ! -s "$CALLS" ] || fail "pnpm ran anyway: $(cat "$CALLS")"
+}
+
+@test "a package.json with no scripts key, or none at all, is a consumer with neither generator" {
+  stub_pnpm
+  git_consumer '{"name":"c"}'
+  run bash "$SCRIPT"
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" 'neither a "gen:i18n" nor a "gen:graphql" script' || fail "does not name the missing scripts: $output"
+  rm "$CONSUMER/package.json"
+  run bash "$SCRIPT"
+  [ "$status" -eq 1 ] || fail "expected exit 1 with no package.json, got $status: $output"
+  contains "$output" 'neither a "gen:i18n" nor a "gen:graphql" script' || fail "no package.json is not named as neither generator: $output"
+  not_contains "$output" "not valid JSON" || fail "a missing file read as a broken one: $output"
+  [ ! -s "$CALLS" ] || fail "pnpm ran anyway: $(cat "$CALLS")"
+}
+
+@test "a package.json that does not parse fails the gate naming the file, before any generator runs" {
+  # It used to read as "no such script", so both generators were skipped.
+  stub_pnpm
+  git_consumer '{"scripts":{"gen:i18n":"true"},}'
+  run bash "$SCRIPT"
+  [ "$status" -eq 1 ] || fail "expected exit 1, got $status: $output"
+  contains "$output" "::error::" || fail "not an annotation: $output"
+  contains "$output" "/consumer/package.json is not valid JSON: " || fail "the file and the cause are not named: $output"
+  not_contains "$output" "neither" || fail "it carried on to the no-generator message: $output"
   [ ! -s "$CALLS" ] || fail "pnpm ran anyway: $(cat "$CALLS")"
 }
 

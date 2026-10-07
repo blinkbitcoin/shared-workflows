@@ -5,13 +5,10 @@ load test_helper
 # invoked with, so we can assert PLAYWRIGHT_BROWSERS is word-split into
 # separate CLI arguments rather than passed as one quoted blob.
 setup() {
-  fakebin="$BATS_TEST_TMPDIR/fakebin"
-  mkdir -p "$fakebin"
   consumer="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$consumer"
   : > "$consumer/package.json"
-  cat > "$fakebin/pnpm" <<'EOF'
-#!/usr/bin/env bash
+  stub_cmd pnpm - <<'EOF'
 if [ "$1" = "exec" ] && [ "$2" = "playwright" ] && [ "$3" = "install" ]; then
   shift 3
   printf '%s\n' "$@"
@@ -20,8 +17,6 @@ fi
 echo "unexpected pnpm invocation: $*" >&2
 exit 2
 EOF
-  chmod +x "$fakebin/pnpm"
-  export PATH="$fakebin:$PATH"
   export GITHUB_WORKSPACE="$consumer"
 }
 

@@ -45,16 +45,33 @@ fi
 runtime_args=()
 [ -z "$runtime" ] || runtime_args=(-H "expo-runtime-version: $runtime")
 
+# One request for the manifest, setting `code`. It fails only for what asking
+# again can fix: no answer at all, or a 5xx from a server that is restarting or
+# overloaded. Any other status is the server's answer, judged below. Its
+# failures are explicit returns, because retry_command runs it where `set -e`
+# does not apply.
+fetch_manifest() {
+  code="$(curl -sS -o "$body" -w '%{http_code}' \
+    -H "expo-channel-name: $channel" \
+    -H "expo-platform: $platform" \
+    -H "expo-protocol-version: 1" \
+    -H "expo-api-version: 1" \
+    "${runtime_args[@]+"${runtime_args[@]}"}" \
+    -H 'accept: multipart/mixed' \
+    "$url")" || { code=""; log "manifest request to $url failed"; return 1; }
+  log "HTTP $code, $(wc -c < "$body" | tr -d ' ') bytes"
+  case "$code" in 5??) return 1 ;; esac
+}
+
+# Three attempts, 5 seconds apart: enough to ride out a dropped connection or a
+# server restart, short enough that a manifest that is really missing fails
+# fast. A GET of the manifest changes nothing on the server, so repeating it is
+# safe.
 group "ota manifest smoke ($channel)"
-code="$(curl -sS -o "$body" -w '%{http_code}' \
-  -H "expo-channel-name: $channel" \
-  -H "expo-platform: $platform" \
-  -H "expo-protocol-version: 1" \
-  -H "expo-api-version: 1" \
-  "${runtime_args[@]+"${runtime_args[@]}"}" \
-  -H 'accept: multipart/mixed' \
-  "$url")" || die "manifest request to $url failed"
-log "HTTP $code, $(wc -c < "$body" | tr -d ' ') bytes"
+code=""
+if ! retry_command 3 5 -- fetch_manifest; then
+  [ -n "$code" ] || die "manifest request to $url failed"
+fi
 endgroup
 
 [ "$code" = "200" ] || die "manifest for $channel returned HTTP $code (expected 200)"

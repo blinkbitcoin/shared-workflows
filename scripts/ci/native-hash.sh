@@ -78,7 +78,7 @@ fi
   # Word-splitting $files/$dirs/$extra here assumes consumer paths contain no
   # spaces or glob metacharacters (true for this repo's real consumers, an
   # Expo app tree); switch to `while IFS= read -r f` if that ever changes.
-  for f in $files $dirs $extra; do printf '%s ' "$f"; shasum -a 256 "$root/$f" | cut -c1-64; done
+  for f in $files $dirs $extra; do printf '%s ' "$f"; sha256_file "$root/$f"; done
   printf 'extra=%s\n' "${NATIVE_EXTRA_GLOBS:-}"
   # Nothing at all for the Expo stack, so its keys stay exactly what they were.
   [ -z "$native" ] || printf 'native=%s\n%s' "$stack" "$native"

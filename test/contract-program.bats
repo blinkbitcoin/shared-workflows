@@ -246,12 +246,12 @@ JSON
   run node --input-type=module -e '
     import fs from "node:fs";
     const root = process.env.REPO_ROOT;
-    const { PROFILE_TITLE } = await import(`${root}/scripts/self/render-contract-table.mjs`);
+    const { profileTitle } = await import(`${root}/scripts/self/render-contract-table.mjs`);
     const contract = JSON.parse(fs.readFileSync(`${root}/packages/app-tooling/contract.json`, "utf8"));
     const doc = fs.readFileSync(`${root}/docs/adopting-an-existing-repo.md`, "utf8");
     const used = new Set(contract.requirements.map((r) => r.profile));
     // A profile names a workflow by its title (`check.yml` for checks), not by itself.
-    const missing = [...used].filter((p) => !doc.includes(`### If you call ${PROFILE_TITLE[p] ?? p}`));
+    const missing = [...used].filter((p) => !doc.includes(`### If you call ${profileTitle(p, contract.profiles[p])}`));
     if (missing.length > 0) throw new Error(`no section for: ${missing.join(", ")}`);
   '
   [ "$status" -eq 0 ] || fail "$output"

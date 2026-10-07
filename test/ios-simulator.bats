@@ -7,8 +7,8 @@
 # and where it records the choice, install from a bundle and from a tar and its
 # URL-scheme pre-approval, the recording and the unified log that runs beside
 # it, and each refusal (no xcrun, no plutil, no simulator, no bundle).
-# What the unified-log predicate matches is ios-unified-log.bats' question: it
-# is a function of scripts/lib/e2e-env.sh.
+# What the unified-log predicate matches is e2e-ios.bats' question: it
+# is a function of scripts/lib/e2e-ios.sh.
 #
 # xcrun and plutil are stubbed. xcrun records its arguments, answers the device
 # list from STUB_DEVICES and, for the two long-running commands, sleeps so the

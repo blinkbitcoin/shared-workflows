@@ -26,16 +26,9 @@ require_cmd pnpm node
 root="$(consumer_root)"
 cd "$root"
 
-# has_dependency NAME [KEYS] - whether package.json names NAME under one of the
-# comma-separated KEYS (default dependencies,devDependencies).
-has_dependency() {
-  DEPENDENCY_NAME="$1" DEPENDENCY_KEYS="${2:-dependencies,devDependencies}" node -e "
-    const pkg = require('./package.json');
-    const found = process.env.DEPENDENCY_KEYS.split(',').some((key) => pkg[key]?.[process.env.DEPENDENCY_NAME]);
-    process.exit(found ? 0 : 1);" 2>/dev/null
-}
-
-if has_dependency expo; then
+# package_json_has dies on a package.json that does not parse, rather than
+# reading it as "no expo dependency" and skipping the drift check.
+if package_json_has dependencies,devDependencies expo; then
   drift_status=0
   drift_output="$(pnpm exec expo install --check 2>&1)" || drift_status=$?
   printf '%s\n' "$drift_output"
@@ -50,7 +43,7 @@ else
 fi
 
 export EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1
-if has_dependency expo-doctor devDependencies; then
+if package_json_has devDependencies expo-doctor; then
   pnpm exec expo-doctor
 else
   pnpm dlx expo-doctor@latest

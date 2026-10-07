@@ -24,10 +24,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd gh
 
-: "${GH_TOKEN:?GH_TOKEN not set}"
-: "${GH_REPO:?GH_REPO not set}"
-: "${WORKFLOW:?WORKFLOW not set}"
-: "${HEAD_SHA:?HEAD_SHA not set}"
+require_env GH_TOKEN GH_REPO:owner/name "WORKFLOW:the promotion's workflow file, e.g. cd-beta.yml" HEAD_SHA
 
 run_id="$(gh run list --workflow "$WORKFLOW" --commit "$HEAD_SHA" --limit 20 \
   --json databaseId,status,conclusion \

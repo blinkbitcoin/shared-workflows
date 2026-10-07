@@ -33,7 +33,7 @@ failure must never fail the job) and writes into `$WORKFLOWS_OUT/forensics`:
 - iOS only: `ios-unified.log` — the simulator's unified log for the same
   window as the video (`ios-simulator.sh record start` spawns
   `simctl log stream`, `record stop` ends it), filtered by
-  `scripts/lib/e2e-env.sh`'s `workflows_ios_unified_log_predicate` to
+  `scripts/lib/e2e-ios.sh`'s `workflows_ios_unified_log_predicate` to
   SpringBoard's alert lifecycle (`AlertItems`, `AlertItemStack`,
   `SceneDeactivation`), FrontBoard's scene-action delivery (`SceneClient`) and
   any line naming the app id or its URL scheme. It exists for the deep link
@@ -66,7 +66,8 @@ runs from the same `if: always()` step that carries the diagnosis.
 
 ## Reading the Maestro debug output
 
-`ios-maestro.sh` / `android-maestro.sh` pass Maestro:
+`ios-maestro.sh` / `android-maestro.sh` pass Maestro (through `run_maestro_suite`
+in `maestro-suite.sh`, which both call):
 
 ```
 --debug-output "$WORKFLOWS_OUT/maestro" --flatten-debug-output --format junit --output "$WORKFLOWS_OUT/maestro/junit.xml"
@@ -102,7 +103,8 @@ quiet for the whole window, which is itself the confirmation.
 
 ## The suite retry and what it means for forensics
 
-Both platform scripts retry the suite exactly once on a **real** failure
+Both platform scripts retry the suite exactly once (`run_maestro_suite`, in
+`maestro-suite.sh`) on a **real** failure
 (`status != 0 && status != 124`) — a timeout (`124`, from `maestro-bound.sh`)
 is never retried, because a hung driver would just burn the timeout twice. The
 recording and forensics you get are from **whichever attempt is the exit

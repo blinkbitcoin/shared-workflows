@@ -33,11 +33,19 @@ case "$*" in
     exit 0
     ;;
 esac
-# A GET: print the canned existing sha, or fail like gh does on a 404.
+# A GET: fail the way WORKFLOWS_TEST_LOOKUP_FAILS says (a status and gh's
+# message), print the canned existing sha, or fail like gh does on a 404 -
+# the error body on stdout, "(HTTP <status>)" on stderr.
+if [ -n "${WORKFLOWS_TEST_LOOKUP_FAILS:-}" ]; then
+  printf '{"message":"%s"}\n' "${WORKFLOWS_TEST_LOOKUP_FAILS#* }"
+  printf 'gh: %s (HTTP %s)\n' "${WORKFLOWS_TEST_LOOKUP_FAILS#* }" "${WORKFLOWS_TEST_LOOKUP_FAILS%% *}" >&2
+  exit 1
+fi
 if [ -s "$WORKFLOWS_TEST_EXISTING" ]; then
   cat "$WORKFLOWS_TEST_EXISTING"
   exit 0
 fi
+printf '{"message":"Not Found"}\n'
 printf 'gh: Not Found (HTTP 404)\n' >&2
 exit 1
 SH
@@ -87,6 +95,36 @@ SH
   contains "$output" "deadbeef" || fail "does not name the wanted sha: $output"
 }
 
+@test "the lookup asks for exactly the tag's ref" {
+  printf 'deadbeef\n' > "$EXISTING"
+  run bash "$RESERVE" v1.2.3-build.42 deadbeef
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  run head -1 "$CALLS"
+  [ "$output" = "api repos/acme/app/git/ref/tags/v1.2.3-build.42 --jq .object.sha" ] || fail "wrong lookup: $output"
+}
+
+@test "a lookup refused for bad credentials is fatal, and creates no tag" {
+  # Read as "absent", a 401 went straight on to create the tag blind.
+  WORKFLOWS_TEST_LOOKUP_FAILS="401 Bad credentials" \
+    run bash "$RESERVE" v1.2.3-build.42 deadbeef
+  [ "$status" -ne 0 ] || fail "a failed lookup must be fatal"
+  contains "$output" "tags/v1.2.3-build.42" || fail "does not name the tag: $output"
+  contains "$output" "Bad credentials (HTTP 401)" || fail "does not carry gh's answer: $output"
+  run cat "$CALLS"
+  not_contains "$output" "-X POST" || fail "it tried to create the tag after a failed lookup: $output"
+  run cat "$GITHUB_OUTPUT"
+  not_contains "$output" "reserved=" || fail "it reported a reservation after a failed lookup: $output"
+}
+
+@test "a lookup that hits a server error is fatal, and creates no tag" {
+  WORKFLOWS_TEST_LOOKUP_FAILS="500 Server Error" \
+    run bash "$RESERVE" v1.2.3-build.42 deadbeef
+  [ "$status" -ne 0 ] || fail "a failed lookup must be fatal"
+  contains "$output" "Server Error (HTTP 500)" || fail "$output"
+  run cat "$CALLS"
+  not_contains "$output" "-X POST" || fail "it tried to create the tag after a failed lookup: $output"
+}
+
 @test "a refused create explains the GITHUB_TOKEN workflow rule" {
   # The 403 that broke pre-releases: GITHUB_TOKEN may not tag a commit whose
   # .github/workflows differ from the default branch tip.
@@ -104,6 +142,7 @@ SH
   [ "$status" -ne 0 ] || fail "a missing sha must be a usage error"
   GH_REPO="" run bash "$RESERVE" v1.2.3-build.42 deadbeef
   [ "$status" -ne 0 ] || fail "an empty GH_REPO must be refused"
+  contains "$output" "::error::missing required environment variable: GH_REPO (owner/name)" || fail "$output"
 }
 
 # --- the pair, and the workflow that wires them -------------------------

@@ -14,7 +14,7 @@ for someone running these scripts directly.
 Two families, one env contract:
 
 - `scripts/native/*` turns a checkout into a runnable app (`prebuild.sh`, `pods.sh`, `ios-build.sh`, `ios-pack.sh`, `android-build.sh`). What differs between an Expo app and a bare React Native app lives under `scripts/native/expo/` and `scripts/native/bare/`, four entry points each (`prebuild.sh`, `app-config.sh`, `metro-start.sh`, `fingerprint.sh`); `scripts/lib/native-stack.sh` resolves the consumer's stack (`WORKFLOWS_NATIVE_STACK_INPUT`, the workflows' `native-stack` input, else detected) and runs the right one. `prebuild.sh` and `metro-start.sh` here are thin dispatchers to it.
-- `scripts/e2e/*` drives a device and the Maestro suite (`metro-start.sh`, `metro-wait.sh`, `ios-simulator.sh`, `android-emulator.sh`, `app-launch.sh`, `maestro-bound.sh`, `ios-maestro.sh`, `android-maestro.sh`, `collect-forensics.sh`), plus three that the workflows call around them: `env-publish.sh`, `run-hook.sh` (the consumer's setup/teardown hooks) and `step-timeout.sh` (the step bound derived from `suite-timeout-minutes`).
+- `scripts/e2e/*` drives a device and the Maestro suite (`metro-start.sh`, `metro-wait.sh`, `ios-simulator.sh`, `android-emulator.sh`, `app-launch.sh`, `maestro-bound.sh`, `maestro-suite.sh`, `ios-maestro.sh`, `android-maestro.sh`, `collect-forensics.sh`), plus three that the workflows call around them: `env-publish.sh`, `run-hook.sh` (the consumer's setup/teardown hooks) and `step-timeout.sh` (the step bound derived from `suite-timeout-minutes`).
 
 All of them run from the repo that hosts these scripts and act on the *consumer*
 checkout resolved by `consumer_root` (`$GITHUB_WORKSPACE/$WORKING_DIRECTORY`).
@@ -46,9 +46,10 @@ pure-bash fallback).
 | `WORKFLOWS_MAESTRO_EXCLUDE_TAGS` | (none) | Passed as `--exclude-tags` only when set. |
 | `WORKFLOWS_SUITE_TIMEOUT_MINUTES` | `10` | Per-attempt bound enforced inside the script (`maestro-bound.sh`), so forensics still run on a hang. |
 | `WORKFLOWS_METRO_PORT` | `8081` | Metro port; also the port reversed into the Android emulator. |
+| `WORKFLOWS_METRO_WAIT_SECONDS` | `180` | How long `metro-wait.sh` waits for Metro to report `packager-status:running`, in real seconds measured on the clock (polled every 2s; the last poll may run past it by its own 5s timeout at most). No workflow sets it; it is there for the tests and for a slow local machine. A Metro whose pid has exited fails at once instead. |
 | `WORKFLOWS_MOCK_API_PORT` | `8082` | Host-side mock-API port also reversed into the Android emulator by `android-emulator.sh prepare`. The template's port base (8080) plus its mock-API offset, as Metro's default is offset 1. Set it empty to reverse nothing but Metro. |
 | `WORKFLOWS_OUT` | `${RUNNER_TEMP:-/tmp}/workflows` | Every artifact this family writes: `metro.log`, `metro.pid`, `sim-udid`, `<scheme>.app.tar`, `maestro/`, `forensics/`, videos. |
-| `MOCK_API_COMMAND` | (none) | What `mock-api-start.sh` runs, from `test-e2e.yml`'s `mock-api-command` input: started in the background in the consumer's working directory with `MOCK_API_PORT` set to `WORKFLOWS_MOCK_API_PORT`, in its own process group, and waited for with `wait-for-http.sh` on that port (`WORKFLOWS_MOCK_API_WAIT_SECONDS`, default 60). `mock-api-stop.sh` stops the group. The pid file and the log are `mock-api.pid` and `mock-api.log` in `WORKFLOWS_OUT`. |
+| `MOCK_API_COMMAND` | (none) | What `mock-api-start.sh` runs, from `test-e2e.yml`'s `mock-api-command` input: started in the background in the consumer's working directory with `MOCK_API_PORT` set to `WORKFLOWS_MOCK_API_PORT`, in its own process group, and waited for with `wait-for-http.sh` on that port (`WORKFLOWS_MOCK_API_WAIT_SECONDS`, default 60, real seconds on the clock). `mock-api-stop.sh` stops the group. The pid file and the log are `mock-api.pid` and `mock-api.log` in `WORKFLOWS_OUT`. |
 | `WORKFLOWS_E2E_SETUP_SCRIPT` | (none) | **Local runs only.** Consumer-relative script run before the suite (e.g. start a mock API), from inside `ios-maestro.sh`/`android-maestro.sh`. A missing file is fatal. In CI the same hooks run as workflow steps on the host from `test-e2e.yml`'s `e2e-setup-script` input, and nothing sets this variable; setting both runs the hook twice. |
 | `WORKFLOWS_E2E_TEARDOWN_SCRIPT` | (none) | **Local runs only**, same contract as above (`test-e2e.yml`'s `e2e-teardown-script` is the CI path). Runs after the suite, pass or fail. |
 | `WORKFLOWS_ANDROID_ABIS` | `x86_64` | `-PreactNativeArchitectures` for `android-build.sh`. CI emulators are x86_64; set `arm64-v8a` to run against an Apple-silicon emulator locally. |
@@ -91,8 +92,9 @@ metro-start.sh (expo start | react-native start) → metro-wait.sh android
 
 `@blinkbitcoin/app-tooling` ships copies of `ios-maestro.sh`,
 `android-maestro.sh`, `app-launch.sh`, `ios-simulator.sh`,
-`android-emulator.sh`, `collect-forensics.sh` and `maestro-bound.sh` under
-`e2e/` (with `lib/e2e-env.sh`, `lib/expo-config.sh`, `lib/native-stack.sh` and
+`android-emulator.sh`, `collect-forensics.sh`, `maestro-bound.sh` and `maestro-suite.sh` under
+`e2e/` (with `lib/e2e-env.sh` and the `lib/shared-env.sh` and `lib/e2e-*.sh`
+files it sources, `lib/expo-config.sh`, `lib/native-stack.sh` and
 each stack's `native/<stack>/app-config.sh`), so an app runs the
 suite on a laptop with the scripts CI runs, from its own root:
 `ios-simulator.sh pick`, `app-launch.sh ios`, `ios-maestro.sh` on iOS, and
@@ -111,6 +113,13 @@ here rather than in each app:
 - `maestro-bound.sh` is sourced, not executed: `bounded_maestro SECONDS CMD...`
   returns 124 on a timeout. It uses `timeout`/`gtimeout` when present and a
   pure-bash watchdog otherwise (a stock Mac has neither).
+- `maestro-suite.sh` is sourced too, and holds the suite run both platform
+  scripts share: `prepare_maestro_suite` (driver startup timeout, the consumer
+  root, the flows and output directories) and `run_maestro_suite PLATFORM
+  DISPLAY_NAME [DEVICE_ARGUMENT...] -- [MAESTRO_TEST_ARGUMENT...]` (the
+  `maestro test` command line, the bound, the retry and the check that flows
+  ran). `ios-maestro.sh` and `android-maestro.sh` keep only their own device
+  steps around those two calls.
 - The Maestro suite is retried once on a real failure, never after a 124: a hung
   driver only burns the step's `timeout-minutes` a second time.
 - `collect-forensics.sh` always exits 0.

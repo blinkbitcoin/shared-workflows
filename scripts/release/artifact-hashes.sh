@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Record the sha256 of the binaries the lane just built in a copy of
-# build-info.json, next to those binaries.
+# Record the sha256 of the binaries a platform's build lane just produced in a
+# copy of build-info.json, next to those binaries.
 #
-#   $WORKFLOWS_OUTPUT_DIR/build-info.json = build-info.json + {
-#     artifacts: { apkSha256, aabSha256 }
-#   }
-#   $WORKFLOWS_OUTPUT_DIR/build-info.android.json = the same bytes, under the name
-#     that is uploaded with the binaries (see the note above the cp below)
+#   android (the default): artifacts.apkSha256 and artifacts.aabSha256
+#   ios:                   artifacts.ipaSha256
+#
+#   $WORKFLOWS_OUTPUT_DIR/build-info.json = build-info.json + { artifacts: {...} }
+#   $WORKFLOWS_OUTPUT_DIR/build-info.<platform>.json = the same bytes, under the
+#     name that is uploaded with the binaries (see the note above the cp below)
 #
 # Why a copy rather than an edit in place: the build-info artifact is produced
 # by build-prepare, once, and is downloaded by both platform jobs at the same
@@ -19,24 +20,37 @@
 # universal apk that was rebuilt, re-signed or swapped between the build step
 # and the upload is caught rather than shipped. Downstream, publish-github-release.yml
 # stages this copy over the build-info one, so the release's build-info.json
-# is the one that names the bytes actually attached to it.
+# is the one that names the bytes actually attached to it. The ios digest has no
+# verify check reading it yet; it is the release record's name for the .ipa.
 #
-# Env: WORKFLOWS_OUTPUT_DIR (where the lane dropped the .apk/.aab), BUILD_INFO_FILE
+# A binary that is not there (an unsigned iOS build packages no .ipa) is
+# recorded as absent, never as an empty digest; more than one of a kind is fatal.
+#
+# Env: WORKFLOWS_OUTPUT_DIR (where the lane dropped the binaries), BUILD_INFO_FILE
 #      (default $WORKFLOWS_RELEASE_META_DIR/build-info.json).
-# Usage: artifact-hashes.sh
+# Usage: artifact-hashes.sh [android|ios]
+# Outputs: android: apk-sha256, aab-sha256; ios: ipa-sha256 (each empty when
+#          that binary is absent).
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/release-env.sh"
 require_cmd node
 
+usage='usage: artifact-hashes.sh [android|ios]'
+[ "$#" -le 1 ] || die "too many arguments: $* ($usage)"
+# `-`, not `:-`: no argument is android, but an empty one is a caller's
+# expression that came out blank, and is refused below rather than guessed.
+platform="${1-android}"
+# The binary types a platform's lane produces, in the order they are recorded.
+case "$platform" in
+  android) kinds=(apk aab) ;;
+  ios) kinds=(ipa) ;;
+  *) die "unknown platform: $platform ($usage)" ;;
+esac
+
 src="${BUILD_INFO_FILE:-$WORKFLOWS_RELEASE_META_DIR/build-info.json}"
 [ -f "$src" ] || die "no build-info.json at $src - run build-info.sh (build-prepare) first"
 dest="$WORKFLOWS_OUTPUT_DIR/build-info.json"
-
-sha256_of() {
-  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1
-  else sha256sum "$1" | cut -d' ' -f1; fi
-}
 
 # first_of GLOB - the single file matching GLOB, or empty. More than one match
 # is fatal: "the apk" has to be unambiguous for a digest to mean anything.
@@ -49,47 +63,41 @@ first_of() {
   [ "${#matches[@]}" -eq 0 ] || printf '%s\n' "${matches[0]}"
 }
 
-apk="$(first_of "$WORKFLOWS_OUTPUT_DIR/*.apk")"
-aab="$(first_of "$WORKFLOWS_OUTPUT_DIR/*.aab")"
-apk_sha=""
-aab_sha=""
-[ -z "$apk" ] || apk_sha="$(sha256_of "$apk")"
-[ -z "$aab" ] || aab_sha="$(sha256_of "$aab")"
+# shas[i] is the digest of kinds[i], empty when there is no such binary. Indexed
+# arrays, not an associative one: macOS's /bin/bash is 3.2. Every file is
+# looked up before any is hashed, so an ambiguous one fails before any work.
+files=()
+for kind in "${kinds[@]}"; do
+  file="$(first_of "$WORKFLOWS_OUTPUT_DIR/*.$kind")"
+  files+=("$file")
+done
+shas=()
+pairs=()
+for i in "${!kinds[@]}"; do
+  sha=""
+  if [ -n "${files[$i]}" ]; then
+    sha="$(sha256_file "${files[$i]}")"
+  fi
+  shas+=("$sha")
+  pairs+=("${kinds[$i]}Sha256=$sha")
+done
 
-# shellcheck disable=SC2016  # process.env.* below is JS, not shell expansion
-BUILD_INFO_SRC="$src" BUILD_INFO_DEST="$dest" APK_SHA256="$apk_sha" AAB_SHA256="$aab_sha" \
-  node --input-type=module -e '
-import { readFileSync, writeFileSync } from "node:fs";
-// A file that is not JSON is a wrong artifact or a truncated download, and the
-// reader must say which file rather than answering with a node stack trace.
-const readJson = (f) => {
-  try {
-    return JSON.parse(readFileSync(f, "utf8"));
-  } catch (error) {
-    console.error(`::error::${f} is not readable as JSON: ${error.message}`);
-    process.exit(1);
-  }
-};
-const info = readJson(process.env.BUILD_INFO_SRC);
-// Merged, not replaced: build-info.json ships an `artifacts` object precisely
-// so each stage can add what it knows without dropping what another wrote.
-info.artifacts = { ...(info.artifacts ?? {}) };
-if (process.env.APK_SHA256) info.artifacts.apkSha256 = process.env.APK_SHA256;
-if (process.env.AAB_SHA256) info.artifacts.aabSha256 = process.env.AAB_SHA256;
-writeFileSync(process.env.BUILD_INFO_DEST, JSON.stringify(info, null, 2) + "\n");
-'
+node "$(dirname "$0")/artifact-hashes.mjs" "$src" "$dest" "${pairs[@]}"
 
 # A second copy under a platform-specific name is what travels with the
 # binaries: a release job merges several artifacts into one directory with no
 # defined order, so two artifacts both carrying `build-info.json` would make the
 # release's record a coin toss. publish-github-release.yml folds this one back in with
 # scripts/release/merge-build-info.sh, which takes only its `artifacts`.
-cp "$dest" "$WORKFLOWS_OUTPUT_DIR/build-info.android.json"
+cp "$dest" "$WORKFLOWS_OUTPUT_DIR/build-info.$platform.json"
 
-log "wrote $dest and $WORKFLOWS_OUTPUT_DIR/build-info.android.json"
-if [ -n "$apk_sha" ]; then log "apkSha256=$apk_sha"; else log "no .apk in $WORKFLOWS_OUTPUT_DIR - apkSha256 not recorded"; fi
-if [ -n "$aab_sha" ]; then log "aabSha256=$aab_sha"; else log "no .aab in $WORKFLOWS_OUTPUT_DIR - aabSha256 not recorded"; fi
+log "wrote $dest and $WORKFLOWS_OUTPUT_DIR/build-info.$platform.json"
+for i in "${!kinds[@]}"; do
+  if [ -n "${shas[$i]}" ]; then log "${kinds[$i]}Sha256=${shas[$i]}"
+  else log "no .${kinds[$i]} in $WORKFLOWS_OUTPUT_DIR - ${kinds[$i]}Sha256 not recorded"; fi
+done
 # The verify lane reads the enriched copy, not the one build-prepare produced.
 gh_env BUILD_INFO_FILE "$dest"
-gh_output apk-sha256 "$apk_sha"
-gh_output aab-sha256 "$aab_sha"
+for i in "${!kinds[@]}"; do
+  gh_output "${kinds[$i]}-sha256" "${shas[$i]}"
+done

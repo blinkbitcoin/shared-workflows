@@ -2,20 +2,8 @@
 load test_helper
 
 setup() {
-  fakebin="$BATS_TEST_TMPDIR/fakebin"
-  mkdir -p "$fakebin"
-  cat > "$fakebin/sudo" <<'EOF'
-#!/usr/bin/env bash
-echo "sudo must not be invoked off a Linux GitHub Actions runner" >&2
-exit 99
-EOF
-  chmod +x "$fakebin/sudo"
-  cat > "$fakebin/udevadm" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "$fakebin/udevadm"
-  export PATH="$fakebin:$PATH"
+  stub_cmd sudo 'echo "sudo must not be invoked off a Linux GitHub Actions runner" >&2; exit 99'
+  stub_cmd udevadm
   unset GITHUB_ACTIONS RUNNER_OS WORKFLOWS_FORCE_RUNNER_SCRIPTS
 }
 

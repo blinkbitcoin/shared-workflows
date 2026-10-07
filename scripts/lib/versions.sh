@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Single source of pinned tool versions. Workflow defaults must match (scripts/self/check-version-pins.sh).
+# Generated from packages/app-tooling/versions.json by scripts/self/render-versions.mjs - do not edit.
+# Change a version in versions.json, then run: node scripts/self/render-versions.mjs --write
 # shellcheck shell=bash
 export MAESTRO_VERSION="2.10.0"
 # SHA-256 of that release's maestro.zip (github.com/mobile-dev-inc/maestro,

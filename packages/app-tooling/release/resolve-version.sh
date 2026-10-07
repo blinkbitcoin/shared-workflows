@@ -159,10 +159,9 @@ fi
 [ -n "$version" ] || die "could not resolve a version (no tag, no release PR title, no v* tag)"
 
 count="$(git rev-list --count --first-parent HEAD)"
-offset="${BUILD_NUMBER_OFFSET:-1000}"
-case "$offset" in
-  '' | *[!0-9]*) die "BUILD_NUMBER_OFFSET must be a non-negative integer (got '$offset')" ;;
-esac
+BUILD_NUMBER_OFFSET="${BUILD_NUMBER_OFFSET:-1000}"
+require_uint BUILD_NUMBER_OFFSET
+offset="$BUILD_NUMBER_OFFSET"
 build="$((count + offset))"
 
 log "version $version from $origin; build $build ($count first-parent commits + offset $offset)"

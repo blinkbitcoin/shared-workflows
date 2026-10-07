@@ -41,6 +41,15 @@ EOF
   [[ "$output" == *"cancelled 1 run(s)"* ]] || fail "assertion failed; output: $output"
 }
 
+@test "each required variable is named when it is missing, before gh is called" {
+  for var in GH_TOKEN REPO HEAD_SHA; do
+    run env -u "$var" bash "$REPO_ROOT/scripts/ci/cancel-runs.sh"
+    [ "$status" -eq 1 ] || fail "ran without $var: $output"
+    contains "$output" "::error::missing required environment variable: $var" || fail "the missing $var was not named: $output"
+    not_contains "$output" "cancelling run" || fail "it cancelled runs without $var: $output"
+  done
+}
+
 # The listing used to feed the loop through `< <(...)`, whose failure nothing
 # sees: a token without actions access listed nothing, and the step reported
 # "cancelled 0 run(s)" and passed while the stale runs kept going.

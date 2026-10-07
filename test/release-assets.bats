@@ -50,9 +50,22 @@ case "$1 $2" in
     ;;
   "release create") : > "$WORKFLOWS_TEST_EXISTS"; exit 0 ;;
   "api "*)
-    # `gh api repos/<r>/git/ref/tags/<tag>`: the tag exists when the marker does.
+    # `gh api repos/<r>/git/ref/tags/<tag>`: fails the way
+    # WORKFLOWS_TEST_TAG_LOOKUP_FAILS says (a status and gh's message), else the
+    # tag exists, with its commit on stdout, when the marker does, else a 404 -
+    # each in gh's own shape: error body on stdout, "(HTTP <status>)" on stderr.
     case "$*" in
-      *"/git/ref/tags/"*) [ -f "$WORKFLOWS_TEST_TAG_EXISTS" ] && exit 0; echo "Not Found" >&2; exit 1 ;;
+      *"/git/ref/tags/"*)
+        if [ -n "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS:-}" ]; then
+          printf '{"message":"%s"}\n' "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS#* }"
+          printf 'gh: %s (HTTP %s)\n' "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS#* }" "${WORKFLOWS_TEST_TAG_LOOKUP_FAILS%% *}" >&2
+          exit 1
+        fi
+        [ -f "$WORKFLOWS_TEST_TAG_EXISTS" ] && { echo deadbeef; exit 0; }
+        echo '{"message":"Not Found"}'
+        echo "gh: Not Found (HTTP 404)" >&2
+        exit 1
+        ;;
     esac
     exit 0
     ;;
@@ -67,6 +80,19 @@ case "$1 $2" in
     done
     [ -n "$dir" ] || exit 1
     cp "$WORKFLOWS_TEST_SOURCE_ASSETS"/* "$dir"/ 2>/dev/null
+    exit 0
+    ;;
+  "release upload")
+    # WORKFLOWS_TEST_UPLOAD_FAILS uploads that drop before one gets through
+    # ("always" never does), counted in a file because each call is a process.
+    if [ -n "${WORKFLOWS_TEST_UPLOAD_FAILS:-}" ]; then
+      n=$(($(cat "$BATS_TEST_TMPDIR/uploads" 2>/dev/null || echo 0) + 1))
+      echo "$n" > "$BATS_TEST_TMPDIR/uploads"
+      if [ "$WORKFLOWS_TEST_UPLOAD_FAILS" = always ] || [ "$n" -le "$WORKFLOWS_TEST_UPLOAD_FAILS" ]; then
+        echo "error connecting to uploads.github.com" >&2
+        exit 1
+      fi
+    fi
     exit 0
     ;;
   "release delete") rm -f "$WORKFLOWS_TEST_SOURCE_EXISTS"; exit 0 ;;
@@ -87,7 +113,8 @@ SH
   export PATH="$STUB:$PATH"
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" WORKFLOWS_ASSETS_DIR="$ASSETS" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   mkdir -p "$RUNNER_TEMP"
-  unset GITHUB_OUTPUT TITLE TARGET_SHA RELEASE_NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE
+  unset GITHUB_OUTPUT TITLE TARGET_SHA RELEASE_NOTES_FILE APPEND_TITLE FROM_TAG DELETE_SOURCE WORKFLOWS_TEST_TAG_LOOKUP_FAILS WORKFLOWS_TEST_UPLOAD_FAILS
+  export WORKFLOWS_RETRY_DELAY_SECONDS=0
 }
 
 source_release() {
@@ -119,6 +146,22 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
   contains "$upload" "--clobber" || fail "upload is not idempotent (no --clobber): $upload"
 }
 
+@test "a dropped upload is tried again, and --clobber makes the repeat overwrite" {
+  assets
+  WORKFLOWS_TEST_UPLOAD_FAILS=1 TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -eq 0 ] || fail "one dropped upload must not fail the release; exited $status: $output"
+  [ "$(grep -c '^release upload' "$WORKFLOWS_TEST_LOG")" -eq 2 ] || fail "expected 2 uploads: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "attempt 1 of 3 failed" || fail "the failed attempt was not logged: $output"
+}
+
+@test "an upload that keeps failing fails the release after three attempts" {
+  assets
+  WORKFLOWS_TEST_UPLOAD_FAILS=always TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -ne 0 ] || fail "a release whose assets never uploaded must fail"
+  [ "$(grep -c '^release upload' "$WORKFLOWS_TEST_LOG")" -eq 3 ] || fail "expected 3 uploads: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "giving up" || fail "the last attempt did not say it gave up: $output"
+}
+
 @test "create-prerelease on a tag reserved in Prepare passes no --target" {
   assets
   : > "$WORKFLOWS_TEST_TAG_EXISTS"
@@ -127,6 +170,40 @@ release() { run bash "$REPO_ROOT/scripts/release/release-assets.sh" "$@"; }
   grep -q -- "release create v1.2.3 --prerelease" "$WORKFLOWS_TEST_LOG" || fail "no create: $(cat "$WORKFLOWS_TEST_LOG")"
   ! grep -q -- "--target" "$WORKFLOWS_TEST_LOG" || fail "--target passed for an existing tag, which would try to create it again: $(cat "$WORKFLOWS_TEST_LOG")"
   contains "$output" "already exists - creating the release on it" || fail "did not say why: $output"
+}
+
+@test "create-prerelease looks up exactly the tag's ref, and passes --target for a 404" {
+  assets
+  TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -qx -- "api repos/acme/app/git/ref/tags/v1.2.3 --jq .object.sha" "$WORKFLOWS_TEST_LOG" \
+    || fail "wrong tag lookup: $(cat "$WORKFLOWS_TEST_LOG")"
+  grep -q -- "release create v1.2.3 --prerelease .*--target deadbeef" "$WORKFLOWS_TEST_LOG" \
+    || fail "a tag GitHub answered 404 for got no --target: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "create-prerelease refuses to guess when the tag lookup is refused for bad credentials" {
+  # Read as "no tag", a 401 passed --target for a tag that may already exist.
+  assets
+  WORKFLOWS_TEST_TAG_LOOKUP_FAILS="401 Bad credentials" TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -ne 0 ] || fail "a failed tag lookup must be fatal"
+  contains "$output" "tags/v1.2.3" || fail "does not name the tag: $output"
+  contains "$output" "Bad credentials (HTTP 401)" || fail "does not carry gh's answer: $output"
+  ! grep -q -- "^release create" "$WORKFLOWS_TEST_LOG" || fail "created a release after a failed lookup: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "create-prerelease refuses to guess when the tag lookup hits a server error" {
+  assets
+  WORKFLOWS_TEST_TAG_LOOKUP_FAILS="500 Server Error" TAG=v1.2.3 TARGET_SHA=deadbeef release create-prerelease
+  [ "$status" -ne 0 ] || fail "a failed tag lookup must be fatal"
+  contains "$output" "Server Error (HTTP 500)" || fail "$output"
+  ! grep -q -- "^release create" "$WORKFLOWS_TEST_LOG" || fail "created a release after a failed lookup: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "a missing TAG is an ::error:: annotation naming it" {
+  TAG="" release create-prerelease
+  [ "$status" -ne 0 ] || fail "an empty TAG must be refused"
+  contains "$output" "::error::missing required environment variable: TAG" || fail "$output"
 }
 
 @test "SHA256SUMS lists basenames and real digests" {

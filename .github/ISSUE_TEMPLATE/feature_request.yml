@@ -38,7 +38,7 @@ body:
         - label: Adds or renames a workflow input, output or secret (consumer-guide change)
         - label: Breaking for a repo pinned at `@v0`
         - label: Changes a cache key (`docs/cache-keys.md`)
-        - label: Moves a pinned tool version (`scripts/lib/versions.sh`)
+        - label: Moves a pinned tool version (`packages/app-tooling/versions.json`)
   - type: textarea
     id: alternatives
     attributes:

@@ -221,10 +221,10 @@ EOF
 @test "cleanup requires BRANCH, and an empty one counts as missing" {
   run env -u BRANCH bash "$CLEANUP"
   [ "$status" -ne 0 ] || fail "cleanup ran without BRANCH: $output"
-  contains "$output" "BRANCH is required" || fail "unexpected error: $output"
+  contains "$output" "::error::missing required environment variable: BRANCH" || fail "unexpected error: $output"
   BRANCH="" run bash "$CLEANUP"
   [ "$status" -ne 0 ] || fail "cleanup ran with an empty BRANCH: $output"
-  contains "$output" "BRANCH is required" || fail "unexpected error: $output"
+  contains "$output" "::error::missing required environment variable: BRANCH" || fail "unexpected error: $output"
 }
 
 @test "cleanup gives each refused branch name its own diagnosis" {

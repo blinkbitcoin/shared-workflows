@@ -44,13 +44,10 @@ fallback_path="$here/$fallback"
 
 root="$(consumer_root)"
 
-has_script() {
-  RUN_SCRIPT_NAME="$name" node -e \
-    "process.exit(require('./package.json').scripts?.[process.env.RUN_SCRIPT_NAME] ? 0 : 1)" \
-    2>/dev/null
-}
-
-if (cd "$root" && has_script); then
+# Called directly, not in a subshell: a package.json that does not parse must
+# stop the step (package_json_has dies), not read as "no such script" and run
+# the fallback in place of the consumer's own gate.
+if package_json_has scripts "$name" "$root"; then
   log "$name: running the consumer's own script"
   exec bash "$(dirname "$0")/run-script.sh" "$name"
 else

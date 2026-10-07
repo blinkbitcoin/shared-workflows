@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The Expo stack's Metro, `expo start` in the background; scripts/e2e/metro-start.sh
 # dispatches here through scripts/lib/native-stack.sh. The log, pid and process
-# group contract is workflows_metro_background's, in scripts/lib/e2e-env.sh.
+# group contract is workflows_metro_background's, in scripts/lib/e2e-metro.sh.
 # Log: $WORKFLOWS_OUT/metro.log  Pid: $WORKFLOWS_OUT/metro.pid
 # Usage: metro-start.sh
 set -euo pipefail

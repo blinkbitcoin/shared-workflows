@@ -8,9 +8,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 require_cmd gh
 
-: "${GH_TOKEN:?GH_TOKEN not set}"
-: "${REPO:?REPO not set}"
-: "${HEAD_SHA:?HEAD_SHA not set}"
+require_env GH_TOKEN REPO HEAD_SHA
 self="${GITHUB_RUN_ID:-0}"
 cancelled=0
 

@@ -1,11 +1,13 @@
 #!/usr/bin/env bats
 # Every assertion ends in `|| fail "..."` - see test_helper.bash.
 #
-# scripts/lib/versions.sh: the one place this repository writes down the tool
-# versions it pins. It is sourced, not run - by yq-version.sh, the installers
-# and check-version-pins.sh, which mirrors it into .mise.toml and the workflow input
-# defaults - so what it has to do is define every pin, export it to the
-# processes that source it, and do nothing else.
+# scripts/lib/versions.sh: the tool versions this repository pins, as shell
+# variables. It is generated from packages/app-tooling/versions.json by
+# scripts/self/render-versions.mjs (whose own test, render-versions.test.mjs,
+# holds the committed file to the generator's output), and sourced, not run -
+# by yq-version.sh, the installers and check-version-pins.sh, which compares it
+# with the workflow input defaults - so what it has to do is define every pin,
+# export it to the processes that source it, and do nothing else.
 #
 # Covers: sourcing it succeeds silently under `set -euo pipefail`; each of the
 # thirteen pins is defined, non-empty, shaped like a version and exported to

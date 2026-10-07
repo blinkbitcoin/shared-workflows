@@ -6,16 +6,10 @@ load test_helper
 # file on each call, so a multi-poll sequence (queued -> in_progress -> success)
 # is exercised without a network or a real 30s sleep.
 setup() {
-  STUB="$BATS_TEST_TMPDIR/bin"
-  mkdir -p "$STUB"
   RESPONSES="$BATS_TEST_TMPDIR/responses"
   COUNTER="$BATS_TEST_TMPDIR/counter"
   printf '0\n' > "$COUNTER"
-  CALLS="$BATS_TEST_TMPDIR/calls"
-  : > "$CALLS"
-  cat > "$STUB/gh" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$WORKFLOWS_TEST_CALLS"
+  stub_cmd gh - <<'SH'
 # A dispatch prints nothing and consumes no canned response.
 if [ "$1" = "workflow" ] && [ "$2" = "run" ]; then exit 0; fi
 n=$(cat "$WORKFLOWS_TEST_COUNTER")
@@ -25,9 +19,8 @@ line=$(sed -n "${n}p" "$WORKFLOWS_TEST_RESPONSES")
 [ -n "$line" ] || line=$(tail -1 "$WORKFLOWS_TEST_RESPONSES")
 printf '%s\n' "$line"
 SH
-  chmod +x "$STUB/gh"
-  export PATH="$STUB:$PATH"
-  export WORKFLOWS_TEST_RESPONSES="$RESPONSES" WORKFLOWS_TEST_COUNTER="$COUNTER" WORKFLOWS_TEST_CALLS="$CALLS"
+  CALLS="$(stub_log gh)"
+  export WORKFLOWS_TEST_RESPONSES="$RESPONSES" WORKFLOWS_TEST_COUNTER="$COUNTER"
   export WORKFLOWS_GREEN_POLL_SECONDS=0
   unset GITHUB_OUTPUT
 }
@@ -92,15 +85,12 @@ green() { run bash "$REPO_ROOT/scripts/release/require-green-run.sh" cd-internal
 # gh_noisy STDERR [EXIT] - replace the gh stub with one that prints the next
 # canned response on stdout, STDERR on stderr, and exits EXIT (default 0).
 gh_noisy() {
-  cat > "$STUB/gh" <<SH
-#!/usr/bin/env bash
-printf '%s\\n' "\$*" >> "\$WORKFLOWS_TEST_CALLS"
+  stub_cmd gh - <<SH
 if [ "\$1" = "workflow" ] && [ "\$2" = "run" ]; then exit 0; fi
 printf '%s\\n' "$1" >&2
 [ "${2:-0}" -eq 0 ] && head -1 "\$WORKFLOWS_TEST_RESPONSES"
 exit ${2:-0}
 SH
-  chmod +x "$STUB/gh"
 }
 
 # A notice on stderr from a call that succeeded used to be merged into the JSON,

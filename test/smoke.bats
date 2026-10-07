@@ -6,7 +6,8 @@
 # request headers (runtime version and platform, set and unset), the skip when
 # no manifest URL is configured, and every way it fails: a missing channel, no
 # curl, a failed request, a non-200 answer and an empty one - with the fetched
-# body cleaned up on both outcomes.
+# body cleaned up on both outcomes - and the retries: a dropped connection or a
+# 5xx is asked again, three times in all, while any other answer is final.
 load test_helper
 
 setup() {
@@ -18,6 +19,8 @@ setup() {
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" RUNNER_TEMP="$BATS_TEST_TMPDIR/tmp"
   export WORKFLOWS_OTA_DIR="$BATS_TEST_TMPDIR/ota" WORKFLOWS_ASSETS_DIR="$BATS_TEST_TMPDIR/assets"
   mkdir -p "$RUNNER_TEMP"
+  # The retries run without their 5-second wait.
+  export WORKFLOWS_RETRY_DELAY_SECONDS=0
   unset GITHUB_ENV OTA_MANIFEST_URL OTA_RUNTIME_VERSION OTA_SMOKE_PLATFORM OTA_BASELINE_BUILD_INFO
 }
 
@@ -25,10 +28,18 @@ stub_curl() {
   cat > "$STUB/curl" <<'SH'
 #!/usr/bin/env bash
 printf 'curl %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
+calls="$(grep -c '^curl ' "$WORKFLOWS_TEST_LOG")"
 prev=""; out=""
 for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done
 [ -n "$out" ] && printf '%s' "${WORKFLOWS_TEST_MANIFEST-manifest bytes}" > "$out"
 [ "${WORKFLOWS_TEST_CURL_FAIL:-}" = "true" ] && exit 7
+# The first WORKFLOWS_TEST_FAIL_FIRST calls fail: no answer (exit 7), or the
+# status in WORKFLOWS_TEST_FAIL_CODE when it is set.
+if [ "$calls" -le "${WORKFLOWS_TEST_FAIL_FIRST:-0}" ]; then
+  [ -n "${WORKFLOWS_TEST_FAIL_CODE:-}" ] || exit 7
+  printf '%s' "$WORKFLOWS_TEST_FAIL_CODE"
+  exit 0
+fi
 printf '%s' "${WORKFLOWS_TEST_CODE:-200}"
 exit 0
 SH
@@ -65,11 +76,38 @@ smoke() { run bash "$REPO_ROOT/scripts/ota/smoke.sh" "$@"; }
 
 # A publish that "succeeded" but serves nothing looks exactly like a working one
 # until a user opens the app.
-@test "a non-200 manifest is fatal" {
+@test "a non-200 manifest is fatal, and a 4xx is not asked again" {
   stub_curl
   WORKFLOWS_TEST_CODE=404 OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
   [ "$status" -ne 0 ] || fail "accepted HTTP 404: $output"
   contains "$output" "returned HTTP 404" || fail "unexpected message: $output"
+  [ "$(grep -c '^curl ' "$WORKFLOWS_TEST_LOG")" -eq 1 ] || fail "a 404 was retried: $(cat "$WORKFLOWS_TEST_LOG")"
+}
+
+@test "a dropped connection is asked again, and the second answer counts" {
+  stub_curl
+  WORKFLOWS_TEST_FAIL_FIRST=1 OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
+  [ "$status" -eq 0 ] || fail "one dropped connection failed the smoke: $output"
+  [ "$(grep -c '^curl ' "$WORKFLOWS_TEST_LOG")" -eq 2 ] || fail "expected two requests: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "attempt 1 of 3 failed with exit status 1: fetch_manifest - retrying in 0s" || fail "the retry was not logged: $output"
+  contains "$output" "manifest for beta is being served" || fail "unexpected message: $output"
+}
+
+@test "a 5xx is asked again, and the second answer counts" {
+  stub_curl
+  WORKFLOWS_TEST_FAIL_FIRST=1 WORKFLOWS_TEST_FAIL_CODE=503 OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
+  [ "$status" -eq 0 ] || fail "one 503 failed the smoke: $output"
+  [ "$(grep -c '^curl ' "$WORKFLOWS_TEST_LOG")" -eq 2 ] || fail "expected two requests: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "HTTP 503" || fail "the 503 was not logged: $output"
+}
+
+@test "a 5xx on every attempt is fatal after three requests, naming the status" {
+  stub_curl
+  WORKFLOWS_TEST_FAIL_FIRST=99 WORKFLOWS_TEST_FAIL_CODE=502 OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
+  [ "$status" -ne 0 ] || fail "accepted HTTP 502: $output"
+  [ "$(grep -c '^curl ' "$WORKFLOWS_TEST_LOG")" -eq 3 ] || fail "expected three requests: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "attempt 3 of 3 failed with exit status 1: fetch_manifest - giving up" || fail "the last attempt was not logged: $output"
+  contains "$output" "returned HTTP 502" || fail "unexpected message: $output"
 }
 
 @test "an empty 200 manifest is fatal" {
@@ -79,11 +117,12 @@ smoke() { run bash "$REPO_ROOT/scripts/ota/smoke.sh" "$@"; }
   contains "$output" "came back empty" || fail "unexpected message: $output"
 }
 
-@test "a failed request is fatal" {
+@test "a request that fails on every attempt is fatal after three requests" {
   stub_curl
   WORKFLOWS_TEST_CURL_FAIL=true OTA_MANIFEST_URL=https://u.example.test/manifest smoke beta
   [ "$status" -ne 0 ] || fail "a failed request was ignored: $output"
-  contains "$output" "failed" || fail "unexpected message: $output"
+  [ "$(grep -c '^curl ' "$WORKFLOWS_TEST_LOG")" -eq 3 ] || fail "expected three requests: $(cat "$WORKFLOWS_TEST_LOG")"
+  contains "$output" "::error::manifest request to https://u.example.test/manifest failed" || fail "unexpected message: $output"
 }
 
 @test "the smoke body does not survive the run" {

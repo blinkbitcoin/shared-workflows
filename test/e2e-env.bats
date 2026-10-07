@@ -1,8 +1,20 @@
 #!/usr/bin/env bats
-load test_helper
-
+# Every assertion ends in `|| fail "..."` - see test_helper.bash.
+#
+# scripts/lib/e2e-env.sh: the one entry point every native and E2E script
+# sources. It assembles the contract from shared-env.sh and the e2e-*.sh files
+# (each tested in its own file, named after it) and makes the run's side
+# effects in workflows_e2e_init. Covered here: every public function and
+# variable is there after sourcing the entry alone; WORKFLOWS_OUT is created
+# and WORKFLOWS_OUT and WORKFLOWS_RUN_START published once, within one process
+# and across processes; the run-start stamp is made once, marked fresh only in
+# the process that made it, and never touched again; and a stamp that cannot be
+# written leaves the run unmarked rather than failing the caller.
+#
 # e2e-env.sh is a library (sourced, not executed), so each case sources it
 # from a throwaway bash -c process rather than `run bash script.sh`.
+load test_helper
+
 setup() {
   GITHUB_ENV="$BATS_TEST_TMPDIR/github_env"
   : > "$GITHUB_ENV"
@@ -11,11 +23,35 @@ setup() {
   export WORKFLOWS_OUT
 }
 
-@test "publishes WORKFLOWS_OUT and WORKFLOWS_RUN_START to GITHUB_ENV" {
+# e2e_env COMMANDS - runs COMMANDS in a fresh bash that has sourced common.sh
+# and the entry, under the options every caller sets.
+e2e_env() {
+  run bash -c 'set -euo pipefail; source "$1/scripts/lib/common.sh"; source "$1/scripts/lib/e2e-env.sh"; eval "$2"' _ "$REPO_ROOT" "$1"
+}
+
+@test "the entry alone defines every function and variable of the contract" {
+  e2e_env '
+    for f in workflows_platform workflows_out_init workflows_e2e_init workflows_app_config workflows_app_id \
+      workflows_scheme workflows_ios_scheme workflows_run_hook workflows_ios_unified_log_predicate \
+      workflows_sim_udid workflows_driver_startup_timeout workflows_assert_suite_ran workflows_metro_background; do
+      [ "$(type -t "$f")" = function ] || echo "missing function $f"
+    done
+    bash -c "for v in WORKFLOWS_OUT WORKFLOWS_LIB_DIR WORKFLOWS_RUN_START WORKFLOWS_RUN_START_FRESH WORKFLOWS_DEV_CLIENT \
+      WORKFLOWS_IOS_CONFIGURATION WORKFLOWS_IOS_PRODUCTS_DIR WORKFLOWS_ANDROID_APK WORKFLOWS_MAESTRO_FLOWS \
+      WORKFLOWS_SUITE_TIMEOUT_MINUTES WORKFLOWS_METRO_PORT WORKFLOWS_MOCK_API_PORT; do
+      [ -n \"\${!v+set}\" ] || echo \"not exported: \$v\"
+    done"
+    echo done'
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$output" = "done" ] || fail "the entry is missing part of the contract: $output"
+}
+
+@test "publishes WORKFLOWS_OUT and WORKFLOWS_RUN_START to GITHUB_ENV, and creates WORKFLOWS_OUT" {
   run bash -c "source '$REPO_ROOT/scripts/lib/common.sh'; source '$REPO_ROOT/scripts/lib/e2e-env.sh'"
-  [ "$status" -eq 0 ]
-  grep -qxF "WORKFLOWS_OUT=$WORKFLOWS_OUT" "$GITHUB_ENV"
-  grep -qxF "WORKFLOWS_RUN_START=$WORKFLOWS_OUT/run-start" "$GITHUB_ENV"
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ -d "$WORKFLOWS_OUT" ] || fail "WORKFLOWS_OUT was not created"
+  grep -qxF "WORKFLOWS_OUT=$WORKFLOWS_OUT" "$GITHUB_ENV" || fail "WORKFLOWS_OUT not published: $(cat "$GITHUB_ENV")"
+  grep -qxF "WORKFLOWS_RUN_START=$WORKFLOWS_OUT/run-start" "$GITHUB_ENV" || fail "WORKFLOWS_RUN_START not published: $(cat "$GITHUB_ENV")"
 }
 
 @test "sourcing twice in the same process appends each variable once" {
@@ -24,9 +60,9 @@ setup() {
     source '$REPO_ROOT/scripts/lib/e2e-env.sh'
     source '$REPO_ROOT/scripts/lib/e2e-env.sh'
   "
-  [ "$status" -eq 0 ]
-  [ "$(grep -c '^WORKFLOWS_OUT=' "$GITHUB_ENV")" -eq 1 ]
-  [ "$(grep -c '^WORKFLOWS_RUN_START=' "$GITHUB_ENV")" -eq 1 ]
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$(grep -c '^WORKFLOWS_OUT=' "$GITHUB_ENV")" -eq 1 ] || fail "WORKFLOWS_OUT: $(cat "$GITHUB_ENV")"
+  [ "$(grep -c '^WORKFLOWS_RUN_START=' "$GITHUB_ENV")" -eq 1 ] || fail "WORKFLOWS_RUN_START: $(cat "$GITHUB_ENV")"
 }
 
 @test "sourcing from separate processes sharing GITHUB_ENV appends each variable once" {
@@ -34,147 +70,34 @@ setup() {
   # file-based (grep $GITHUB_ENV itself), not a shell-variable flag that only
   # survives within one process.
   run bash -c "source '$REPO_ROOT/scripts/lib/common.sh'; source '$REPO_ROOT/scripts/lib/e2e-env.sh'"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || fail "status $status: $output"
   run bash -c "source '$REPO_ROOT/scripts/lib/common.sh'; source '$REPO_ROOT/scripts/lib/e2e-env.sh'"
-  [ "$status" -eq 0 ]
-  [ "$(grep -c '^WORKFLOWS_OUT=' "$GITHUB_ENV")" -eq 1 ]
-  [ "$(grep -c '^WORKFLOWS_RUN_START=' "$GITHUB_ENV")" -eq 1 ]
-}
-
-# The warm iOS build spent ~80s installing a dependency tree so that
-# workflows_ios_scheme could ask the Expo config for a name it then discarded -
-# the workspace filename is what it returns. test-e2e.yml now skips Setup on a cache
-# hit, so the scheme must resolve with no pnpm, no node_modules and no expo.
-@test "the iOS scheme resolves from the workspace alone, with no expo config available" {
-  root="$BATS_TEST_TMPDIR/consumer"
-  mkdir -p "$root/ios/RNMobileTemplatedev.xcworkspace"
-  # The resolver logs its reason on stderr; only stdout is the scheme. node
-  # stays on PATH: the stack is asked of native-stack.mjs.
-  run env -u EXPO_CONFIG_JSON GITHUB_WORKSPACE="$root" WORKING_DIRECTORY=. PATH="$(dirname "$(command -v node)"):/usr/bin:/bin" \
-    WORKFLOWS_NATIVE_STACK_INPUT=expo \
-    bash -c "source '$REPO_ROOT/scripts/lib/common.sh'; source '$REPO_ROOT/scripts/lib/e2e-env.sh'; workflows_ios_scheme 2>/dev/null"
-  [ "$status" -eq 0 ] || fail "status $status; output: $output"
-  # bash 3.2 (macOS /bin/bash, which bats runs under) has no negative array
-  # subscripts, so compare $output rather than ${lines[-1]}.
-  [ "$output" = "RNMobileTemplatedev" ] || fail "got '$output'"
-}
-
-# ...and the cross-check still fires when the config IS there and disagrees:
-# dropping it silently would hide a real prebuild/config mismatch.
-@test "a disagreeing expo config still warns, and the workspace name still wins" {
-  root="$BATS_TEST_TMPDIR/consumer"
-  mkdir -p "$root/ios/FromWorkspace.xcworkspace"
-  cfg="$BATS_TEST_TMPDIR/expo.json"
-  printf '{"name":"FromConfig"}\n' > "$cfg"
-  run env GITHUB_WORKSPACE="$root" WORKING_DIRECTORY=. EXPO_CONFIG_JSON="$cfg" WORKFLOWS_NATIVE_STACK_INPUT=expo \
-    bash -c "source '$REPO_ROOT/scripts/lib/common.sh'; source '$REPO_ROOT/scripts/lib/e2e-env.sh'; workflows_ios_scheme"
-  [ "$status" -eq 0 ] || fail "status $status; output: $output"
-  contains "$output" "::warning::" || fail "no warning; output: $output"
-  contains "$output" "FromWorkspace" || fail "output: $output"
-}
-
-# The platform used to be read inside a `case` word, where a failing `$(...)`
-# never stops the shell: an unknown platform printed its error and the function
-# still returned 0 with an empty application id.
-@test "workflows_app_id with an unknown platform fails instead of answering an empty id" {
-  run bash -c "set -euo pipefail
-    source '$REPO_ROOT/scripts/lib/common.sh'
-    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
-    id=\"\$(workflows_app_id windows)\"
-    echo \"reached with id='\$id'\""
-  [ "$status" -ne 0 ] || fail "an unknown platform answered: $output"
-  contains "$output" "platform must be ios or android (got 'windows')" || fail "output: $output"
-  not_contains "$output" "reached with id" || fail "the caller carried on: $output"
-}
-
-@test "workflows_app_id prefers WORKFLOWS_APP_ID, and otherwise asks the Expo stack's configuration" {
-  run bash -c "WORKFLOWS_APP_ID=com.example.override
-    source '$REPO_ROOT/scripts/lib/common.sh'
-    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
-    workflows_app_id windows"
   [ "$status" -eq 0 ] || fail "status $status: $output"
-  contains "$output" "com.example.override" || fail "the override was not used: $output"
-
-  printf '{"ios":{"bundleIdentifier":"com.example.ios"},"android":{"package":"com.example.android"}}\n' \
-    > "$BATS_TEST_TMPDIR/expo.json"
-  local platform
-  for platform in ios android; do
-    run bash -c "export EXPO_CONFIG_JSON='$BATS_TEST_TMPDIR/expo.json' WORKFLOWS_NATIVE_STACK_INPUT=expo
-      source '$REPO_ROOT/scripts/lib/common.sh'
-      source '$REPO_ROOT/scripts/lib/e2e-env.sh'
-      workflows_app_id $platform"
-    [ "$status" -eq 0 ] || fail "$platform: status $status: $output"
-    contains "$output" "com.example.$platform" || fail "$platform: $output"
-  done
+  [ "$(grep -c '^WORKFLOWS_OUT=' "$GITHUB_ENV")" -eq 1 ] || fail "WORKFLOWS_OUT: $(cat "$GITHUB_ENV")"
+  [ "$(grep -c '^WORKFLOWS_RUN_START=' "$GITHUB_ENV")" -eq 1 ] || fail "WORKFLOWS_RUN_START: $(cat "$GITHUB_ENV")"
 }
 
-@test "read through \$(...), the iOS scheme stops on a working directory that does not exist" {
-  run bash -c "set -euo pipefail
-    export GITHUB_WORKSPACE='$BATS_TEST_TMPDIR' WORKING_DIRECTORY=missing
-    source '$REPO_ROOT/scripts/lib/common.sh'
-    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
-    scheme=\"\$(workflows_ios_scheme)\"
-    echo \"reached with scheme='\$scheme'\""
-  [ "$status" -ne 0 ] || fail "the caller carried on: $output"
-  not_contains "$output" "reached with" || fail "the caller carried on: $output"
-  not_contains "$output" "no ios/*.xcworkspace in  -" || fail "it looked for a workspace under an empty root: $output"
-}
-
-# Each identifier is asked of the consumer's native stack. Against the bare
-# fixture that is its committed projects: no expo, no pnpm, no node_modules.
-# xcodebuild is a fake that fails, as on a runner without Pods, so the bundle
-# identifier comes from the project file.
-@test "against the bare fixture, every identifier comes from the committed native projects" {
-  bin="$BATS_TEST_TMPDIR/bin"
-  mkdir -p "$bin"
-  printf '#!/usr/bin/env bash\nexit 65\n' > "$bin/xcodebuild"
-  chmod +x "$bin/xcodebuild"
-  run env GITHUB_WORKSPACE="$FIXTURES/consumer-bare" WORKING_DIRECTORY=. PATH="$bin:$PATH" bash -c "
-    source '$REPO_ROOT/scripts/lib/common.sh'
-    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
-    {
-      printf 'ios=%s\n' \"\$(workflows_app_id ios)\"
-      printf 'android=%s\n' \"\$(workflows_app_id android)\"
-      printf 'scheme=[%s]\n' \"\$(workflows_scheme)\"
-      printf 'xcode=%s\n' \"\$(workflows_ios_scheme)\"
-    } 2>/dev/null"
+@test "the run-start stamp is made by the first process, marked fresh only there, and never touched again" {
+  e2e_env 'printf "fresh=[%s]\n" "$WORKFLOWS_RUN_START_FRESH"'
   [ "$status" -eq 0 ] || fail "status $status: $output"
-  [ "$output" = "ios=com.example.bare
-android=com.example.bare
-scheme=[]
-xcode=App" ] || fail "got: $output"
+  [ "$output" = "fresh=[1]" ] || fail "the first process did not mark the stamp fresh: $output"
+  [ -f "$WORKFLOWS_OUT/run-start" ] || fail "no stamp at $WORKFLOWS_OUT/run-start"
+  touch -t 200001010000 "$WORKFLOWS_OUT/run-start"
+  e2e_env 'printf "fresh=[%s]\n" "$WORKFLOWS_RUN_START_FRESH"'
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  [ "$output" = "fresh=[]" ] || fail "a later process marked the stamp fresh: $output"
+  [ -z "$(find "$WORKFLOWS_OUT/run-start" -newermt 2000-01-02)" ] || fail "a later process touched the stamp"
 }
 
-@test "against the Expo fixture, the identifiers come from the Expo configuration" {
-  printf '{"name":"Fixture App","scheme":"fixture","ios":{"bundleIdentifier":"com.example.expo"},"android":{"package":"com.example.expo.android"}}\n' \
-    > "$BATS_TEST_TMPDIR/expo.json"
-  run env GITHUB_WORKSPACE="$FIXTURES/consumer-min" WORKING_DIRECTORY=. EXPO_CONFIG_JSON="$BATS_TEST_TMPDIR/expo.json" bash -c "
-    source '$REPO_ROOT/scripts/lib/common.sh'
-    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
-    {
-      printf 'ios=%s\n' \"\$(workflows_app_id ios)\"
-      printf 'android=%s\n' \"\$(workflows_app_id android)\"
-      printf 'scheme=%s\n' \"\$(workflows_scheme)\"
-    } 2>/dev/null"
+@test "a stamp that cannot be written leaves the run unmarked, and the caller carries on" {
+  [ "$(id -u)" -ne 0 ] || skip "root writes into a read-only directory"
+  mkdir -p "$WORKFLOWS_OUT"
+  chmod a-w "$WORKFLOWS_OUT"
+  e2e_env 'printf "fresh=[%s]\n" "$WORKFLOWS_RUN_START_FRESH"'
+  chmod u+w "$WORKFLOWS_OUT"
   [ "$status" -eq 0 ] || fail "status $status: $output"
-  [ "$output" = "ios=com.example.expo
-android=com.example.expo.android
-scheme=fixture" ] || fail "got: $output"
-}
-
-@test "workflows_metro_background starts the command in its own process group, with the log and PID" {
-  run bash -c "set -euo pipefail
-    source '$REPO_ROOT/scripts/lib/common.sh'
-    source '$REPO_ROOT/scripts/lib/e2e-env.sh'
-    WORKFLOWS_METRO_PORT=9999 workflows_metro_background bash -c 'printf \"CI=%s\\n\" \"\$CI\"'"
-  [ "$status" -eq 0 ] || fail "status $status: $output"
-  pid="$(cat "$WORKFLOWS_OUT/metro.pid")"
-  [[ "$pid" =~ ^[0-9]+$ ]] || fail "not a PID: $pid"
-  contains "$output" "Metro starting (pid $pid, port 9999, log $WORKFLOWS_OUT/metro.log)" || fail "output: $output"
-  contains "$output" "stop it with: kill -TERM -$pid" || fail "output: $output"
-  for i in $(seq 1 50); do
-    [ -s "$WORKFLOWS_OUT/metro.log" ] && break
-    sleep 0.2
-  done
-  [ "$(cat "$WORKFLOWS_OUT/metro.log")" = "CI=1" ] || fail "the command did not run with CI=1: $(cat "$WORKFLOWS_OUT/metro.log")"
+  # The shell reports the refused write on stderr, as it always has.
+  contains "$output" "fresh=[]" || fail "no marker printed: $output"
+  not_contains "$output" "fresh=[1]" || fail "an unwritten stamp was marked fresh: $output"
+  [ ! -e "$WORKFLOWS_OUT/run-start" ] || fail "a stamp appeared in a read-only directory"
 }

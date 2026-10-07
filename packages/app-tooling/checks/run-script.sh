@@ -10,13 +10,9 @@ name="${1:?usage: run-script.sh NAME}"
 root="$(consumer_root)"
 cd "$root"
 
-has_script() {
-  RUN_SCRIPT_NAME="$name" node -e \
-    "process.exit(require('./package.json').scripts?.[process.env.RUN_SCRIPT_NAME] ? 0 : 1)" \
-    2>/dev/null
-}
-
-if has_script; then
+# package_json_has dies on a package.json that does not parse, rather than
+# reading it as "no such script" and falling through to the binary lookup.
+if package_json_has scripts "$name"; then
   exec pnpm run "$name"
 elif [ -x "node_modules/.bin/$name" ]; then
   exec pnpm exec "$name"

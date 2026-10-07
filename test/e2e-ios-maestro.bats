@@ -128,3 +128,12 @@ suite() { run bash "$REPO_ROOT/scripts/e2e/ios-maestro.sh"; }
   [ "$(cat "$CALLS")" = "maestro test .maestro --platform ios --udid SIM-1 -e APP_ID=com.example.app --debug-output $WORKFLOWS_OUT/maestro --flatten-debug-output --format junit --output $WORKFLOWS_OUT/maestro/junit.xml --include-tags smoke" ] \
     || fail "calls: $(cat "$CALLS")"
 }
+
+@test "without WORKFLOWS_SIM_UDID, the simulator ios-simulator.sh pick remembered is addressed" {
+  unset WORKFLOWS_SIM_UDID
+  mkdir -p "$WORKFLOWS_OUT"
+  printf 'SIM-PICKED\n' > "$WORKFLOWS_OUT/sim-udid"
+  suite
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$(cat "$CALLS")" "maestro test .maestro --platform ios --udid SIM-PICKED -e APP_ID=com.example.app " || fail "calls: $(cat "$CALLS")"
+}
