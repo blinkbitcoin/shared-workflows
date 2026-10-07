@@ -77,3 +77,30 @@ disk-heaviest job in the family: system image + AVD + APK + emulator + Maestro
 CLI can otherwise exhaust a standard runner's ~14GB free). It prints `df -h /`
 before and after so a disk-pressure failure is diagnosable straight from the
 job log without downloading anything.
+
+## Android NDK downloads (Linux)
+
+A React Native Android build asks for NDK versions the runner image does not
+ship, and Gradle downloads them while it configures the project, on every
+build. On the template (React Native 0.86.3, Expo SDK 57) in October 2026:
+
+| NDK | Asked for by | Why that version |
+| --- | --- | --- |
+| `27.1.12297006` | `:app` | React Native's `ndkVersion` (`react-native/gradle/libs.versions.toml`), which the prebuild template's `app/build.gradle` reads as `rootProject.ext.ndkVersion` |
+| `27.0.12077973` | `:expo-updates` | it has a CMake build and sets no `ndkVersion`, so it gets the Android Gradle Plugin's default; the plugin is React Native's (`agp = "8.12.0"` in `@react-native/gradle-plugin`), not a version the app declares |
+
+`ubuntu-24.04` (images 20260927 and 20261004 both did this) ships `27.3.13750724` (the default),
+`28.2.13676358` and `29.0.14206865`, so neither is there. The two installs
+took at most 25 and 17 seconds of an 11 to 14 minute Gradle build. The
+download is not retried: a corrupt archive fails the build during project
+configuration with `Error on ZipFile unknown archive` and
+`InstallFailedException: Failed to install the following SDK components:
+ndk;<version>`. Re-run the job. This is the same failure
+`scripts/ci/android-sdk-install.sh` retries for the emulator's packages.
+
+Nothing here pre-installs or caches these NDK versions. They belong to the app's
+React Native and Gradle plugin and move with them, the AGP default can only be
+read out of the plugin's jar, and caching both would add about 2 GB to a
+repository cache that is already full. If the failure becomes frequent, the
+fix is to install the versions Gradle will ask for through
+`android-sdk-install.sh` before the Gradle step.

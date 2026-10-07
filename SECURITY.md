@@ -7,8 +7,7 @@ problem in a pull request.
 
 - Preferred: GitHub → **Security** → **Report a vulnerability** (private
   security advisory) on this repository.
-- Email: `security@blink.sv` *(placeholder — replace with the real address for
-  your fork before publishing this repository)*.
+- Email: `security@blink.sv`.
 
 Include the workflow, action or script involved, the ref you pin (`@v0`, a tag
 or a sha), and the smallest caller that reproduces it. Expect an
@@ -61,6 +60,9 @@ backported fixes — a consumer is expected to move its pin forward.
   history.
 
 Dependency exposure on the consumer side is watched by `check.yml`'s audit
-step; this repository's own dependencies are the pinned tools in `.mise.toml`
-and the actions pinned in `.github/workflows/`, both watched by Dependabot
-(`.github/dependabot.yml`).
+step. This repository's own dependencies are the actions pinned in
+`.github/workflows/` and `.github/actions/`, which Dependabot watches
+(`.github/dependabot.yml`), and the pinned tools in `.mise.toml`,
+`scripts/lib/versions.sh` and `packages/app-tooling/versions.json`, which no bot
+proposes updates for: they are bumped by hand, and `make check-version-pins` and
+`make check-tool-versions` hold the copies together.

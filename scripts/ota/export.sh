@@ -9,7 +9,7 @@
 set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 source "$(dirname "$0")/../lib/release-env.sh"
-require_cmd npx
+require_cmd pnpm
 
 root="$(consumer_root)"
 cd "$root"
@@ -17,7 +17,11 @@ rm -rf "$WORKFLOWS_OTA_DIR"
 mkdir -p "$WORKFLOWS_OTA_DIR"
 
 group "expo export (ota)"
-CI=1 npx expo export --platform all --source-maps --output-dir "$WORKFLOWS_OTA_DIR"
+# pnpm exec, not npx: with CI set npx assumes --yes, and an app whose expo is
+# not resolvable would get whatever expo the registry serves today, exporting
+# an update built by a CLI the app never pinned. Prebuild and the config
+# reader already go through pnpm exec.
+CI=1 pnpm exec expo export --platform all --source-maps --output-dir "$WORKFLOWS_OTA_DIR"
 endgroup
 
 # On content, not on the directory: mkdir -p above already guarantees the

@@ -39,7 +39,12 @@ setup() {
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$CALLS"
 case "\$*" in
-  *recordVideo*|*"log stream"*) exec sleep 30 ;;
+  # Like simctl and log stream: catch SIGINT and exit cleanly. Not
+  # \`exec sleep\`, and not a bash trap: a background job of a non-interactive
+  # shell starts with SIGINT ignored, which sleep keeps and bash may not undo,
+  # so the stop's interrupt was never seen and the tests waited out the sleep.
+  # It notes when its handler is in, so a test can stop it only after that.
+  *recordVideo*|*"log stream"*) exec perl -e '\$SIG{INT} = sub { exit 0 }; open my \$f, ">>", "$CALLS.ready"; print \$f "ready\\n"; close \$f; sleep 30' ;;
   "simctl list -j devices available") none='{"devices":{}}'; printf '%s\n' "\${STUB_DEVICES:-\$none}" ;;
   "simctl list devices available") printf 'the plain device list\n' ;;
   "simctl boot "*|"simctl bootstatus "*|"simctl shutdown "*) exit "\${STUB_SIMCTL_STATUS:-0}" ;;
@@ -352,14 +357,19 @@ only_path() {
   sim record start >/dev/null
   rec="$(cat "$WORKFLOWS_OUT/ios-record.pid")"
   logp="$(cat "$WORKFLOWS_OUT/ios-unified-log.pid")"
+  local i
+  for i in $(seq 1 50); do [ "$(grep -c . "$CALLS.ready" 2>/dev/null)" -ge 2 ] && break; sleep 0.1; done
+  local started=$SECONDS
   run sim record stop
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
+  # The stub exits on SIGINT, so a stop that interrupts it returns at once. One
+  # that waits out its 30-second loop sent nothing the recorder heard.
+  [ $((SECONDS - started)) -lt 10 ] || fail "stop took $((SECONDS - started))s: the recorder never saw the interrupt"
   contains "$output" "unified log stopped" || fail "output: $output"
   [ ! -f "$WORKFLOWS_OUT/ios-record.pid" ] || fail "recording pid file survived"
   [ ! -f "$WORKFLOWS_OUT/ios-unified-log.pid" ] || fail "unified-log pid file survived"
   # Poll rather than sleep a fixed second: under a parallel run a killed process
   # can take longer than that to go.
-  local i
   for i in $(seq 1 50); do
     kill -0 "$rec" 2>/dev/null || kill -0 "$logp" 2>/dev/null || break
     sleep 0.2
@@ -377,12 +387,21 @@ only_path() {
 
 @test "record stop with a recording but no unified log stops the recording alone" {
   # A recording started before the unified log existed, or whose log stream
-  # never started, leaves only the recording's pid file.
-  sleep 30 &
+  # never started, leaves only the recording's pid file. The fake recorder
+  # writes down the signal it gets: simctl finalises the mp4 only on SIGINT.
+  local signals="$BATS_TEST_TMPDIR/signals"
+  SIGNALS="$signals" perl -e '
+    for my $s (qw(INT TERM)) { $SIG{$s} = sub { open my $f, ">>", $ENV{SIGNALS}; print $f "$s\n"; close $f; exit 0 } }
+    sleep 30' &
   local rec=$!
   printf '%s\n' "$rec" > "$WORKFLOWS_OUT/ios-record.pid"
+  # Give perl a moment to install its handlers before the stop arrives.
+  sleep 0.5
+  local started=$SECONDS
   run sim record stop
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
+  [ $((SECONDS - started)) -lt 10 ] || fail "stop took $((SECONDS - started))s: the recorder never saw the interrupt"
+  [ "$(cat "$signals" 2>/dev/null)" = "INT" ] || fail "the recorder got '$(cat "$signals" 2>/dev/null)', not a lone SIGINT"
   contains "$output" "recording stopped ($WORKFLOWS_OUT/ios.mp4)" || fail "output: $output"
   not_contains "$output" "unified log stopped" || fail "it reported a log it never had: $output"
   [ ! -f "$WORKFLOWS_OUT/ios-record.pid" ] || fail "recording pid file survived"

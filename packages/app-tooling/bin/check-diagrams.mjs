@@ -189,6 +189,25 @@ export function main(
 ) {
   const all = argv.includes('--all');
   const explicit = argv.filter((a) => a !== '--all');
+  // A flag this does not know, or a file it was named that is not there, used
+  // to fall through to "diagrams ok": a typo passed the gate it was meant to run.
+  const flag = explicit.find((a) => a.startsWith('-'));
+  if (flag !== undefined) {
+    error(`::error::check-diagrams: unexpected ${flag}: pass --all and file paths`);
+    return 1;
+  }
+  const missing = explicit.filter((file) => {
+    try {
+      read(file);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  if (missing.length > 0) {
+    error(`::error::check-diagrams: no such file: ${missing.join(', ')}`);
+    return 1;
+  }
 
   let candidates;
   if (explicit.length > 0) {

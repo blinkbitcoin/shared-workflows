@@ -27,21 +27,33 @@ bounded_maestro() {
   # Fallback watchdog: run the command in the background and poll it once a
   # second. The marker file (not the exit status) is what distinguishes "we
   # killed it" from "it exited with 143 on its own".
+  #
+  # The watchdog writes nothing, so it holds none of the caller's output: a
+  # killed subshell does not take its running `sleep` with it, and that orphan
+  # kept a pipe on this function's output open - every caller reading it waited
+  # out the nap, a second on each normal run and thirty after a timeout. Each
+  # nap is also waited on rather than run in the foreground, so the TERM below
+  # interrupts it, and the trap ends every nap the watchdog has started: by
+  # job, not by a saved pid, because the TERM can land between `sleep &` and
+  # the assignment of its pid, which left the thirty-second nap running.
   local marker; marker="$(mktemp)"
   "$@" &
   local cmd_pid=$!
   (
+    trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM
     i=0
     while [ "$i" -lt "$secs" ]; do
-      sleep 1
+      sleep 1 & nap=$!
+      wait "$nap"
       kill -0 "$cmd_pid" 2>/dev/null || exit 0
       i=$((i + 1))
     done
     printf 1 > "$marker"
     kill -TERM "$cmd_pid" 2>/dev/null
-    sleep 30
+    sleep 30 & nap=$!
+    wait "$nap"
     kill -KILL "$cmd_pid" 2>/dev/null
-  ) &
+  ) >/dev/null 2>&1 &
   local watchdog_pid=$!
   wait "$cmd_pid" || status=$?
   kill -TERM "$watchdog_pid" 2>/dev/null

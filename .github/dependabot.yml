@@ -1,7 +1,12 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # `/` alone reads .github/workflows/ and a root action.yml, never the
+    # composite actions under .github/actions/, whose pins (ruby/setup-ruby,
+    # actions/cache, mise-action) every consumer job runs. Both are listed.
+    directories:
+      - /
+      - /.github/actions/*
     schedule:
       interval: weekly
     # A release has a week to be yanked before it is proposed here. Security

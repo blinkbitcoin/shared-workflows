@@ -50,3 +50,28 @@ setup() {
   [ "$(yq -r "$step[0].with.install_args" "$a")" = "yq" ] \
     || fail "native-key's mise-action installs more than yq: install_args is '$(yq -r "$step[0].with.install_args" "$a")'"
 }
+
+# A job that does not install (install: 'false') used to restore the pnpm store
+# and then save it untouched under the current lockfile's key: after a lockfile
+# change, a stale store under the exact key every later job hits. And the key
+# hashed '**/pnpm-lock.yaml', which also matched .workflows/'s fixture
+# lockfiles, so a fixture change moved every consumer's key.
+@test "setup caches the pnpm store only for a job that installs, keyed on the consumer's own lockfile" {
+  a="$REPO_ROOT/.github/actions/setup/action.yml"
+  for name in "Resolve pnpm store path" "Cache pnpm store"; do
+    cond="$(yq -r ".runs.steps[] | select(.name == \"$name\") | .if" "$a")"
+    [ "$cond" = "inputs.install == 'true'" ] || fail "'$name' is not gated on install: if is '$cond'"
+  done
+  key="$(yq -r '.runs.steps[] | select(.name == "Cache pnpm store") | .with.key' "$a")"
+  [ "$key" = 'pnpm-${{ runner.os }}-${{ steps.store.outputs.lock-hash }}' ] || fail "unexpected pnpm cache key: $key"
+  not_contains "$(cat "$a")" "hashFiles(" || fail "setup hashes files by glob again"
+}
+
+# Dependabot's `directory: /` reads .github/workflows/ and a root action.yml
+# only, so the pins inside the composite actions were never proposed.
+@test "dependabot watches the composite actions' pins as well as the workflows'" {
+  cfg="$REPO_ROOT/.github/dependabot.yml"
+  dirs="$(yq -r '.updates[] | select(.package-ecosystem == "github-actions") | .directories[]' "$cfg")"
+  printf '%s\n' "$dirs" | grep -qx '/' || fail "the workflows are not watched: $dirs"
+  printf '%s\n' "$dirs" | grep -qxF '/.github/actions/*' || fail "the composite actions are not watched: $dirs"
+}

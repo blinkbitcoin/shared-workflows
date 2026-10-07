@@ -90,6 +90,16 @@ Every row is a make target; nothing here is run through a package manager.
   the clone. That is intended once this is on `main` — one `make setup-hooks` per
   physical clone — but a branch that changes `lefthook.yml` changes what every
   sibling worktree runs. `mise exec -- lefthook uninstall` reverses it.
+- **Prove the checkout is current before reading a line of it.** A worktree
+  your tooling made for you may have been cut from a local `main` that is
+  weeks old, and a review of stale code is guessing: one session reviewed a
+  tree 117 commits behind and reported findings in files that had since moved
+  or been fixed. Before any review, investigation or change, run
+  `git fetch origin` and then `git rev-list --count HEAD..origin/main`; it must
+  print `0`. If it does not and the branch has no commits of its own, move it
+  with `git merge --ff-only origin/main`; if it has commits, rebase them onto
+  `origin/main` first. Name the commit you worked from (`git rev-parse --short
+  HEAD`) in the review or PR, and fetch again before pushing.
 - **The consumer guide is the contract.** Adding, renaming or re-defaulting a
   workflow input, output or secret without the matching
   `docs/consumer-guide.md` row is a breaking change shipped silently.
@@ -289,7 +299,8 @@ Every row is a make target; nothing here is run through a package manager.
   enforced on top: adding or removing a `##`-documented make target without
   updating the command table above is a hard failure, and so is a
   `<!--count:...-->` marker that disagrees with the tree
-  (`test/docs-facts.bats`).
+  (`test/docs-facts.bats`; the counts that grow with ordinary PRs are round
+  floors, `1800+ tests`, which hold until the count crosses the next step).
 
 ## Rules every app of the family follows
 

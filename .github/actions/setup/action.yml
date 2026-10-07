@@ -41,17 +41,24 @@ runs:
         ruby-version: ${{ steps.rb.outputs.version }}
         bundler-cache: true
         working-directory: ${{ inputs.working-directory }}
+    # The store is cached only for a job that installs: one that does not
+    # would restore the store and then save it, untouched, under the current
+    # lockfile's key - after a lockfile change, a stale store under the exact
+    # key every later job then hits. Keyed on the consumer's own lockfile only,
+    # not a glob that also matches .workflows/'s test fixtures.
     - name: Resolve pnpm store path
       id: store
+      if: inputs.install == 'true'
       shell: bash
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: bash "${{ github.action_path }}/../../../scripts/ci/pnpm-store-path.sh"
     - name: Cache pnpm store
+      if: inputs.install == 'true'
       uses: actions/cache@v6
       with:
         path: ${{ steps.store.outputs.path }}
-        key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+        key: pnpm-${{ runner.os }}-${{ steps.store.outputs.lock-hash }}
         restore-keys: |
           pnpm-${{ runner.os }}-
     - name: Install dependencies

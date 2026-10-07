@@ -89,6 +89,50 @@ green() { run bash "$REPO_ROOT/scripts/release/require-green-run.sh" cd-internal
   contains "$output" "did not complete for abc123" || fail "unexpected message: $output"
 }
 
+# gh_noisy STDERR [EXIT] - replace the gh stub with one that prints the next
+# canned response on stdout, STDERR on stderr, and exits EXIT (default 0).
+gh_noisy() {
+  cat > "$STUB/gh" <<SH
+#!/usr/bin/env bash
+printf '%s\\n' "\$*" >> "\$WORKFLOWS_TEST_CALLS"
+if [ "\$1" = "workflow" ] && [ "\$2" = "run" ]; then exit 0; fi
+printf '%s\\n' "$1" >&2
+[ "${2:-0}" -eq 0 ] && head -1 "\$WORKFLOWS_TEST_RESPONSES"
+exit ${2:-0}
+SH
+  chmod +x "$STUB/gh"
+}
+
+# A notice on stderr from a call that succeeded used to be merged into the JSON,
+# which then failed to parse and read as "no run": a green run went unseen.
+@test "a notice on stderr from a successful gh call does not hide the run" {
+  printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":31}]' > "$RESPONSES"
+  gh_noisy 'A new release of gh is available: 2.80.0'
+  green
+  [ "$status" -eq 0 ] || fail "a stderr notice hid a green run: $output"
+  contains "$output" "run 31 for abc123 succeeded" || fail "unexpected message: $output"
+  contains "$output" "succeeded with a notice: A new release of gh is available" || fail "the notice was dropped: $output"
+}
+
+@test "a gh call that keeps failing is reported as an API problem, quoting gh's stderr" {
+  printf '%s\n' '[]' > "$RESPONSES"
+  gh_noisy 'HTTP 403: Resource not accessible by integration' 1
+  WORKFLOWS_GREEN_DISCOVERY_MINUTES=0 green
+  [ "$status" -ne 0 ] || fail "passed with every gh call failing: $output"
+  contains "$output" "every 'gh run list' failed, the last with: HTTP 403: Resource not accessible by integration" \
+    || fail "the failure did not quote gh: $output"
+  not_contains "$output" "it was never started" || fail "an API failure was reported as a missing run: $output"
+}
+
+@test "the stderr scratch file does not survive the run" {
+  printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":32}]' > "$RESPONSES"
+  export RUNNER_TEMP="$BATS_TEST_TMPDIR/runner-temp"
+  mkdir -p "$RUNNER_TEMP"
+  green
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ -z "$(ls -A "$RUNNER_TEMP")" ] || fail "left files behind: $(ls -A "$RUNNER_TEMP")"
+}
+
 @test "writes the run id to GITHUB_OUTPUT" {
   printf '%s\n' '[{"conclusion":"success","status":"completed","databaseId":99}]' > "$RESPONSES"
   out="$BATS_TEST_TMPDIR/gh_output"
