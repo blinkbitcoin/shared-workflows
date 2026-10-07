@@ -461,6 +461,50 @@ lane_step_count() {
   contains "$path" 'build-info.ios.json' || fail "the .ipa upload does not carry build-info.ios.json: $path"
 }
 
+# A wrong or missing build-info-artifact is a caller wiring mistake, and download-artifact
+# fails on it by name. It once ran after Setup, prebuild and (on iOS) pod install, so
+# the mistake surfaced only after minutes of runner time, macOS minutes on iOS. The
+# download needs only $WORKFLOWS_RELEASE_META_DIR, which the release output step
+# publishes, so it runs right after that step and before anything expensive.
+@test "the build workflows download build-info before Setup and prebuild" {
+  require_cmd yq
+  for platform in ios android; do
+    f="$REPO_ROOT/.github/workflows/build-$platform.yml"
+    names="$(yq -r '.jobs.build.steps[].name' "$f")"
+    publish_i="$(grep -nxF 'Publish the release output directories' <<<"$names" | cut -d: -f1)"
+    download_i="$(grep -nxF 'Download build-info' <<<"$names" | cut -d: -f1)"
+    setup_i="$(grep -nxF 'Setup' <<<"$names" | cut -d: -f1)"
+    prebuild_i="$(grep -nxF "Prebuild ($platform)" <<<"$names" | cut -d: -f1)"
+    lane_i="$(grep -nxF "Fastlane $platform build" <<<"$names" | cut -d: -f1)"
+    [ -n "$publish_i" ] && [ -n "$download_i" ] && [ -n "$setup_i" ] && [ -n "$prebuild_i" ] && [ -n "$lane_i" ] \
+      || fail "build-$platform.yml is missing a step this test orders: $names"
+    [ "$publish_i" -lt "$download_i" ] \
+      || fail "build-$platform.yml downloads build-info before WORKFLOWS_RELEASE_META_DIR is published: $names"
+    [ "$download_i" -lt "$setup_i" ] \
+      || fail "build-$platform.yml downloads build-info after Setup, so a wrong build-info-artifact fails late: $names"
+    [ "$download_i" -lt "$prebuild_i" ] \
+      || fail "build-$platform.yml downloads build-info after prebuild, so a wrong build-info-artifact fails late: $names"
+    [ "$download_i" -lt "$lane_i" ] \
+      || fail "build-$platform.yml downloads build-info after the lane that reads it: $names"
+  done
+}
+
+# bundletool needs nothing prebuild makes, and a wrong bundletool-version or
+# bundletool-sha256 should fail before prebuild is paid for. It stays after Setup:
+# it runs a $WORKFLOWS_DIR script, and checks the jar with the java Setup may pin.
+@test "build-android installs bundletool after Setup and before prebuild" {
+  require_cmd yq
+  f="$REPO_ROOT/.github/workflows/build-android.yml"
+  names="$(yq -r '.jobs.build.steps[].name' "$f")"
+  setup_i="$(grep -nxF 'Setup' <<<"$names" | cut -d: -f1)"
+  bundletool_i="$(grep -nxF 'Install bundletool' <<<"$names" | cut -d: -f1)"
+  prebuild_i="$(grep -nxF 'Prebuild (android)' <<<"$names" | cut -d: -f1)"
+  [ -n "$setup_i" ] && [ -n "$bundletool_i" ] && [ -n "$prebuild_i" ] \
+    || fail "build-android.yml is missing a step this test orders: $names"
+  [ "$setup_i" -lt "$bundletool_i" ] || fail "build-android.yml installs bundletool before Setup: $names"
+  [ "$bundletool_i" -lt "$prebuild_i" ] || fail "build-android.yml installs bundletool after prebuild: $names"
+}
+
 # $WORKFLOWS_DIR is published by the setup composite action, so it exists only
 # in the steps after Setup. A step before it - or in a job that never runs
 # setup - expands `$WORKFLOWS_DIR/scripts/…` to `/scripts/…` and exits 127 on

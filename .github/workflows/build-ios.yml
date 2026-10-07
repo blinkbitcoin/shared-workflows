@@ -184,6 +184,16 @@ jobs:
         run: bash ".workflows/scripts/release/require-inputs.sh"
       - name: Publish the release output directories
         run: bash ".workflows/scripts/release/env-publish.sh"
+      # As soon as its path exists, before Setup: a wrong or missing
+      # build-info-artifact fails here in seconds instead of after Setup,
+      # prebuild and pod install have spent minutes of macOS time. Nothing in
+      # between touches $WORKFLOWS_RELEASE_META_DIR, which lives under
+      # $RUNNER_TEMP, outside the checkout.
+      - name: Download build-info
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.build-info-artifact }}
+          path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
       - name: Native cache keys
         id: keys
         uses: ./.workflows/.github/actions/native-key
@@ -232,11 +242,6 @@ jobs:
       - name: Pod install
         timeout-minutes: 10
         run: bash "$WORKFLOWS_DIR/scripts/native/pods.sh"
-      - name: Download build-info
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ inputs.build-info-artifact }}
-          path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
       # 7-18 minutes, median 11 (unsigned: the template builds without a store
       # account). Signing adds a match clone and the .ipa export, a minute or
       # two. Twice the slowest run is 37; 40.
