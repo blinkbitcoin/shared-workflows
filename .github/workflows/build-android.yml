@@ -243,7 +243,16 @@ jobs:
         with:
           name: ${{ inputs.build-info-artifact }}
           path: ${{ env.WORKFLOWS_RELEASE_META_DIR }}
+      # The two lanes carry bounds of their own, as build-ios.yml's do: a Gradle
+      # build stalled on a dependency download or a wedged daemon fails with
+      # the step's name in the log, at about twice its slowest normal run,
+      # instead of as a job cancelled at 60. Measured over the template's 41
+      # internal builds of 2026-09-24 to 2026-10-03: the build took 9-18
+      # minutes, median 13, and twice the slowest is 36, so 40. Everything else
+      # in the job took at most 7 minutes, so both bounds (50 together) can
+      # fire inside the 60.
       - name: Fastlane android build
+        timeout-minutes: 40
         env:
           BUILD_INFO_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/build-info.json
           STORE_NOTES_FILE: ${{ env.WORKFLOWS_RELEASE_META_DIR }}/store-notes.txt
@@ -273,8 +282,11 @@ jobs:
       # ANDROID_UPLOAD_CERT_SHA256 comes from environment-variables; the lane forwards it to
       # the package's verify-android.sh as --cert-sha256, which is what turns
       # "the aab is signed" into "the aab is signed by the expected key".
+      # 3-11s there (unsigned); the signature checks are local. 10, the bound
+      # test-e2e.yml gives its short steps.
       - name: Fastlane android verify
         if: ${{ inputs.verify }}
+        timeout-minutes: 10
         env:
           # The enriched copy, not build-info's: it carries
           # artifacts.apkSha256, which is what the verify-android your lane runs

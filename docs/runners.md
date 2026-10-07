@@ -20,6 +20,14 @@ jobs. That is a scheduling argument, not a cost one, and it is why the
 consumer guide's `ci.yml` runs iOS on pushes to `main` and keeps it off PRs
 unless one carries the `e2e:ios` label.
 
+A hung macOS job costs the same 10x for every minute it hangs, so the
+steps that hang carry bounds below their job's: `build-ios.yml`'s
+`Pod install` (10 minutes), `Fastlane ios build` (40) and
+`Fastlane ios verify` (10) inside a 90-minute job, and `test-e2e.yml`'s
+`Pod install` (20) and `Build iOS app` (45) inside a 60-minute one. The
+`build-ios.yml` bounds are about twice the slowest normal run measured on the
+template, so a hang is cut short and named instead of running out the job.
+
 `macos-runner` (default `macos-26`) is a workflow input on every family member
 that takes inputs at all — the exception is `pr-closed.yml`, which takes none —
 so a caller can pin an older or newer image without editing this repo. Consumers that want a repo-wide override without touching every caller
