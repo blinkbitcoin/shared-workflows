@@ -374,7 +374,8 @@ test('main checks only the files it is given', () => {
 });
 
 test('main refuses a flag it does not know rather than passing', () => {
-  for (const flag of ['--help', '-a', '--al']) {
+  // Not --help: every program answers that with its usage (help.mjs).
+  for (const flag of ['--verbose', '-a', '--al']) {
     const result = runMain([flag], { docs: { 'a.md': DIAGRAM } });
     assert.equal(result.code, 1, flag);
     assert.deepEqual(result.out, [], flag);
