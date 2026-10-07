@@ -167,3 +167,12 @@ test('--root with no directory after it checks the working directory', () => {
   assert.equal(main(['--root'], { ...io, cwd: '/repo', list: () => [], read: () => '' }), 1);
   assert.deepEqual(err, ['shell locale: no shell file found under /repo; the file filter or the root is wrong']);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-shell-locale(?: |$)/m);
+  assert.deepEqual(err, []);
+});

@@ -5,6 +5,8 @@
 // each of them, in name order, and stops at the first that fails. A repository
 // with no skills, or none with tests, passes: there is nothing to break.
 //
+//   check-skills [--root DIR]   (default: the working directory)
+//
 // The suites run from the repository root, the directory they were written
 // against. Some drive fastlane, so the caller runs this where the release gate
 // runs (`make check-release`), with the Ruby bundle installed.
@@ -12,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 export const SKILLS_DIR = '.claude/skills';
 export const SUITE = 'tests/run.sh';
@@ -45,6 +48,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), run = bash } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let root;
   try {
     ({ root } = parseArgs(argv, cwd));

@@ -18,6 +18,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
 import { main as checkSkills } from './check-skills.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** The arguments, as `{ directory }`. */
 export function parseArgs(argv) {
@@ -52,6 +53,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), run = spawn, skills = checkSkills, exists = existsSync } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let directory;
   try {
     ({ directory } = parseArgs(argv));

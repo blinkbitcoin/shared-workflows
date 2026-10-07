@@ -91,3 +91,12 @@ test('runs as a program', () => {
   assert.equal(result.status, 0);
   assert.equal(result.stdout, 'lockfile ok\n');
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-lockfile(?: |$)/m);
+  assert.deepEqual(err, []);
+});

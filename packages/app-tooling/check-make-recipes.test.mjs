@@ -161,3 +161,12 @@ test('the default reader treats a directory with no Makefile as missing', () => 
   assert.equal(main([], { cwd: root, error: (line) => error.push(line) }), 1);
   assert.deepEqual(error, [`make recipes: no Makefile in ${root}`]);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-make-recipes(?: |$)/m);
+  assert.deepEqual(err, []);
+});

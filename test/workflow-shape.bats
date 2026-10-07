@@ -684,6 +684,28 @@ lane_step_count() {
   done
 }
 
+# Two OTA publishes to one channel at once let an older bundle finish last and
+# overwrite the newer one users receive, so the publishing job queues per app
+# and channel. Queued, never cancelled: a publish stopped half-way leaves the
+# channel in an unknown state. The prefix keeps the group apart from a caller's
+# own (`release`, `release-internal-<sha>`), which would otherwise deadlock.
+@test "publish-ota serialises its publish job per repository and channel" {
+  f="$REPO_ROOT/.github/workflows/publish-ota.yml"
+  group=$(yq -r '.jobs.publish.concurrency.group // ""' "$f")
+  [ -n "$group" ] || fail "publish-ota's publish job has no concurrency group"
+  [[ "$group" == shared-workflows-publish-ota-* ]] \
+    || fail "publish-ota's group lost its shared-workflows-publish-ota- prefix, which keeps it apart from a caller's group: $group"
+  [[ "$group" == *'inputs.channel'* ]] \
+    || fail "publish-ota's group is not keyed on inputs.channel, so publishes to different channels would wait on each other: $group"
+  [[ "$group" == *'inputs.repository || github.repository'* ]] \
+    || fail "publish-ota's group is not keyed on the published repository: $group"
+  [ "$(yq -r '.jobs.publish.concurrency."cancel-in-progress"' "$f")" = "false" ] \
+    || fail "publish-ota's group must queue (cancel-in-progress: false), never cancel a publish half-way"
+  # The one job: export and publish are its steps, so one group covers both.
+  [ "$(yq -r '.jobs | length' "$f")" = "1" ] \
+    || fail "publish-ota gained a job; decide whether it must join the publish job's concurrency group"
+}
+
 # A job that calls a reusable workflow cannot carry `timeout-minutes`: GitHub
 # rejects the key there, and the called workflow's own jobs hold the bound. So
 # the rule is about the jobs that run steps.
@@ -1016,6 +1038,28 @@ lane_step_count() {
     grep -qF 'github.ref != inputs.default-branch' "$f" \
       || fail "$w.yml does not compare github.ref against the input"
   done
+}
+
+@test "every setup-gradle step leaves the transforms out of the Gradle cache" {
+  require_cmd yq
+  # The transforms entry carried the app's own compiled config, so setup-gradle
+  # saved the whole entry again (600 MB) on every push, an identical commit
+  # included, and pushed the iOS app out of a full 10 GB repository cache.
+  # Rebuilding the transforms costs about two minutes of Linux time a build.
+  found=0
+  for f in "$REPO_ROOT"/.github/workflows/*.yml; do
+    n=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^gradle/actions/setup-gradle@"))] | length' "$f")
+    [ "$n" -gt 0 ] || continue
+    found=$((found + n))
+    for i in $(seq 0 $((n - 1))); do
+      excludes=$(yq -r "[.jobs[].steps[]? | select((.uses // \"\") | test(\"^gradle/actions/setup-gradle@\"))][$i].with.\"gradle-home-cache-excludes\" // \"\"" "$f")
+      for path in 'caches/transforms-4' 'caches/*/transforms'; do
+        printf '%s\n' "$excludes" | grep -qxF "$path" \
+          || fail "$(basename "$f"): setup-gradle step $((i + 1)) does not exclude $path from the cache"
+      done
+    done
+  done
+  [ "$found" -ge 2 ] || fail "expected the setup-gradle steps of build-android.yml and test-e2e.yml, found $found"
 }
 
 @test "the iOS and Android artifact uploads in test-e2e.yml guard on the build the same way" {

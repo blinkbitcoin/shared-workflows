@@ -9,7 +9,7 @@ load test_helper
 @test "the package's release scripts are the ones the workflows run" {
   run bash "$REPO_ROOT/scripts/self/package-copies.sh"
   [ "$status" -eq 0 ] || fail "stale copies: $output"
-  contains "$output" "package copies ok (57 files)" || fail "output: $output"
+  contains "$output" "package copies ok (58 files)" || fail "output: $output"
 }
 
 # A tree of its own, so the cases below can change originals and copies freely.
@@ -34,13 +34,14 @@ tree() {
   cp "$REPO_ROOT/scripts/security/semgrepignore" "$tree/scripts/security/"
   cp "$REPO_ROOT"/scripts/e2e/{ios-maestro,android-maestro,app-launch,ios-simulator,android-emulator,collect-forensics,maestro-bound,maestro-suite,wait-for-http}.sh "$tree/scripts/e2e/"
   cp "$REPO_ROOT/.github/zizmor.yml" "$tree/.github/"
+  cp "$REPO_ROOT/LICENSE" "$tree/"
 }
 
 @test "--write copies every original into the package, and the copies then check clean" {
   tree
   run bash "$tree/scripts/self/package-copies.sh" --write
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  contains "$output" "copied 57 files into packages/app-tooling" || fail "output: $output"
+  contains "$output" "copied 58 files into packages/app-tooling" || fail "output: $output"
   for rel in release/resolve-version.sh release/build-info.sh release/build-info.mjs checks/generated.sh checks/secrets.sh \
     checks/run-script.sh checks/expo-health.sh ci/check-ci.sh ci/maestro-install.sh hooks/install-if-lockfile-changed.sh \
     lib/common.sh lib/release-env.sh lib/git-clean.sh lib/versions.sh security/scan.sh security/code.sh \
@@ -53,6 +54,7 @@ tree() {
     cmp -s "$tree/scripts/$rel" "$tree/packages/app-tooling/$rel" || fail "packages/app-tooling/$rel is not a copy"
   done
   cmp -s "$tree/.github/zizmor.yml" "$tree/packages/app-tooling/zizmor.yml" || fail "packages/app-tooling/zizmor.yml is not a copy"
+  cmp -s "$tree/LICENSE" "$tree/packages/app-tooling/LICENSE" || fail "packages/app-tooling/LICENSE is not a copy"
   [ -x "$tree/packages/app-tooling/release/resolve-version.sh" ] || [ ! -x "$tree/scripts/release/resolve-version.sh" ] \
     || fail "the copy lost the original's executable bit"
   run bash "$tree/scripts/self/package-copies.sh"
@@ -69,6 +71,20 @@ tree() {
   contains "$output" "packages/app-tooling/release/build-info.sh packages/app-tooling/lib/common.sh" || fail "output: $output"
   contains "$output" "run: bash scripts/self/package-copies.sh --write" || fail "the fix was not named: $output"
   not_contains "$output" "resolve-version.sh" || fail "a current copy was reported: $output"
+}
+
+# npm packs a LICENSE only from the package directory, so the package carries
+# the repository's own; a copyright or license change at the root must reach it.
+@test "a changed root LICENSE fails until the package's copy follows it" {
+  tree
+  bash "$tree/scripts/self/package-copies.sh" --write
+  printf 'Copyright (c) 2027 Blink Bitcoin\n' >> "$tree/LICENSE"
+  run bash "$tree/scripts/self/package-copies.sh"
+  [ "$status" -ne 0 ] || fail "a stale LICENSE checked clean: $output"
+  contains "$output" "packages/app-tooling/LICENSE" || fail "output: $output"
+  bash "$tree/scripts/self/package-copies.sh" --write
+  run bash "$tree/scripts/self/package-copies.sh"
+  [ "$status" -eq 0 ] || fail "the refreshed LICENSE did not check clean: $output"
 }
 
 @test "a missing original is fatal, whether checking or writing" {

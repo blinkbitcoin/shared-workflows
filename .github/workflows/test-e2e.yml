@@ -476,6 +476,14 @@ jobs:
           # branch is `master` never wrote the cache at all and paid a cold
           # Gradle on every run, including on its own default branch.
           cache-read-only: ${{ github.ref != inputs.default-branch }}
+          # The transforms entry holds the app's own compiled config next to the
+          # libraries', so setup-gradle saved all of it again (600 MB) on every
+          # push, an identical commit included, and that pushed the iOS app out
+          # of a full 10 GB repository cache. Rebuilt each build instead: about
+          # two minutes of Linux time (docs/cache-keys.md, "Gradle").
+          gradle-home-cache-excludes: |
+            caches/transforms-4
+            caches/*/transforms
       - name: Prebuild (android)
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
         run: bash "$WORKFLOWS_DIR/scripts/native/prebuild.sh" android

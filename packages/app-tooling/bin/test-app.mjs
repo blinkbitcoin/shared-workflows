@@ -5,6 +5,8 @@
 // node:test file; this decides which apply, says why each other one does not,
 // and runs the rest in one `node --test` with APP_ROOT set to the app.
 //
+//   test-app [--root DIR] [--suite NAME ...] [--list]
+//
 // The app is found the way check-contract finds it: the repository, then the
 // working-directory its callers pass, and its native stack by the same rule.
 // app-tooling.json's appSuites.skip turns a suite off, with a reason that is
@@ -16,6 +18,7 @@ import { ConfigError, CONFIG_FILE, readSection, stringMap } from '../lib/config.
 import { isProgram } from '../lib/is-program.mjs';
 import { SUITES } from '../suites/index.mjs';
 import { defaultIo, readConsumer } from './check-contract.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 export const SUITES_DIR = fileURLToPath(new URL('../suites/', import.meta.url));
 
@@ -85,6 +88,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), io = defaultIo, suites = SUITES, run = runSuites } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

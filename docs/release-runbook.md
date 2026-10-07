@@ -833,6 +833,16 @@ release PR stale for the length of a 60-90 minute build and drop the run
 entirely on two quick pushes — and `cd-beta-retry` is precisely the workflow
 that has to run promptly. Neither calls a store API.
 
+Inside every one of those queues, `publish-ota.yml` adds one more of its own:
+its publish job joins `shared-workflows-publish-ota-<repository>-<channel>`,
+also `cancel-in-progress: false`, so two publishes to the same OTA channel never
+overlap whichever caller started them, and an older bundle can never land after
+a newer one. Different channels run side by side. A third publish queued behind
+a running one replaces the pending second one, which is the right outcome for
+OTA: the newest commit is what users should get. The prefix keeps the name
+apart from every caller's group above; a caller group with the same name would
+deadlock against it.
+
 ## GitHub Environments
 
 Settings → Environments. Four, three of which exist only to scope secrets:

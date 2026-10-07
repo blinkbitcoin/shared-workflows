@@ -16,6 +16,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** The licenses every repository of the organisation accepts, as SPDX identifiers. */
 export const DEFAULT_ALLOWED = [
@@ -74,6 +75,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), licenses = pnpmLicenses } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

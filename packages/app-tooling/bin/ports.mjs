@@ -15,6 +15,7 @@ import path from 'node:path';
 import { ConfigError, portTable, readSection } from '../lib/config.mjs';
 import { isProgram } from '../lib/is-program.mjs';
 import { envLines, PortError, tableLines } from '../lib/ports.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const USAGE = 'usage: ports [--sh] [--root DIR]';
 
@@ -35,6 +36,7 @@ export function main(
     },
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let shell = false;
   let root = cwd;
   for (let i = 0; i < argv.length; i++) {

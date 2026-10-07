@@ -94,3 +94,12 @@ test('an unknown job is a usage error', () => {
   assert.equal(run.status, 2);
   assert.match(run.stderr, /unknown security job: nope/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), run: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-security(?: |$)/m);
+  assert.deepEqual(err, []);
+});

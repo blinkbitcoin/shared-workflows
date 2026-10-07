@@ -432,3 +432,12 @@ test('as a command it finds the CLI on PATH and runs in --root', () => {
   assert.equal(child.status, 0, child.stderr);
   assert.match(child.stdout, /codeql: no findings\n$/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-code-scanning(?: |$)/m);
+  assert.deepEqual(err, []);
+});

@@ -73,6 +73,20 @@ jobs:
     # OTA is off unless a caller deliberately turns it on: an accidental update
     # reaches every installed app immediately and cannot be recalled.
     if: ${{ inputs.ota-enabled }}
+    # One publish per app and channel at a time, so an older bundle can never
+    # finish last and overwrite the newer one users receive. The group is on
+    # this job, the only one: export, upload and publish are its steps, so the
+    # whole export -> publish -> smoke sequence of one run never interleaves
+    # with another's. Queued, never cancelled: a publish stopped half-way
+    # leaves the channel in an unknown state. GitHub keeps one *pending* job
+    # per group, so a third publish queued behind a running one replaces the
+    # second; for OTA that is right, the newest commit is the one users should
+    # get. The `shared-workflows-` prefix keeps the name apart from any
+    # caller's own group: a caller holding a group of the same name while
+    # this job waits for it would wait forever.
+    concurrency:
+      group: shared-workflows-publish-ota-${{ inputs.repository || github.repository }}-${{ inputs.channel }}
+      cancel-in-progress: false
     runs-on: ${{ inputs.linux-runner }}
     timeout-minutes: 30
     environment: ${{ inputs.environment }}

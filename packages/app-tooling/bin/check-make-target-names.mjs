@@ -24,6 +24,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
 import { documentedTargets as documented, expandIncludes } from '../lib/makefile.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** The `##`-documented targets of a Makefile, the ones `make help` lists. */
 export function documentedTargets(makefile) {
@@ -96,6 +97,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), read = readOrNull } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

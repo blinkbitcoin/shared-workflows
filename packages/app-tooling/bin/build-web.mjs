@@ -7,23 +7,27 @@
 // `404.html`: Pages serves `404.html` for a path with no file, which is how a
 // deep link into a dynamic route boots the client router. Everything after the
 // program name goes to `expo export` (`--dev` reads `.env.development`, which is
-// how the web e2e suite builds against the mock API).
+// how the web e2e suite builds against the mock API), except `--help` or `-h`,
+// which prints this text instead of running anything.
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** Command-line entry; returns the exit code. */
 export function main(
   argv = process.argv.slice(2),
   {
     cwd = process.cwd(),
+    log = console.log,
     error = console.error,
     run = (command, args, options) => spawnSync(command, args, { stdio: 'inherit', ...options }),
     exists = existsSync,
     copy = copyFileSync,
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   const exported = run('pnpm', ['exec', 'expo', 'export', '--platform', 'web', ...argv], { cwd });
   if (exported.error) {
     error(`build-web: could not run pnpm exec expo: ${exported.error.message}`);

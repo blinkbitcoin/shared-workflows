@@ -37,7 +37,9 @@
     "interfaces.json",
     "versions.json",
     "expo",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "exports": {
     "./versions.json": "./versions.json",

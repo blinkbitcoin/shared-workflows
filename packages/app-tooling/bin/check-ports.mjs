@@ -20,6 +20,7 @@ import { ConfigError, portTable, readSection, stringMap } from '../lib/config.mj
 import { isProgram } from '../lib/is-program.mjs';
 import { isAllowed, isBinary, portPattern } from '../lib/port-literals.mjs';
 import { BASE_DEFAULT, resolvePorts } from '../lib/ports.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const USAGE = 'usage: check-ports [--root DIR]';
 
@@ -52,6 +53,7 @@ export function main(
   argv = process.argv.slice(2),
   { cwd = process.cwd(), log = console.log, error = console.error, list = trackedFiles, scan = offenders, env = {} } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let root = cwd;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--root' && argv[i + 1]) root = path.resolve(cwd, argv[++i]);

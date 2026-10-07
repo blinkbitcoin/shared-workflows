@@ -135,3 +135,12 @@ test('as a command it reads the workflows of --root', () => {
   assert.equal(wrong.status, 1);
   assert.match(wrong.stderr, /^cd-beta\.yml is in no group/m);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-workflow-names(?: |$)/m);
+  assert.deepEqual(err, []);
+});

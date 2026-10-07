@@ -327,3 +327,12 @@ test('as a command it lists the tracked and the untracked files git does not ign
   assert.equal(fromFile.status, 0, fromFile.stderr);
   assert.equal(fromFile.stdout, 'test siblings ok (2 source files)\n');
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-test-siblings(?: |$)/m);
+  assert.deepEqual(err, []);
+});

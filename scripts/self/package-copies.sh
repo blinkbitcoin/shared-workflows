@@ -15,7 +15,9 @@
 # Node programs they run (build-info.sh's build-info.mjs), at the
 # same relative paths (release/, checks/, ci/, security/, setup/ and native/ beside lib/, as under
 # scripts/), so each copy runs unchanged. check-ci.sh's default zizmor policy,
-# .github/zizmor.yml here, rides along as zizmor.yml at the package root. Copies inside one repository,
+# .github/zizmor.yml here, rides along as zizmor.yml at the package root, and so
+# does the repository's LICENSE: npm packs a LICENSE only from the package
+# directory, and follows no symlink to one outside it. Copies inside one repository,
 # held identical on every commit by test/package-copies.bats, cannot drift the
 # way a consumer's own copy did: that one was compared only in the consumer's
 # CI, and only when a shared-workflows checkout was at hand.
@@ -86,6 +88,7 @@ copies=(
   scripts/native/bare/app-config.sh:native/bare/app-config.sh
   scripts/native/bare/fingerprint.sh:native/bare/fingerprint.sh
   .github/zizmor.yml:zizmor.yml
+  LICENSE:LICENSE
 )
 
 write=false

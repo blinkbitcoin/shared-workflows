@@ -2011,3 +2011,12 @@ test('a consumer whose callers pass two working directories is refused, and the 
   assert.equal(code, 1);
   assert.match(stderr, /^::error::the callers pass different working-directory inputs: (app \(check\.yml\), mobile \(build-ios\.yml\)|mobile \(build-ios\.yml\), app \(check\.yml\))\.[^\n]*\n$/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { stdout: { write: (text) => out.push(text) }, stderr: { write: (text) => err.push(text) } });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-contract(?: |$)/m);
+  assert.deepEqual(err, []);
+});

@@ -49,6 +49,7 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { ConfigError, CONFIG_FILE, readSection, stringList, stringMap } from '../lib/config.mjs';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const TEST = /\.test\.[^/]+$/;
 
@@ -235,6 +236,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), listFiles = gitFiles, read = readOrNull } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let flags;
   try {
     flags = parseArgs(argv, cwd);

@@ -374,7 +374,8 @@ test('main checks only the files it is given', () => {
 });
 
 test('main refuses a flag it does not know rather than passing', () => {
-  for (const flag of ['--help', '-a', '--al']) {
+  // Not --help: every program answers that with its usage (help.mjs).
+  for (const flag of ['--verbose', '-a', '--al']) {
     const result = runMain([flag], { docs: { 'a.md': DIAGRAM } });
     assert.equal(result.code, 1, flag);
     assert.deepEqual(result.out, [], flag);
@@ -487,4 +488,13 @@ test('as a command it passes a doc set without diagrams without starting the CLI
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line), runner: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-diagrams(?: |$)/m);
+  assert.deepEqual(err, []);
 });
