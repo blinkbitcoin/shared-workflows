@@ -120,7 +120,29 @@ locales_for() {
 # "at the limit" with an editor's final newline must not read as over by
 # one). Uses node rather than `wc -m`, which under a "C"/POSIX locale counts
 # bytes, not code points, and would over-count anything outside ASCII.
+#
+# Every .txt under the metadata tree is counted once, up front, by one node
+# (CHAR_COUNTS, "<path><TAB><count>" lines): a node per file was most of
+# this script's time. A path not in it is counted on its own.
+CHAR_COUNTS=$'\n'
+if [ -d "$METADATA_DIR" ]; then
+  CHAR_COUNTS+="$(find "$METADATA_DIR" -name '*.txt' -print0 | node -e '
+    const fs = require("fs");
+    const paths = fs.readFileSync(0, "utf8").split("\0").filter((p) => p && !/[\t\n]/.test(p));
+    for (const p of paths) {
+      try {
+        const s = fs.readFileSync(p, "utf8").replace(/\n$/, "");
+        process.stdout.write(p + "\t" + Array.from(s).length + "\n");
+      } catch (e) {}
+    }
+  ')"$'\n'
+fi
 char_count() {
+  local rest="${CHAR_COUNTS#*$'\n'"$1"$'\t'}"
+  if [ "$rest" != "$CHAR_COUNTS" ]; then
+    printf '%s' "${rest%%$'\n'*}"
+    return 0
+  fi
   node -e '
     const fs = require("fs");
     let s = fs.readFileSync(process.argv[1], "utf8");

@@ -246,16 +246,22 @@ process.stdin.on("end", () => {
   for (const row of arr) process.stdout.write(row.name + "\n");
 });
 '; }
-json_value_of() { node -e '
+# The names whose first row's value is the string "true", one per line: the
+# toggles that are on, read once rather than one node per toggle.
+json_true_names() { node -e '
 let s = "";
 process.stdin.on("data", (c) => (s += c));
 process.stdin.on("end", () => {
   let arr = [];
   try { arr = JSON.parse(s); } catch (e) { arr = []; }
-  const row = arr.find((r) => r.name === process.argv[1]);
-  process.stdout.write(row && row.value !== undefined ? String(row.value) : "");
+  const seen = new Set();
+  for (const row of arr) {
+    if (seen.has(row.name)) continue;
+    seen.add(row.name);
+    if (row.value !== undefined && String(row.value) === "true") process.stdout.write(row.name + "\n");
+  }
 });
-' "$1"; }
+'; }
 
 # A failing `gh … list` is fatal, never an empty list: with no listing, a
 # name that is already set cannot be told from one that is missing, so
@@ -267,6 +273,7 @@ VARIABLES_JSON=""
 SECRETS_JSON=""
 REMOTE_VARIABLE_NAMES_CACHE=""
 REMOTE_SECRET_NAMES_CACHE=""
+TRUE_VARIABLES_CACHE=""
 load_remote_listings() {
   local out
   out="$(gh variable list "${GH_REPO_ARGS[@]+"${GH_REPO_ARGS[@]}"}" --json name,value 2>/dev/null)" || {
@@ -279,17 +286,27 @@ load_remote_listings() {
     exit 1
   }
   SECRETS_JSON="$out"
-  REMOTE_VARIABLE_NAMES_CACHE="$(printf '%s' "$VARIABLES_JSON" | json_to_names)"$'\n'
-  REMOTE_SECRET_NAMES_CACHE="$(printf '%s' "$SECRETS_JSON" | json_to_names)"$'\n'
+  # Each cache is newline-delimited at both ends, so a lookup is one pattern
+  # match in this shell rather than a grep per name.
+  REMOTE_VARIABLE_NAMES_CACHE=$'\n'"$(printf '%s' "$VARIABLES_JSON" | json_to_names)"$'\n'
+  REMOTE_SECRET_NAMES_CACHE=$'\n'"$(printf '%s' "$SECRETS_JSON" | json_to_names)"$'\n'
+  TRUE_VARIABLES_CACHE=$'\n'"$(printf '%s' "$VARIABLES_JSON" | json_true_names)"$'\n'
 }
 
 remote_has() {
   local class="$1" name="$2"
   if [ "$class" = "variable" ]; then
-    printf '%s' "$REMOTE_VARIABLE_NAMES_CACHE" | grep -qx "$name"
+    case "$REMOTE_VARIABLE_NAMES_CACHE" in *$'\n'"$name"$'\n'*) return 0 ;; esac
   else
-    printf '%s' "$REMOTE_SECRET_NAMES_CACHE" | grep -qx "$name"
+    case "$REMOTE_SECRET_NAMES_CACHE" in *$'\n'"$name"$'\n'*) return 0 ;; esac
   fi
+  return 1
+}
+
+# The toggle NAME is set to "true" on the remote.
+toggle_on() {
+  case "$TRUE_VARIABLES_CACHE" in *$'\n'"$1"$'\n'*) return 0 ;; esac
+  return 1
 }
 
 # --- --plan ------------------------------------------------------------------
@@ -320,8 +337,7 @@ if [ "$MODE" = "verify" ]; then
 
   while IFS='|' read -r toggle needs; do
     [ -n "$toggle" ] || continue
-    ENABLED="$(printf '%s' "$VARIABLES_JSON" | json_value_of "$toggle")"
-    [ "$ENABLED" = "true" ] || continue
+    toggle_on "$toggle" || continue
     ANY_ENABLED=1
     for name in $needs; do
       class="$(class_of "$name")"
@@ -334,8 +350,7 @@ if [ "$MODE" = "verify" ]; then
 
   while IFS='|' read -r toggle name reason; do
     [ -n "$toggle" ] || continue
-    ENABLED="$(printf '%s' "$VARIABLES_JSON" | json_value_of "$toggle")"
-    [ "$ENABLED" = "true" ] || continue
+    toggle_on "$toggle" || continue
     class="$(class_of "$name")"
     remote_has "$class" "$name" || echo "WARN: $name ($class) $reason"
   done <<<"$WARN_TOGGLES_TABLE"
