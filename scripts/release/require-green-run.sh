@@ -88,22 +88,26 @@ while :; do
   elif [ -n "$gh_stderr" ]; then
     log "gh run list succeeded with a notice: $gh_stderr"
   fi
-  count=0
+  # One parse per poll: the run count and the newest run's id, status and
+  # conclusion, joined by `|`, which none of them can contain (a number, a
+  # number, and two of GitHub's lower-case enum words). A missing or null field
+  # is an empty one between its separators, so it never shifts the others; a
+  # whitespace separator such as @tsv's tab would, because `read` merges a run
+  # of them. Output yq cannot parse is no run at all, as an empty list is: the
+  # fallback below, not a gh failure, so the discovery deadline still
+  # dispatches or reports "never started".
+  fields="0|||"
   if [ -n "$runs" ]; then
-    count="$(printf '%s' "$runs" | yq -r 'length // 0' 2>/dev/null || echo 0)"
+    fields="$(printf '%s' "$runs" | yq -r '[(length // 0), (.[0].databaseId // ""), (.[0].status // ""), (.[0].conclusion // "")] | join("|")' 2>/dev/null)" \
+      || fields="0|||"
   fi
+  IFS='|' read -r count run_id status conclusion <<< "$fields"
 
-  run_id=""
-  if [ "$count" -gt 0 ]; then
-    run_id="$(printf '%s' "$runs" | yq -r '.[0].databaseId // ""')"
-  fi
   if [ -n "$run_id" ] && [ "$run_id" = "$superseded_run_id" ]; then
     # The newest run for the sha is still the one the dispatch replaced.
     count=0
   fi
   if [ "$count" -gt 0 ]; then
-    status="$(printf '%s' "$runs" | yq -r '.[0].status // ""')"
-    conclusion="$(printf '%s' "$runs" | yq -r '.[0].conclusion // ""')"
     if [ "$status" = "completed" ]; then
       case "$conclusion" in
         success)
