@@ -970,6 +970,28 @@ lane_step_count() {
   done
 }
 
+@test "every setup-gradle step leaves the transforms out of the Gradle cache" {
+  command -v yq >/dev/null || skip "yq not installed"
+  # The transforms entry carried the app's own compiled config, so setup-gradle
+  # saved the whole entry again (600 MB) on every push, an identical commit
+  # included, and pushed the iOS app out of a full 10 GB repository cache.
+  # Rebuilding the transforms costs about two minutes of Linux time a build.
+  found=0
+  for f in "$REPO_ROOT"/.github/workflows/*.yml; do
+    n=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^gradle/actions/setup-gradle@"))] | length' "$f")
+    [ "$n" -gt 0 ] || continue
+    found=$((found + n))
+    for i in $(seq 0 $((n - 1))); do
+      excludes=$(yq -r "[.jobs[].steps[]? | select((.uses // \"\") | test(\"^gradle/actions/setup-gradle@\"))][$i].with.\"gradle-home-cache-excludes\" // \"\"" "$f")
+      for path in 'caches/transforms-4' 'caches/*/transforms'; do
+        printf '%s\n' "$excludes" | grep -qxF "$path" \
+          || fail "$(basename "$f"): setup-gradle step $((i + 1)) does not exclude $path from the cache"
+      done
+    done
+  done
+  [ "$found" -ge 2 ] || fail "expected the setup-gradle steps of build-android.yml and test-e2e.yml, found $found"
+}
+
 @test "the iOS and Android artifact uploads in test-e2e.yml guard on the build the same way" {
   command -v yq >/dev/null || skip "yq not installed"
   # The Android upload ran under always() with if-no-files-found: error, so a

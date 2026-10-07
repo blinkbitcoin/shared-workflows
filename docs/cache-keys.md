@@ -48,7 +48,7 @@ waits on a dependency install. It folds together:
 | Android system image | `sysimg-{ver}-{api}-default-x86_64` | `test-e2e.yml` job `android` (`{api}` = `android-api-level`) | `actions/cache@v6` over `$ANDROID_SDK_DIR/system-images/android-{api}` |
 | AVD + adb keys | `avd-{ver}-{api}-x86_64-default-hidedialogs` | `test-e2e.yml` job `android` | `actions/cache@v6` over `~/.android/avd/*`, `~/.android/adb*`; a miss bakes a snapshot via `scripts/e2e/android-emulator.sh snapshot-bake` |
 | Playwright browsers | `playwright-{os}-{pwversion}` | `build-web.yml` job `e2e` (version from `scripts/web/playwright-cache-key.sh`, which wraps `scripts/web/playwright-version.sh`) | `build-web.yml` e2e job |
-| Gradle | managed by `gradle/actions/setup-gradle` | that action | `test-e2e.yml` job `build-android` and `build-android.yml`; only the `default-branch` ref writes it, every other ref reads it |
+| Gradle | managed by `gradle/actions/setup-gradle`, transforms excluded (`gradle-home-cache-excludes`, see below) | that action | `test-e2e.yml` job `build-android` and `build-android.yml`; only the `default-branch` ref writes it, every other ref reads it |
 | mise tools | managed by `jdx/mise-action` (`cache: true`) | that action | `setup` and `native-key` actions |
 
 Notes:
@@ -81,3 +81,16 @@ Notes:
   built `.app` because `scripts/native/ios-pack.sh` resolves the Xcode scheme
   from the workspace, and on a cache hit no `expo prebuild` has run. (A bare
   app's workspace is committed; restoring it over itself changes nothing.)
+- The Gradle cache leaves out the transforms (`caches/transforms-4`,
+  `caches/*/transforms`). setup-gradle keys its large entries on their content,
+  and the transforms entry holds the app's own compiled config (an
+  `app.config` asset) next to the libraries', so any change to it, the release
+  version bump included, made a new 600 MB entry. With the default
+  `cache-cleanup: on-success` the entry was saved again on every push, an
+  identical commit included. On the template that filled the 10 GB repository
+  cache and pushed the 248 MB iOS app out, which then cost a 17 to 23 minute
+  macOS rebuild. Rebuilding the transforms instead cost about two minutes of a
+  12 to 14 minute Linux Gradle build, measured on two builds of each.
+  `cache-cleanup: never` was tried too: it stopped the dependencies entry from
+  being saved again but not the transforms, and kept every file it had ever
+  restored.
