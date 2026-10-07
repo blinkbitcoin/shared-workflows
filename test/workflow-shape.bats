@@ -636,6 +636,28 @@ lane_step_count() {
   done
 }
 
+# Two OTA publishes to one channel at once let an older bundle finish last and
+# overwrite the newer one users receive, so the publishing job queues per app
+# and channel. Queued, never cancelled: a publish stopped half-way leaves the
+# channel in an unknown state. The prefix keeps the group apart from a caller's
+# own (`release`, `release-internal-<sha>`), which would otherwise deadlock.
+@test "publish-ota serialises its publish job per repository and channel" {
+  f="$REPO_ROOT/.github/workflows/publish-ota.yml"
+  group=$(yq -r '.jobs.publish.concurrency.group // ""' "$f")
+  [ -n "$group" ] || fail "publish-ota's publish job has no concurrency group"
+  [[ "$group" == shared-workflows-publish-ota-* ]] \
+    || fail "publish-ota's group lost its shared-workflows-publish-ota- prefix, which keeps it apart from a caller's group: $group"
+  [[ "$group" == *'inputs.channel'* ]] \
+    || fail "publish-ota's group is not keyed on inputs.channel, so publishes to different channels would wait on each other: $group"
+  [[ "$group" == *'inputs.repository || github.repository'* ]] \
+    || fail "publish-ota's group is not keyed on the published repository: $group"
+  [ "$(yq -r '.jobs.publish.concurrency."cancel-in-progress"' "$f")" = "false" ] \
+    || fail "publish-ota's group must queue (cancel-in-progress: false), never cancel a publish half-way"
+  # The one job: export and publish are its steps, so one group covers both.
+  [ "$(yq -r '.jobs | length' "$f")" = "1" ] \
+    || fail "publish-ota gained a job; decide whether it must join the publish job's concurrency group"
+}
+
 # A job that calls a reusable workflow cannot carry `timeout-minutes`: GitHub
 # rejects the key there, and the called workflow's own jobs hold the bound. So
 # the rule is about the jobs that run steps.
