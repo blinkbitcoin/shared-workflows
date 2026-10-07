@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
@@ -10,6 +10,7 @@ import {
   RELEASE_WORKFLOWS,
   callerCalls,
   callerInputs,
+  flowMapping,
   callersUse,
   callProblems,
   environmentVariablesProblems,
@@ -39,6 +40,7 @@ import {
   summaryTable,
   resolved,
   toggleOn,
+  UNREADABLE_WITH,
   workingDirectoryInput,
 } from './bin/check-contract.mjs';
 
@@ -235,6 +237,58 @@ test('a requirement behind an expression is reported but never blocks', () => {
   const result = check(readContract(), c).find((r) => r.req.id === 'package-script.check-types');
   assert.equal(result.level, 'warn');
   assert.match(result.reason, /cannot evaluate/);
+});
+
+// --- with: written as a flow mapping -------------------------------------------
+
+test('a one-line flow mapping yields its pairs, unquoted, commas inside quotes kept', () => {
+  assert.deepEqual(flowMapping("{ lint: false, scripts-script: 'test:ci', note: \"a, b\" }"), [
+    ['lint', 'false'],
+    ['scripts-script', 'test:ci'],
+    ['note', 'a, b'],
+  ]);
+  assert.deepEqual(flowMapping('{}'), []);
+  assert.deepEqual(flowMapping('{ lint: false, }'), [['lint', 'false']]);
+});
+
+test('anything but a flat one-line flow mapping is not read', () => {
+  for (const text of ['lint: false', '{ lint: false', '{ nested: { a: 1 } }', '{ list: [1, 2] }', "{ a: 'open }", '{ not a pair }']) {
+    assert.equal(flowMapping(text), null, text);
+  }
+});
+
+const flowCaller = (withLine) =>
+  ['jobs:', '  checks:', '    uses: blinkbitcoin/shared-workflows/.github/workflows/check.yml@v0', `    ${withLine}`].join('\n');
+
+test('a caller that switches a gate off in a one-line flow mapping is not blocked by that gate', () => {
+  // This caller passes lint: false. Read as no inputs at all, the lint toggle
+  // fell back to on, and the report told it to pass the lint: false it passes.
+  for (const line of ['with: { lint: false }', 'with: { lint: false }  # gate off']) {
+    const c = consumer({ callers: { 'ci.yml': flowCaller(line) } });
+    assert.equal(c.inputs.get('check.yml:lint'), 'false', line);
+    const result = check(readContract(), c).find((r) => r.req.id === 'package-script.check-lint');
+    assert.equal(result.level, 'skip', line);
+    assert.equal(result.reason, 'check.yml:lint is off');
+  }
+});
+
+test('a with: this cannot read makes every toggle of that workflow unknown, so it warns and never blocks', () => {
+  const c = consumer({ callers: { 'ci.yml': flowCaller('with: { lint: false,') } });
+  assert.equal(c.inputs.get('check.yml:*'), UNREADABLE_WITH);
+  assert.equal(toggleOn(req('package-script.check-lint'), c.inputs), 'unknown');
+  const result = check(readContract(), c).find((r) => r.req.id === 'package-script.check-lint');
+  assert.equal(result.level, 'warn');
+  assert.match(result.reason, /cannot evaluate/);
+  // Only that workflow: a toggle of another one keeps its own default.
+  assert.equal(toggleOn(req('package-script.test-scripts'), c.inputs), true);
+});
+
+test('a toggle the caller passes explicitly wins over its workflow being unreadable', () => {
+  const inputs = new Map([
+    ['check.yml:*', UNREADABLE_WITH],
+    ['check.yml:lint', 'false'],
+  ]);
+  assert.equal(toggleOn(req('package-script.check-lint'), inputs), false);
 });
 
 // test-unit.yml's scripts-script names the script the step runs; '' skips the step.
@@ -928,6 +982,7 @@ test('each reusable workflow a repository calls switches on its own profile', ()
   assert.deepEqual(profileOf('build-web.yml'), ['web']);
   assert.deepEqual(profileOf('publish-badges.yml'), ['badges']);
   assert.deepEqual(profileOf('check-code-scanning.yml'), ['code-scanning']);
+  assert.deepEqual(profileOf('check-security.yml'), ['security']);
   for (const workflow of RELEASE_WORKFLOWS) {
     assert.deepEqual(profileOf(workflow), ['release'], workflow);
   }
@@ -935,6 +990,23 @@ test('each reusable workflow a repository calls switches on its own profile', ()
   for (const pipeline of ['publish-internal.yml', 'publish-beta.yml', 'publish-production.yml', 'publish-store-listing.yml']) {
     assert.ok(RELEASE_WORKFLOWS.includes(pipeline), pipeline);
   }
+});
+
+// The security profile once had no workflow that switched it on, so its rules
+// were never checked unless --profile named it. Every profile the contract
+// declares must be reachable from some workflow of this family.
+test('every profile in the contract is switched on by at least one reusable workflow', () => {
+  const workflowsDir = fileURLToPath(new URL('../../.github/workflows/', import.meta.url));
+  const reusable = readdirSync(workflowsDir).filter((f) => f.endsWith('.yml') && !f.startsWith('self-'));
+  const reached = new Set(reusable.flatMap((workflow) => [...activeProfiles(new Set([workflow]))]));
+  for (const profile of readContract().profiles) {
+    assert.ok(reached.has(profile), `no reusable workflow switches on the ${profile} profile`);
+  }
+});
+
+test('calling check.yml and check-security.yml together checks both profiles', () => {
+  const active = activeProfiles(new Set(['check.yml', 'check-security.yml']));
+  assert.deepEqual([...active].sort(), ['checks', 'security']);
 });
 
 test('a make ci prerequisite that is a file, not a rule, reaches nothing and breaks nothing', () => {

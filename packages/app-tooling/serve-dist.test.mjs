@@ -81,6 +81,20 @@ test('serves over http with the status and type Pages would send', async () => {
   assert.equal(await elsewhere.text(), 'not found');
 });
 
+test('a path that is not valid percent-encoding is a 400, not a crash', () => {
+  assert.deepEqual(resolveRequest(dist, '/repo', '/repo/%E0%A4%A'), { file: null, status: 400 });
+});
+
+test('a malformed request is answered 400 and the server keeps serving', async () => {
+  const bad = await fetch(`http://localhost:${port}/repo/%E0%A4%A`);
+  assert.equal(bad.status, 400);
+  assert.equal(await bad.text(), 'bad request');
+  // The next request still reaches it: the URIError used to stop the process.
+  const home = await fetch(`http://localhost:${port}/repo/`);
+  assert.equal(home.status, 200);
+  assert.equal(await home.text(), 'home');
+});
+
 test('an unknown extension is served as a plain byte stream', async () => {
   writeFileSync(path.join(dist, 'data.bin'), 'bytes');
   const response = await fetch(`http://localhost:${port}/repo/data.bin`);

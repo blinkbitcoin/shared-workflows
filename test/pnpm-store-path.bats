@@ -8,7 +8,8 @@
 # to get one is fatal.
 #
 # Covers: the path published from the consumer root; printed on stdout when
-# there is no $GITHUB_OUTPUT; and fatal with no pnpm on PATH, with pnpm failing,
+# there is no $GITHUB_OUTPUT; the lockfile hash, of the consumer's own
+# pnpm-lock.yaml only, moving with it, and "none" without one; and fatal with no pnpm on PATH, with pnpm failing,
 # or with a working directory that does not exist. pnpm is always a stub.
 
 load test_helper
@@ -82,5 +83,39 @@ SH
   unset GITHUB_OUTPUT
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$REPO_ROOT/scripts/ci/pnpm-store-path.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  [ "$output" = "path=/cache/pnpm-store" ] || fail "wrong stdout: $output"
+  [ "$output" = $'path=/cache/pnpm-store\nlock-hash=none' ] || fail "wrong stdout: $output"
+}
+
+# The cache key. Only the consumer's own lockfile counts: this repository is
+# checked out inside the workspace as .workflows/, with lockfiles of its own.
+@test "lock-hash is the sha256 of the consumer's pnpm-lock.yaml and nothing else" {
+  stub_pnpm 'printf "/cache/pnpm-store\n"'
+  printf 'lockfileVersion: 9.0\n' > "$CONSUMER/pnpm-lock.yaml"
+  want="$(shasum -a 256 "$CONSUMER/pnpm-lock.yaml" | cut -d' ' -f1)"
+  mkdir -p "$CONSUMER/.workflows/test/fixtures/consumer-min"
+  printf 'lockfileVersion: 9.0\n# a fixture\n' > "$CONSUMER/.workflows/test/fixtures/consumer-min/pnpm-lock.yaml"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$REPO_ROOT/scripts/ci/pnpm-store-path.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  grep -qx "lock-hash=$want" "$GITHUB_OUTPUT" || fail "wrong lock-hash: $(cat "$GITHUB_OUTPUT")"
+}
+
+@test "a changed lockfile changes lock-hash" {
+  stub_pnpm 'printf "/cache/pnpm-store\n"'
+  printf 'lockfileVersion: 9.0\n' > "$CONSUMER/pnpm-lock.yaml"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$REPO_ROOT/scripts/ci/pnpm-store-path.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  first="$(grep '^lock-hash=' "$GITHUB_OUTPUT")"
+  : > "$GITHUB_OUTPUT"
+  printf 'lockfileVersion: 9.0\n# bumped\n' > "$CONSUMER/pnpm-lock.yaml"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$REPO_ROOT/scripts/ci/pnpm-store-path.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  second="$(grep '^lock-hash=' "$GITHUB_OUTPUT")"
+  [ "$first" != "$second" ] || fail "lock-hash did not move with the lockfile: $first"
+}
+
+@test "no lockfile hashes as none rather than failing" {
+  stub_pnpm 'printf "/cache/pnpm-store\n"'
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$REPO_ROOT/scripts/ci/pnpm-store-path.sh"
+  [ "$status" -eq 0 ] || fail "a missing lockfile must not fail this step: $output"
+  grep -qx 'lock-hash=none' "$GITHUB_OUTPUT" || fail "wrong lock-hash: $(cat "$GITHUB_OUTPUT")"
 }
