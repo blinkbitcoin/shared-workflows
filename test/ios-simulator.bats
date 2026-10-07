@@ -337,15 +337,19 @@ only_path() {
 # FrontBoard's UIOpenURLAction hand-off are what actually explain it, and they
 # live in this log.
 
+# Both backgrounded xcrun calls have logged their line: the stub writes each
+# whole line in one append, so a match is the call, not half of one.
+both_called() { grep -q "recordVideo" "$CALLS" && grep -q "spawn SIM-UDID log stream" "$CALLS"; }
+
 @test "record start streams the unified log beside the video, with its own pid file" {
   run sim record start
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
   # Both xcrun calls are backgrounded, so the stub may not have logged its
   # arguments by the time the script returns. With every core busy that took
   # 1.6 to 4 seconds, and under a parallel `make check` more than 5, which the
-  # old 5-second bound turned into a failure. The loop stops at the second
-  # line, so only a run that is really broken waits out the 30 seconds.
-  for _ in $(seq 1 300); do [ "$(grep -c . "$CALLS")" -ge 2 ] && break; sleep 0.1; done
+  # old 5-second bound turned into a failure. The wait returns at the second
+  # call, so only a run that is really broken waits out the 60 seconds.
+  wait_for 60 "both backgrounded xcrun calls in $CALLS" both_called
   grep -q "recordVideo" "$CALLS" || fail "no recordVideo call: $(cat "$CALLS")"
   grep -q "spawn SIM-UDID log stream" "$CALLS" || fail "no log stream call: $(cat "$CALLS")"
   [ -f "$WORKFLOWS_OUT/ios-record.pid" ] || fail "no recording pid file"
@@ -355,6 +359,8 @@ only_path() {
 
 # Both long-running stubs have written their ready line: their SIGINT handler is in.
 both_ready() { [ -f "$CALLS.ready" ] && [ "$(grep -c . "$CALLS.ready")" -ge 2 ]; }
+# The process PID has exited.
+gone() { ! kill -0 "$1" 2>/dev/null; }
 
 @test "record stop ends both and removes both pid files" {
   sim record start >/dev/null
@@ -364,7 +370,7 @@ both_ready() { [ -f "$CALLS.ready" ] && [ "$(grep -c . "$CALLS.ready")" -ge 2 ];
   # still ignore the signal (a background job starts with it ignored), and the
   # stop would wait out its loop for a reason that is the test's, not the script's.
   wait_for 60 "both stubs to install their SIGINT handler" both_ready
-  local i started=$SECONDS
+  local started=$SECONDS
   run sim record stop
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
   # The stub exits on SIGINT, so a stop that interrupts it returns at once. One
@@ -377,10 +383,8 @@ both_ready() { [ -f "$CALLS.ready" ] && [ "$(grep -c . "$CALLS.ready")" -ge 2 ];
   [ ! -f "$WORKFLOWS_OUT/ios-unified-log.pid" ] || fail "unified-log pid file survived"
   # Poll rather than sleep a fixed second: under a parallel run a killed process
   # can take longer than that to go.
-  for i in $(seq 1 50); do
-    kill -0 "$rec" 2>/dev/null || kill -0 "$logp" 2>/dev/null || break
-    sleep 0.2
-  done
+  wait_for 60 "the recording (pid $rec) to exit" gone "$rec"
+  wait_for 60 "the log stream (pid $logp) to exit" gone "$logp"
   ! kill -0 "$rec" 2>/dev/null || fail "recording (pid $rec) still running"
   ! kill -0 "$logp" 2>/dev/null || fail "log stream (pid $logp) still running"
 }

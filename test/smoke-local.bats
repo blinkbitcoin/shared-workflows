@@ -116,15 +116,12 @@ lock_file() { printf '%s/runs/%s.pid' "$WORKFLOWS_ACT_CACHE" "$(cd "$work" && pr
 # returns once the last one listens.
 hold_port() {
   node -e 'for (const p of process.argv.slice(1)) require("net").createServer().listen(Number(p), "127.0.0.1")' "$@" &
-  local holder=$! last="${*: -1}" i
+  local holder=$! last="${*: -1}"
   background "$holder"
-  for i in $(seq 1 100); do
-    (exec 3<>"/dev/tcp/127.0.0.1/$last") 2>/dev/null && return 0
-    sleep 0.1
-  done
-  kill "$holder"
-  fail "could not hold port(s) $*"
+  wait_for 60 "port(s) $* to be held" accepts "$last" || return
 }
+# Something accepts a connection on 127.0.0.1:PORT.
+accepts() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 # Every helper process a test starts is stopped by teardown, quietly.
 background() { disown "$1"; echo "$1" >> "$BATS_TEST_TMPDIR/background"; }
 teardown() {
@@ -375,9 +372,9 @@ STUB
     pid=$!
     # The script reaches act in under a second on a quiet machine, but in 5 to
     # 9 seconds beside a parallel bats suite, as under `make check`, which a
-    # 10-second bound failed. The loop stops once act has started, so only a
+    # 10-second bound failed. The wait returns once act has started, so only a
     # run that is really broken waits out the 60 seconds.
-    for i in $(seq 1 600); do [ -f "$BATS_TEST_TMPDIR/act.started" ] && break; sleep 0.1; done
+    wait_for 60 "$signal: act to start" test -f "$BATS_TEST_TMPDIR/act.started"
     [ -f "$BATS_TEST_TMPDIR/act.started" ] || fail "$signal: act never started"
     # A terminal's Ctrl-C or hang-up reaches the script and act together.
     kill -"$signal" "$pid" "$(pgrep -P "$pid")"

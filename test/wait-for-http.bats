@@ -46,6 +46,9 @@ teardown() {
   contains "$output" "nothing answered at http://127.0.0.1:$PORT/ within 1s" || fail "output: $output"
 }
 
+# Something accepts a connection on 127.0.0.1:PORT.
+listening() { python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 0.2).close()' "$1" 2>/dev/null; }
+
 # A server that takes the connection and never answers costs each try its whole
 # 2s curl timeout. Bounded by a count of tries, 3 seconds meant 3 tries of 2s
 # each plus 1s between them, 9s; bounded by the clock it is one try past 3s.
@@ -58,10 +61,7 @@ time.sleep(60)
 ' "$PORT" >/dev/null 2>&1 3>&- &
   pid=$!
   # Poll for the listener rather than sleeping a fixed time.
-  for _ in $(seq 1 50); do
-    python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 0.2).close()' "$PORT" 2>/dev/null && break
-    sleep 0.1
-  done
+  wait_for 60 "the silent server to listen on port $PORT" listening "$PORT"
   run bash "$WAIT" "http://127.0.0.1:$PORT/" 3
   kill "$pid" 2>/dev/null || true
   [ "$status" -ne 0 ] || fail "a server that never answered passed: $output"
