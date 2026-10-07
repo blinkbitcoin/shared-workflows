@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testsuite name="suite a" time="0.001036" disabled="0" errors="0" tests="1" failures="0" skipped="0" timestamp="2026-10-07T17:08:10.810Z" hostname="host">
+		<testcase name="truthy &amp;quot;x&amp;quot; &amp; &lt;y>" time="0.000323" classname="test" file="@ROOT@/test/mod.test.mjs"/>
+	</testsuite>
+	<testcase name="top level" time="2.5" classname="test" file="@ROOT@/test/mod.test.mjs"/>
+	<!-- tests 2 -->
+	<!-- suites 1 -->
+	<!-- pass 2 -->
+	<!-- fail 0 -->
+	<!-- duration_ms 39.89625 -->
+	<!-- Error: 50.00% function coverage does not meet threshold of 100%. -->
+</testsuites>

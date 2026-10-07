@@ -78,6 +78,23 @@ gate on every PR. Escape hatches exist for genuinely broken tooling
 (`git commit --no-verify`, `LEFTHOOK=0 git push`), and personal additions go in
 a gitignored `lefthook-local.yml` rather than in `lefthook.yml`.
 
+### Where the time goes
+
+`make check` and `make test` time every recipe line of every gate and every
+test, and end by printing the wall clock, each target's share of it, the 20
+slowest tests and the 20 slowest suites. Each run lands in `.timing/<run>/`
+(gitignored, named by its start time): `targets.jsonl`, a line per timed recipe
+line from `scripts/self/time-step.mjs`; bats' `report.xml` and node's
+`test-package.xml` and `test-scripts.xml`, JUnit with each test's time; and the
+report's own `timing.json`, every suite included. `.timing/latest` points at the
+last run reported. A gate that fails stops make before its report, and that is
+when you want it: `make report-timing` prints the newest run, and
+`node scripts/self/timing-report.mjs .timing/<run>` any other. In CI every
+self-ci job that runs make writes the same report into its job summary and
+uploads its `.timing/` as the `timing-<job>` artifact, kept 14 days. The report
+is advice, never a gate: it cannot fail `make check`, the pre-push hook or a CI
+job.
+
 ### A new script needs a test file of its own
 
 Every script has its own test file, named after it, that runs it and covers

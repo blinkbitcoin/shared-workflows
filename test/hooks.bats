@@ -148,13 +148,18 @@ $sorted"
   # activated. mise alone is linked into an empty bin dir so a tool that also
   # happens to be installed system-wide cannot make this pass. Real targets,
   # not a `command -v` probe: make 3.81 resolves a recipe's command differently
-  # from the shell it would hand a probe to.
+  # from the shell it would hand a probe to. Each line runs through
+  # time-step.mjs ($(TIMED)), which must find the pinned tools too; its record
+  # goes to this test's own directory, not the checkout's .timing/.
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
   ln -s "$(command -v mise)" "$bin/mise"
+  timing="$BATS_TEST_TMPDIR/timing"
   for target in check-spell check-tool-versions; do
-    run env -i HOME="$HOME" PATH="$bin:/usr/bin:/bin" make -s -C "$REPO_ROOT" "$target"
+    run env -i HOME="$HOME" PATH="$bin:/usr/bin:/bin" TIMING_DIR="$timing" make -s -C "$REPO_ROOT" "$target"
     [ "$status" -eq 0 ] || fail "'make $target' failed without an activated shell: $output"
+    grep -q "\"target\":\"$target\".*\"status\":0}" "$timing/targets.jsonl" \
+      || fail "'make $target' left no timing record: $(cat "$timing/targets.jsonl" 2>&1)"
   done
 }
 

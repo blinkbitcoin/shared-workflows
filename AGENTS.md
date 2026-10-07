@@ -38,7 +38,7 @@ scripts/web/        web export, Playwright install and run
 scripts/hooks/      git hooks a consumer installs from the package (install-if-lockfile-changed)
 scripts/self/       this repo's own upkeep (check-version-pins, render-versions, tag-major, smoke-local,
                     package-copies, render-contract-table, check-store-notes-section,
-                    changed-gates)
+                    changed-gates, and time-step and timing-report, which time make check)
 scripts/lib/        sourced bash helpers (common, versions, *-env, expo-config,
                     changed-files) and native-stack, the dispatch to scripts/native/<stack>/;
                     e2e-env is one entry over shared-env (shared with release-env) and
@@ -63,11 +63,16 @@ docs/               consumer-guide, adopting-an-existing-repo, release-runbook, 
 ## Commands
 
 Every row is a make target; nothing here is run through a package manager.
+Every recipe line of the gates `make check` runs goes through `$(TIMED)`
+(`scripts/self/time-step.mjs`), and the test targets write JUnit reports beside
+it, so a run says which target and which test took the time instead of leaving
+it to a guess (CONTRIBUTING.md, "Where the time goes"). A new gate's recipe
+lines start with `$(TIMED)` too; `test/self-workflows.bats` fails otherwise.
 
 | Target | |
 |---|---|
 | `make setup-hooks` | Install the git hooks (lefthook, from `.mise.toml`) — clone-wide, see the worktree rule |
-| `make check` | Everything self-ci runs: `check-ci`, the four test suites, the version checks, `check-spell` and `check-secrets` |
+| `make check` | Everything self-ci runs: `check-ci`, the four test suites, the version checks, `check-spell` and `check-secrets`; timed into `.timing/<run>/`, and ends by printing where the time went |
 | `make check-ci` | The CI code: shellcheck over every script under `scripts/` (bash strict), actionlint over the workflows and composite actions, and zizmor's security audit of both (offline, medium and up; policy in `.github/zizmor.yml`, passed with `--config`) |
 | `make test` | Every test suite: `test-unit`, `test-package`, `test-scripts` and `test-fastlane` |
 | `make test-unit` | The bats suite over the scripts, the workflows' shape and the docs' facts |
@@ -80,6 +85,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make check-secrets` | Scan the whole git history for committed secrets (gitleaks) |
 | `make test-smoke-local` | Prepare against the template with nektos/act — Docker and a pushed branch required; not part of `check` (CONTRIBUTING.md, "Running the release pipeline locally") |
 | `make test-smoke-local-android` | `test-smoke-local`, then the unsigned Android build, amd64 with a provisioned Android SDK |
+| `make report-timing` | Show where the last check or test run spent its time: each target, the 20 slowest tests and suites, from the newest run under `.timing/` |
 | `make report-run-timing` | Show where a GitHub Actions run spent its time - queues, slowest steps, critical path - with `trace-run` and your own `gh` login (`RUN=<run URL>`, `ARGS='--logs --compare <run>'`); not part of `check` |
 | `make help` | Show every target with its description |
 
