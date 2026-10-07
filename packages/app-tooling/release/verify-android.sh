@@ -172,9 +172,9 @@ else
     vc_fail_group "bundletool could not read $aab" $AAB_CHECKS
   else
     attr() { # <attribute name>
-      printf '%s\n' "$aab_manifest" | sed -n "s/.*android:$1=\"\([^\"]*\)\".*/\1/p" | head -1
+      sed -n "/.*android:$1=\"\([^\"]*\)\".*/{s//\1/p;q;}" <<<"$aab_manifest"
     }
-    aab_package="$(printf '%s\n' "$aab_manifest" | sed -n 's/.*[^a-zA-Z]package="\([^"]*\)".*/\1/p' | head -1)"
+    aab_package="$(sed -n '/.*[^a-zA-Z]package="\([^"]*\)".*/{s//\1/p;q;}' <<<"$aab_manifest")"
     aab_version_code="$(attr versionCode)"
     aab_version_name="$(attr versionName)"
     vc_ok aab-manifest "$aab_package $aab_version_name ($aab_version_code)"

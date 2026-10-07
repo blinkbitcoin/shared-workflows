@@ -299,15 +299,19 @@ EOF
 # A field off aapt2's `package:` line (`name`, `versionCode`, `versionName`).
 # Scoped to that one line on purpose: `name='...'` also appears on every
 # uses-permission and launchable-activity line.
+#
+# These helpers take a first match with sed's `{...;q;}` over a here-string,
+# never `| head -1`: under pipefail, head exiting after one line can kill the
+# stage still writing with SIGPIPE and fail the pipeline with 141.
 vc_badging_field() { # <badging output> <field>
-  printf '%s\n' "$1" | sed -n '/^package:/p' | head -1 |
+  sed -n '/^package:/{p;q;}' <<<"$1" |
     sed -n "s/.*[[:space:]]$2='\([^']*\)'.*/\1/p" || true
 }
 
 # A single-quoted value off a `<prefix>:'<value>'` badging line (sdkVersion,
 # targetSdkVersion).
 vc_badging_line_value() { # <badging output> <prefix>
-  printf '%s\n' "$1" | sed -n "s/^$2:'\([^']*\)'.*/\1/p" | head -1 || true
+  sed -n "/^$2:'\([^']*\)'.*/{s//\1/p;q;}" <<<"$1" || true
 }
 
 # A debuggable release build hands anyone with the APK a debugger session
@@ -622,7 +626,7 @@ process.stdout.write(String(JSON.parse(info)?.fingerprint?.[process.env.VC_BUILD
 # `{"expo-channel-name":"production"}`, and no JSON tool is guaranteed on a
 # runner that can read an AAB.
 vc_json_string_field() { # <json text> <field>
-  printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1
+  sed -n "/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/{s//\1/p;q;}" <<<"$1"
 }
 
 vc_bool() { # <value> -> true | false | '' (empty in, empty out)

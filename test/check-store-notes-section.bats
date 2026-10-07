@@ -58,3 +58,14 @@ render() {
   [ "$status" -ne 0 ] || fail "a note-less section passed"
   contains "$output" "carries no notes" || fail "no message: $output"
 }
+
+# Past a pipe's buffer, `| head -1` exiting after the first line killed printf
+# with SIGPIPE, and pipefail ended the check with 141. Kept under Linux's
+# 128 KiB cap on one variable.
+@test "a section of thousands of lines is read to its first line, with status 0" {
+  local i
+  for ((i = 0; i < 9000; i++)); do printf '• note %s\n' "$i"; done > "$BATS_TEST_TMPDIR/notes"
+  SECTION="$(render 'Store notes')" run bash "$CHECK"
+  [ "$status" -eq 0 ] || fail "exited $status: ${output:0:400}"
+  contains "$output" "9000 lines of notes" || fail "the count is not logged: ${output:0:400}"
+}
