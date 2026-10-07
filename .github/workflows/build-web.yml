@@ -159,6 +159,7 @@ jobs:
           name: web-dist
           path: ${{ inputs.working-directory }}/${{ inputs.output-directory }}
           retention-days: 1
+          overwrite: true
           # Every other upload in this family sets this explicitly. Failing here
           # beats the e2e job downloading an empty artifact and failing
           # on a missing index.html one job later.

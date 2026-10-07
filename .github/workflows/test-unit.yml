@@ -92,3 +92,4 @@ jobs:
           path: ${{ inputs.working-directory }}/coverage
           if-no-files-found: ignore
           retention-days: ${{ inputs.coverage-artifact-retention-days }}
+          overwrite: true

@@ -275,6 +275,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/dependencies.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   code:
     name: Code
     needs: settings
@@ -325,6 +326,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/code.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   policy:
     name: Policy
     needs: settings
@@ -370,6 +372,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/policy.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   # A record rather than a scan: what the release pins, kept long enough to
   # answer "did we ship the vulnerable version?" when an advisory lands later.
   sbom:
@@ -415,6 +418,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/sbom.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
       - name: Upload the bill of materials
         if: ${{ !cancelled() && steps.scan.conclusion != 'failure' }}
         uses: actions/upload-artifact@v7
@@ -423,6 +427,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/sbom.cdx.json
           if-no-files-found: error
           retention-days: 90
+          overwrite: true
   # Every job here installs (see the settings job); these two are the reason:
   # expo export and expo prebuild, or react-native bundle on the bare stack,
   # run from the consumer's node_modules. Both take native-stack, which decides
@@ -471,6 +476,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/bundle.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   mobile:
     name: Mobile
     needs: settings
@@ -515,6 +521,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/mobile.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   # The release's own assets, not a rebuild: what the stores receive is what is
   # checked. binaries-fetch.sh puts them in a directory and hands its path to
   # the binaries runner through SECURITY_BINARIES_DIR.
@@ -568,6 +575,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/binaries.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   # History and tags, not a shallow clone: the review diffs against the pull
   # request's base, or against the last release tag on the release pull request.
   review:
@@ -622,6 +630,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/review.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   # OpenAnt is built from the commit review-codebase.sh pins, into a
   # cache keyed on that file, so moving the pin is what rebuilds it.
   review-codebase:
@@ -678,6 +687,7 @@ jobs:
           path: ${{ inputs.working-directory }}/.security/review-codebase.sarif
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
   verdict:
     name: Verdict
     needs: [settings, dependencies, code, policy, sbom, bundle, mobile, binaries, review, review-codebase]

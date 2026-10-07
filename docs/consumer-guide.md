@@ -1329,7 +1329,10 @@ and your `security-settings.json` still decides which of those actually run:
 **Call it once per workflow run.** Each scanner's SARIF travels as a run-scoped
 artifact named after the scanner (`security-sarif-<job>`), so a second call in
 the same run - two stages side by side in one workflow - has its verdict read the
-first call's SARIF as well as its own. The template calls it once from `ci.yml`
+first call's SARIF as well as its own, and where both calls run the same scanner
+the later upload silently replaces the earlier one (every upload sets
+`overwrite: true`, so a re-run job replaces its own artifact instead of failing
+on it). The template calls it once from `ci.yml`
 and once from `cd-production.yml`, which are separate runs.
 
 The release pull request's CI run is a `workflow_dispatch` on its branch, not a
