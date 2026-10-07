@@ -21,18 +21,18 @@ STUB
   export PATH="$bin:$PATH"
 }
 
-metro_log() {
-  local i
-  for i in $(seq 1 50); do
-    [ -s "$WORKFLOWS_OUT/metro.log" ] && break
-    sleep 0.2
-  done
-  cat "$WORKFLOWS_OUT/metro.log"
+# The script returns once the fake is started, not once it has run: its line
+# is in the log when the log ends in a newline.
+metro_logged() {
+  [ -s "$WORKFLOWS_OUT/metro.log" ] && [ -z "$(tail -c 1 "$WORKFLOWS_OUT/metro.log")" ]
 }
+
+metro_log() { cat "$WORKFLOWS_OUT/metro.log"; }
 
 @test "starts react-native start in the consumer root on the default port, and records the log and PID" {
   run bash "$REPO_ROOT/scripts/native/bare/metro-start.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
+  wait_for 60 "the fake pnpm's line in metro.log" metro_logged
   [ "$(metro_log)" = "pnpm exec react-native start --port 8081 | CI=1 | cwd=$(cd "$GITHUB_WORKSPACE" && pwd -P)" ] || fail "log: $(metro_log)"
   pid="$(cat "$WORKFLOWS_OUT/metro.pid")"
   [[ "$pid" =~ ^[0-9]+$ ]] || fail "not a PID: $pid"
@@ -43,6 +43,7 @@ metro_log() {
 @test "the configured port is used, and dev-client never adds a flag" {
   WORKFLOWS_DEV_CLIENT=true WORKFLOWS_METRO_PORT=9091 run bash "$REPO_ROOT/scripts/native/bare/metro-start.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
+  wait_for 60 "the fake pnpm's line in metro.log" metro_logged
   contains "$(metro_log)" "pnpm exec react-native start --port 9091 | CI=1" || fail "log: $(metro_log)"
   not_contains "$(metro_log)" "--dev-client" || fail "an expo flag reached react-native: $(metro_log)"
 }

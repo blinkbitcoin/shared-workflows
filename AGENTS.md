@@ -180,8 +180,13 @@ Every row is a make target; nothing here is run through a package manager.
   one bats job per core (the suite goes from about eight minutes to two), and
   CI does the same. A test uses its own `$BATS_TEST_TMPDIR`, never a fixed path
   another test also writes, and polls for a background process instead of
-  sleeping a fixed time: a busy machine overruns any fixed wait. A test that
-  passes alone and fails in the parallel run is a broken test.
+  sleeping a fixed time: a busy machine overruns any fixed wait. The poll is
+  `wait_for SECONDS WHAT COMMAND...` (`test/test_helper.bash`), which fails
+  the test naming what never came; a loop that counts its tries and then
+  carries on lets the next assertion read a half-written file, and once read
+  an empty Metro log on a machine where a background process took over ten
+  seconds to start. A test that passes alone and fails in the parallel run is
+  a broken test.
 - **Every assertion ends in `|| fail "..."`** — bash 3.2 (macOS's
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`
