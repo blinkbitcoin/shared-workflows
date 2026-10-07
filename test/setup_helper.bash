@@ -4,6 +4,12 @@
 # by a fake on PATH. Nothing touches the network or the real machine. Each fake
 # appends "<name> <arguments>" to $LOG, which is what most assertions read.
 #
+# Every fake is a symbolic link to test/fixtures/fake-tool, which does the
+# logging and sources the fake's body from $FAKEBIN/<name>.impl. A fresh
+# script per fake per test cost the parallel suite most of a minute on macOS,
+# which checks each new executable's first run one at a time across the
+# machine; never write a fake as a new executable file, link it instead.
+#
 # Loaded after test_helper by test/setup-lib.bats, toolchain.bats,
 # setup-android.bats, setup-ios.bats and setup-all.bats.
 
@@ -51,10 +57,7 @@ case "$pkg" in
   platform-tools) tool=adb ;;
   *) tool= ;;
 esac
-if [ -n "$tool" ]; then
-  printf '#!/bin/bash\necho "%s $*" >>"$LOG"\n. "$FAKEBIN/%s.impl"\n' "$tool" "$tool" >"$sdk/$pkg/$tool"
-  chmod +x "$sdk/$pkg/$tool"
-fi
+[ -z "$tool" ] || ln -sf "$FAKE_TOOL" "$sdk/$pkg/$tool"
 true
 EOF
   # Records the AVD it creates and the answer to its custom-hardware-profile
@@ -115,11 +118,9 @@ EOF
 # The names of every fake put on PATH.
 FAKE_TOOLS="uname curl mise make brew sleep pnpm bundle android avdmanager emulator adb xcode-select xcodebuild xcrun gem pod security java ruby watchman"
 
-# fake_wrapper NAME FILE: a logging wrapper at FILE that sources NAME's body.
-fake_wrapper() {
-  printf '#!/bin/bash\necho "%s $*" >>"$LOG"\n. "$FAKEBIN/%s.impl"\n' "$1" "$1" >"$2"
-  chmod +x "$2"
-}
+# fake_wrapper NAME DIRECTORY: the fake NAME in DIRECTORY, a link to the one
+# logging dispatcher (test/fixtures/fake-tool), which sources NAME's body.
+fake_wrapper() { ln -sf "$FAKE_TOOL" "$2/$1"; }
 
 # setup_sandbox: the app (the working directory, holding .mise.toml and React
 # Native's catalogue), HOME, TMPDIR, fixtures and fakes. Sets APP, SDK, WORK,
@@ -129,6 +130,9 @@ setup_sandbox() {
   FAKEBIN="$WORK/bin"
   SETUP_FIXTURES="$WORK/fixtures"
   LOG="$WORK/log"
+  # Set again after the unset of FAKE_* settings below, which would clear one
+  # the environment brought in.
+  FAKE_TOOL="$REPO_ROOT/test/fixtures/fake-tool"
   PYTHON3="$(command -v python3)"
   local node
   node="$(node -p process.execPath)"
@@ -137,7 +141,7 @@ setup_sandbox() {
   : >"$LOG"
   write_fake_impls
   local tool
-  for tool in $FAKE_TOOLS; do fake_wrapper "$tool" "$FAKEBIN/$tool"; done
+  for tool in $FAKE_TOOLS; do fake_wrapper "$tool" "$FAKEBIN"; done
   printf '{"runtimes":[{"platform":"iOS","isAvailable":true}]}' >"$WORK/runtimes.json"
   printf '{"devices":{}}' >"$WORK/booted.json"
   : >"$WORK/app/.mise.toml"
@@ -148,7 +152,8 @@ setup_sandbox() {
     CI MAESTRO_DIR MAESTRO_VERSION MAESTRO_SHA256 GITHUB_PATH
   # shellcheck disable=SC2046  # one name per word
   unset $(compgen -e | grep '^FAKE_' || true)
-  export HOME="$WORK/home" TMPDIR="$WORK/tmp" LOG WORK FAKEBIN SETUP_FIXTURES SETUP_RETRY_DELAY=0
+  export HOME="$WORK/home" TMPDIR="$WORK/tmp" LOG WORK FAKEBIN SETUP_FIXTURES SETUP_RETRY_DELAY=0 \
+    FAKE_TOOL="$REPO_ROOT/test/fixtures/fake-tool"
   export PATH="$FAKEBIN:$WORK/nodebin:/usr/bin:/bin:/usr/sbin:/sbin"
   cd "$WORK/app" || return 1
   APP="$(pwd -P)"
@@ -223,8 +228,8 @@ echo "avdmanager $*" >>"$LOG"
 # is downloaded.
 plant_cmdline_tools() {
   mkdir -p "$1/cmdline-tools/latest/bin"
-  fake_wrapper android "$1/cmdline-tools/latest/bin/android"
-  fake_wrapper avdmanager "$1/cmdline-tools/latest/bin/avdmanager"
+  fake_wrapper android "$1/cmdline-tools/latest/bin"
+  fake_wrapper avdmanager "$1/cmdline-tools/latest/bin"
 }
 
 # plant_maestro VERSION: a Maestro in ~/.maestro that reports VERSION.

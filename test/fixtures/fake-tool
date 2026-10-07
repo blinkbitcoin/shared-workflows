@@ -1,0 +1,13 @@
+#!/bin/bash
+# The one executable behind every fake the machine setup tests put on PATH
+# (test/setup_helper.bash): each fake is a symbolic link to this file, named
+# after the tool. It logs "<name> <arguments>" to $LOG and runs the tool's body
+# from $FAKEBIN/<name>.impl.
+#
+# One file rather than a fresh script per fake per test: macOS checks every
+# new executable the first time it runs, one at a time across the machine, so
+# twenty-odd fresh fakes in each of eighteen parallel tests queued behind each
+# other for seconds per test. A link to a file already checked costs nothing.
+name="${0##*/}"
+echo "$name $*" >>"$LOG"
+. "$FAKEBIN/$name.impl"

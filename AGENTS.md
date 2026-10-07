@@ -198,7 +198,12 @@ Every row is a make target; nothing here is run through a package manager.
   carries on lets the next assertion read a half-written file, and once read
   an empty Metro log on a machine where a background process took over ten
   seconds to start. A test that passes alone and fails in the parallel run is
-  a broken test.
+  a broken test. On macOS the first run of every newly written executable is
+  checked by the system one at a time across the whole machine (about 90 ms
+  each, never in parallel), so a suite that writes many fakes queues behind
+  itself, while a fake that is a link to an executable that already ran costs
+  nothing. The machine setup tests' fakes all link to
+  `test/fixtures/fake-tool`, which took their files from 49 s to 10 s.
 - **Every assertion ends in `|| fail "..."`** — bash 3.2 (macOS's
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`

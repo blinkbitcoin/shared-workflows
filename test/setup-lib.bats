@@ -6,7 +6,8 @@
 # SETUP_RETRY_DELAY. Then it offers step, ok, info, warn, die, have, os,
 # retry, consent, set_env_local, sha_ok, use_mise_env and parse_common_args.
 #
-# Covers every way out of each: the pins from this repository's layout and the
+# Also the sandbox's fakes: each a link to one dispatcher that logs and runs
+# the fake's body. Covers every way out of each: the pins from this repository's layout and the
 # package's; the retry delay's default and override; retry succeeding at once,
 # after a failure (with its growing pause) and giving up; consent from
 # SETUP_YES, refused off a terminal, and a yes, a spelled-out yes and a no on
@@ -25,6 +26,22 @@ setup() {
 # Runs SNIPPET in a fresh strict bash that has sourced this repository's lib.sh.
 in_lib() {
   run bash -c 'set -euo pipefail; source "$REPO_ROOT/scripts/setup/lib.sh"; eval "$1"' _ "$1"
+}
+
+# The sandbox's own contract (test/setup_helper.bash): every fake is a link to
+# the one dispatcher, so no test writes a fresh executable per fake - on macOS
+# each one's first run is checked serially across the machine - and a fake
+# still logs its call and runs its body under its own name.
+@test "every fake on PATH is a link to the one dispatcher, and logs and runs its body" {
+  local tool
+  for tool in $FAKE_TOOLS; do
+    [ -L "$FAKEBIN/$tool" ] || fail "$tool is not a link"
+    [ "$(readlink "$FAKEBIN/$tool")" = "$REPO_ROOT/test/fixtures/fake-tool" ] || fail "$tool links to $(readlink "$FAKEBIN/$tool")"
+  done
+  [ -x "$REPO_ROOT/test/fixtures/fake-tool" ] || fail "the dispatcher is not executable"
+  run uname -m
+  [ "$output" = arm64 ] || fail "uname -m: $output"
+  [ "$(cat "$LOG")" = "uname -m" ] || fail "log: $(cat "$LOG")"
 }
 
 @test "SETUP_ROOT is the working directory, not where the script lives, and is exported" {
