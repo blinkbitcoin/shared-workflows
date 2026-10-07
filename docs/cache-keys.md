@@ -49,7 +49,7 @@ waits on a dependency install. It folds together:
 | AVD + adb keys | `avd-{ver}-{api}-x86_64-default-hidedialogs` | `test-e2e.yml` job `android` | restore + save over `~/.android/avd/*`, `~/.android/adb*`, saved on the default branch only; a miss bakes a snapshot via `scripts/e2e/android-emulator.sh snapshot-bake` |
 | Playwright browsers | `playwright-{os}-{pwversion}` | `build-web.yml` job `e2e` (version from `scripts/web/playwright-cache-key.sh`, which wraps `scripts/web/playwright-version.sh`) | `build-web.yml` e2e job |
 | Gradle | managed by `gradle/actions/setup-gradle`, transforms excluded (`gradle-home-cache-excludes`, see below) | that action | `test-e2e.yml` job `build-android` and `build-android.yml`; only the `default-branch` ref writes it, every other ref reads it |
-| mise tools | managed by `jdx/mise-action` (`cache: true`) | that action | `setup` and `native-key` actions |
+| mise tools | `jdx/mise-action`'s default key; in the `setup` action followed by `-without-{tools}`, the tools that job skips (`skip-tools`, plus `ruby` with `ruby-enabled`), sorted and joined by `-`, so a narrowed job never shares an entry with a full one; nothing skipped is the default key exactly | that action; the suffix from `scripts/ci/mise-skip-tools.sh` (`cache-key-suffix` output) | `setup` and `native-key` actions (`native-key` installs only yq, through `install_args`, which the default key already hashes) |
 
 Notes:
 

@@ -146,6 +146,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'false'
       - name: Draft the store notes into the release PR
         id: draft

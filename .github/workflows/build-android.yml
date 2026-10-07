@@ -213,6 +213,8 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           # fastlane's android lanes are Ruby, same as the iOS ones.
           ruby-enabled: 'true'
+          # No skip-tools: Gradle, bundletool and apksigner all need Java, and
+          # ruby-enabled already leaves mise's Ruby out.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:

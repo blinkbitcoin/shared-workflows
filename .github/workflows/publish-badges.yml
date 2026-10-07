@@ -128,6 +128,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       # Only when Unit succeeded: a failed Unit may have uploaded a partial
       # coverage/ (the upload is `if: always()`), and the renderer writes
       # the red placeholder for that case without reading a summary at all.

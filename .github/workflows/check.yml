@@ -296,6 +296,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Types
         if: ${{ inputs.types }}
         env:
@@ -350,6 +351,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Generated
         if: ${{ inputs.generated }}
         env:
@@ -386,6 +388,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Docs
         if: ${{ inputs.docs }}
         env:
@@ -422,6 +425,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       # expo-only.sh resolves the stack first and passes with a notice on a bare
       # app, which has no Expo SDK to drift from: the input stays on by default
       # without turning a bare consumer's Dependencies job red.
@@ -498,6 +502,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       # Also gated here, though the job is skipped while the input is off: the
       # step's own `if:` is what ties the script to its input in contract.json.
       - name: App suites
@@ -534,6 +539,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Prebuild
         if: ${{ inputs.prebuild }}
         timeout-minutes: 20
@@ -567,6 +573,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Read pinned Ruby version
         id: rb
         if: ${{ inputs.release }}
@@ -607,6 +614,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: CI
         if: ${{ inputs.ci }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:ci' scripts/ci/check-ci.sh
@@ -637,6 +645,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Secrets
         if: ${{ inputs.secrets }}
         run: bash "$WORKFLOWS_DIR/scripts/checks/run-consumer-or.sh" 'check:secrets' scripts/checks/secrets.sh
@@ -667,6 +676,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Commits
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}

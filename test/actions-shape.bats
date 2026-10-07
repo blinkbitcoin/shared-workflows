@@ -67,6 +67,29 @@ setup() {
   not_contains "$(cat "$a")" "hashFiles(" || fail "setup hashes files by glob again"
 }
 
+# A job skips the mise tools it does not use (skip-tools, and Ruby wherever
+# setup-ruby provides it). The skip has to be in the environment before
+# mise-action runs, or mise installs the tools anyway; and mise-action's default
+# key does not read MISE_DISABLE_TOOLS, so the suffix is what keeps a narrowed
+# job's cache entry apart from a full one's.
+@test "setup chooses the mise tools to skip before installing, and keys the mise cache on them" {
+  a="$REPO_ROOT/.github/actions/setup/action.yml"
+  skip_at="$(yq -r '.runs.steps | to_entries[] | select(.value.id == "skip") | .key' "$a")"
+  mise_at="$(yq -r '.runs.steps | to_entries[] | select((.value.uses // "") | test("^jdx/mise-action@")) | .key' "$a")"
+  [ -n "$skip_at" ] || fail "setup has no step with id: skip"
+  [ "$(wc -l <<<"$mise_at" | tr -d ' ')" -eq 1 ] || fail "setup no longer has exactly one mise-action step: $mise_at"
+  [ "$skip_at" -lt "$mise_at" ] || fail "the skip step ($skip_at) runs after mise-action ($mise_at)"
+  run_line="$(yq -r '.runs.steps[] | select(.id == "skip") | .run' "$a")"
+  contains "$run_line" "scripts/ci/mise-skip-tools.sh" || fail "the skip step runs something else: $run_line"
+  [ "$(yq -r '.runs.steps[] | select(.id == "skip") | .env.SKIP_TOOLS' "$a")" = '${{ inputs.skip-tools }}' ] \
+    || fail "the skip step does not read the skip-tools input"
+  [ "$(yq -r '.runs.steps[] | select(.id == "skip") | .env.RUBY_ENABLED' "$a")" = '${{ inputs.ruby-enabled }}' ] \
+    || fail "the skip step does not read the ruby-enabled input"
+  key="$(yq -r ".runs.steps[$mise_at].with.cache_key" "$a")"
+  [ "$key" = '{{default}}${{ steps.skip.outputs.cache-key-suffix }}' ] || fail "unexpected mise cache key: $key"
+  [ "$(yq -r '.inputs."skip-tools".default' "$a")" = "" ] || fail "skip-tools must default to nothing skipped"
+}
+
 # Dependabot's `directory: /` reads .github/workflows/ and a root action.yml
 # only, so the pins inside the composite actions were never proposed.
 @test "dependabot watches the composite actions' pins as well as the workflows'" {

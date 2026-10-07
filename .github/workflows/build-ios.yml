@@ -206,6 +206,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java'
           # Ruby unconditionally here (unlike test-e2e.yml, which installs it only on
           # a cache miss): fastlane is the whole point of this job.
           ruby-enabled: 'true'

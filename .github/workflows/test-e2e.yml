@@ -248,6 +248,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java'
           ruby-enabled: 'true'
       # Before the prebuild, because EXPO_PUBLIC_* is inlined when the bundle is
       # written - anything published later never reaches the .app. Miss only:
@@ -368,6 +369,8 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          # Java stays: Maestro is a JVM program.
+          skip-tools: 'ruby'
       - name: Install Maestro
         timeout-minutes: 10
         uses: ./.workflows/.github/actions/maestro
@@ -482,6 +485,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'ruby'
       - name: Setup Gradle
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
         uses: gradle/actions/setup-gradle@v6
@@ -570,6 +574,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'ruby'
       - name: Install Maestro
         timeout-minutes: 10
         uses: ./.workflows/.github/actions/maestro

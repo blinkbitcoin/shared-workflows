@@ -114,6 +114,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       # The baseline comes from the channel's release assets, never from an
       # artifact of this run: download-artifact only sees the current run, so a
       # same-run artifact would compare the commit against itself and the gate
