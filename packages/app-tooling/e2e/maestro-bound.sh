@@ -35,7 +35,13 @@ bounded_maestro() {
   # nap is also waited on rather than run in the foreground, so the TERM below
   # interrupts it, and the trap ends every nap the watchdog has started: by
   # job, not by a saved pid, because the TERM can land between `sleep &` and
-  # the assignment of its pid, which left the thirty-second nap running.
+  # the assignment of its pid.
+  #
+  # Even by job, a TERM that lands while a nap is still being started leaves
+  # it out of `jobs -p` now and then under load, so no nap is longer than a
+  # second: the thirty-second grace after the TERM is thirty one-second naps
+  # that stop as soon as the command is gone. A nap that slips through holds
+  # the caller's descriptors for a second, not thirty.
   local marker; marker="$(mktemp)"
   "$@" &
   local cmd_pid=$!
@@ -50,8 +56,12 @@ bounded_maestro() {
     done
     printf 1 > "$marker"
     kill -TERM "$cmd_pid" 2>/dev/null
-    sleep 30 & nap=$!
-    wait "$nap"
+    i=0
+    while [ "$i" -lt 30 ] && kill -0 "$cmd_pid" 2>/dev/null; do
+      sleep 1 & nap=$!
+      wait "$nap"
+      i=$((i + 1))
+    done
     kill -KILL "$cmd_pid" 2>/dev/null
   ) >/dev/null 2>&1 &
   local watchdog_pid=$!
