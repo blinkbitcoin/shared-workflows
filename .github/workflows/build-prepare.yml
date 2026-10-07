@@ -241,6 +241,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Fingerprint
         id: fingerprint
         run: bash "$WORKFLOWS_DIR/scripts/release/fingerprint.sh"

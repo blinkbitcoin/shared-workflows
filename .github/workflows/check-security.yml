@@ -237,6 +237,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Resolve the security settings
         id: resolve
@@ -275,6 +276,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Scan dependencies
         id: scan
@@ -330,6 +332,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       # The longest of the three: code.sh fetches its Semgrep registry
       # packs on every invocation, so this step can hang on the Semgrep registry
@@ -381,6 +384,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Scan the install policy
         id: scan
@@ -426,6 +430,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Write the bill of materials
         id: scan
@@ -483,6 +488,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Scan the exported bundle
         id: scan
@@ -528,6 +534,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Scan the native projects
         id: scan
@@ -576,6 +583,8 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          # Java stays: apksigner is a Java program.
+          skip-tools: 'ruby'
           install: 'true'
       - name: Download the release binaries
         env:
@@ -630,6 +639,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Review the change
         id: scan
@@ -684,6 +694,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       - name: Cache the OpenAnt build
         uses: actions/cache@v6
@@ -755,6 +766,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
           install: 'true'
       # merge-multiple is safe here only because each artifact carries a file
       # named after its own job - dependencies.sarif, code.sarif, and so on. Two

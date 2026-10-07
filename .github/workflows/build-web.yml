@@ -146,6 +146,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Export web build
         env:
           EXPORT_SCRIPT: ${{ inputs.build-script }}
@@ -193,6 +194,7 @@ jobs:
         uses: ./.workflows/.github/actions/setup
         with:
           working-directory: ${{ inputs.working-directory }}
+          skip-tools: 'java ruby'
       - name: Download web-dist
         uses: actions/download-artifact@v8
         with:

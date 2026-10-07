@@ -1843,3 +1843,43 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   [ "$in_actions" -gt 0 ] || fail "found no upload-artifact step under .github/actions: the step query is broken"
   [ "${#bad[@]}" -eq 0 ] || fail "upload-artifact steps without overwrite: true:$(printf '\n  %s' "${bad[@]}")"
 }
+
+# Every Setup leaves out the mise tools its job does not use. Most jobs run only
+# node and pnpm, so Java and Ruby were a download on every mise cache miss (a
+# Ruby compile on macOS) and weight in every restore. The jobs below keep Java
+# because something they run needs it; a new job that needs Java joins the list
+# here, and a job on the list that no longer exists fails it, so the list cannot
+# rot. Ruby is left out everywhere it is not needed or setup-ruby provides it
+# (ruby-enabled), except publish-store's lane: with ruby-enabled off, fastlane.sh
+# falls back to whatever `bundle` is on PATH.
+@test "every Setup skips the mise tools its job does not use" {
+  require_cmd yq
+  java_jobs="build-android.yml:build test-e2e.yml:ios test-e2e.yml:build-android test-e2e.yml:android check-security.yml:binaries publish-store.yml:lane"
+  ruby_kept="publish-store.yml:lane"
+  seen=""
+  for f in "${WORKFLOWS[@]}"; do
+    base="$(basename "$f")"
+    calls="$(yq -r '.jobs | to_entries[] | .key as $job | .value.steps[]? | select((.uses // "") | test("workflows/.github/actions/setup$")) | [$job, (.with."skip-tools" // ""), (.with."ruby-enabled" // "")] | join("|")' "$f")"
+    [ -n "$calls" ] || continue
+    while IFS='|' read -r job skip ruby_enabled; do
+      # yq prints an empty line for a job with no matching step.
+      [ -n "$job" ] || continue
+      id="$base:$job"
+      seen="$seen $id"
+      if [[ " $java_jobs " == *" $id "* ]]; then
+        [[ " $skip " != *" java "* ]] || fail "$id skips java, which it needs"
+      else
+        [[ " $skip " == *" java "* ]] || fail "$id installs java, which nothing in it uses: skip-tools is '$skip'"
+      fi
+      if [[ " $ruby_kept " == *" $id "* ]]; then
+        [[ " $skip " != *" ruby "* ]] || fail "$id skips ruby, which fastlane.sh can fall back to"
+      else
+        [[ " $skip " == *" ruby "* || "$ruby_enabled" == "true" ]] \
+          || fail "$id installs mise's ruby, which nothing in it uses: skip-tools is '$skip'"
+      fi
+    done <<<"$calls"
+  done
+  for id in $java_jobs $ruby_kept; do
+    [[ "$seen " == *" $id "* ]] || fail "$id is listed here but has no Setup step"
+  done
+}

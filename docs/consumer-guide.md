@@ -1672,7 +1672,7 @@ flowchart TD
   consumer -->|"the app's working tree at ref"| shared
   shared -->|"this repo at job.workflow_sha, under .workflows/"| envpub
   envpub -->|"WORKFLOWS_OUT and the four output directories, into GITHUB_ENV"| setup
-  setup -->|"mise tools, Ruby with bundler-cache when ruby is true, WORKFLOWS_DIR"| download
+  setup -->|"mise tools, Ruby from setup-ruby with bundler-cache when ruby is true (mise skips its own), WORKFLOWS_DIR"| download
   download -->|"pattern from artifacts, merge-multiple, one flat directory"| assets
   download --> buildenv
   buildenv -->|"validated environment-variables keys, into GITHUB_ENV"| envjson
@@ -3173,7 +3173,11 @@ is not, or to keep an app on its path whatever its dependencies say later.
 | Native cache key (`native-hash.sh`) | Lockfile versions and the config, plugin and patch files | The same, plus every tracked file under `ios/` and `android/` |
 
 Both stacks need pnpm and mise: the workflows install the toolchain from your
-`.mise.toml` and read `pnpm-lock.yaml` before any install. The lanes run from a
+`.mise.toml` and read `pnpm-lock.yaml` before any install. Each job installs
+only the tools it uses: Java only where Android is built or tested, Maestro runs
+or `apksigner` reads a release APK, and Ruby from ruby/setup-ruby where a lane
+or CocoaPods needs it, never mise's copy. Keep both pinned in `.mise.toml`
+anyway: the Ruby version is read from it. The lanes run from a
 root `fastlane/` by default; a Fastfile elsewhere is the `fastlane-directory`
 input, which `build-ios.yml`, `build-android.yml`, `publish-store.yml`,
 `build-prepare.yml` and `pr-store-notes.yml` take. fastlane itself only finds a
