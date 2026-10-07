@@ -16,13 +16,14 @@ rest explain the parts of it that surprise people.
 | Work out why a cache missed, or what invalidates one | [cache-keys.md](cache-keys.md) |
 | Read what a failed (or passing) E2E run left behind, or where a job spent its time | [forensics.md](forensics.md) |
 | Choose a runner label, or understand the macOS bill | [runners.md](runners.md) |
+| Find where a CI run spent its time: queues, slow steps, the critical path | [consumer-guide.md](consumer-guide.md#where-a-run-spends-its-time) |
 
 ## One line each
 
 | Doc | Contents |
 | --- | --- |
 | [adopting-an-existing-repo.md](adopting-an-existing-repo.md) | What an existing app has to provide, per workflow it calls, and the two ways to satisfy each gate. The table is generated from `packages/app-tooling/contract.json` |
-| [consumer-guide.md](consumer-guide.md) | Every workflow's inputs, outputs and secrets; the full caller examples; versioning and the `@v0` pin; the `.workflows/` self-checkout; what each app configuration file becomes on the Expo presets |
+| [consumer-guide.md](consumer-guide.md) | Every workflow's inputs, outputs and secrets; the full caller examples; versioning and the `@v0` pin; the `.workflows/` self-checkout; what each app configuration file becomes on the Expo presets; where a run spends its time (`trace-run`) |
 | [release-runbook.md](release-runbook.md) | The six steps of a release across the callers, versions and build numbers, store notes and their LLM pass, the listing sync, store toggles, every variable and secret, environments, rollback, hotfix, the verification gates, `DRY_RUN=1` |
 | [ota.md](ota.md) | The `OTA_ENABLED` toggle, code signing, the channel model, the fingerprint gate, hotfix and rollback; the update server is in `deploy/ota/` |
 | [security.md](security.md) | What `check-security` runs, the nine scanners, where findings and the verdict go, every setting and its environment twin, the LLM jobs, suppression, known limits |

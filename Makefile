@@ -82,10 +82,16 @@ test-smoke-local: ## Run Prepare against the template with act (the Linux jobs, 
 	$(MISE) bash scripts/self/smoke-local.sh
 test-smoke-local-android: ## test-smoke-local, then the unsigned Android build
 	$(MISE) bash scripts/self/smoke-local.sh --android
+# Where a GitHub Actions run spent its time, read with your own gh login:
+# make report-run-timing RUN=<run URL> [ARGS='--logs --compare <run URL>'].
+# The check is make's own, so an empty RUN names the variable, not just the usage.
+report-run-timing: ## Show where a GitHub Actions run spent its time (RUN=<run URL>, ARGS=<more trace-run options>)
+	$(if $(RUN),,$(error RUN is empty: make report-run-timing RUN=<run URL> [ARGS='--logs --compare <run URL>']))
+	$(MISE) node packages/app-tooling/bin/trace-run.mjs $(RUN) $(ARGS)
 # Clone-wide, not worktree-scoped: a git worktree shares .git/hooks with the
 # main checkout, so this installs the hooks for every worktree of this clone.
 setup-hooks: ## Install the git hooks (lefthook) - affects the whole clone, not just this worktree
 	$(MISE) lefthook install
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
-.PHONY: check-ci check-secrets test test-unit test-package test-scripts test-fastlane check-version-pins check-tool-versions check-spell check test-smoke-local test-smoke-local-android setup-hooks help
+.PHONY: check-ci check-secrets test test-unit test-package test-scripts test-fastlane check-version-pins check-tool-versions check-spell check test-smoke-local test-smoke-local-android report-run-timing setup-hooks help

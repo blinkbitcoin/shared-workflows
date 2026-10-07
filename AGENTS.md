@@ -52,6 +52,7 @@ packages/           app-tooling (tooling any repo installs; expo/ holds the Expo
                     security/ the scanner copies and lib/security-*.mjs their modules,
                     lib/native-stack.mjs the Expo-or-bare rule every part applies,
                     e2e/ the Maestro suite runner copies, bin/serve-dist.mjs the web preview,
+                    bin/trace-run.mjs where a GitHub Actions run spent its time,
                     fixtures/template/ the template's files, before and after)
 deploy/ota/         the self-hosted OTA update server (Docker Compose), only needed with OTA on
 docs/               consumer-guide, adopting-an-existing-repo, release-runbook, ota, security,
@@ -79,6 +80,7 @@ Every row is a make target; nothing here is run through a package manager.
 | `make check-secrets` | Scan the whole git history for committed secrets (gitleaks) |
 | `make test-smoke-local` | Prepare against the template with nektos/act — Docker and a pushed branch required; not part of `check` (CONTRIBUTING.md, "Running the release pipeline locally") |
 | `make test-smoke-local-android` | `test-smoke-local`, then the unsigned Android build, amd64 with a provisioned Android SDK |
+| `make report-run-timing` | Show where a GitHub Actions run spent its time - queues, slowest steps, critical path - with `trace-run` and your own `gh` login (`RUN=<run URL>`, `ARGS='--logs --compare <run>'`); not part of `check` |
 | `make help` | Show every target with its description |
 
 ## Rules of the road

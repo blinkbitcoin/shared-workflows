@@ -3734,6 +3734,44 @@ and `.claude/worktrees/` (Claude Code's checkouts of the repository), and holds
 Biome, tsc, knip, typos, git, Semgrep and CodeQL to the same pair. See
 [its README](../packages/app-tooling/README.md#repository-guards).
 
+## Where a run spends its time
+
+`trace-run`, a program of `@blinkbitcoin/app-tooling`, shows where any GitHub
+Actions run spent its time, so a slow pipeline is measured rather than guessed
+at. It reads the run through the REST API with the reader's own `gh` login:
+it needs `gh auth login` and read access to the repository, and nothing in the
+workflows - no permission, no step, no artifact.
+
+```sh
+pnpm exec trace-run https://github.com/<owner>/<app>/actions/runs/<run-id>
+pnpm exec trace-run <owner>/<app> <run-id> --logs --compare <an earlier run-id>
+```
+
+- **What it prints:** the run's wall clock (first job created to last job
+  finished); each job's queue time (created to started; a macOS job waiting
+  for a runner shows here) and run time, with its result and runner; the
+  slowest steps across the run (`--top N`, default 15); and the critical path.
+- **The critical path** is read from the timestamps alone: the job that
+  finished last, then the job that finished last before it started, and so on
+  back. The workflow file and its `needs:` are not read, so two jobs that only
+  happened to run one after the other can show as a chain.
+- **`--logs`** also reads each finished job's log. The scripts of these
+  workflows close a log group with a `trace: <phase> <seconds>s` line, and
+  each one is listed under the step that printed it, so a long step breaks
+  down into its phases (the emulator boot, the build, the flows).
+- **`--compare RUN`** lines up another run (a URL, a run id in the same
+  repository, or `owner/repository run-id`): the wall clock, each job by name
+  and each step by job and name, with the change, the largest increase first.
+- **`--json FILE`** writes the whole tree (run, jobs, steps, phases, critical
+  path, slowest steps, comparison) for a script to read; `--attempt N` reads
+  an earlier attempt; `--sort run` orders the jobs by run time.
+- **Exit codes:** 2 on a usage error, 1 when `gh` is missing (the message
+  says to install it and run `gh auth login`) or fails (its own message is
+  printed). A run still going is measured up to now.
+
+In shared-workflows itself, `make report-run-timing RUN=<run URL>` runs it
+(`ARGS='--logs'` for more).
+
 ## The store-release plugin
 
 Getting an app from the unsigned builds these workflows produce to a submittable

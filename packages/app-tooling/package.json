@@ -135,7 +135,8 @@
     "build-web": "./bin/build-web.mjs",
     "check-prebuild": "./bin/check-prebuild.mjs",
     "test-scripts": "./bin/test-scripts.mjs",
-    "help": "./bin/help.mjs"
+    "help": "./bin/help.mjs",
+    "trace-run": "./bin/trace-run.mjs"
   },
   "peerDependencies": {
     "@biomejs/biome": ">=2.5.0",
