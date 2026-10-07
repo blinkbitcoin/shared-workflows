@@ -280,6 +280,103 @@ ci_make_targets() {
     || fail "ci_make_targets found almost nothing: $(ci_make_targets | tr '\n' ' ')"
 }
 
+# --- timing ---------------------------------------------------------------------
+#
+# `make check` and each self-CI job record how long every gate and every test
+# took (scripts/self/time-step.mjs, scripts/self/timing-report.mjs), so a slow
+# suite is measured rather than guessed at. A gate whose recipe line skipped
+# $(TIMED) would silently fall out of the numbers, and a job without the report
+# and upload steps would leave its numbers on the runner.
+
+# Each recipe line of TARGET, a continued line (after a trailing `\`) joined to
+# the line it continues, one per output line.
+recipe_lines() {
+  awk -v target="$1" '
+    $0 ~ "^" target ":" { inside = 1; next }
+    inside && /^\t/ {
+      line = substr($0, 2)
+      if (joining) { current = current " " line } else { current = line }
+      joining = (line ~ /\\$/)
+      if (!joining) print current
+      next
+    }
+    inside { inside = 0 }
+  ' "$REPO_ROOT/Makefile"
+}
+
+@test "every recipe line of every gate make check runs is timed through \$(TIMED)" {
+  local target line count=0 untimed=()
+  while IFS= read -r target; do
+    while IFS= read -r line; do
+      count=$((count + 1))
+      case "$line" in
+        '$(TIMED) '*) ;;
+        *) untimed+=("$target: $line") ;;
+      esac
+    done < <(recipe_lines "$target")
+  done < <(check_prerequisites)
+  [ "$count" -ge 10 ] || fail "found only $count recipe lines: recipe_lines is broken"
+  [ "${#untimed[@]}" -eq 0 ] || fail "recipe lines not run through \$(TIMED):$(printf '\n  %s' "${untimed[@]}")"
+}
+
+@test "TIMED runs a line through time-step.mjs under the target's name, and the test targets write their reports into the run" {
+  grep -qxF 'TIMED = $(MISE) node scripts/self/time-step.mjs $@ --' "$REPO_ROOT/Makefile" \
+    || fail "TIMED no longer runs scripts/self/time-step.mjs with the target's name"
+  grep -qxF 'TIMING_DIR ?= .timing/$(TIMING_RUN)' "$REPO_ROOT/Makefile" || fail "TIMING_DIR is not .timing/\$(TIMING_RUN)"
+  contains "$(recipe_lines test-unit)" '--timing --report-formatter junit --output $(TIMING_DIR) ' \
+    || fail "test-unit writes no JUnit report into the run: $(recipe_lines test-unit)"
+  local target
+  for target in test-package test-scripts; do
+    contains "$(recipe_lines "$target")" "--test-reporter=spec --test-reporter-destination=stdout" \
+      || fail "$target no longer prints its spec report and coverage table: $(recipe_lines "$target")"
+    contains "$(recipe_lines "$target")" "--test-reporter=junit --test-reporter-destination=\$(TIMING_DIR)/$target.xml" \
+      || fail "$target writes no JUnit report into the run: $(recipe_lines "$target")"
+  done
+}
+
+# The report ends `check` and `test`, and must never fail them: the pre-push
+# hook runs `make check`, and timing is advice, not a gate.
+@test "make check and make test end with the timing report, which cannot fail them" {
+  local target
+  for target in check test; do
+    [ "$(recipe_lines "$target")" = '-$(MISE) node scripts/self/timing-report.mjs $(TIMING_DIR)' ] \
+      || fail "$target does not end with the report, ignoring its failure: $(recipe_lines "$target")"
+  done
+  [ "$(recipe_lines report-timing)" = '$(MISE) node scripts/self/timing-report.mjs' ] \
+    || fail "report-timing does not report the newest run: $(recipe_lines report-timing)"
+}
+
+# Every job of the two called workflows that runs make, as `FILE JOB`.
+make_jobs() {
+  local f
+  for f in "$SELF_CHECKS" "$SELF_UNIT"; do
+    yq -r '.jobs | to_entries[] | select([.value.steps[] | .run // "" | test("^make ")] | any) | .key' "$f" \
+      | sed "s|^|$f |"
+  done
+}
+
+@test "every self-CI job that runs make names its timing run, and ends by reporting and uploading it" {
+  require_cmd yq
+  local f job where report upload count=0 bad=()
+  while read -r f job; do
+    count=$((count + 1))
+    where="${f##*/} job $job"
+    # shellcheck disable=SC2016 # the expression is GitHub's, not the shell's
+    [ "$(yq -r ".jobs.\"$job\".env.TIMING_RUN" "$f")" = '${{ github.run_id }}-${{ github.job }}' ] \
+      || bad+=("$where: env.TIMING_RUN is not the run id and the job")
+    report="$(yq -r ".jobs.\"$job\".steps[-2] | [.name, .if, .\"continue-on-error\", .run] | join(\"|\")" "$f")"
+    [ "$report" = "Timing report|always()|true|node scripts/self/timing-report.mjs" ] \
+      || bad+=("$where: the next-to-last step is not the report under always() and continue-on-error: $report")
+    upload="$(yq -r ".jobs.\"$job\".steps[-1] | [.name, .if, .uses, .with.name, .with.path, .with.\"include-hidden-files\", .with.\"retention-days\", .with.\"if-no-files-found\", .with.overwrite] | join(\"|\")" "$f")"
+    # shellcheck disable=SC2016 # the expression is GitHub's, not the shell's
+    [ "$upload" = 'Upload timing|always()|actions/upload-artifact@v7|timing-${{ github.job }}|.timing/
+!.timing/latest
+|true|14|ignore|true' ] || bad+=("$where: the last step is not the timing upload: $upload")
+  done < <(make_jobs)
+  [ "$count" -ge 5 ] || fail "found only $count jobs running make: make_jobs is broken"
+  [ "${#bad[@]}" -eq 0 ] || fail "jobs without timing:$(printf '\n  %s' "${bad[@]}")"
+}
+
 # --- which gates a change runs ------------------------------------------------
 #
 # self-ci.yml's `changes` job classifies the diff with scripts/self/changed-gates.sh

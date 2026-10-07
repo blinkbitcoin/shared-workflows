@@ -9,6 +9,13 @@ name: Self checks
 # job here or in self-unit.yml, or the suite fails. Without it a new gate would
 # be enforced on laptops and in no CI job at all - the exact failure this split
 # would otherwise introduce.
+#
+# Every job that runs make times it (see the Makefile's TIMED): TIMING_RUN
+# names the job's run under .timing/, and its last two steps print where the
+# time went - into the job summary - and upload .timing/ as timing-<job>
+# (.timing/latest is only a link to the run beside it). Both run after a
+# failure too, when the numbers matter most, and the report never fails a job
+# of its own: timing is advice, not a gate.
 on:
   workflow_call:
     # Set by self-ci.yml's `changes` job. True by default, so a caller that
@@ -31,14 +38,32 @@ jobs:
     if: ${{ inputs.ci }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env: { TIMING_RUN: "${{ github.run_id }}-${{ github.job }}" }
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
       - run: make check-ci
+      - name: Timing report
+        if: always()
+        continue-on-error: true
+        run: node scripts/self/timing-report.mjs
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: timing-${{ github.job }}
+          path: |
+            .timing/
+            !.timing/latest
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
   secrets:
     name: Secrets
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env: { TIMING_RUN: "${{ github.run_id }}-${{ github.job }}" }
     steps:
       # fetch-depth: 0, because `make check-secrets` scans the whole history with
       # gitleaks and refuses a shallow clone. The other jobs here take the
@@ -47,23 +72,73 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: jdx/mise-action@v5
       - run: make check-secrets
+      - name: Timing report
+        if: always()
+        continue-on-error: true
+        run: node scripts/self/timing-report.mjs
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: timing-${{ github.job }}
+          path: |
+            .timing/
+            !.timing/latest
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
   versions:
     name: Versions
     if: ${{ inputs.versions }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env: { TIMING_RUN: "${{ github.run_id }}-${{ github.job }}" }
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
       - run: make check-version-pins check-tool-versions
+      - name: Timing report
+        if: always()
+        continue-on-error: true
+        run: node scripts/self/timing-report.mjs
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: timing-${{ github.job }}
+          path: |
+            .timing/
+            !.timing/latest
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
   spell:
     name: Spell
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env: { TIMING_RUN: "${{ github.run_id }}-${{ github.job }}" }
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
       - run: make check-spell
+      - name: Timing report
+        if: always()
+        continue-on-error: true
+        run: node scripts/self/timing-report.mjs
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: timing-${{ github.job }}
+          path: |
+            .timing/
+            !.timing/latest
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
   commits:
     name: Commits
     # A called workflow sees the caller's event, so this is the PR check it

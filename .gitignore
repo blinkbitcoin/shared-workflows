@@ -7,3 +7,7 @@ lefthook-local.yml
 
 # The gems make test-fastlane installs for the lanes' tests.
 .gems/
+
+# Each make check or make test run's timings (scripts/self/time-step.mjs) and
+# their report; `make report-timing` reads the newest.
+.timing/

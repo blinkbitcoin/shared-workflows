@@ -181,8 +181,9 @@ errors() { grep -c '::error::' <<< "$output" || true; }
   # The generated half is scripts/self/render-versions.mjs --check, tested in
   # test/render-versions.test.mjs; this holds the target to running both, in
   # that order, so the CI job that runs the target runs the drift check too.
+  # Each line runs under scripts/self/time-step.mjs, which times it.
   run make --no-print-directory -n -C "$REPO_ROOT" check-version-pins MISE=
   [ "$status" -eq 0 ] || fail "make -n failed: $output"
-  [ "$output" = "node scripts/self/render-versions.mjs --check
-bash scripts/self/check-version-pins.sh" ] || fail "unexpected recipe: $output"
+  [ "$output" = "node scripts/self/time-step.mjs check-version-pins -- node scripts/self/render-versions.mjs --check
+node scripts/self/time-step.mjs check-version-pins -- bash scripts/self/check-version-pins.sh" ] || fail "unexpected recipe: $output"
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites time="1.857">
+<testsuite name="docs-contract.bats" tests="3" failures="1" errors="0" skipped="0" time="0.305" timestamp="2026-10-07T17:07:59" hostname="host">
+    <testcase classname="docs-contract.bats" name="AGENTS.md exists - the command table is the agent-facing contract" time="0.006" />
+    <testcase classname="docs-contract.bats" name="no make target is named after the tool it runs" time="0.138" />
+    <testcase classname="docs-contract.bats" name="a failing case &lt;with&gt; &quot;markup&quot;" time="0.042">
+        <failure type="failure">(in test file test/docs-contract.bats, line 9)
+  `false' failed</failure>
+    </testcase>
+</testsuite>
+<testsuite name="require-cmd.bats" tests="2" failures="0" errors="0" skipped="0" time="1.552" timestamp="2026-10-07T17:07:59" hostname="host">
+    <testcase classname="require-cmd.bats" name="require_cmd fails naming the missing tool and the fix" time="0.008" />
+    <testcase classname="require-cmd.bats" name="no bats file skips a test for want of a tool .mise.toml pins" time="1.299" />
+</testsuite>
+</testsuites>

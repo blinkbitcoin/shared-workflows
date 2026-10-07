@@ -8,6 +8,13 @@ name: Self unit
 # the code right" rather than "is the repository tidy" - and because this is
 # where a coverage artifact will come from when this repository starts
 # publishing its own badges.
+#
+# Every job that runs make times it (see the Makefile's TIMED): TIMING_RUN
+# names the job's run under .timing/, and its last two steps print where the
+# time went - into the job summary - and upload .timing/ as timing-<job>
+# (.timing/latest is only a link to the run beside it). Both run after a
+# failure too, when the numbers matter most, and the report never fails a job
+# of its own: timing is advice, not a gate.
 on:
   workflow_call:
     # Set by self-ci.yml's `changes` job; true by default. Tests has no input:
@@ -23,6 +30,7 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env: { TIMING_RUN: "${{ github.run_id }}-${{ github.job }}" }
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
@@ -30,11 +38,28 @@ jobs:
       # on a laptop, so a test that only passes alone fails here too.
       - run: sudo apt-get install -y --no-install-recommends parallel
       - run: make test-unit
+      - name: Timing report
+        if: always()
+        continue-on-error: true
+        run: node scripts/self/timing-report.mjs
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: timing-${{ github.job }}
+          path: |
+            .timing/
+            !.timing/latest
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
   package:
     name: Package
     if: ${{ inputs.package }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env: { TIMING_RUN: "${{ github.run_id }}-${{ github.job }}" }
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
@@ -42,6 +67,22 @@ jobs:
       # on the target in the Makefile for why they ratchet and never drop.
       - run: make test-package
       - run: make test-scripts
+      - name: Timing report
+        if: always()
+        continue-on-error: true
+        run: node scripts/self/timing-report.mjs
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: timing-${{ github.job }}
+          path: |
+            .timing/
+            !.timing/latest
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
   # The Ruby lanes the package ships (packages/app-tooling/fastlane): their unit
   # tests, run under Bundler against the test Gemfile. A job of its own because
   # it needs Ruby and a gem install the other two do not, and because a run
@@ -51,7 +92,24 @@ jobs:
     if: ${{ inputs.package }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env: { TIMING_RUN: "${{ github.run_id }}-${{ github.job }}" }
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
       - run: make test-fastlane
+      - name: Timing report
+        if: always()
+        continue-on-error: true
+        run: node scripts/self/timing-report.mjs
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: timing-${{ github.job }}
+          path: |
+            .timing/
+            !.timing/latest
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
