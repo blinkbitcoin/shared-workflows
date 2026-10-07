@@ -54,8 +54,12 @@ real_count() {
     scripts)            git -C "$REPO_ROOT" ls-files 'scripts/**/*.sh' 'scripts/**/*.mjs' | wc -l ;;
     bats-files)         git -C "$REPO_ROOT" ls-files 'test/*.bats' | wc -l ;;
     # bats --count, not `grep -c '^@test'`: the grep counts a commented-out case
-    # too, which is how 554 and 551 came to disagree.
-    tests)              (cd "$REPO_ROOT" && bats --count test/) ;;
+    # too, which is how 554 and 551 came to disagree. Counted a few tracked
+    # files at a time on every core and summed: one `bats --count test/`
+    # preprocesses every file in turn, ten seconds on a Mac.
+    tests)              (cd "$REPO_ROOT" && git ls-files -z 'test/*.bats' \
+                          | xargs -0 -P "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" -n 6 bats --count) \
+                          | awk '{ total += $1 } END { print total + 0 }' ;;
     *)                  echo "UNKNOWN" ;;
   esac
 }
@@ -83,10 +87,22 @@ count_holds() {
 }
 
 @test "every marked count in the docs matches the tree" {
-  local wrong="" name claimed real
+  # Each count is worked out once, however many docs mark it (the test count
+  # is marked in three places): " name=value " pairs in known, since bash 3.2
+  # has no associative arrays.
+  local wrong="" name claimed real known=" "
   while read -r name claimed; do
     [ -n "$name" ] || continue
-    real="$(real_count "$name" | tr -d ' ')"
+    case "$known" in
+      *" $name="*)
+        real="${known#* "$name"=}"
+        real="${real%% *}"
+        ;;
+      *)
+        real="$(real_count "$name" | tr -d ' ')"
+        known="$known$name=$real "
+        ;;
+    esac
     [ "$real" != "UNKNOWN" ] || fail "a doc marks an unknown count: $name"
     count_holds "$name" "$claimed" "$real" || wrong="$wrong $name(doc=$claimed real=$real step=$(count_step "$name"))"
   done <<< "$(marked_counts)"
