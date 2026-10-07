@@ -48,7 +48,7 @@ esac
 [ -n "${WORKFLOWS_TEST_FP_FAIL:-}" ] && exit 1
 exit 0
 SH
-  chmod +x "$STUB/npx"
+  as_fakes "$STUB/npx"
   export PATH="$STUB:$PATH"
 }
 
@@ -110,7 +110,7 @@ SH
 printf 'the CLI should not have run\n' >&2
 exit 1
 SH
-  chmod +x "$STUB/npx"
+  as_fakes "$STUB/npx"
   PATH="$STUB:$PATH" WORKFLOWS_FINGERPRINT_IOS=preios WORKFLOWS_FINGERPRINT_ANDROID=preand \
     run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"

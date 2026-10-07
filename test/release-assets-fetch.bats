@@ -19,7 +19,7 @@ for a in "$@"; do [ "$prev" = "--dir" ] && dir="$a"; prev="$a"; done
 for name in ${FAKE_ASSETS-app-release.aab}; do printf 'bytes' > "$dir/$name"; done
 exit 0
 EOF
-  chmod +x "$fakebin/gh"
+  as_fakes "$fakebin/gh"
   export PATH="$fakebin:$PATH"
   export GH_TOKEN=fake GH_REPO=org/app
   dir="$BATS_TEST_TMPDIR/assets"

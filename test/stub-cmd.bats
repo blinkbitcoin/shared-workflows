@@ -6,6 +6,12 @@
 # body (output and exit status), one whose body comes from stdin, several calls
 # to one fake, two fakes at once, a fake that replaces an earlier one, and the
 # fakes coming first on PATH, once each, under this test's own directory.
+#
+# as_fakes and fake_runner too: every fake is a link to this run's read-only
+# copy of test/fixtures/fake-runner (so no test writes a fresh executable; see
+# as_fakes), a bash fake runs with its arguments and its own path as $0, any
+# other under the interpreter its #! line names, and a test that writes to a
+# fake's path afterwards fails instead of rewriting the runner.
 load test_helper
 
 @test "a fake with no body records its arguments and exits 0 silently" {
@@ -95,4 +101,51 @@ tag v1" ] || fail "recorded: $(stub_calls git)"
   stub_cmd echoer 'printf "<%s>" "$@"'
   run echoer "a b" "it's"
   [ "$output" = "<a b><it's>" ] || fail "output: $output"
+}
+
+@test "a stub_cmd fake is a link to the run's read-only runner" {
+  stub_cmd gh
+  local fake="$BATS_TEST_TMPDIR/stub-bin/gh"
+  [ -L "$fake" ] || fail "gh is not a link"
+  [ "$(readlink "$fake")" = "$BATS_RUN_TMPDIR/fake-runner" ] || fail "gh links to $(readlink "$fake")"
+  cmp -s "$BATS_RUN_TMPDIR/fake-runner" "$REPO_ROOT/test/fixtures/fake-runner" || fail "the runner is not the fixture's copy"
+  [ ! -w "$BATS_RUN_TMPDIR/fake-runner" ] || fail "the runner is writable"
+}
+
+@test "as_fakes runs a bash fake with its arguments, its own path as \$0, and its exit status" {
+  local fake="$BATS_TEST_TMPDIR/bin/tool"
+  mkdir -p "${fake%/*}"
+  printf '#!/usr/bin/env bash\nprintf "%%s|%%s\\n" "$0" "$*"\nexit 3\n' > "$fake"
+  as_fakes "$fake"
+  run "$fake" one "two words"
+  [ "$status" -eq 3 ] || fail "exited $status: $output"
+  [ "$output" = "$fake|one two words" ] || fail "output: $output"
+}
+
+@test "as_fakes runs any other fake under the interpreter its #! line names" {
+  require_cmd node
+  local fake="$BATS_TEST_TMPDIR/bin/tool"
+  mkdir -p "${fake%/*}"
+  printf '#!/usr/bin/env node\nconsole.log(process.argv.slice(2).join("+"))\n' > "$fake"
+  as_fakes "$fake"
+  run "$fake" a b
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "a+b" ] || fail "output: $output"
+}
+
+@test "writing to a fake's path afterwards fails, and leaves the runner alone" {
+  local fake="$BATS_TEST_TMPDIR/bin/tool"
+  mkdir -p "${fake%/*}"
+  printf '#!/bin/bash\necho first\n' > "$fake"
+  as_fakes "$fake"
+  run bash -c 'echo second > "$1"' _ "$fake"
+  [ "$status" -ne 0 ] || fail "the write went through"
+  cmp -s "$BATS_RUN_TMPDIR/fake-runner" "$REPO_ROOT/test/fixtures/fake-runner" || fail "the runner changed"
+  [ "$("$fake")" = first ] || fail "the fake changed"
+}
+
+@test "as_fakes refuses a path that is not a file the test wrote" {
+  run as_fakes "$BATS_TEST_TMPDIR/missing"
+  [ "$status" -ne 0 ] || fail "accepted a missing file"
+  contains "$output" "as_fakes: $BATS_TEST_TMPDIR/missing is not a script the test wrote" || fail "output: $output"
 }

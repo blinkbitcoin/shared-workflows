@@ -49,7 +49,7 @@ printf '{"message":"Not Found"}\n'
 printf 'gh: Not Found (HTTP 404)\n' >&2
 exit 1
 SH
-  chmod +x "$STUB/gh"
+  as_fakes "$STUB/gh"
   export PATH="$STUB:$PATH"
   EXISTING="$BATS_TEST_TMPDIR/existing"
   : > "$EXISTING"

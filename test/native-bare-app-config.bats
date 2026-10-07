@@ -27,7 +27,7 @@ printf 'xcodebuild %s\n' "$*" >> "$CALLS"
 [ -n "${XCODEBUILD_JSON:-}" ] || exit 65
 printf '%s' "$XCODEBUILD_JSON"
 STUB
-  chmod +x "$bin/xcodebuild"
+  as_fakes "$bin/xcodebuild"
   export PATH="$bin:$PATH"
 }
 

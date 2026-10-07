@@ -103,7 +103,7 @@ git --git-dir="$REMOTE" update-ref refs/heads/gh-pages $1 || exit 3
 echo "another publish landed first" >&2
 exit 1
 EOF
-  chmod +x "$hook"
+  as_fakes "$hook"
 }
 
 # The second conflicting race, and the easier one to hit in practice: closing a
@@ -274,7 +274,7 @@ EOF
 echo "refusing" >&2
 exit 1
 HOOK
-  chmod +x "$CONSUMER/.git/hooks/pre-commit"
+  as_fakes "$CONSUMER/.git/hooks/pre-commit"
   BRANCH=feat/x run bash "$CLEANUP"
   [ "$status" -eq 1 ] || fail "a refused removal reported success: $output"
   contains "$output" "::error::could not remove badges/feat/x (exit 2)" || fail "no diagnosis in: $output"
@@ -288,7 +288,7 @@ HOOK
 cat >/dev/null
 exit 1
 HOOK
-  chmod +x "$REMOTE/hooks/pre-receive"
+  as_fakes "$REMOTE/hooks/pre-receive"
   BRANCH=feat/x GH_PAGES_PUSH_ATTEMPTS=2 run bash "$CLEANUP"
   [ "$status" -eq 1 ] || fail "a rejected cleanup reported success: $output"
   contains "$output" "could not push gh-pages in 2 attempts" || fail "no diagnosis in: $output"
@@ -311,7 +311,7 @@ HOOK
 : > "$TMP/commit-seen"
 exit 0
 HOOK
-  chmod +x "$CONSUMER/.git/hooks/pre-commit"
+  as_fakes "$CONSUMER/.git/hooks/pre-commit"
   BRANCH=feat/x run bash "$CLEANUP"
   [ "$status" -eq 1 ] || fail "a failed re-apply reported success: $output"
   contains "$output" "the gh-pages re-apply step failed (exit 2)" || fail "no diagnosis in: $output"

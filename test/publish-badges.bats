@@ -104,7 +104,7 @@ git --git-dir="$REMOTE" update-ref refs/heads/gh-pages $1 || exit 3
 echo "another publish landed first" >&2
 exit 1
 EOF
-  chmod +x "$hook"
+  as_fakes "$hook"
 }
 
 @test "the first publish creates gh-pages as an orphan carrying only badges" {
@@ -204,7 +204,7 @@ EOF
 cat >/dev/null
 exit 1
 HOOK
-  chmod +x "$REMOTE/hooks/pre-receive"
+  as_fakes "$REMOTE/hooks/pre-receive"
   BRANCH=main GH_PAGES_PUSH_ATTEMPTS=1 run bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "the publish reported success against a rejecting remote"
   rm "$REMOTE/hooks/pre-receive"
@@ -230,7 +230,7 @@ HOOK
 echo "refusing" >&2
 exit 1
 HOOK
-  chmod +x "$CONSUMER/.git/hooks/pre-commit"
+  as_fakes "$CONSUMER/.git/hooks/pre-commit"
   render_badges "$CONSUMER" 77%
   BRANCH=main run bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "publishing nothing reported success: $output"
@@ -256,7 +256,7 @@ HOOK
 : > "$TMP/commit-seen"
 exit 0
 HOOK
-  chmod +x "$CONSUMER/.git/hooks/pre-commit"
+  as_fakes "$CONSUMER/.git/hooks/pre-commit"
   render_badges "$CONSUMER" 77%
   BRANCH=main run bash "$PUBLISH"
   [ "$status" -ne 0 ] || fail "a failed re-apply reported success: $output"

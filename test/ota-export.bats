@@ -41,7 +41,7 @@ if [ -n "$out" ] && [ "${WORKFLOWS_TEST_EXPORT_EMPTY:-}" != "true" ]; then
 fi
 exit "${WORKFLOWS_TEST_PNPM_STATUS:-0}"
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
 }
 
 export_ota() { run bash "$REPO_ROOT/scripts/ota/export.sh"; }
@@ -129,7 +129,7 @@ export_ota() { run bash "$REPO_ROOT/scripts/ota/export.sh"; }
 printf 'npx %s\n' "$*" >> "$WORKFLOWS_TEST_LOG"
 exit 1
 SH
-  chmod +x "$STUB/npx"
+  as_fakes "$STUB/npx"
   export_ota
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   ! grep -q '^npx ' "$WORKFLOWS_TEST_LOG" || fail "export went through npx: $(cat "$WORKFLOWS_TEST_LOG")"

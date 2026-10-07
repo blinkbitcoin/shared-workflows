@@ -35,7 +35,7 @@ components="${FAKE_COMPONENTS:-}"
 [ -n "$components" ] || components='[{}]'
 printf '{"bomFormat":"CycloneDX","components":%s}' "$components" > "$out"
 STUB
-  chmod +x "$bin/pnpm"
+  as_fakes "$bin/pnpm"
 }
 
 compliant_workspace() {

@@ -12,7 +12,7 @@ setup() {
 [ -f "$WORKFLOWS_TEST_FAIL" ] && exit 1
 cat "$WORKFLOWS_TEST_BODY"
 SH
-  chmod +x "$STUB/gh"
+  as_fakes "$STUB/gh"
   export PATH="$STUB:$PATH"
   export WORKFLOWS_OUT="$BATS_TEST_TMPDIR/out" GITHUB_ENV="$BATS_TEST_TMPDIR/gh_env"
   : > "$GITHUB_ENV"

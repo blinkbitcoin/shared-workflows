@@ -41,7 +41,7 @@ if [ -n "$out" ] && [ "${WORKFLOWS_TEST_EXPORT_EMPTY:-}" != "true" ]; then
 fi
 exit "${WORKFLOWS_TEST_NPX_STATUS:-0}"
 SH
-  chmod +x "$STUB/npx"
+  as_fakes "$STUB/npx"
 }
 
 publish() { run bash "$REPO_ROOT/scripts/ota/publish.sh" "$@"; }

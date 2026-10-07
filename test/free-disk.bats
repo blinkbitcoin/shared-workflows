@@ -9,7 +9,7 @@ setup() {
 echo "sudo must not be invoked off a Linux GitHub Actions runner" >&2
 exit 99
 EOF
-  chmod +x "$fakebin/sudo"
+  as_fakes "$fakebin/sudo"
   export PATH="$fakebin:$PATH"
   unset GITHUB_ACTIONS RUNNER_OS WORKFLOWS_FORCE_RUNNER_SCRIPTS
 }

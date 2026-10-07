@@ -20,7 +20,7 @@ printf 'path: %s\n' "${BUNDLE_PATH-unset}" >> "$WORKFLOWS_TEST_LOG"
 printf 'cwd: %s\n' "$PWD" >> "$WORKFLOWS_TEST_LOG"
 exit "${FAKE_BUNDLE_EXIT:-0}"
 SH
-  chmod +x "$STUB/bundle"
+  as_fakes "$STUB/bundle"
   export PATH="$STUB:$PATH"
 }
 

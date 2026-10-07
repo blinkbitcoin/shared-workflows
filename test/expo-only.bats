@@ -30,7 +30,7 @@ setup() {
   export WORKFLOWS_TEST_CALLS="$CALLS"
   # A pnpm that records what it was asked to run.
   printf '#!/usr/bin/env bash\nprintf "pnpm %%s\\n" "$*" >> "$WORKFLOWS_TEST_CALLS"\n' > "$STUB/pnpm"
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   export PATH="$STUB:$PATH"
 }
 

@@ -41,7 +41,7 @@ if [ -n "$out" ]; then
 fi
 exit 0
 SH
-    chmod +x "$STUB/$tool"
+    as_fakes "$STUB/$tool"
   done
 }
 

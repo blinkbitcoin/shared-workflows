@@ -29,7 +29,7 @@ setup() {
 printf '%s\n' "pnpm $*" >> "$WORKFLOWS_TEST_LOG"
 exit "${WORKFLOWS_TEST_PNPM_EXIT:-0}"
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   export WORKFLOWS_TEST_LOG="$BATS_TEST_TMPDIR/calls.log"
   : > "$WORKFLOWS_TEST_LOG"
 }

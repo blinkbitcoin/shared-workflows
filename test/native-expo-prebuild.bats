@@ -20,7 +20,7 @@ setup() {
 printf 'pnpm %s | cwd=%s CI=%s EXPO_NO_GIT_STATUS=%s\n' "$*" "$PWD" "${CI:-}" "${EXPO_NO_GIT_STATUS:-}" >> "$CALLS"
 exit "${PNPM_STATUS:-0}"
 STUB
-  chmod +x "$bin/pnpm"
+  as_fakes "$bin/pnpm"
   export PATH="$bin:$PATH"
 }
 

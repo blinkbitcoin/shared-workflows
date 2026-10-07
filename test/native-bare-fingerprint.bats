@@ -119,7 +119,7 @@ fingerprint() { bash "$REPO_ROOT/scripts/native/bare/fingerprint.sh" "$@"; }
 [ "\$#" -le 2 ] || exit 3
 exec "$real" "\$@"
 SH
-  chmod +x "$bin/shasum"
+  as_fakes "$bin/shasum"
   PATH="$bin:$PATH" run fingerprint ios
   [ "$status" -eq 1 ] || fail "a failed hash passed: $output"
   contains "$output" "could not hash the ios files in" || fail "output: $output"

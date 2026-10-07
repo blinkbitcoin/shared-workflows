@@ -20,7 +20,7 @@ setup() {
 #!/usr/bin/env bash
 printf 'pnpm %s\n' "$*" >> "$CALLS"
 STUB
-  chmod +x "$bin/pnpm"
+  as_fakes "$bin/pnpm"
   export PATH="$bin:$PATH"
   export WORKING_DIRECTORY=.
   unset WORKFLOWS_NATIVE_STACK_INPUT

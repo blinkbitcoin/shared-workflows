@@ -34,7 +34,7 @@ setup() {
 @test "a hook that exists runs, from the consumer root" {
   mkdir -p "$CONSUMER/scripts/e2e"
   printf '#!/usr/bin/env bash\nprintf "hook ran in %%s\\n" "$PWD"\n' > "$CONSUMER/scripts/e2e/up.sh"
-  chmod +x "$CONSUMER/scripts/e2e/up.sh"
+  as_fakes "$CONSUMER/scripts/e2e/up.sh"
   HOOK="scripts/e2e/up.sh" run bash "$REPO_ROOT/scripts/e2e/run-hook.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "hook ran in" || fail "the hook did not run: $output"
@@ -52,7 +52,7 @@ setup() {
 @test "a hook that fails fails the step" {
   mkdir -p "$CONSUMER/scripts/e2e"
   printf '#!/usr/bin/env bash\nexit 3\n' > "$CONSUMER/scripts/e2e/bad.sh"
-  chmod +x "$CONSUMER/scripts/e2e/bad.sh"
+  as_fakes "$CONSUMER/scripts/e2e/bad.sh"
   HOOK="scripts/e2e/bad.sh" run bash "$REPO_ROOT/scripts/e2e/run-hook.sh"
   [ "$status" -ne 0 ] || fail "a failing hook must not report success: $output"
 }

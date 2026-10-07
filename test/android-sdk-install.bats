@@ -28,7 +28,7 @@ if [ "\$attempts" -le "\${WORKFLOWS_TEST_FAILURES:-0}" ]; then
 fi
 exit 0
 SH
-    chmod +x "$SDK/$bin_dir/sdkmanager"
+    as_fakes "$SDK/$bin_dir/sdkmanager"
   fi
   # The download cache the script purges between attempts, so a test can watch
   # it go.

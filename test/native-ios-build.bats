@@ -35,7 +35,7 @@ STUB
 #!/usr/bin/env bash
 printf 'sudo %s\n' "$*" >> "$CALLS"
 STUB
-  chmod +x "$bin/xcodebuild" "$bin/sudo"
+  as_fakes "$bin/xcodebuild" "$bin/sudo"
   # node for the stack resolver (packages/app-tooling/lib/native-stack.mjs),
   # which a runner always has; nothing else from this machine.
   export PATH="$bin:$(dirname "$(command -v node)"):/usr/bin:/bin"
@@ -47,7 +47,7 @@ formatter() {
 printf '$1\n' >> "\$CALLS"
 sed 's/^/$1: /'
 STUB
-  chmod +x "$bin/$1"
+  as_fakes "$bin/$1"
 }
 
 build() { run bash "$REPO_ROOT/scripts/native/ios-build.sh"; }

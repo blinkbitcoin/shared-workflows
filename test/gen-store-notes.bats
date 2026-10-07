@@ -52,7 +52,7 @@ printf '%s\n' "\${STORE_NOTES_LOCALES-unset}" > "$BATS_TEST_TMPDIR/locales.txt"
 printf '{}\n' > "\$out/store-notes.json"
 printf 'from the fake\n' > "\$out/store-notes.txt"
 SH
-  chmod +x "$STUB/node"
+  as_fakes "$STUB/node"
   export PATH="$STUB:$PATH"
 }
 

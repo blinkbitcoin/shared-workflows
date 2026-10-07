@@ -26,7 +26,7 @@ echo "npm notice a lifecycle line" >&2
 report='[{"filename":"blinkbitcoin-app-tooling-1.2.3.tgz"}]'
 printf '%s\n' "${FAKE_REPORT:-$report}"
 EOF
-  chmod +x "$bin/npm"
+  as_fakes "$bin/npm"
   export PATH="$bin:$PATH"
   package="$BATS_TEST_TMPDIR/package"
   mkdir -p "$package"

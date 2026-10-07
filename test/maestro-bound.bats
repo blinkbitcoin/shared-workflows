@@ -23,7 +23,7 @@ plant_timeout_stub() {
 echo "STUB TIMEOUT: $*"
 exit 124
 EOF
-  chmod +x "$fakebin/timeout"
+  as_fakes "$fakebin/timeout"
 }
 
 @test "sourcing exposes bounded_maestro" {

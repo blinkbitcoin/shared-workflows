@@ -57,7 +57,7 @@ case " $* " in
 esac
 echo "doctor ran: $*"
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   export PATH="$STUB:$PATH"
 }
 

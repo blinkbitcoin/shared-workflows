@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do [ "$1" = --output ] && out="$2"; shift; done
 printf '{"version":"2.1.0","runs":[]}' > "$out"
 exit "${FAKE_EXIT:-0}"
 STUB
-  chmod +x "$bin/semgrep"
+  as_fakes "$bin/semgrep"
 }
 
 bare_path() {

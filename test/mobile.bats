@@ -69,7 +69,7 @@ fake_expo() {
 } >> "$CALLS"
 mkdir -p android ios
 STUB
-  chmod +x "$file"
+  as_fakes "$file"
   printf '%s' "$file"
 }
 
@@ -83,7 +83,7 @@ printf "mobsfscan-cwd %s\n" "$PWD" >> "$CALLS"
 while [ $# -gt 0 ]; do [ "$1" = -o ] && printf %s "{\"version\":\"2.1.0\",\"runs\":[{\"tool\":{\"driver\":{\"name\":\"mobsfscan\"}},\"results\":[]}]}" > "$2"; shift; done'
   fi
   printf '#!/usr/bin/env bash\n%s\n' "$body" > "$bin/mobsfscan"
-  chmod +x "$bin/mobsfscan"
+  as_fakes "$bin/mobsfscan"
 }
 
 # A PATH with only what the runner needs besides the tool under test, so "the
@@ -180,7 +180,7 @@ mobile() { run bash "$REPO_ROOT/scripts/security/mobile.sh"; }
 @test "a prebuild that fails fails the job before mobsfscan runs" {
   fake_mobsfscan
   printf '#!/usr/bin/env bash\necho "config plugin threw" >&2\nexit 4\n' > "$bin/expo"
-  chmod +x "$bin/expo"
+  as_fakes "$bin/expo"
   export SECURITY_EXPO_BIN="$bin/expo"
   mobile
   [ "$status" -ne 0 ] || fail "a failed prebuild passed: $output"

@@ -29,7 +29,7 @@ setup() {
 #!/usr/bin/env bash
 printf '%s\n' "pnpm $*" >> "$WORKFLOWS_TEST_LOG"
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   PATH="$STUB:$PATH"
   export PATH WORKFLOWS_TEST_LOG="$BATS_TEST_TMPDIR/calls.log"
   : > "$WORKFLOWS_TEST_LOG"

@@ -37,7 +37,7 @@ case " $* " in
 esac
 exit 0
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   export PATH="$STUB:$PATH"
 }
 
@@ -71,7 +71,7 @@ bare_path() {
 printf 'ERR_PNPM_OUTDATED_LOCKFILE\n' >&2
 exit 1
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   printf '{}\n' > "$CONSUMER/package.json"
   : > "$CONSUMER/pnpm-lock.yaml"
   PATH="$STUB:$PATH" run bash "$REPO_ROOT/scripts/ci/pnpm-install.sh"
@@ -85,7 +85,7 @@ SH
 #!/usr/bin/env bash
 printf '%s|%s\n' "$PWD" "$*" >> "$WORKFLOWS_TEST_CALLS"
 SH
-  chmod +x "$STUB/pnpm"
+  as_fakes "$STUB/pnpm"
   cd "$BATS_TEST_TMPDIR"
   PATH="$STUB:$PATH" run bash "$SCRIPT"
   [ "$status" -eq 0 ] || fail "exited $status: $output"

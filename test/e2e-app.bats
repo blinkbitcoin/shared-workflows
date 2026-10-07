@@ -139,7 +139,7 @@ android/app/build/outputs/apk/debug/app-debug.apk" ] || fail "got: $output"
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin"
   printf '#!/usr/bin/env bash\nexit 65\n' > "$bin/xcodebuild"
-  chmod +x "$bin/xcodebuild"
+  as_fakes "$bin/xcodebuild"
   run env GITHUB_WORKSPACE="$FIXTURES/consumer-bare" WORKING_DIRECTORY=. PATH="$bin:$PATH" bash -c "
     source '$REPO_ROOT/scripts/lib/common.sh'
     source '$REPO_ROOT/scripts/lib/e2e-app.sh'

@@ -19,7 +19,7 @@ setup() {
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$ADB_LOG"
 STUB
-  chmod +x "$bin/adb"
+  as_fakes "$bin/adb"
   PATH="$bin:$PATH"
   export PATH
   : > "$ADB_LOG"

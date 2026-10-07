@@ -123,7 +123,7 @@ printf '%s\n' "$*" >> "$WORKFLOWS_TEST_CALLS"
 [ "${WORKFLOWS_TEST_FINGERPRINT_STATUS:-0}" = 0 ] || exit "$WORKFLOWS_TEST_FINGERPRINT_STATUS"
 printf '{"hash":"computed-%s"}' "${!#}"
 SH
-  chmod +x "$STUB/npx"
+  as_fakes "$STUB/npx"
   export PATH="$STUB:$PATH"
 }
 

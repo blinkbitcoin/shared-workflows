@@ -16,7 +16,7 @@ printf '%s\n' "$*" >> "$GH_LOG"
 [ "$3" != "${FAKE_FAILS:-}" ] || exit 1
 exit 0
 EOF
-  chmod +x "$bin/gh"
+  as_fakes "$bin/gh"
   export PATH="$bin:$PATH"
   export GH_TOKEN=fake GH_REPO=org/app TAG=v1.2.3
 }

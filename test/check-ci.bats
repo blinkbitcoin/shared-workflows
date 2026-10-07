@@ -17,7 +17,7 @@ setup() {
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$MISE_LOG"
 STUB
-  chmod +x "$bin/mise"
+  as_fakes "$bin/mise"
   PATH="$bin:$PATH"
   export PATH
   : > "$MISE_LOG"

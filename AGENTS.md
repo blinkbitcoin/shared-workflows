@@ -202,8 +202,13 @@ Every row is a make target; nothing here is run through a package manager.
   checked by the system one at a time across the whole machine (about 90 ms
   each, never in parallel), so a suite that writes many fakes queues behind
   itself, while a fake that is a link to an executable that already ran costs
-  nothing. The machine setup tests' fakes all link to
-  `test/fixtures/fake-tool`, which took their files from 49 s to 10 s.
+  nothing. So a fake a test writes is made with `stub_cmd`, or written and
+  then passed to `as_fakes` (`test/test_helper.bash`) instead of `chmod +x`:
+  either turns it into a link to one read-only runner. Keep `chmod +x` only
+  for a file the test later rewrites, copies or packs, which a link cannot
+  stand in for. The machine setup tests' fakes link to
+  `test/fixtures/fake-tool` the same way. Together these took the parallel
+  suite on a Mac from about four and a half minutes to under two.
 - **Every assertion ends in `|| fail "..."`** — bash 3.2 (macOS's
   `/bin/bash`) does not honour `errexit` for a bare `[[ ]]`, so an unguarded
   assertion cannot fail a test locally. `test/assertions-enforced.bats`

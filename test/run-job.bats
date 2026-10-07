@@ -40,7 +40,7 @@ fake_osv_scanner() {
     printf '#!/usr/bin/env bash\n'
     cat
   } > "$bin/osv-scanner"
-  chmod +x "$bin/osv-scanner"
+  as_fakes "$bin/osv-scanner"
   export PATH="$bin:$PATH"
 }
 

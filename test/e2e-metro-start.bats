@@ -17,7 +17,7 @@ setup() {
 #!/usr/bin/env bash
 printf 'pnpm %s | CI=%s\n' "$*" "${CI:-}"
 STUB
-  chmod +x "$bin/pnpm"
+  as_fakes "$bin/pnpm"
   export PATH="$bin:$PATH"
   unset WORKFLOWS_NATIVE_STACK_INPUT
 }

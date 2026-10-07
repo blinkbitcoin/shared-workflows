@@ -43,7 +43,7 @@ fi
 printf '%s' "${WORKFLOWS_TEST_CODE:-200}"
 exit 0
 SH
-  chmod +x "$STUB/curl"
+  as_fakes "$STUB/curl"
 }
 
 smoke() { run bash "$REPO_ROOT/scripts/ota/smoke.sh" "$@"; }

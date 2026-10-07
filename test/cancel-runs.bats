@@ -27,7 +27,7 @@ fi
 echo "unexpected gh invocation: $*" >&2
 exit 2
 EOF
-  chmod +x "$fakebin/gh"
+  as_fakes "$fakebin/gh"
   export PATH="$fakebin:$PATH"
   export GH_TOKEN=fake REPO=org/repo HEAD_SHA=deadbeef GITHUB_RUN_ID=999
 }

@@ -106,7 +106,7 @@ STUB
 printf 'dwarfdump %s\n' "$*" >> "$CALLS"
 if [ -d "$2" ]; then cat "$2/uuid.txt"; else cat "$2.uuid"; fi
 STUB
-  chmod +x "$bin/plutil" "$bin/lipo" "$bin/codesign" "$bin/dwarfdump"
+  as_fakes "$bin/plutil" "$bin/lipo" "$bin/codesign" "$bin/dwarfdump"
 }
 
 # A PATH with the ordinary tools the gate needs, less the ones named in $@.
