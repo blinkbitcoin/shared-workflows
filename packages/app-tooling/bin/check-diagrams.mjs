@@ -8,7 +8,7 @@
 // a grey error box — so the blocks are extracted here and fed to the same
 // mermaid parser GitHub uses, pinned to one version.
 //
-//   node scripts/check-diagrams.mjs [--all] [files...]
+//   check-diagrams [--all] [files...]
 //
 // With no arguments only docs that changed against origin/main are checked, so
 // the usual `make check-docs` costs nothing; `--all` checks the whole doc set
@@ -26,6 +26,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DOC_EXCLUDES, DOC_GLOBS, docFiles, fencedBlocks } from './check-docs-tables.mjs';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 // Pinned, not `@latest`: the parser is the thing under test, so a mermaid
 // release must be a reviewed commit here rather than a check that changes its
@@ -187,6 +188,7 @@ export function main(
     runner = mmdcRunner,
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   const all = argv.includes('--all');
   const explicit = argv.filter((a) => a !== '--all');
   // A flag this does not know, or a file it was named that is not there, used

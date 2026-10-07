@@ -29,6 +29,7 @@ import { ConfigError, readSection, testScriptsConfig } from '../lib/config.mjs';
 import { globFiles } from '../lib/glob-files.mjs';
 import { isProgram } from '../lib/is-program.mjs';
 import { main as siblings } from './check-test-siblings.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const USAGE = 'usage: test-scripts [--root DIR]';
 
@@ -102,6 +103,7 @@ export function main(
     },
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let root = cwd;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--root' && argv[i + 1]) root = path.resolve(cwd, argv[++i]);

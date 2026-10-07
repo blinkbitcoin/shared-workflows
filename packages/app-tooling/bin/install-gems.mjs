@@ -9,11 +9,13 @@
 // `pnpm install`, which is what puts this program in node_modules.
 import { spawnSync } from 'node:child_process';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const bundle = (args) => spawnSync('bundle', args, { stdio: 'inherit' }).status ?? 1;
 
 /** Command-line entry; returns the exit code. */
 export function main(argv = process.argv.slice(2), { env = process.env, log = console.log, error = console.error, run = bundle } = {}) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   if (argv.length > 0) {
     error(`install-gems: unexpected ${argv.join(' ')}: it takes no arguments`);
     return 1;

@@ -135,3 +135,12 @@ test('as a command it reads the report from pnpm on PATH, in --root', (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, new RegExp(`^disallowed license GPL-3.0: ${path.basename(bin)}\n`));
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line), licenses: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-licenses(?: |$)/m);
+  assert.deepEqual(err, []);
+});

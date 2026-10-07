@@ -137,3 +137,12 @@ test('as a program it prints the exports, and fails on a bad variable', () => {
   const bad = spawnSync(process.execPath, [BIN], { cwd: work, encoding: 'utf8', env: { PATH: process.env.PATH, APP_PORT_BASE: 'x' } });
   assert.equal(bad.status, 2);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +ports(?: |$)/m);
+  assert.deepEqual(err, []);
+});

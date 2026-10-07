@@ -24,6 +24,7 @@ import {
   SUMMARY_PATH,
 } from '../lib/badge.mjs';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 export { BADGE_DIR, SUMMARY_PATH };
 
@@ -69,6 +70,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   try {
     const status = parseStatus(argv);
     const { message, detail } = writeCoverageBadge({

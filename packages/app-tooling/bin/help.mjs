@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
 import { documentedTargets, expandIncludes } from '../lib/makefile.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** The help lines for a Makefile's text: sorted, one per target, padded to the longest name. */
 export function helpLines(text, { colour = false } = {}) {
@@ -61,6 +62,7 @@ export function main(
     isTTY = process.stdout.isTTY === true,
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

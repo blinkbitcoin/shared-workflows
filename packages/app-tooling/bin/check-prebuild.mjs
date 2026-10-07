@@ -37,6 +37,7 @@ import path from 'node:path';
 import { ConfigError, prebuildConfig, readSection } from '../lib/config.mjs';
 import { globFiles } from '../lib/glob-files.mjs';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const USAGE = 'usage: check-prebuild [--root DIR] [--keep]';
 
@@ -106,6 +107,7 @@ export function main(
     remove = (directory) => rmSync(directory, { recursive: true, force: true }),
   } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let root = cwd;
   let keep = false;
   for (let i = 0; i < argv.length; i++) {

@@ -79,3 +79,12 @@ test('runs as a program against a real directory, plain when piped', () => {
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /make help: no Makefile in /);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +help(?: |$)/m);
+  assert.deepEqual(err, []);
+});

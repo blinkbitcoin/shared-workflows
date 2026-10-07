@@ -16,12 +16,13 @@
 // so does every git source when the workflows pin no single commit (a tag such
 // as @v0 moves, so it allows none either).
 //
-// Usage: check-lockfile [--root DIR]   (default: the working directory)
+//   check-lockfile [--root DIR]   (default: the working directory)
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
 import { isCommit, SHARED, workflowsPin } from '../lib/pin.mjs';
 import { parseArgs, readCallers } from './fix-tooling-pin.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 const HASH = '[^,{}\\s]+';
 const REGISTRY = new RegExp(`^resolution: \\{integrity: ${HASH}(, tarball: https://registry\\.npmjs\\.org/${HASH})?\\}$`);
@@ -53,6 +54,7 @@ export function foreignResolutions(lockfile, pin) {
 
 /** Command-line entry; returns the exit code. */
 export function main(argv = [], { cwd = process.cwd(), log = console.log, error = console.error } = {}) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   const args = parseArgs(argv, cwd);
   if (args.error) {
     error(args.error.replace('fix-tooling-pin', 'check-lockfile'));

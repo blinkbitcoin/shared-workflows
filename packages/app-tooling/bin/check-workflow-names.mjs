@@ -17,6 +17,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** The top-level `name:` of a workflow file, unquoted, or null when it has none. */
 export function displayName(text) {
@@ -82,6 +83,7 @@ export function main(
   argv = process.argv.slice(2),
   { log = console.log, error = console.error, cwd = process.cwd(), read = readWorkflows } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, log)) return 0;
   let options;
   try {
     options = parseArgs(argv, cwd);

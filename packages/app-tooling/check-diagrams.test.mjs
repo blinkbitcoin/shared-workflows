@@ -488,3 +488,12 @@ test('as a command it passes a doc set without diagrams without starting the CLI
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line), runner: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +check-diagrams(?: |$)/m);
+  assert.deepEqual(err, []);
+});

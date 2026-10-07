@@ -148,3 +148,12 @@ test('runs as a program', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /no workflow calls shared-workflows/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line), exec: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +fix-tooling-pin(?: |$)/m);
+  assert.deepEqual(err, []);
+});

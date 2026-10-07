@@ -16,6 +16,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isProgram } from '../lib/is-program.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 export const DEFAULTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'doctor.requirements.json');
 const SECTIONS = ['tools', 'commands', 'env'];
@@ -145,6 +146,7 @@ export function main(
   argv = process.argv.slice(2),
   { cwd = process.cwd(), write = (text) => process.stdout.write(text), error = console.error, ...io } = {},
 ) {
+  if (answerHelp(argv, import.meta.url, (text) => write(`${text}\n`))) return 0;
   let root = cwd;
   if (argv.length === 2 && argv[0] === '--root') root = path.resolve(cwd, argv[1]);
   else if (argv.length > 0) {

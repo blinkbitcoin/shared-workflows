@@ -68,3 +68,12 @@ test('as a program it runs pnpm and copies the page', () => {
   assert.equal(readFileSync(path.join(work, 'args.txt'), 'utf8').trim(), 'exec expo export --platform web --dev');
   assert.ok(existsSync(path.join(work, 'dist', '404.html')));
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line), run: () => assert.fail('--help ran something') });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +build-web(?: |$)/m);
+  assert.deepEqual(err, []);
+});

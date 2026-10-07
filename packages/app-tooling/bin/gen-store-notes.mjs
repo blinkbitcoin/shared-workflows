@@ -1,19 +1,39 @@
 #!/usr/bin/env node
 // Store notes for a build, from a release-please body or from
-// conventional commit subjects.
+// conventional commit subjects, for the app in the working directory.
+//
+//   gen-store-notes (--from-body FILE | --from-commits [RANGE] | --tag TAG | --pr N | --preview) [options]
+//
+//   --from-body FILE      render from a release body (e.g. the GitHub release)
+//   --from-commits [R]    render from conventional commit subjects in range R
+//   --tag TAG             render from release TAG's body (gh release view), with --body-section
+//   --pr N                render from pull request N's body (gh pr view), with --body-section
+//   --preview             render from --tag or --pr when given, else $TAG or $PR,
+//                         else the commits since the last v* tag (what make gen-store-notes runs)
+//   --body-section        also take a verbatim "## Store notes" section from the body
+//   --locales a,b         locales to emit (default: $STORE_NOTES_LOCALES, else
+//                         the locale directories under fastlane/metadata/ios)
+//   --fastlane-directory D  the app's fastlane directory, relative to the working
+//                         directory, whose metadata/ios names the locales (default: fastlane)
+//   --include-changelog   append the full changelog (also $STORE_NOTES_INCLUDE_CHANGELOG)
+//   --out DIR|-           write store-notes.json + store-notes.txt into DIR, or - for stdout
+//   --help, -h            this text
+//
+//   gen-store-notes --from-body RELEASE_BODY.md --out dist/
+//   gen-store-notes --from-commits v1.2.0..HEAD --out -
+//   TAG=v1.4.0 gen-store-notes --preview
 //
 // The deterministic renderer is the product: it always runs, always produces
 // something a store will accept, and is what the optional LLM pass falls back
-// to. Nothing here talks to a store -- the lanes read `store-notes.json` and
-// `store-notes.txt` (see the consumer's fastlane/lanes/shared.rb `store_notes`).
+// to. That pass runs when $STORE_NOTES_LLM_PROVIDER is set, and
+// ./store-notes.prompt.md is added to its prompt when present. Nothing here
+// talks to a store -- the lanes read `store-notes.json` and `store-notes.txt`
+// (see the consumer's fastlane/lanes/shared.rb `store_notes`).
 //
 // It runs in the app's repository: the working directory is the app, where
 // its commits, its fastlane/metadata/ios locales and its optional
 // store-notes.prompt.md are. shared-workflows' scripts/release/gen-store-notes.sh runs
 // it from the workflows checkout; on a laptop it is `pnpm exec gen-store-notes`.
-//
-//   gen-store-notes --from-body RELEASE_BODY.md --out dist/
-//   gen-store-notes --from-commits v1.2.0..HEAD --out -
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -21,6 +41,7 @@ import { fileURLToPath } from 'node:url';
 import { isProgram } from '../lib/is-program.mjs';
 import { parseEffort, parseExtraParams } from '../lib/llm.mjs';
 import { rewriteNotes } from '../lib/store-notes-rewrite.mjs';
+import { answerHelp } from '../lib/usage.mjs';
 
 /** Store caps, in characters -- which is how both stores count. */
 export const STORE_LIMITS = { testflight: 4000, play: 500, appstore: 4000 };
@@ -384,33 +405,6 @@ export async function buildNotes({
 
 // ---------- CLI ----------
 
-export const USAGE = `usage: gen-store-notes (--from-body FILE | --from-commits [RANGE] | --tag TAG | --pr N | --preview) [options]
-
-Store notes for a build, from a release-please body or from
-conventional commit subjects, for the app in the working directory. Nothing
-here talks to a store: the lanes read store-notes.json and store-notes.txt
-(fastlane/lanes/shared.rb). An LLM pass runs when $STORE_NOTES_LLM_PROVIDER
-is set; ./store-notes.prompt.md is added to its prompt when present.
-
-  --from-body FILE      render from a release body (e.g. the GitHub release)
-  --from-commits [R]    render from conventional commit subjects in range R
-  --tag TAG             render from release TAG's body (gh release view), with --body-section
-  --pr N                render from pull request N's body (gh pr view), with --body-section
-  --preview             render from --tag or --pr when given, else $TAG or $PR,
-                        else the commits since the last v* tag (what make gen-store-notes runs)
-  --body-section        also take a verbatim "## Store notes" section from the body
-  --locales a,b         locales to emit (default: $STORE_NOTES_LOCALES, else
-                        the locale directories under fastlane/metadata/ios)
-  --fastlane-directory D  the app's fastlane directory, relative to the working
-                        directory, whose metadata/ios names the locales (default: fastlane)
-  --include-changelog   append the full changelog (also $STORE_NOTES_INCLUDE_CHANGELOG)
-  --out DIR|-           write store-notes.json + store-notes.txt into DIR, or - for stdout
-  --help                this text
-
-  gen-store-notes --from-body RELEASE_BODY.md --out dist/
-  gen-store-notes --from-commits v1.2.0..HEAD --out -
-  TAG=v1.4.0 gen-store-notes --preview`;
-
 /** The flags that each name where the changes come from; at most one may be given. */
 const SOURCE_FLAGS = ['--from-body', '--from-commits', '--tag', '--pr'];
 
@@ -566,10 +560,7 @@ export async function main(
 }
 
 async function run(argv, { cwd, env, write, error, rewrite, exec }) {
-  if (argv.includes('--help') || argv.includes('-h')) {
-    write(`${USAGE}\n`);
-    return;
-  }
+  if (answerHelp(argv, import.meta.url, (text) => write(`${text}\n`))) return;
   const options = resolveSource(parseArgs(argv), env);
   const locales = resolveLocales(options, env, cwd);
 

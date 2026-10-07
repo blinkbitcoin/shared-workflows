@@ -206,3 +206,12 @@ test('a directory with no app-tooling.json and no scripts reads as the defaults 
   assert.equal(main(['--root', dir], { log() {}, error: (line) => errors.push(line) }), 2);
   assert.match(errors[0], /no script module matches scripts\/\*\*\/\*\.mjs/);
 });
+
+test('main answers --help with its usage on stdout and exit 0, before anything else', async () => {
+  const out = [];
+  const err = [];
+  const code = await main(['--help'], { log: (line) => out.push(line), error: (line) => err.push(line) });
+  assert.equal(code, 0);
+  assert.match(out.join(''), /^ +test-scripts(?: |$)/m);
+  assert.deepEqual(err, []);
+});

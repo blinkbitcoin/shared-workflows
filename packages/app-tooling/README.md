@@ -25,6 +25,12 @@ Node 22.12 or later, for the whole package: an app's `metro.config.js` and
 `fingerprint.config.js` are CommonJS and `require()` the ES module presets,
 which node does without a flag from 22.12.
 
+Every program in `bin/` answers `--help` (or `-h`) with its usage on standard
+output and exits 0, before reading any other argument: `pnpm exec check-docs
+--help`. The text is the program's own header comment, read from its file, so
+the usage a terminal prints and the one in the source are the same text; the
+sections below show the common calls.
+
 ## The pinned tool table
 
 `versions.json` is the one place a tool version is written down. Everything

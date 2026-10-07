@@ -29,7 +29,6 @@ import {
   STORE_LIMITS,
   TRUNCATION_SUFFIX,
   toStoreNotes,
-  USAGE,
 } from './bin/gen-store-notes.mjs';
 import { maxTokensFor, renderPrompt, TESTFLIGHT_LIMIT } from './lib/store-notes-rewrite.mjs';
 
@@ -511,7 +510,8 @@ test('STORE_NOTES_LOCALES is honoured, below --locales and above discovery', () 
 
 test('--help prints the usage and exits 0 without rendering anything', () => {
   const stdout = execFileSync('node', [script, '--help'], { encoding: 'utf8' });
-  assert.match(stdout, /^usage: gen-store-notes /);
+  assert.match(stdout, /^Store notes for a build/);
+  assert.match(stdout, /^ {2}gen-store-notes \(--from-body FILE/m);
   assert.match(stdout, /--from-commits/);
   assert.match(stdout, /--locales/);
 });
@@ -593,7 +593,9 @@ const releaseBody = path.join(fixtures, 'release-body.md');
 test('main prints the usage for -h and exits 0', async () => {
   const { code, out, err } = await runMain(['-h']);
   assert.equal(code, 0);
-  assert.equal(out, `${USAGE}\n`);
+  assert.match(out, /^Store notes for a build/);
+  assert.match(out, /^ {2}--help, -h {12}this text$/m);
+  assert.match(out, /^ {2}TAG=v1.4.0 gen-store-notes --preview$/m);
   assert.deepEqual(err, []);
 });
 
