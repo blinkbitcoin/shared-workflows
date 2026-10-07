@@ -113,15 +113,36 @@ act_arg() { grep -A1 -x -- "$1" "$BATS_TEST_TMPDIR/act.args" | tail -1; }
 # The run lock of the scratch checkout, named as the script names it.
 lock_file() { printf '%s/runs/%s.pid' "$WORKFLOWS_ACT_CACHE" "$(cd "$work" && printf '%s' "$PWD" | cksum | cut -d' ' -f1)"; }
 # Hold TCP ports on 127.0.0.1 open until the test ends, all in one process;
-# returns once the last one listens.
+# returns once every one of them is busy.
+#
+# A port another process already listens on counts as held: busy is all a test
+# needs. Tests run in parallel and each derives its port range from its own
+# checkout path, so two ranges overlap about one time in ten; an unhandled
+# EADDRINUSE there used to kill the holder, and the test then waited out its
+# whole deadline for ports nobody held. The holder writes a file once every
+# port listens or is found taken, and a holder that dies fails the test at once.
 hold_port() {
-  node -e 'for (const p of process.argv.slice(1)) require("net").createServer().listen(Number(p), "127.0.0.1")' "$@" &
-  local holder=$! last="${*: -1}"
+  local ready="$BATS_TEST_TMPDIR/ports-held.$RANDOM"
+  node -e '
+    const net = require("net"), fs = require("fs");
+    const [ready, ...ports] = process.argv.slice(1);
+    let left = ports.length;
+    const settled = () => { if (--left === 0) fs.writeFileSync(ready, ""); };
+    for (const port of ports) {
+      const server = net.createServer();
+      server.on("error", (error) => {
+        if (error.code !== "EADDRINUSE") throw error;
+        settled();
+      });
+      server.listen(Number(port), "127.0.0.1", settled);
+    }' "$ready" "$@" &
+  local holder=$!
   background "$holder"
-  wait_for 60 "port(s) $* to be held" accepts "$last" || return
+  wait_for 60 "port(s) $* to be held" held_or_gone "$holder" "$ready" || return
+  [ -e "$ready" ] || fail "the port holder exited before holding port(s) $*"
 }
-# Something accepts a connection on 127.0.0.1:PORT.
-accepts() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+# The holder HOLDER has written READY, or is no longer running.
+held_or_gone() { [ -e "$2" ] || ! kill -0 "$1" 2>/dev/null; }
 # Every helper process a test starts is stopped by teardown, quietly.
 background() { disown "$1"; echo "$1" >> "$BATS_TEST_TMPDIR/background"; }
 teardown() {
@@ -240,6 +261,21 @@ teardown() {
   [ "$status" -ne 0 ] || fail "a busy port was accepted: $output"
   contains "$output" "40124 on 127.0.0.1 is in use" || fail "output: $output"
   [ ! -f "$BATS_TEST_TMPDIR/act.args" ] || fail "act was run anyway"
+}
+
+# Tests run in parallel and their port ranges can overlap, so a range may
+# already hold a port another test listens on. That port is busy, which is all
+# hold_port promises, and the rest are still held.
+@test "hold_port counts a port another process listens on as held, and holds the rest" {
+  first=$((40200 + RANDOM % 500))
+  hold_port "$first"
+  local started=$SECONDS
+  hold_port "$first" $((first + 1)) $((first + 2)) || fail "a port already in use failed the holder"
+  [ $((SECONDS - started)) -lt 30 ] || fail "took $((SECONDS - started))s: the holder died and the wait ran out"
+  local port
+  for port in "$first" $((first + 1)) $((first + 2)); do
+    (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null || fail "port $port is not held"
+  done
 }
 
 @test "no free port in the probed range is a clear failure" {
