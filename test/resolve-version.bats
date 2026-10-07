@@ -45,6 +45,17 @@ resolve() { run bash "$REPO_ROOT/scripts/release/resolve-version.sh" "$REPO"; }
   contains "$output" "APP_VERSION=2.5.0" || fail "no APP_VERSION=2.5.0 in: $output"
 }
 
+# Past a pipe's buffer, `| head -1` exiting after the first match killed grep
+# with SIGPIPE under pipefail. Kept under Linux's 128 KiB cap on one variable.
+@test "the first version in a title of thousands of versions wins" {
+  local title='chore(main): release 2.5.0' i
+  for ((i = 0; i < 15000; i++)); do title+=$'\n9.9.9'; done
+  commit
+  RELEASE_PR_TITLE="$title" resolve
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$output" "APP_VERSION=2.5.0" || fail "no APP_VERSION=2.5.0 in: $output"
+}
+
 # The gap this closes: on release-please's merge commit the tag does not exist
 # yet (it is created from that very push), a `push` event carries no
 # RELEASE_PR_TITLE, and the PR is closed so `autorelease: pending` finds

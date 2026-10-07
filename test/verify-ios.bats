@@ -57,7 +57,9 @@ setup() {
 #   plutil -extract <key.path> raw -o - <plist>   python3's plistlib, as plutil reads it
 #   lipo -archs <binary>                          the binary's text is its slice list
 #   codesign                                      $CODESIGN_VERIFY_EXIT and _OUT for
-#                                                 --verify, $CODESIGN_DETAILS for -dv,
+#                                                 --verify, $CODESIGN_DETAILS for -dv
+#                                                 (or the file $CODESIGN_DETAILS_FILE,
+#                                                 for more than one variable can hold),
 #                                                 $ENTITLEMENTS for --entitlements
 #   dwarfdump --uuid <path>                       <path>/uuid.txt for a dSYM, <path>.uuid
 #                                                 for a binary
@@ -92,7 +94,9 @@ STUB
 printf 'codesign %s\n' "$*" >> "$CALLS"
 case "$1" in
   --verify) printf '%s' "${CODESIGN_VERIFY_OUT:-}"; exit "${CODESIGN_VERIFY_EXIT:-0}" ;;
-  -dv) printf '%s\n' "${CODESIGN_DETAILS-Authority=Apple Distribution: Blink (TEAM123)
+  -dv)
+    if [ -n "${CODESIGN_DETAILS_FILE:-}" ]; then cat "$CODESIGN_DETAILS_FILE" >&2; exit 0; fi
+    printf '%s\n' "${CODESIGN_DETAILS-Authority=Apple Distribution: Blink (TEAM123)
 TeamIdentifier=TEAM123}" >&2 ;;
   -d) printf '%s' "${ENTITLEMENTS:-}" ;;
 esac
@@ -456,6 +460,21 @@ PY
   contains "$output" 'ok provisioning: embedded.mobileprovision present' || fail "$output"
   contains "$output" 'ok get-task-allow: no get-task-allow entitlement' || fail "$output"
   contains "$(cat "$CALLS")" "codesign --verify --strict --verbose=2 $app" || fail "$(cat "$CALLS")"
+}
+
+# Past a pipe's buffer, `| head -1` exiting after the first line killed the sed
+# still writing with SIGPIPE, and pipefail ended the gate with 141.
+@test "signing takes the first authority and team out of thousands of lines" {
+  local app i
+  app="$(fake_app)"
+  printf 'profile' > "$app/embedded.mobileprovision"
+  {
+    printf 'Authority=Apple Distribution: Blink (TEAM123)\nTeamIdentifier=TEAM123\n'
+    for ((i = 0; i < 15000; i++)); do printf 'Authority=Apple Root CA\nTeamIdentifier=OTHER\n'; done
+  } > "$BATS_TEST_TMPDIR/details.txt"
+  verify "${RELEASE[@]}" CODESIGN_DETAILS_FILE="$BATS_TEST_TMPDIR/details.txt" "$app"
+  [ "$status" -eq 0 ] || fail "status $status: $output"
+  contains "$output" 'ok signing: Apple Distribution: Blink (TEAM123) (team TEAM123)' || fail "$output"
 }
 
 @test "get-task-allow false passes, true fails" {

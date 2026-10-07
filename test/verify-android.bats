@@ -219,6 +219,20 @@ aab-version-code aab-version-name aab-matches-apk ota signature signing-cert'
   contains "$(cat "$CALLS")" "apksigner verify --print-certs $apk" || fail "$(cat "$CALLS")"
 }
 
+# Past a pipe's buffer, `| head -1` exiting after the first line killed the sed
+# still writing with SIGPIPE, and pipefail ended the gate with 141.
+@test "the AAB manifest's first package and version win over thousands of later ones" {
+  local i
+  artifacts
+  for ((i = 0; i < 15000; i++)); do
+    printf '<x android:versionCode="7" android:versionName="9.9.9" package="other.package"/>\n'
+  done >> "$BATS_TEST_TMPDIR/manifest.xml"
+  verify "${RELEASE[@]}" "$aab" "$apk"
+  contains "$output" "ok aab-manifest: $PACKAGE 1.2.3 (42)" || fail "$output"
+  contains "$output" 'ok aab-version-code: 42' || fail "$output"
+  contains "$output" 'ok aab-version-name: 1.2.3' || fail "$output"
+}
+
 @test "well-formed artifacts with OTA off pass, with no OTA rows past ota" {
   artifacts
   aab_manifest '/expo.modules.updates/d'

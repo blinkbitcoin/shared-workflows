@@ -58,7 +58,12 @@ cd "$dir"
 
 # `|| true` throughout: every one of these is an optional source, and with
 # `set -o pipefail` a no-match grep would otherwise abort the script.
-extract_version() { printf '%s' "${1:-}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true; }
+# The first match by bash's own regex, not `| head -1`: under pipefail, head
+# exiting early can kill the writer with SIGPIPE and fail the pipeline with 141.
+semver_pattern='[0-9]+\.[0-9]+\.[0-9]+'
+extract_version() {
+  if [[ "${1:-}" =~ $semver_pattern ]]; then printf '%s\n' "${BASH_REMATCH[0]}"; fi
+}
 
 version=""
 origin=""

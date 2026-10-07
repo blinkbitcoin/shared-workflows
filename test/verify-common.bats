@@ -421,6 +421,29 @@ EXPO_PUBLIC_WEB_DOMAIN' ] || fail "$output"
   [ "$output" = 'beta' ] || fail "spaced: $output"
 }
 
+# Past a pipe's buffer, `| head -1` exiting after the first line killed the
+# stage still writing with SIGPIPE, and pipefail failed the helper with 141.
+@test "the first match is taken out of thousands of matching lines, with status 0" {
+  local i
+  {
+    printf "package: name='first.package' versionCode='42' versionName='1.2.3'\nsdkVersion:'24'\n"
+    printf '{"expo-channel-name":"production"}\n'
+    for ((i = 0; i < 15000; i++)); do
+      printf "package: name='other.package' versionCode='7'\nsdkVersion:'99'\n"
+      printf '{"expo-channel-name":"other"}\n'
+    done
+  } > "$dir/many.txt"
+  lib "vc_badging_field \"\$(cat '$dir/many.txt')\" name"
+  [ "$status" -eq 0 ] || fail "badging field exited $status"
+  [ "$output" = 'first.package' ] || fail "badging field: $output"
+  lib "vc_badging_line_value \"\$(cat '$dir/many.txt')\" sdkVersion"
+  [ "$status" -eq 0 ] || fail "badging line exited $status"
+  [ "$output" = '24' ] || fail "badging line: $output"
+  lib "vc_json_string_field \"\$(cat '$dir/many.txt')\" expo-channel-name"
+  [ "$status" -eq 0 ] || fail "JSON field exited $status"
+  [ "$output" = 'production' ] || fail "JSON field: $output"
+}
+
 @test "XML entities are undone before the JSON is parsed, &amp; last" {
   local escaped='{&quot;expo-channel-name&quot;:&quot;production&quot;}'
   lib "vc_xml_unescape '$escaped'"
