@@ -50,6 +50,23 @@ exports is there for its own tests, and may change in any release.
 `package.test.mjs` holds each module's exports to this table, so a name becomes
 public only by adding it here.
 
+## Verifying a release
+
+Each version on GitHub Packages carries a build provenance attestation:
+`self-release.yml` packs the package once, attests that tarball with
+`actions/attest-build-provenance`, and publishes the same tarball, so the
+attestation names the exact bytes a registry install receives. (`npm publish
+--provenance` signs only for registry.npmjs.org, hence the attestation.) Fetch
+the tarball and check it was built by this repository's release workflow:
+
+```sh
+npm pack @blinkbitcoin/app-tooling@<version>   # needs the @blinkbitcoin registry in .npmrc
+gh attestation verify blinkbitcoin-app-tooling-<version>.tgz --repo blinkbitcoin/shared-workflows
+```
+
+A git dependency at the workflows pin is not a tarball and has no attestation;
+the commit it names is what you trust there.
+
 ## The pinned tool table
 
 `versions.json` is the one place a tool version is written down. Everything

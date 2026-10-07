@@ -270,9 +270,12 @@ Every row is a make target; nothing here is run through a package manager.
   `main`, so merging one never leaves the other conflicting. Each rebuild is a
   force push, which dismisses an approval: approve a release PR right
   before merging it. The `publish-app-tooling` job runs the package's suites
-  (`make test-package`, `make test-fastlane`) again before `npm publish`, so a
-  merge that skipped or bypassed the release PR's CI still cannot publish
-  untested code.
+  (`make test-package`, `make test-fastlane`) again, so a merge that skipped or
+  bypassed the release PR's CI still cannot publish untested code; it then packs
+  the package once (`scripts/self/pack-app-tooling.sh`), attests that tarball
+  with `actions/attest-build-provenance`, and publishes that same tarball to
+  GitHub Packages. `npm publish --provenance` is not an option: it signs only
+  for registry.npmjs.org.
 
   The chain, end to end:
 
@@ -296,7 +299,7 @@ Every row is a make target; nothing here is run through a package manager.
     rel->>rel: store-notes job runs pr-store-notes.yml against the template, dry run, from that commit
     rel->>tags: major-tag job moves v0 and the minor tag to that commit, only after that dry run passed
     rel->>rel: publish-app-tooling job runs make test-package and make test-fastlane, when paths-released names the package
-    rel->>tags: publish-app-tooling job publishes the npm package, only after those tests passed
+    rel->>tags: publish-app-tooling job packs the npm package, attests the tarball, publishes that tarball, only after those tests passed
     rel->>pr: the other component's open release PR is rebuilt on the new main, manifest included
   ```
 
