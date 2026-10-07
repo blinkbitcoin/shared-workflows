@@ -357,7 +357,11 @@ STUB
     # started ignoring: perl puts the default back, as a terminal has it.
     perl -e '$SIG{INT} = "DEFAULT"; exec @ARGV' bash "$SCRIPT" 2>/dev/null &
     pid=$!
-    for i in $(seq 1 100); do [ -f "$BATS_TEST_TMPDIR/act.started" ] && break; sleep 0.1; done
+    # The script reaches act in under a second on a quiet machine, but in 5 to
+    # 9 seconds beside a parallel bats suite, as under `make check`, which a
+    # 10-second bound failed. The loop stops once act has started, so only a
+    # run that is really broken waits out the 60 seconds.
+    for i in $(seq 1 600); do [ -f "$BATS_TEST_TMPDIR/act.started" ] && break; sleep 0.1; done
     [ -f "$BATS_TEST_TMPDIR/act.started" ] || fail "$signal: act never started"
     # A terminal's Ctrl-C or hang-up reaches the script and act together.
     kill -"$signal" "$pid" "$(pgrep -P "$pid")"
