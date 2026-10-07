@@ -7,11 +7,15 @@ inputs:
   sha256:
     description: SHA-256 of that version's release archive (empty for the pinned version, whose checksum scripts/lib/versions.sh holds; required for any other)
     default: ''
+  save-cache:
+    description: Save the CLI to the Actions cache on a miss ('true' or 'false'). test-e2e.yml passes 'false' off the default branch, whose cache scope a branch's entries would only crowd
+    default: 'true'
 runs:
   using: composite
   steps:
-    - name: Cache Maestro
-      uses: actions/cache@v6
+    - name: Restore Maestro
+      id: cache
+      uses: actions/cache/restore@v6
       with:
         # The CLI only. `tests/` and `logs/` are per-run output the Maestro CLI
         # writes under its own home; cached, they grow run over run and every
@@ -33,3 +37,14 @@ runs:
         MAESTRO_VERSION: ${{ inputs.version }}
         MAESTRO_SHA256: ${{ inputs.sha256 }}
       run: bash "${{ github.action_path }}/../../../scripts/ci/maestro-install.sh"
+    # Saved here rather than in a post-job step: what it holds is the
+    # installed CLI, final once the install has run.
+    - name: Save Maestro
+      if: ${{ inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v6
+      with:
+        path: |
+          ~/.maestro
+          !~/.maestro/tests
+          !~/.maestro/logs
+        key: maestro-${{ runner.os }}-${{ inputs.version }}-v2
