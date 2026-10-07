@@ -22,7 +22,7 @@ section="${SECTION:-}"
   die "the dry run's section output is empty: pr-store-notes.yml rendered no $title section, or its output is no longer wired to the job"
 
 section_markers "$title"
-first="$(printf '%s\n' "$section" | head -1)"
+first="${section%%$'\n'*}"
 last="$(printf '%s\n' "$section" | tail -1)"
 [ "$first" = "$begin_marker" ] ||
   die "the section does not open with '$begin_marker' (first line: '$first')"

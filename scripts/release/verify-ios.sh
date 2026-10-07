@@ -172,8 +172,8 @@ else
     vc_tool_missing signing codesign
   elif codesign --verify --strict --verbose=2 "$app" >"$work/codesign.txt" 2>&1; then
     details="$(codesign -dv --verbose=4 "$app" 2>&1 || true)"
-    team="$(printf '%s\n' "$details" | sed -n 's/^TeamIdentifier=\(.*\)$/\1/p' | head -1)"
-    authority="$(printf '%s\n' "$details" | sed -n 's/^Authority=\(.*\)$/\1/p' | head -1)"
+    team="$(sed -n '/^TeamIdentifier=\(.*\)$/{s//\1/p;q;}' <<<"$details")"
+    authority="$(sed -n '/^Authority=\(.*\)$/{s//\1/p;q;}' <<<"$details")"
     if [ -z "$team" ] || [ "$team" = 'not set' ]; then
       vc_fail signing "signed without a team identifier (ad-hoc?): ${authority:-no authority}"
     else
