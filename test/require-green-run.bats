@@ -32,6 +32,7 @@ green() { run bash "$REPO_ROOT/scripts/release/require-green-run.sh" cd-internal
   green
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "run 11 for abc123 succeeded" || fail "unexpected message: $output"
+  traced "$output" "Wait for cd-internal.yml to succeed on abc123" || fail "the wait was not timed: $output"
 }
 
 @test "polls while the run is still going, then passes" {

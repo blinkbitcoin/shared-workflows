@@ -31,3 +31,14 @@ EOF
   [ "$status" -eq 99 ]
   [[ "$output" == *"sudo must not be invoked"* ]] || fail "assertion failed; output: $output"
 }
+
+@test "on a Linux runner the cleanup runs in one timed group, between two disk reports" {
+  stub_cmd sudo
+  stub_cmd df 'echo "disk report"'
+  GITHUB_ACTIONS=true RUNNER_OS=Linux run bash "$REPO_ROOT/scripts/ci/free-disk.sh"
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  contains "$(stub_calls sudo)" "rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup" || fail "sudo calls: $(stub_calls sudo)"
+  [ "$(stub_calls df)" = "-h /
+-h /" ] || fail "df calls: $(stub_calls df)"
+  traced "$output" "Free disk space" || fail "the cleanup was not timed: $output"
+}

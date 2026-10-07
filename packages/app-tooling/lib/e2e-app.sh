@@ -50,12 +50,17 @@ workflows_ios_scheme() { workflows_app_config ios-scheme; }
 
 # workflows_run_hook VAR_NAME - run a consumer-relative hook script when the variable
 # names one. Missing file is fatal: a silently skipped setup hook produces a
-# confusing suite failure later.
+# confusing suite failure later. The hook runs in a timed log group, closed
+# whether it passes or fails (the teardown hook's failure is tolerated, and the
+# phase after it would otherwise be timed from the hook's start).
 workflows_run_hook() {
-  local var="$1" path="${!1:-}" root
+  local var="$1" path="${!1:-}" root status=0
   [ -n "$path" ] || return 0
   root="$(consumer_root)"
   [ -f "$root/$path" ] || die "$var points at a missing file: $root/$path"
+  group "Run $path ($var)"
   log "running $var: $path"
-  (cd "$root" && bash "$path")
+  (cd "$root" && bash "$path") || status=$?
+  endgroup
+  return "$status"
 }

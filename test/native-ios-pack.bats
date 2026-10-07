@@ -28,6 +28,7 @@ built_app() {
   run bash "$REPO_ROOT/scripts/native/ios-pack.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   tar_path="$WORKFLOWS_OUT/Demo.app.tar"
+  traced "$output" "Pack the simulator app" || fail "the packing was not timed: $output"
   [ -f "$tar_path" ] || fail "no tar at $tar_path"
   contains "$(cat "$GITHUB_OUTPUT")" "app_tar=$tar_path" || fail "output: $(cat "$GITHUB_OUTPUT")"
   listing="$(tar -tvf "$tar_path")"

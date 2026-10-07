@@ -640,5 +640,6 @@ body_of() { sed -n 's/^release create [^ ]* //p' "$WORKFLOWS_TEST_LOG"; }
   : > "$summary"
   TAG=v1.2.3 GITHUB_STEP_SUMMARY="$summary" release create-prerelease
   [ "$status" -eq 0 ] || fail "exited $status: $output"
-  [ ! -s "$summary" ] || fail "wrote a summary for an unmarked release: $(cat "$summary")"
+  [ -z "$(summary_beyond_timings "$summary")" ] || fail "wrote a summary for an unmarked release: $(cat "$summary")"
+  traced "$output" "upload 2 assets to v1.2.3" || fail "the upload was not timed: $output"
 }

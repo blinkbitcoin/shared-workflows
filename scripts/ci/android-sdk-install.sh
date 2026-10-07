@@ -40,6 +40,7 @@ for candidate in "$sdk_root"/cmdline-tools/latest/bin/sdkmanager \
 done
 [ -n "$sdkmanager" ] || die "no sdkmanager under $sdk_root (looked in cmdline-tools/*/bin and tools/bin)"
 
+group "Install Android SDK packages ($*)"
 attempt=0
 while :; do
   # --channel=0 (stable) is what the action asks for, so the revision resolved
@@ -49,6 +50,7 @@ while :; do
   # reports the archive it could not read.
   if "$sdkmanager" --install "$@" --channel=0 < /dev/null > /dev/null; then
     printf 'Installed: %s\n' "$*"
+    endgroup
     exit 0
   fi
 

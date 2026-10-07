@@ -16,6 +16,7 @@ if [ "${WORKFLOWS_FORCE_RUNNER_SCRIPTS:-}" != "1" ] &&
   exit 0
 fi
 
+group "Free disk space"
 df -h /
 
 sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup
@@ -32,3 +33,4 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 df -h /
+endgroup

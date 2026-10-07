@@ -88,13 +88,18 @@ case "${1:-}" in
     gh_output udid "$udid"
     gh_env WORKFLOWS_SIM_UDID "$udid"
     # Already-booted is the normal case here, hence the tolerated failure.
+    group "Boot simulator"
     xcrun simctl boot "$udid" || true
+    endgroup
     ;;
   wait)
+    group "Wait for the simulator to finish booting"
     xcrun simctl bootstatus "$sim_udid" -b
+    endgroup
     ;;
   install)
     src="${2:?usage: ios-simulator.sh install <app.tar|App.app>}"
+    group "Install app on simulator"
     if [ -d "$src" ]; then
       app="$src"
     else
@@ -109,6 +114,7 @@ case "${1:-}" in
     xcrun simctl install "$sim_udid" "$app"
     log "installed $app"
     approve_url_schemes "$app"
+    endgroup
     ;;
   record)
     case "${2:-}" in

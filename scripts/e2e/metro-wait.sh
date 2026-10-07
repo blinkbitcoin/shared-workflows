@@ -44,10 +44,12 @@ metro_ready() {
   return 1
 }
 
+group "Wait for Metro to be ready"
 if ! wait_until "$wait_seconds" 2 metro_ready; then
   tail_metro_log
   die "Metro did not report packager-status:running within ${wait_seconds}s (gave up after ${wait_until_elapsed}s)"
 fi
+endgroup
 log "Metro is ready (after ${wait_until_elapsed}s)"
 
 # Prewarming only pays off if it warms *the* graph the app then asks for. Metro

@@ -11,5 +11,7 @@ browsers="${PLAYWRIGHT_BROWSERS:-chromium}"
 root="$(consumer_root)"
 cd "$root"
 
+group "Install Playwright browsers ($browsers)"
 # shellcheck disable=SC2086 # PLAYWRIGHT_BROWSERS is a space-separated name list, word-splitting is intended
 pnpm exec playwright install $browsers --with-deps
+endgroup

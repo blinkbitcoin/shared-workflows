@@ -137,3 +137,26 @@ log even though the artifact only carries the final attempt's files.
 own HTML report, traces and screenshots) as `playwright-report`; open
 `index.html` locally (`npx playwright show-report <dir>`) for the interactive
 trace viewer — it's more useful than the individual PNGs for a web failure.
+
+## Where a job spends its time
+
+A release or E2E job runs for an hour or more, and the step list only says
+which step was slow, not which part of it. So every long phase inside the
+scripts (a pod install, an Xcode or Gradle build, booting a simulator,
+installing the app, waiting for Metro or for the app's first bundle request, a
+Maestro suite, a store upload) runs in a log group that times itself. For each
+one the job shows:
+
+- a **Timings** table in the job summary, one row per phase with its duration
+  (`| Pod install | 4m 12s |`), under each step that ran one;
+- a line in the log, after the group closes, in a fixed format:
+  `trace: Pod install 252.3s` (the phase's name, then seconds to a tenth).
+
+The `trace:` lines are there to be read by a program: `trace-run`, coming in
+`@blinkbitcoin/app-tooling`, reads them from a run's logs and puts every job's
+phases side by side. A phase that failed has no `trace:` line and no row: its
+group stays open, so the log ends inside the phase that failed.
+
+The helpers are `group` and `endgroup` in `scripts/lib/common.sh`; a new long
+phase in a script is wrapped in them, and the script's test asserts its
+`trace:` line (`traced` in `test/test_helper.bash`).

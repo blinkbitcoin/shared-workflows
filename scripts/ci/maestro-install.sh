@@ -56,6 +56,7 @@ installed_version() {
 }
 
 if [ "$(installed_version || true)" != "$MAESTRO_VERSION" ]; then
+  group "Download and install Maestro $MAESTRO_VERSION"
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
   url="https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
@@ -71,6 +72,7 @@ if [ "$(installed_version || true)" != "$MAESTRO_VERSION" ]; then
   mkdir -p "$home"
   rm -rf "${home:?}/bin" "${home:?}/lib"
   mv "$work/maestro/bin" "$work/maestro/lib" "$home/"
+  endgroup
 fi
 
 [ -x "$bin" ] || die "maestro install failed: $bin not found"

@@ -34,6 +34,7 @@ fetch() { run bash "$REPO_ROOT/scripts/release/release-assets-fetch.sh" "$@"; }
     || fail "unexpected gh argv: $(cat "$GH_LOG")"
   [ -s "$dir/app-release.aab" ] || fail "the asset did not land in $dir"
   contains "$output" "release v1.2.3: app-release.aab into $dir" || fail "the download was not reported: $output"
+  traced "$output" "Download *.aab from release v1.2.3" || fail "the download was not timed: $output"
 }
 
 @test "a directory that does not exist yet is created" {

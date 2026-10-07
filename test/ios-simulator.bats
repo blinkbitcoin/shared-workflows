@@ -114,6 +114,7 @@ only_path() {
   grep -qx "udid=OLD-1" "$GITHUB_OUTPUT" || fail "no udid step output: $(cat "$GITHUB_OUTPUT")"
   grep -qx "WORKFLOWS_SIM_UDID=OLD-1" "$GITHUB_ENV" || fail "no WORKFLOWS_SIM_UDID for later steps: $(cat "$GITHUB_ENV")"
   grep -qx "simctl boot OLD-1" "$CALLS" || fail "the chosen simulator was not booted: $(cat "$CALLS")"
+  traced "$output" "Boot simulator" || fail "the boot was not timed: $output"
 }
 
 @test "with none booted, pick prefers an iPhone 15 or later over an older one" {
@@ -177,6 +178,7 @@ only_path() {
   run sim wait
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
   grep -qx "simctl bootstatus PICKED-1 -b" "$CALLS" || fail "calls: $(cat "$CALLS")"
+  traced "$output" "Wait for the simulator to finish booting" || fail "the wait was not timed: $output"
 }
 
 @test "wait fails when the simulator never finishes booting" {
@@ -239,6 +241,7 @@ only_path() {
   [ "$(grep -c schemeapproval "$CALLS")" -eq 3 ] || fail "expected 3 approvals: $(cat "$CALLS")"
   contains "$output" "pre-approved URL schemes for com.example.app: myapp com.example.app exp+my-app" ||
     fail "output: $output"
+  traced "$output" "Install app on simulator" || fail "the install was not timed: $output"
 }
 
 # Approving before installing would be approving for an app LaunchServices has

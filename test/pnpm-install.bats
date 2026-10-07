@@ -60,6 +60,7 @@ bare_path() {
   : > "$CONSUMER/pnpm-lock.yaml"
   run bash "$REPO_ROOT/scripts/ci/pnpm-install.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
+  traced "$output" "Install dependencies (pnpm install)" || fail "the install was not timed: $output"
   run cat "$CALLS"
   contains "$output" "install --frozen-lockfile" || fail "not a frozen install: $output"
 }

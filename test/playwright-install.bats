@@ -32,4 +32,5 @@ EOF
     run bash "$REPO_ROOT/scripts/web/playwright-install.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *$'chromium\nfirefox\n--with-deps'* ]] || fail "assertion failed; output: $output"
+  traced "$output" "Install Playwright browsers (chromium firefox)" || fail "the install was not timed: $output"
 }

@@ -336,7 +336,7 @@ Fixed
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   [ "$(edits)" -eq 1 ] || fail "expected one edit: $(cat "$WORKFLOWS_TEST_LOG")"
   [ "$(output_value section "$GITHUB_OUTPUT")" = "$EXPECTED_SECTION" ] || fail "no section output: $(cat "$GITHUB_OUTPUT")"
-  [ ! -s "$GITHUB_STEP_SUMMARY" ] || fail "a real run wrote the dry-run summary: $(cat "$GITHUB_STEP_SUMMARY")"
+  [ -z "$(summary_beyond_timings "$GITHUB_STEP_SUMMARY")" ] || fail "a real run wrote the dry-run summary: $(cat "$GITHUB_STEP_SUMMARY")"
   not_contains "$output" "dry run" || fail "a real run calls itself a dry run: $output"
 }
 

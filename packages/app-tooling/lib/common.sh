@@ -66,8 +66,83 @@ wait_until() {
     if [ "$remaining" -lt "$interval" ]; then sleep "$remaining"; else sleep "$interval"; fi
   done
 }
-group() { printf '::group::%s\n' "$*"; }
-endgroup() { printf '::endgroup::\n'; }
+# group NAME / endgroup - fold a phase of the log into a collapsible group, and
+# say how long it took.
+#
+# A release or E2E job runs for hours, and without this nothing recorded where.
+# group prints `::group::NAME` and starts the phase's clock; endgroup prints
+# `::endgroup::`, then on stderr one line in the format trace-run (in
+# @blinkbitcoin/app-tooling) reads back from a job's log:
+#
+#   trace: NAME 252.3s
+#
+# and, when GITHUB_STEP_SUMMARY is set, a row of a Timings table in the step's
+# summary (the heading and table header written once, and again only when
+# something else was written to the summary since the last row). With no
+# summary file nothing more is printed, so stdout carries only the two markers.
+#
+# GitHub does not nest groups, so a group opened while another is open closes
+# and times that one first. endgroup with no group open prints its marker and
+# nothing else. A script that fails inside a group leaves it open and untimed,
+# which is the point: the log ends in the phase that failed.
+#
+# Both print to stdout, so neither belongs in a function whose output a caller
+# captures with $(...): the markers would become part of the value.
+#
+# The clock is EPOCHREALTIME (bash 5, microseconds; its decimal separator follows
+# the locale, so only its digits are kept), else bash's own SECONDS, whole
+# seconds, on bash 3.2 (macOS's /bin/bash). Neither forks, and neither needs a
+# date on PATH: a test that narrows PATH to a few tools still runs the script.
+group() {
+  [ -z "${workflows_group_name:-}" ] || endgroup
+  printf '::group::%s\n' "$*"
+  workflows_group_name="$*"
+  workflows_group_clock
+  workflows_group_started="$workflows_group_now"
+}
+endgroup() {
+  printf '::endgroup::\n'
+  [ -n "${workflows_group_name:-}" ] || return 0
+  local name="$workflows_group_name" tenths seconds last
+  workflows_group_name=""
+  workflows_group_clock
+  # Microseconds to tenths of a second, rounded to the nearest.
+  tenths=$(( (10#$workflows_group_now - 10#$workflows_group_started + 50000) / 100000 ))
+  [ "$tenths" -ge 0 ] || tenths=0
+  printf 'trace: %s %d.%ds\n' "$name" "$((tenths / 10))" "$((tenths % 10))" >&2
+  [ -n "${GITHUB_STEP_SUMMARY:-}" ] || return 0
+  # The heading and table header once, while the table is the last thing in the
+  # file. A row written after something else would join that thing's table (or
+  # be no table at all), so then the Timings table starts again.
+  last="$(tail -n 1 "$GITHUB_STEP_SUMMARY" 2>/dev/null)" || last=""
+  if ! [[ "$last" =~ $workflows_timings_row ]]; then
+    gh_summary '' '### Timings' '' '| Phase | Time |' '|---|---|'
+  fi
+  seconds=$(( (tenths + 5) / 10 ))
+  gh_summary "| ${name//|/\\|} | $(workflows_human_duration "$seconds") |"
+}
+# A line of the Timings table endgroup writes: its separator, or a row.
+workflows_timings_row='^(\|---\|---\||\| .+ \| ([0-9]+h )?([0-9]+m )?[0-9]+s \|)$'
+# Sets workflows_group_now to the time in microseconds, as digits only.
+workflows_group_clock() {
+  local now="${EPOCHREALTIME:-}"
+  if [ -n "$now" ]; then
+    workflows_group_now="${now//[!0-9]/}"
+  else
+    workflows_group_now="${SECONDS}000000"
+  fi
+}
+# workflows_human_duration SECONDS - 42s, 4m 12s, 1h 3m 7s.
+workflows_human_duration() {
+  local total="$1"
+  if [ "$total" -lt 60 ]; then
+    printf '%ds\n' "$total"
+  elif [ "$total" -lt 3600 ]; then
+    printf '%dm %ds\n' "$((total / 60))" "$((total % 60))"
+  else
+    printf '%dh %dm %ds\n' "$((total / 3600))" "$((total % 3600 / 60))" "$((total % 60))"
+  fi
+}
 # retry_command ATTEMPTS DELAY_SECONDS -- COMMAND [ARGUMENT...] - run COMMAND,
 # and run it again after DELAY_SECONDS while it exits non-zero, ATTEMPTS times
 # in all. Returns 0 on the first success, else the last attempt's exit status.

@@ -72,6 +72,7 @@ dispatch_once() {
   return 0
 }
 
+group "Wait for $workflow to succeed on $sha"
 while :; do
   # `|| true`: a transient API error must not fail the gate on the first blip;
   # the loop retries and the overall timeout is the real bound.
@@ -112,6 +113,7 @@ while :; do
       case "$conclusion" in
         success)
           log "$workflow run $run_id for $sha succeeded"
+          endgroup
           gh_output run-id "$run_id"
           exit 0
           ;;

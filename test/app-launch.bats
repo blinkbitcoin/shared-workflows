@@ -84,6 +84,7 @@ launch() { run bash "$REPO_ROOT/scripts/e2e/app-launch.sh" "$@"; }
   wait
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
   contains "$output" "app is up" || fail "output: $output"
+  traced "$output" "Wait for the app to request its bundle" || fail "the wait was not timed: $output"
 }
 
 # Metro a developer started in their own terminal writes no metro.log, but it is

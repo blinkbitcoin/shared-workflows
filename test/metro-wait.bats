@@ -144,6 +144,8 @@ elapsed_in() { sed -n 's/.*Metro is ready (after \([0-9][0-9]*\)s).*/\1/p' <<<"$
   # The loop-count message said 2s for the first poll; no time has passed.
   [ -n "$elapsed" ] && [ "$elapsed" -le 1 ] || fail "expected about 0s: $output"
   [ "$(status_polls)" -eq 1 ] || fail "polled more than once: $(cat "$WORKFLOWS_TEST_LOG")"
+  traced "$output" "Wait for Metro to be ready" || fail "the wait was not timed: $output"
+  traced "$output" "prewarming the ios bundle" || fail "the prewarm was not timed: $output"
 }
 
 @test "a Metro ready after a few polls reports the seconds really waited" {

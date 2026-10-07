@@ -14,7 +14,7 @@ rest explain the parts of it that surprise people.
 | Run the security scanners, read their verdict, or turn one off | [security.md](security.md) |
 | Know why a CI, release or tooling choice was made | [decisions/README.md](decisions/README.md) |
 | Work out why a cache missed, or what invalidates one | [cache-keys.md](cache-keys.md) |
-| Read what a failed (or passing) E2E run left behind | [forensics.md](forensics.md) |
+| Read what a failed (or passing) E2E run left behind, or where a job spent its time | [forensics.md](forensics.md) |
 | Choose a runner label, or understand the macOS bill | [runners.md](runners.md) |
 
 ## One line each
@@ -28,7 +28,7 @@ rest explain the parts of it that surprise people.
 | [security.md](security.md) | What `check-security` runs, the nine scanners, where findings and the verdict go, every setting and its environment twin, the LLM jobs, suppression, known limits |
 | [decisions/README.md](decisions/README.md) | The architecture decisions behind the CI, release and tooling half of the template, kept under their original numbers |
 | [cache-keys.md](cache-keys.md) | Each cache's key shape, what invalidates it, and the restore/save split |
-| [forensics.md](forensics.md) | The artifacts an E2E job uploads on iOS and Android, what is in each, and retention |
+| [forensics.md](forensics.md) | The artifacts an E2E job uploads on iOS and Android, what is in each, and retention; the Timings table and `trace:` lines every job leaves |
 | [runners.md](runners.md) | Runner labels, macOS billing at 10x, self-hosted notes, KVM and disk pressure |
 
 ## Elsewhere in the repo
