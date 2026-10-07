@@ -87,21 +87,14 @@ toggle-huawei|setup|cred-huawei,huawei-listing,huawei-app-signing
 huawei-testers|consoles|huawei-app-record
 "
 
-# Associative arrays need bash 4+, and macOS ships bash 3.2 as /bin/bash, so
-# owner/needs lookups go through awk against STEPS_TABLE instead of a map.
+# The ids in table order. Associative arrays need bash 4+, and macOS ships
+# bash 3.2 as /bin/bash, so owner and needs are read from STEPS_TABLE itself
+# (steps_json) rather than a map.
 STEP_IDS=()
 while IFS='|' read -r id _owner _needs; do
   [ -n "$id" ] || continue
   STEP_IDS+=("$id")
 done <<<"$STEPS_TABLE"
-
-step_owner() {
-  printf '%s\n' "$STEPS_TABLE" | awk -F'|' -v id="$1" '$1==id{print $2}'
-}
-
-step_needs() {
-  printf '%s\n' "$STEPS_TABLE" | awk -F'|' -v id="$1" '$1==id{print $3}'
-}
 
 is_valid_step() {
   local want="$1" id
@@ -135,20 +128,22 @@ STATE_FILE="$STORE_SETUP_DIR/state.json"
 
 # The steps table, as JSON, built once per invocation for the ops that need
 # it inside node (next, render, list-steps).
+# One pass over STEPS_TABLE in this shell: a lookup per step (a subshell and an
+# awk each for owner and needs) cost about a hundred processes, 0.2 s, on
+# every call.
 steps_json() {
   local id first=1 owner needs needs_json
   printf '['
-  for id in "${STEP_IDS[@]}"; do
+  while IFS='|' read -r id owner needs; do
+    [ -n "$id" ] || continue
     [ "$first" -eq 1 ] || printf ','
     first=0
-    owner="$(step_owner "$id")"
-    needs="$(step_needs "$id")"
     needs_json="[]"
     if [ -n "$needs" ]; then
       needs_json="[\"${needs//,/\",\"}\"]"
     fi
     printf '{"id":"%s","owner":"%s","needs":%s}' "$id" "$owner" "$needs_json"
-  done
+  done <<<"$STEPS_TABLE"
   printf ']'
 }
 
