@@ -1167,7 +1167,7 @@ signing_pin_offenders() {
 }
 
 @test "test-e2e.yml saves its caches only on the default branch" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   # A branch's saves land in that branch's own cache scope, which the default
   # branch never reads, but they count against the same 10 GB. The release
   # PR's CI saved the iOS app, Pods and a pnpm store there on every push to
@@ -1540,7 +1540,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # and the verdict output reads fail), and then leading every artifact name, the
 # verdict's download pattern and the code scanning category.
 @test "check-security.yml takes artifact-prefix, empty by default, checked before the settings resolve" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   [ "$(yq -r '.on.workflow_call.inputs."artifact-prefix".type' "$f")" = "string" ] || fail "artifact-prefix is not a string input"
   [ "$(yq -r '.on.workflow_call.inputs."artifact-prefix" | has("default")' "$f")" = "true" ] \
@@ -1571,7 +1571,7 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 # what its first attempt uploaded instead of failing on the name. The one
 # download is anchored to the prefix the same way.
 @test "every upload-artifact in check-security.yml is named after the prefix and overwrites, and the download is anchored to it" {
-  command -v yq >/dev/null || skip "yq not installed"
+  require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
   uploads="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact"))] | length' "$f")"
   [ "$uploads" -eq 10 ] || fail "expected ten artifact uploads (nine SARIF, one bill of materials), found $uploads"
