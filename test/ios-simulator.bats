@@ -353,18 +353,25 @@ only_path() {
   kill "$(cat "$WORKFLOWS_OUT/ios-record.pid")" "$(cat "$WORKFLOWS_OUT/ios-unified-log.pid")" 2>/dev/null || true
 }
 
+# Both long-running stubs have written their ready line: their SIGINT handler is in.
+both_ready() { [ -f "$CALLS.ready" ] && [ "$(grep -c . "$CALLS.ready")" -ge 2 ]; }
+
 @test "record stop ends both and removes both pid files" {
   sim record start >/dev/null
   rec="$(cat "$WORKFLOWS_OUT/ios-record.pid")"
   logp="$(cat "$WORKFLOWS_OUT/ios-unified-log.pid")"
-  local i
-  for i in $(seq 1 50); do [ "$(grep -c . "$CALLS.ready" 2>/dev/null)" -ge 2 ] && break; sleep 0.1; done
-  local started=$SECONDS
+  # Stop only once both stubs have their SIGINT handler in: before that they
+  # still ignore the signal (a background job starts with it ignored), and the
+  # stop would wait out its loop for a reason that is the test's, not the script's.
+  wait_for 60 "both stubs to install their SIGINT handler" both_ready
+  local i started=$SECONDS
   run sim record stop
   [ "$status" -eq 0 ] || fail "status $status; output: $output"
   # The stub exits on SIGINT, so a stop that interrupts it returns at once. One
-  # that waits out its 30-second loop sent nothing the recorder heard.
-  [ $((SECONDS - started)) -lt 10 ] || fail "stop took $((SECONDS - started))s: the recorder never saw the interrupt"
+  # that waits out its 30-second loop sent nothing the recorder heard; anything
+  # under 20 seconds is the interrupt, with room for a machine too busy to start
+  # the script quickly.
+  [ $((SECONDS - started)) -lt 20 ] || fail "stop took $((SECONDS - started))s: the recorder never saw the interrupt"
   contains "$output" "unified log stopped" || fail "output: $output"
   [ ! -f "$WORKFLOWS_OUT/ios-record.pid" ] || fail "recording pid file survived"
   [ ! -f "$WORKFLOWS_OUT/ios-unified-log.pid" ] || fail "unified-log pid file survived"

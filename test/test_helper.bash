@@ -63,6 +63,29 @@ stub_calls() { cat "$(stub_log "$1")"; }
 contains() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
 not_contains() { case "$1" in *"$2"*) return 1 ;; *) return 0 ;; esac; }
 
+# wait_for SECONDS WHAT COMMAND [ARG...] - run COMMAND every tenth of a second
+# until it succeeds, and fail the test naming WHAT once SECONDS have passed.
+#
+# For state a background process leaves behind (a log line, a pid file, a
+# process gone): the poll returns as soon as the state is there, and fails if
+# it never comes, rather than falling through to an assertion that then reads
+# a half-written file. The loops this replaced counted iterations and carried on
+# silently when they ran out; under a parallel run with every core busy a
+# background process can take more than ten seconds to start at all, which
+# outlasted them. So the deadline is generous - only a broken test waits it out.
+wait_for() {
+  local seconds="$1" what="$2" deadline
+  shift 2
+  deadline=$((SECONDS + seconds))
+  until "$@"; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      fail "gave up after ${seconds}s waiting for $what"
+      return 1
+    fi
+    sleep 0.1
+  done
+}
+
 # require_cmd TOOL... - fail the current test, naming every TOOL not on PATH
 # and the fix, instead of skipping it.
 #

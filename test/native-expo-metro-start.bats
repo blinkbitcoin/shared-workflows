@@ -21,21 +21,18 @@ STUB
   export PATH="$bin:$PATH"
 }
 
-# Waits for the background fake to write its line into the log: up to ten
-# seconds, returning as soon as it is there. A two-second budget ran out when
-# the suite runs in parallel and every core is busy.
-metro_log() {
-  local i
-  for i in $(seq 1 50); do
-    [ -s "$WORKFLOWS_OUT/metro.log" ] && break
-    sleep 0.2
-  done
-  cat "$WORKFLOWS_OUT/metro.log"
+# The script returns once the fake is started, not once it has run: its line
+# is in the log when the log ends in a newline.
+metro_logged() {
+  [ -s "$WORKFLOWS_OUT/metro.log" ] && [ -z "$(tail -c 1 "$WORKFLOWS_OUT/metro.log")" ]
 }
+
+metro_log() { cat "$WORKFLOWS_OUT/metro.log"; }
 
 @test "starts expo on the default port with --dev-client, and records the log and PID" {
   run bash "$REPO_ROOT/scripts/native/expo/metro-start.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
+  wait_for 60 "the fake pnpm's line in metro.log" metro_logged
   [ "$(metro_log)" = "pnpm exec expo start --port 8081 --dev-client | CI=1" ] || fail "log: $(metro_log)"
   pid="$(cat "$WORKFLOWS_OUT/metro.pid")"
   [[ "$pid" =~ ^[0-9]+$ ]] || fail "not a PID: $pid"
@@ -46,6 +43,7 @@ metro_log() {
 @test "a Release build gets no --dev-client, on the configured port" {
   WORKFLOWS_DEV_CLIENT=false WORKFLOWS_METRO_PORT=9090 run bash "$REPO_ROOT/scripts/native/expo/metro-start.sh"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
+  wait_for 60 "the fake pnpm's line in metro.log" metro_logged
   [ "$(metro_log)" = "pnpm exec expo start --port 9090 | CI=1" ] || fail "log: $(metro_log)"
 }
 
