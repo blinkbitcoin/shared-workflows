@@ -635,6 +635,14 @@ jobs:
       repository: your-org/private-app
 ```
 
+The token is also what a partial clone fetches with later. The `Changes` jobs
+(`check.yml`, `check-code-scanning.yml`, `build-web.yml`) and `check-security.yml`'s
+`Review` check out every commit and tree but no older file content (`filter:
+blob:none`). The classifiers never read any; the review's diff fetches the
+base's copy of each changed file, through the credentials the checkout left in
+place. So those checkouts keep `persist-credentials` at its default, and a
+token that can read the repository for the checkout can read it for that fetch.
+
 `secrets: inherit` is never used anywhere in this family (Part B's release
 workflows follow the same rule for their own, larger secret sets) — every
 secret a reusable workflow needs is declared and passed explicitly.
@@ -839,6 +847,13 @@ The base of the diff is `github.event.pull_request.base.sha` on a
 that follows it are classified the same way — which is why a caller's `ci.yml`
 needs no `paths-ignore`. `LICENSE` matches anywhere in the tree, not just at
 the root, so a per-package copyright bump is docs too.
+
+The list of changed paths comes from the commits' trees alone (`git diff
+--no-renames --name-only`), so the `Changes` job checks out a partial clone:
+every commit and tree, no file content beyond the checked-out tip (`filter:
+blob:none`), however long the app's history. A rename is two changes, the path
+it left and the path it took: moving `src/a.ts` to `docs/a.md` is not
+docs-only.
 
 The classifier **fails open**: when the range cannot be read at all — no base,
 the all-zero base of a branch's first push, or a base made unreachable by a
@@ -1294,7 +1309,7 @@ that scans nothing while reporting green is worse than one that is red.
 | `bundle` | Allow the bundle scanner (`check-security bundle`), which reads what the JavaScript bundle gives away. Expo: `expo export` of every platform in `bundle.platforms`.<br>Bare: `react-native bundle` per platform, `--dev false`, minified only where the platform does not build with Hermes, as its release does. Default `false` |
 | `mobile` | Allow the native project scanner (`check-security mobile`, mobsfscan). Expo: over a fresh prebuild in a temporary copy, never the working tree's `ios/` and `android/`.<br>Bare: over the committed `ios/` and `android/`, in place, with no prebuild and no installed dependencies needed. Default `false` |
 | `binaries` | Allow the MASTG checks over the release's built binaries (`check-security binaries`). Needs `release-tag`. Default `false` |
-| `review` | Allow the LLM review of the change (`check-security review`). Gets full history and, on a pull request, its base. It reads the package's own `security-review.prompt.md`, then your repository's, if you have one, as an addendum. Default `false` |
+| `review` | Allow the LLM review of the change (`check-security review`). Gets every commit and tag and, on a pull request, its base, as a partial clone: the diff fetches the base's copy of each changed file, in one batch, with the checkout's token. It reads the package's own `security-review.prompt.md`, then your repository's, if you have one, as an addendum. Default `false` |
 | `review-codebase` | Allow the LLM security review of the whole codebase, with OpenAnt (`check-security review-codebase`). The build is cached, keyed on the OpenAnt commit `scripts/security/review-codebase.sh` pins. Default `false` |
 | `review-full-range` | Review everything since the last release tag rather than the pull request's diff. Default `false` |
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |

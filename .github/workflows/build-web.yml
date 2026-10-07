@@ -93,7 +93,10 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.consumer-token || github.token }}
+          # A partial clone, exactly as in check.yml: the classifier lists paths,
+          # which every commit and tree answer without any older file content.
           fetch-depth: 0
+          filter: blob:none
       # No setup here, exactly as in check.yml: changed-class.sh is pure git,
       # so this job reaches it through the plain .workflows checkout ($WORKFLOWS_DIR is
       # published by the setup action, which never runs in this job).
