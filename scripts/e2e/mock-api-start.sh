@@ -43,9 +43,11 @@ log "mock API started (pid $pid, port ${WORKFLOWS_MOCK_API_PORT:-none}, log $log
   log "WORKFLOWS_MOCK_API_PORT is empty: not waiting for the mock API"
   exit 0
 }
+group "Wait for the mock API on port $WORKFLOWS_MOCK_API_PORT"
 if ! bash "$(dirname "$0")/wait-for-http.sh" "http://localhost:$WORKFLOWS_MOCK_API_PORT/" "${WORKFLOWS_MOCK_API_WAIT_SECONDS:-60}"; then
   log "--- tail of $log_file ---"
   tail -50 "$log_file" >&2 || true
   die "the mock API did not come up on port $WORKFLOWS_MOCK_API_PORT: $command_line"
 fi
+endgroup
 log "mock API is up on port $WORKFLOWS_MOCK_API_PORT"

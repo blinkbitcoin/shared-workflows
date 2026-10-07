@@ -86,6 +86,27 @@ wait_for() {
   done
 }
 
+# traced OUTPUT NAME - OUTPUT opened the log group NAME and then carries its
+# trace line, `trace: NAME 12.3s` (group and endgroup in scripts/lib/common.sh):
+# the phase was timed. Use it as `traced "$output" "Boot simulator" || fail ...`.
+traced() {
+  local line opened="" timed="" pattern='^trace: (.+) [0-9]+\.[0-9]s$'
+  while IFS= read -r line; do
+    [ "$line" != "::group::$2" ] || opened=1
+    if [ -n "$opened" ] && [[ "$line" =~ $pattern ]] && [ "${BASH_REMATCH[1]}" = "$2" ]; then timed=1; fi
+  done <<< "$1"
+  [ -n "$opened" ] && [ -n "$timed" ]
+}
+# summary_beyond_timings FILE - the step summary FILE without the Timings table
+# endgroup writes into it, and without blank lines: what else a script wrote
+# there. Empty when the script wrote nothing but its timings.
+summary_beyond_timings() {
+  awk '/^### Timings$/ { timings = 1; next }
+    /^$/ { next }
+    timings && /^\|/ { next }
+    { timings = 0; print }' "$1"
+}
+
 # require_cmd TOOL... - fail the current test, naming every TOOL not on PATH
 # and the fix, instead of skipping it.
 #

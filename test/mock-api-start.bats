@@ -42,6 +42,7 @@ teardown() {
   MOCK_API_COMMAND="pwd > where.txt; echo \"\$MOCK_API_PORT\" > port.txt; $SERVER" run bash "$START"
   [ "$status" -eq 0 ] || fail "exited $status: $output"
   contains "$output" "mock API is up on port $PORT" || fail "output: $output"
+  traced "$output" "Wait for the mock API on port $PORT" || fail "the wait was not timed: $output"
   [ "$(cat "$CONSUMER/where.txt")" = "$(cd "$CONSUMER" && pwd -P)" ] || fail "ran in $(cat "$CONSUMER/where.txt")"
   [ "$(cat "$CONSUMER/port.txt")" = "$PORT" ] || fail "MOCK_API_PORT was $(cat "$CONSUMER/port.txt")"
   [ -s "$WORKFLOWS_OUT/mock-api.pid" ] || fail "no pid file"

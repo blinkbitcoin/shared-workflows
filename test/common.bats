@@ -646,3 +646,146 @@ recording_sleep() {
   [ "$status" -eq 1 ] || fail "ran with no command: $output"
   contains "$output" "::error::retry_command: no command to run" || fail "$output"
 }
+# group / endgroup. The fixed clocks below unset EPOCHREALTIME first: bash 5
+# drops its special meaning once it is unset, so the test can then set it like
+# any variable, and the arithmetic is checked to the tenth on every bash.
+trace_line_pattern='^trace: (.+) ([0-9]+(\.[0-9])?)s$'
+@test "group and endgroup print the markers on stdout and a trace line on stderr" {
+  unset GITHUB_STEP_SUMMARY
+  group "Pod install" > "$BATS_TEST_TMPDIR/out" 2> "$BATS_TEST_TMPDIR/err"
+  endgroup >> "$BATS_TEST_TMPDIR/out" 2>> "$BATS_TEST_TMPDIR/err"
+  [ "$(cat "$BATS_TEST_TMPDIR/out")" = "::group::Pod install
+::endgroup::" ] || fail "stdout: $(cat "$BATS_TEST_TMPDIR/out")"
+  err="$(cat "$BATS_TEST_TMPDIR/err")"
+  [[ "$err" =~ $trace_line_pattern ]] || fail "not a trace line: $err"
+  [ "${BASH_REMATCH[1]}" = "Pod install" ] || fail "name: ${BASH_REMATCH[1]}"
+}
+@test "endgroup reports the time between the two to a tenth of a second, whatever the locale's decimal separator" {
+  unset EPOCHREALTIME GITHUB_STEP_SUMMARY
+  EPOCHREALTIME=100,250000
+  group "Boot simulator" > /dev/null
+  EPOCHREALTIME=102.000000
+  err="$(endgroup 2>&1 >/dev/null)" || fail "endgroup failed"
+  [ "$err" = "trace: Boot simulator 1.8s" ] || fail "trace: $err"
+}
+@test "a second group closes and times the first, since GitHub does not nest groups" {
+  unset EPOCHREALTIME GITHUB_STEP_SUMMARY
+  EPOCHREALTIME=10.000000
+  group first > "$BATS_TEST_TMPDIR/out" 2> "$BATS_TEST_TMPDIR/err"
+  EPOCHREALTIME=12.500000
+  group second >> "$BATS_TEST_TMPDIR/out" 2>> "$BATS_TEST_TMPDIR/err"
+  EPOCHREALTIME=13.040000
+  endgroup >> "$BATS_TEST_TMPDIR/out" 2>> "$BATS_TEST_TMPDIR/err"
+  [ "$(cat "$BATS_TEST_TMPDIR/out")" = "::group::first
+::endgroup::
+::group::second
+::endgroup::" ] || fail "stdout: $(cat "$BATS_TEST_TMPDIR/out")"
+  [ "$(cat "$BATS_TEST_TMPDIR/err")" = "trace: first 2.5s
+trace: second 0.5s" ] || fail "stderr: $(cat "$BATS_TEST_TMPDIR/err")"
+}
+@test "endgroup with no group open prints its marker and nothing else" {
+  unset GITHUB_STEP_SUMMARY
+  run endgroup
+  [ "$status" -eq 0 ] || fail "exited $status: $output"
+  [ "$output" = "::endgroup::" ] || fail "output: $output"
+  group once > /dev/null
+  endgroup > /dev/null 2>&1
+  run endgroup
+  [ "$output" = "::endgroup::" ] || fail "a closed group was timed again: $output"
+}
+@test "endgroup writes the Timings heading once per summary file, then a row per phase" {
+  unset EPOCHREALTIME
+  GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"; export GITHUB_STEP_SUMMARY
+  printf 'before\n' > "$GITHUB_STEP_SUMMARY"
+  EPOCHREALTIME=100.000000; group "Pod install" > /dev/null
+  EPOCHREALTIME=352.300000; endgroup > "$BATS_TEST_TMPDIR/out" 2> /dev/null
+  EPOCHREALTIME=400.000000; group "Fast | odd name" > /dev/null
+  EPOCHREALTIME=412.040000; endgroup >> "$BATS_TEST_TMPDIR/out" 2> /dev/null
+  EPOCHREALTIME=0.000000; group "Archive" > /dev/null
+  EPOCHREALTIME=3725.000000; endgroup >> "$BATS_TEST_TMPDIR/out" 2> /dev/null
+  [ "$(cat "$BATS_TEST_TMPDIR/out")" = "::endgroup::
+::endgroup::
+::endgroup::" ] || fail "printed more than the markers: $(cat "$BATS_TEST_TMPDIR/out")"
+  [ "$(cat "$GITHUB_STEP_SUMMARY")" = "before
+
+### Timings
+
+| Phase | Time |
+|---|---|
+| Pod install | 4m 12s |
+| Fast \| odd name | 12s |
+| Archive | 1h 2m 5s |" ] || fail "summary: $(cat "$GITHUB_STEP_SUMMARY")"
+}
+@test "endgroup writes nothing but its marker to stdout when GITHUB_STEP_SUMMARY is unset" {
+  unset GITHUB_STEP_SUMMARY
+  group quiet > /dev/null
+  out="$(endgroup 2>/dev/null)" || fail "endgroup failed"
+  [ "$out" = "::endgroup::" ] || fail "stdout: $out"
+}
+@test "without EPOCHREALTIME (bash 3.2, macOS's /bin/bash) the clock is bash's whole SECONDS" {
+  unset EPOCHREALTIME GITHUB_STEP_SUMMARY
+  SECONDS=1000
+  group "Install app on simulator" > /dev/null
+  SECONDS=1004
+  err="$(endgroup 2>&1 >/dev/null)" || fail "endgroup failed"
+  # SECONDS counts on from each assignment, so a second may tick between the
+  # assignment and endgroup's read of it.
+  case "$err" in
+    "trace: Install app on simulator 4.0s" | "trace: Install app on simulator 5.0s") ;;
+    *) fail "trace: $err" ;;
+  esac
+  run /bin/bash -c 'source "$1/scripts/lib/common.sh"; unset GITHUB_STEP_SUMMARY; group "Under /bin/bash"; endgroup' _ "$REPO_ROOT"
+  [ "$status" -eq 0 ] || fail "/bin/bash exited $status: $output"
+  [[ "${output##*$'\n'}" =~ $trace_line_pattern ]] || fail "/bin/bash: $output"
+  run env PATH="$BATS_TEST_TMPDIR/nothing" /bin/bash -c 'source "$1/scripts/lib/common.sh"; unset EPOCHREALTIME GITHUB_STEP_SUMMARY; group "No tools"; endgroup' _ "$REPO_ROOT"
+  [ "$status" -eq 0 ] || fail "needed a tool on PATH: $output"
+  [ "${output##*$'\n'}" = "trace: No tools 0.0s" ] || fail "with no PATH: $output"
+}
+@test "traced (test_helper.bash) finds a timed group, and not one that was opened but never timed" {
+  unset GITHUB_STEP_SUMMARY
+  out="$({ group "Pod install"; echo "pods"; endgroup; } 2>&1)"
+  traced "$out" "Pod install" || fail "missed a timed group: $out"
+  ! traced "$out" "Pod" || fail "matched a prefix of the name: $out"
+  ! traced "::group::Pod install" "Pod install" || fail "matched a group with no trace line"
+  ! traced "trace: Pod install 1.0s" "Pod install" || fail "matched a trace line with no group"
+}
+@test "endgroup never reports a negative time when the clock steps back" {
+  unset EPOCHREALTIME GITHUB_STEP_SUMMARY
+  EPOCHREALTIME=50.000000; group "Clock stepped back" > /dev/null
+  EPOCHREALTIME=49.000000
+  err="$(endgroup 2>&1 >/dev/null)" || fail "endgroup failed"
+  [ "$err" = "trace: Clock stepped back 0.0s" ] || fail "trace: $err"
+}
+@test "summary_beyond_timings (test_helper.bash) keeps what a script wrote besides its timings" {
+  GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"; export GITHUB_STEP_SUMMARY
+  : > "$GITHUB_STEP_SUMMARY"
+  group one > /dev/null; endgroup > /dev/null 2>&1
+  [ -z "$(summary_beyond_timings "$GITHUB_STEP_SUMMARY")" ] || fail "timings left over: $(summary_beyond_timings "$GITHUB_STEP_SUMMARY")"
+  gh_summary '### Checks' '' '| a | b |'
+  group two > /dev/null; endgroup > /dev/null 2>&1
+  [ "$(summary_beyond_timings "$GITHUB_STEP_SUMMARY")" = "### Checks
+| a | b |" ] || fail "kept: $(summary_beyond_timings "$GITHUB_STEP_SUMMARY")"
+}
+@test "endgroup starts the Timings table again when something else was written to the summary since its last row" {
+  unset EPOCHREALTIME
+  GITHUB_STEP_SUMMARY="$BATS_TEST_TMPDIR/summary.md"; export GITHUB_STEP_SUMMARY
+  : > "$GITHUB_STEP_SUMMARY"
+  EPOCHREALTIME=0.000000; group one > /dev/null
+  EPOCHREALTIME=2.000000; endgroup > /dev/null 2>&1
+  gh_summary '| check | passed |'
+  EPOCHREALTIME=2.000000; group two > /dev/null
+  EPOCHREALTIME=5.000000; endgroup > /dev/null 2>&1
+  [ "$(cat "$GITHUB_STEP_SUMMARY")" = "
+### Timings
+
+| Phase | Time |
+|---|---|
+| one | 2s |
+| check | passed |
+
+### Timings
+
+| Phase | Time |
+|---|---|
+| two | 3s |" ] || fail "summary: $(cat "$GITHUB_STEP_SUMMARY")"
+}

@@ -61,6 +61,7 @@ setup() {
   [ "$(cat "$SDK_LOG")" = "--install emulator --channel=0" ] \
     || fail "unexpected sdkmanager call: $(cat "$SDK_LOG")"
   contains "$output" "Installed: emulator" || fail "unexpected message: $output"
+  traced "$output" "Install Android SDK packages (emulator)" || fail "the install was not timed: $output"
 }
 
 @test "finds sdkmanager in a versioned cmdline-tools directory" {

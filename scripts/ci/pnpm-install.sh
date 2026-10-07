@@ -12,7 +12,9 @@ cd "$root"
 # package.json. pnpm says ERR_PNPM_OUTDATED_LOCKFILE in its own words, which
 # name neither this workflow family nor the commit that has to be made - and on
 # an adopting repository that is the first red of the run.
+group "Install dependencies (pnpm install)"
 pnpm install --frozen-lockfile || die_fix \
   "pnpm install --frozen-lockfile failed in $root" \
   "if the lockfile is out of date with package.json, run pnpm install locally and commit pnpm-lock.yaml; CI installs frozen on purpose, so that a build is the dependency tree someone reviewed" \
   "60-second-start"
+endgroup

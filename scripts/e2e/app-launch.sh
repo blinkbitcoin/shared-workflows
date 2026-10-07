@@ -138,12 +138,14 @@ if [ "$receipt" = false ]; then
   exit 0
 fi
 
+group "Wait for the app to request its bundle"
 for i in $(seq 1 60); do
   # "iOS Bundled 1479ms .../entry.js" is what Expo's Metro logs per request;
   # the React Native CLI's Metro logs "BUNDLE  ./index.js", and older ones
   # "Bundling" or a raw ".bundle" URL.
   if tail -n "+$before" "$metro_log" | grep -qE 'Bundled|Bundling|BUNDLE|\.bundle'; then
     log "Metro served a bundle after $((i * 2))s - app is up"
+    endgroup
     exit 0
   fi
   sleep 2

@@ -14,7 +14,9 @@ args="${EXPORT_ARGS:-}"
 root="$(consumer_root)"
 cd "$root"
 
+group "Export the web build ($EXPORT_SCRIPT)"
 # shellcheck disable=SC2086 # EXPORT_ARGS is a space-separated flag list, word-splitting is intended
 pnpm run "$EXPORT_SCRIPT" -- $args
+endgroup
 
 [ -f "$OUTPUT_DIR/index.html" ] || die "web export did not produce $OUTPUT_DIR/index.html (script: $EXPORT_SCRIPT)"

@@ -29,7 +29,9 @@ mkdir -p "$out"
 # verdict fails on them. A non-zero exit here is a crash - a missing binary
 # under CI, a bad config, output that is not SARIF - and errexit hands its
 # status straight back, so the run names the scanner that died.
+group "Run the $job scanner"
 bash "$runner"
+endgroup
 
 sarif="$out/$job.sarif"
 # -s, not -f: a zero-byte file is the same silence as no file. A runner that

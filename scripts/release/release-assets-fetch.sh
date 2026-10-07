@@ -25,7 +25,9 @@ dir="${3:?usage: release-assets-fetch.sh TAG PATTERN DIR}"
   "publish-storeyml"
 
 mkdir -p "$dir"
+group "Download $pattern from release $tag"
 err="$(gh release download "$tag" --pattern "$pattern" --dir "$dir" --clobber 2>&1 >/dev/null)" \
   || die "could not download $pattern from release $tag in ${GH_REPO:-this repository}: $err"
+endgroup
 files="$(find "$dir" -maxdepth 1 -type f -name "$pattern" -exec basename {} \; | sort)"
 log "release $tag: $(tr '\n' ' ' <<<"$files")into $dir"

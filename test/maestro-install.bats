@@ -90,6 +90,7 @@ $MAESTRO_PIN"
   [ "$status" -eq 0 ] || fail "expected success, got $status: $output"
   [ "$("$HOME/.maestro/bin/maestro" --version)" = "$MAESTRO_PIN" ] || fail "the archive was not installed"
   [ -f "$HOME/.maestro/lib/maestro.jar" ] || fail "maestro/lib was not installed"
+  traced "$output" "Download and install Maestro $MAESTRO_PIN" || fail "the install was not timed: $output"
   [ "$(cat "$GITHUB_PATH")" = "$HOME/.maestro/bin" ] || fail "not put on PATH: $(cat "$GITHUB_PATH")"
   contains "$(cat "$CURL_CALLS")" "releases/download/cli-$MAESTRO_PIN/maestro.zip" \
     || fail "not the release archive: $(cat "$CURL_CALLS")"

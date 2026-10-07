@@ -31,6 +31,8 @@ STUB
   grep -qx "reverse tcp:8081 tcp:8081" "$ADB_LOG" || fail "Metro's port was not reversed: $(cat "$ADB_LOG")"
   grep -qx "reverse tcp:8082 tcp:8082" "$ADB_LOG" || fail "the default mock-API port 8082 was not reversed: $(cat "$ADB_LOG")"
   ! grep -qx "reverse tcp:4000 tcp:4000" "$ADB_LOG" || fail "the retired default 4000 was reversed: $(cat "$ADB_LOG")"
+  grep -qx "install -r $apk" "$ADB_LOG" || fail "the APK was not installed: $(cat "$ADB_LOG")"
+  traced "$output" "Install app on emulator" || fail "the install was not timed: $output"
 }
 
 @test "WORKFLOWS_MOCK_API_PORT overrides the reversed mock-API port" {

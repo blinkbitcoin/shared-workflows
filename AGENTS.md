@@ -137,6 +137,16 @@ Every row is a make target; nothing here is run through a package manager.
   a run log; give it a file under the matching `scripts/<area>/` and a bats
   test. Everything under `scripts/` is `shellcheck -x` clean under
   `set -euo pipefail`.
+- **A long phase in a script runs between `group NAME` and `endgroup`**
+  (`scripts/lib/common.sh`), named so a human knows it ("Boot simulator",
+  "Install app on simulator"). `endgroup` times it: a `trace: NAME 12.3s`
+  line on stderr, which `trace-run` reads from job logs, and a row of the
+  step summary's Timings table ([`docs/forensics.md`](docs/forensics.md),
+  "Where a job spends its time"). Groups do not nest, so a phase never opens
+  one inside another script's (a verifier run inside the fastlane group has
+  none), and neither goes in a function whose output a caller captures with
+  `$(...)`: the markers are on stdout. The script's own test asserts the
+  phase with `traced "$output" NAME` (`test/test_helper.bash`).
 - **`set -e` does not reach everywhere, so a step that can fail there says
   so.** It does not stop on a failing `$(...)` inside a command's arguments
   or a `case` word, on a failure inside a function its caller reads through
@@ -456,7 +466,7 @@ repository's checkout.
 
 - What consumers may call, and with what: [`docs/consumer-guide.md`](docs/consumer-guide.md).
 - Why a cache missed: [`docs/cache-keys.md`](docs/cache-keys.md).
-- What a failed E2E run leaves behind: [`docs/forensics.md`](docs/forensics.md).
+- What a failed E2E run leaves behind, and where a job spent its time: [`docs/forensics.md`](docs/forensics.md).
 - Runner labels, macOS billing, KVM and disk: [`docs/runners.md`](docs/runners.md).
 - Contributing workflow and PR expectations: [`CONTRIBUTING.md`](CONTRIBUTING.md).
   Vulnerability reports: [`SECURITY.md`](SECURITY.md).

@@ -34,7 +34,9 @@ case "${1:-}" in
     root="$(consumer_root)"
     apk="${2:-$root/$WORKFLOWS_ANDROID_APK}"
     [ -f "$apk" ] || die "no APK at $apk - run android-build.sh first"
+    group "Install app on emulator"
     adb install -r "$apk"
+    endgroup
     # Metro and the consumer's mock API both live on the host; the emulator
     # reaches them through reversed ports rather than 10.0.2.2 so the app's
     # localhost URLs work unchanged.

@@ -193,6 +193,16 @@ scheme=fixture" ] || fail "got: $output"
   [ "$status" -eq 0 ] || fail "status $status: $output"
   contains "$output" "running HOOK: e2e/up.sh" || fail "the hook was not logged: $output"
   contains "$output" "hook ran in $(cd "$BATS_TEST_TMPDIR/consumer" && pwd -P)" || fail "the hook did not run from the root: $output"
+  traced "$output" "Run e2e/up.sh (HOOK)" || fail "the hook was not timed: $output"
+}
+
+@test "workflows_run_hook returns a failing hook's status, with its group closed and timed" {
+  mkdir -p "$BATS_TEST_TMPDIR/consumer/e2e"
+  printf 'exit 7\n' > "$BATS_TEST_TMPDIR/consumer/e2e/down.sh"
+  export GITHUB_WORKSPACE="$BATS_TEST_TMPDIR" WORKING_DIRECTORY=consumer
+  HOOK=e2e/down.sh app_env 'workflows_run_hook HOOK || echo "returned $?"'
+  contains "$output" "returned 7" || fail "the hook's status was lost: $output"
+  traced "$output" "Run e2e/down.sh (HOOK)" || fail "the failed hook was not timed: $output"
 }
 
 @test "workflows_run_hook refuses a hook file that does not exist, naming the variable and the path" {

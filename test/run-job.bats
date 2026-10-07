@@ -73,6 +73,7 @@ path_without_node() {
   grep -q '"name": "policy"' "$GITHUB_WORKSPACE/.security/policy.sarif" \
     || fail "the SARIF is not the policy runner's: $(cat "$GITHUB_WORKSPACE/.security/policy.sarif")"
   contains "$output" 'policy: .security/policy.sarif' || fail "the log does not say where the SARIF landed: $output"
+  traced "$output" "Run the policy scanner" || fail "the scanner was not timed: $output"
 }
 
 @test "run-job.sh looks for the SARIF in the directory SECURITY_DIR names" {

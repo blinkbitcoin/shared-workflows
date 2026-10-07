@@ -22,6 +22,7 @@ EOF
     run bash "$REPO_ROOT/scripts/web/export.sh"
   [ "$status" -eq 0 ]
   [ -f "$consumer/dist/index.html" ]
+  traced "$output" "Export the web build (build:web)" || fail "the export was not timed: $output"
 }
 
 @test "passes EXPORT_ARGS through word-split to the export script" {
