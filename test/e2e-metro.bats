@@ -15,6 +15,11 @@ setup() {
   unset WORKFLOWS_METRO_PORT WORKFLOWS_MOCK_API_PORT
 }
 
+# The background command has written its whole line into metro.log.
+metro_logged() {
+  [ -s "$WORKFLOWS_OUT/metro.log" ] && [ -z "$(tail -c 1 "$WORKFLOWS_OUT/metro.log")" ]
+}
+
 # metro_env COMMANDS - runs COMMANDS in a fresh bash that has sourced common.sh
 # and this library, under the options every caller sets.
 metro_env() {
@@ -54,10 +59,7 @@ metro_env() {
   [[ "$pid" =~ ^[0-9]+$ ]] || fail "not a PID: $pid"
   contains "$output" "Metro starting (pid $pid, port 9999, log $WORKFLOWS_OUT/metro.log)" || fail "output: $output"
   contains "$output" "stop it with: kill -TERM -$pid" || fail "output: $output"
-  for _ in $(seq 1 50); do
-    [ -s "$WORKFLOWS_OUT/metro.log" ] && break
-    sleep 0.2
-  done
+  wait_for 60 "the command's line in metro.log" metro_logged
   [ "$(cat "$WORKFLOWS_OUT/metro.log")" = "CI=1 pgid=$pid" ] \
     || fail "the command did not run with CI=1 as its own process group's leader: $(cat "$WORKFLOWS_OUT/metro.log")"
 }
