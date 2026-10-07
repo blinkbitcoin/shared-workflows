@@ -475,8 +475,8 @@ Notes:
   is there so adding the `e2e:ios` label to an already-open PR triggers a new
   run that picks it up (a label change is not `synchronize`).
 - `concurrency` is the **caller's** job, not this repo's — none of the
-  reusable workflows sets a workflow-level one (a called workflow's
-  `concurrency` would fight the caller's). Cancel in-flight runs on every branch except `main` (a `main`
+  reusable workflows set it (a called workflow's `concurrency` would fight the
+  caller's). Cancel in-flight runs on every branch except `main` (a `main`
   push after a merge should never be cancelled by the next one).
 - `unit-changed` and `e2e-changed` (from `check.yml`'s `changes` job) let
   `unit` and `e2e` skip a change that cannot affect them: a Maestro flow edit
@@ -1289,7 +1289,7 @@ that scans nothing while reporting green is worse than one that is red.
 | `dependencies` | Allow the dependency scanner (`check-security dependencies`, osv-scanner over the lockfile). Default `true` |
 | `code` | Allow the source scanner (`check-security code`, Semgrep's TypeScript, secrets and OWASP packs, this package's React Native rules plus your `jobs.code.rules`). Default `true` |
 | `policy` | Allow the install-policy scanner (`check-security policy`, your `pnpm-workspace.yaml` install policy). Default `true` |
-| `sbom` | Allow the bill of materials (`check-security sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact, kept 90 days. Default `false` |
+| `sbom` | Allow the bill of materials (`check-security sbom`). Also uploads `sbom.cdx.json` as the `security-sbom` artifact (`<artifact-prefix>-security-sbom` with a prefix), kept 90 days. Default `false` |
 | `native-stack` | `expo` or `bare`, for the two scanners below. Default empty: detected, as in [Expo or bare React Native](#expo-or-bare-react-native) |
 | `bundle` | Allow the bundle scanner (`check-security bundle`), which reads what the JavaScript bundle gives away. Expo: `expo export` of every platform in `bundle.platforms`.<br>Bare: `react-native bundle` per platform, `--dev false`, minified only where the platform does not build with Hermes, as its release does. Default `false` |
 | `mobile` | Allow the native project scanner (`check-security mobile`, mobsfscan). Expo: over a fresh prebuild in a temporary copy, never the working tree's `ios/` and `android/`.<br>Bare: over the committed `ios/` and `android/`, in place, with no prebuild and no installed dependencies needed. Default `false` |
@@ -1300,6 +1300,7 @@ that scans nothing while reporting green is worse than one that is red.
 | `release-tag` | The release whose `.apk`, `.aab` and `.ipa` assets `binaries` checks. Default empty; with `binaries` on and no tag, the job fails naming the fix |
 | `environment-variables` | Non-secret environment for every job, as a flat JSON object: `SECURITY_LLM_PROVIDER`, `SECURITY_LLM_MODEL`, `SECURITY_LLM_EFFORT`, `SECURITY_LLM_EXTRA_PARAMS`,<br>`OPENAI_BASE_URL`, and any `SECURITY_*` twin of a `security-settings.json` setting. Default `{}` |
 | `sarif-upload-enabled` | Upload the SARIF to code scanning, from the default branch only (see below). Default `true`. Off makes the run say so<br>with a warning and a summary line rather than go quiet, and the verdict still applies the threshold |
+| `artifact-prefix` | Name for this call's artifacts, for a caller that calls this workflow more than once in one run (see below). `my-app` makes them `my-app-security-sarif-<job>` and `my-app-security-sbom`,<br>and the code scanning category `my-app-security`. Lowercase letters, digits and inner hyphens, at most 64 characters, not containing `security-sarif`; anything else fails the `Settings` job. Default empty: the plain names |
 
 Secrets: `consumer-token`, only for a private consumer repository, and
 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for the two LLM jobs. The keys reach the
@@ -1314,7 +1315,7 @@ second rule that drifts.
 | Value | When |
 | --- | --- |
 | `.security/verdict.json`, `{"verdict","highest","canBlock"}` | the `Verdict` job ran and the merge wrote the file |
-| `{"verdict":"fail"}` | a scanner job failed (it reported nothing to the merge); the `Verdict` step failed, or never ran<br>because a step before it failed, without writing the file; or the configuration job failed (a broken `security-settings.json`) |
+| `{"verdict":"fail"}` | a scanner job failed (it reported nothing to the merge); the `Verdict` step failed, or never ran<br>because a step before it failed, without writing the file; or the configuration job failed (a broken `security-settings.json`, or a refused `artifact-prefix`) |
 | `{"verdict":"disabled"}` | `security-settings.json` switches the gate off |
 | empty | the merge succeeded but wrote no `verdict.json` |
 
@@ -1334,14 +1335,20 @@ and your `security-settings.json` still decides which of those actually run:
 | The release pull request (release-please's branch) | `ci.yml` | the above plus `bundle`, `review-codebase`, `review-full-range` |
 | The production dispatch, before any store job | `cd-production.yml` | `binaries`, `mobile`, `bundle`, `sbom`, with `release-tag` and `ref` set to the tag |
 
-**Call it once per workflow run.** Each scanner's SARIF travels as a run-scoped
-artifact named after the scanner (`security-sarif-<job>`), so a second call in
-the same run - two stages side by side in one workflow - has its verdict read the
-first call's SARIF as well as its own, and where both calls run the same scanner
-the later upload silently replaces the earlier one (every upload sets
-`overwrite: true`, so a re-run job replaces its own artifact instead of failing
-on it). The template calls it once from `ci.yml`
-and once from `cd-production.yml`, which are separate runs.
+**Calling it twice in one workflow run.** Each scanner's SARIF travels as a
+run-scoped artifact named after the scanner (`security-sarif-<job>`), and
+artifacts belong to the run, not to the call. A second call in the same run -
+two apps, or two configurations side by side in one workflow - therefore passes
+its own `artifact-prefix`: its uploads become `<prefix>-security-sarif-<job>`,
+its `Verdict` job downloads `<prefix>-security-sarif-*` and so merges its own
+SARIF only, and its code scanning upload takes the category `<prefix>-security`,
+so the two calls' alerts do not replace each other. One of the calls may keep the
+empty default. `scripts/security/artifact-prefix.sh` refuses a prefix that could
+let one call's pattern match the other's names (a glob character, a capital, or
+the text `security-sarif`). Every upload overwrites, so re-running a failed job
+replaces its artifact rather than failing on the name. The template calls it once
+from `ci.yml` and once from `cd-production.yml`, which are separate runs, and
+needs no prefix.
 
 The release pull request's CI run is a `workflow_dispatch` on its branch, not a
 `pull_request` event, so a caller recognises it by `github.ref_name` starting
@@ -1412,8 +1419,7 @@ the store notes drafted into it, version/notes preparation, signed store builds,
 arbitrary fastlane lanes, the GitHub release, OTA publishing, and a retry for a
 promotion the green gate gave up on. They are strictly opt-in — nothing in `ci.yml` calls them — and
 they follow every rule the workflows above do: `permissions: contents: read` at
-the top, no workflow-level `concurrency` (the caller owns it; the one job-level
-group is `publish-ota.yml`'s, below), self-checkout into `.workflows/`,
+the top, no `concurrency` (the caller owns it), self-checkout into `.workflows/`,
 every `run:` a single `bash "$WORKFLOWS_DIR/scripts/..."` line, and **every secret
 declared `required: false`** so a caller only passes the ones its stage needs.
 
@@ -1771,19 +1777,6 @@ Fingerprint gate → `expo export` → publish → manifest smoke check.
 | `runtime-version` | `''` | Sent as the `expo-runtime-version` header in that check. Empty takes the baseline's iOS fingerprint: the gate only lets an update through when this commit fingerprints the same, and that fingerprint is the runtime version the update is served under |
 
 No outputs. Secrets: `consumer-token`, `OTA_PUBLISH_TOKEN` (both optional).
-
-**One publish per channel at a time.** The workflow's one job, which exports,
-publishes and smoke-checks, joins the job-level group
-`shared-workflows-publish-ota-<repository>-<channel>` with
-`cancel-in-progress: false`, so two runs publishing to the same channel queue
-instead of overlapping, and an older bundle can never finish last and replace
-the newer one users receive. Different channels still run side by side, and a
-running publish is never cancelled. GitHub keeps one *pending* job per group: a
-third publish queued behind a running one replaces the second, which for OTA is
-the right outcome, since the newest commit is the one users should get. The
-`shared-workflows-` prefix keeps the name apart from the caller's own group
-(`release`, `release-internal-<sha>`); do not name a caller's group after it, or
-the caller holds it while this job waits for it, forever.
 
 What is published is the export `scripts/ota/export.sh` wrote to `$WORKFLOWS_OTA_DIR`
 — the bytes the fingerprint gate vetted — not an export the CLI performs for
@@ -2596,9 +2589,7 @@ Rules that hold for all four:
   caller's token.
 - **The concurrency group stays in the caller**, because a reusable workflow
   cannot name one for its caller. The store jobs of `publish-internal.yml` join
-  the shared `release` queue on their own, as they did as caller jobs, and
-  `publish-ota.yml`'s job queues per channel inside whichever queue its caller
-  holds (see [`publish-ota.yml`](#publish-otayml)).
+  the shared `release` queue on their own, as they did as caller jobs.
 - **`github.*` is the caller's.** `github.sha`, `github.event_name` and the run id
   are those of the run that called the pipeline, so a dispatch's own values
   (`tag`, `action`, `platforms`) are passed as inputs.

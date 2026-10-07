@@ -75,3 +75,19 @@ setup() {
   printf '%s\n' "$dirs" | grep -qx '/' || fail "the workflows are not watched: $dirs"
   printf '%s\n' "$dirs" | grep -qxF '/.github/actions/*' || fail "the composite actions are not watched: $dirs"
 }
+
+@test "maestro restores the CLI everywhere and saves it only when the caller says so" {
+  # test-e2e.yml passes save-cache: false off the default branch, whose cache
+  # scope its own entries would otherwise crowd; the default keeps every other
+  # caller saving as before.
+  a="$REPO_ROOT/.github/actions/maestro/action.yml"
+  [ "$(yq -r '.inputs."save-cache".default' "$a")" = "true" ] || fail "maestro's save-cache input no longer defaults to 'true'"
+  [ "$(yq -r '[.runs.steps[] | select((.uses // "") | test("^actions/cache@"))] | length' "$a")" -eq 0 ] \
+    || fail "maestro uses actions/cache, which saves whatever the caller asked"
+  restore_key=$(yq -r '.runs.steps[] | select((.uses // "") | test("^actions/cache/restore@")) | .with.key' "$a")
+  save=$(yq -r '.runs.steps[] | select((.uses // "") | test("^actions/cache/save@"))' "$a")
+  [ -n "$restore_key" ] && [ -n "$save" ] || fail "maestro no longer restores and saves its cache in separate steps"
+  [ "$(printf '%s' "$save" | yq -r '.with.key')" = "$restore_key" ] || fail "maestro saves under a different key than it restores"
+  contains "$(printf '%s' "$save" | yq -r '.if')" "inputs.save-cache == 'true'" || fail "maestro's save is not gated on save-cache"
+  contains "$(printf '%s' "$save" | yq -r '.if')" "cache-hit != 'true'" || fail "maestro's save runs on an exact hit too"
+}

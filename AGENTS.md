@@ -31,7 +31,7 @@ scripts/release/    version and store notes resolution, fastlane invocation, rel
                     the release PR's dispatches (dispatch-release-pr-ci, dispatch-at-tag)
 scripts/security/   check-security.yml: one scanner runner per job and their lib/runner.sh,
                     scan.sh (every job, then the verdict), and the CI bridges
-                    (settings, run-job, verdict, label-sarif, binaries-fetch)
+                    (settings, artifact-prefix, run-job, verdict, label-sarif, binaries-fetch)
 scripts/setup/      a consumer's machine setup (toolchain, android, ios, all), pins in lib/versions.sh
                     (generated from packages/app-tooling/versions.json)
 scripts/web/        web export, Playwright install and run

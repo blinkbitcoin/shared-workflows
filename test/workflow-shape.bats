@@ -1166,6 +1166,34 @@ signing_pin_offenders() {
   [ "$found" -ge 2 ] || fail "expected the setup-gradle steps of build-android.yml and test-e2e.yml, found $found"
 }
 
+@test "test-e2e.yml saves its caches only on the default branch" {
+  command -v yq >/dev/null || skip "yq not installed"
+  # A branch's saves land in that branch's own cache scope, which the default
+  # branch never reads, but they count against the same 10 GB. The release
+  # PR's CI saved the iOS app, Pods and a pnpm store there on every push to
+  # main, and pushed the default branch's own iOS app out. Restores still read
+  # the default branch's entries from any branch.
+  f="$REPO_ROOT/.github/workflows/test-e2e.yml"
+  gate='github.ref == inputs.default-branch'
+  combined=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^actions/cache@")) | .name] | join(", ")' "$f")
+  [ -z "$combined" ] || fail "test-e2e.yml uses actions/cache, which saves on any branch: $combined"
+  saves=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("^actions/cache/save@"))] | length' "$f")
+  [ "$saves" -ge 5 ] || fail "expected the five saves (iOS app, Pods, APK, system image, AVD), found $saves"
+  ungated=$(yq -r "[.jobs[].steps[]? | select((.uses // \"\") | test(\"^actions/cache/save@\")) | select(((.if // \"\") | contains(\"$gate\")) | not) | .name] | join(\", \")" "$f")
+  [ -z "$ungated" ] || fail "test-e2e.yml saves without checking the default branch: $ungated"
+  # Every save writes a key some restore in the same job reads.
+  for j in $(yq -r '.jobs | keys | .[]' "$f"); do
+    for k in $(yq -r ".jobs.\"$j\".steps[]? | select((.uses // \"\") | test(\"^actions/cache/save@\")) | .with.key" "$f" | tr -d ' '); do
+      yq -r ".jobs.\"$j\".steps[]? | select((.uses // \"\") | test(\"^actions/cache/restore@\")) | .with.key" "$f" | tr -d ' ' | grep -qxF "$k" \
+        || fail "test-e2e.yml job $j saves $k, which no restore in that job reads"
+    done
+  done
+  maestro=$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("/actions/maestro$"))] | length' "$f")
+  [ "$maestro" -ge 2 ] || fail "expected the ios and android jobs' maestro steps, found $maestro"
+  wrong=$(yq -r "[.jobs[].steps[]? | select((.uses // \"\") | test(\"/actions/maestro\$\")) | select(.with.\"save-cache\" != \"\${{ $gate }}\") | .name] | join(\", \")" "$f")
+  [ -z "$wrong" ] || fail "test-e2e.yml's maestro steps do not pass save-cache: \${{ $gate }}: $wrong"
+}
+
 @test "the iOS and Android artifact uploads in test-e2e.yml guard on the build the same way" {
   require_cmd yq
   # The Android upload ran under always() with if-no-files-found: error, so a
@@ -1479,9 +1507,13 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
 @test "each scanner's SARIF travels under its own artifact name and its own filename" {
   require_cmd yq
   f="$REPO_ROOT/.github/workflows/check-security.yml"
-  names="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.name | select(test("^security-sarif-"))] | join("\n")' "$f")"
+  stem='${{ needs.settings.outputs.artifact-prefix }}'
+  names="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.name | select(test("security-sarif-"))] | join("\n")' "$f")"
   [ "$(grep -c . <<<"$names")" -eq 9 ] || fail "expected nine SARIF uploads, got: $names"
   [ "$(sort -u <<<"$names" | grep -c .)" -eq 9 ] || fail "two scanner jobs upload under one artifact name: $names"
+  for job in $SECURITY_JOBS; do
+    grep -qxF "${stem}security-sarif-$job" <<<"$names" || fail "the $job SARIF is not uploaded as ${stem}security-sarif-$job: $names"
+  done
   paths="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.path] | join("\n")' "$f")"
   for job in $SECURITY_JOBS; do
     contains "$paths" "/.security/$job.sarif" || fail "no upload of $job.sarif: $paths"
@@ -1489,14 +1521,74 @@ SECURITY_JOBS="dependencies code policy sbom bundle mobile binaries review revie
   # The bill of materials is for people, not for the verdict: its own artifact,
   # kept long enough to answer a later advisory, and outside the security-sarif-*
   # pattern the verdict downloads.
-  [ "$(yq -r '.jobs.sbom.steps[] | select(.with.name == "security-sbom") | .with.path' "$f")" \
-    = '${{ inputs.working-directory }}/.security/sbom.cdx.json' ] || fail "the sbom job does not keep sbom.cdx.json"
-  [ "$(yq -r '.jobs.sbom.steps[] | select(.with.name == "security-sbom") | .with."retention-days"' "$f")" -ge 90 ] \
+  sbom="${stem}security-sbom"
+  [ "$(yq -r ".jobs.sbom.steps[] | select(.with.name == \"$sbom\") | .with.path" "$f")" \
+    = '${{ inputs.working-directory }}/.security/sbom.cdx.json' ] || fail "the sbom job does not keep sbom.cdx.json as $sbom"
+  [ "$(yq -r ".jobs.sbom.steps[] | select(.with.name == \"$sbom\") | .with.\"retention-days\"" "$f")" -ge 90 ] \
     || fail "the bill of materials is not kept for at least 90 days"
   pattern="$(yq -r '.jobs.verdict.steps[] | select(.name == "Download scanner SARIF") | .with.pattern' "$f")"
-  [ "$pattern" = 'security-sarif-*' ] || fail "the verdict downloads '$pattern', which would pull in the bill of materials" 
+  [ "$pattern" = "${stem}security-sarif-*" ] \
+    || fail "the verdict downloads '$pattern', which would pull in the bill of materials or another call's SARIF"
   merge="$(yq -r '[.jobs.verdict.steps[] | select((.uses // "") | test("download-artifact"))][0].with."merge-multiple"' "$f")"
   [ "$merge" = "true" ] || fail "the verdict does not merge the scanner artifacts into one directory: $merge"
+}
+
+# Two calls in one workflow run share one artifact namespace. The prefix keeps
+# them apart: an input, empty by default so an existing caller's names do not
+# move, checked by artifact-prefix.sh in the Settings job before the settings
+# are resolved (a refused prefix leaves `enabled` empty, so every scanner skips
+# and the verdict output reads fail), and then leading every artifact name, the
+# verdict's download pattern and the code scanning category.
+@test "check-security.yml takes artifact-prefix, empty by default, checked before the settings resolve" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  [ "$(yq -r '.on.workflow_call.inputs."artifact-prefix".type' "$f")" = "string" ] || fail "artifact-prefix is not a string input"
+  [ "$(yq -r '.on.workflow_call.inputs."artifact-prefix" | has("default")' "$f")" = "true" ] \
+    || fail "artifact-prefix has no explicit default"
+  [ "$(yq -r '.on.workflow_call.inputs."artifact-prefix".default' "$f")" = "" ] \
+    || fail "artifact-prefix does not default to empty, which renames every existing caller's artifacts"
+  step() { yq -r ".jobs.settings.steps[] | select(.id == \"artifact-prefix\") | $1" "$f"; }
+  [ "$(step '.run')" = 'bash ".workflows/scripts/security/artifact-prefix.sh" "$ARTIFACT_PREFIX"' ] \
+    || fail "the Settings job does not check the prefix with artifact-prefix.sh: $(step '.run')"
+  [ "$(step '.env.ARTIFACT_PREFIX')" = '${{ inputs.artifact-prefix }}' ] \
+    || fail "the input reaches the script other than through ARTIFACT_PREFIX: $(step '.env.ARTIFACT_PREFIX')"
+  [ "$(yq -r '.jobs.settings.outputs."artifact-prefix"' "$f")" = '${{ steps.artifact-prefix.outputs.artifact-prefix }}' ] \
+    || fail "the Settings job does not publish the checked prefix"
+  ids="$(yq -r '[.jobs.settings.steps[] | (.id // .name)] | join(",")' "$f")"
+  [[ "$ids" == *"artifact-prefix"*"resolve"* ]] \
+    || fail "the prefix is checked after the settings resolve, so a refused prefix still writes enabled: $ids"
+  # Nothing reads the raw input but that one step: everything else takes the
+  # checked stem from the Settings job.
+  raw="$(grep -cF 'inputs.artifact-prefix' "$f")"
+  [ "$raw" -eq 1 ] || fail "inputs.artifact-prefix is read on $raw lines; every use goes through needs.settings.outputs.artifact-prefix"
+  category="$(yq -r '.jobs.verdict.steps[] | select((.uses // "") | test("upload-sarif")) | .with.category' "$f")"
+  [ "$category" = '${{ needs.settings.outputs.artifact-prefix }}security' ] \
+    || fail "the code scanning category is '$category'; two calls under one category replace each other's alerts"
+}
+
+# Every upload-artifact step, the scanners' and the bill of materials', starts
+# its name with the prefix and overwrites: a re-run of a failed job replaces
+# what its first attempt uploaded instead of failing on the name. The one
+# download is anchored to the prefix the same way.
+@test "every upload-artifact in check-security.yml is named after the prefix and overwrites, and the download is anchored to it" {
+  command -v yq >/dev/null || skip "yq not installed"
+  f="$REPO_ROOT/.github/workflows/check-security.yml"
+  uploads="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact"))] | length' "$f")"
+  [ "$uploads" -eq 10 ] || fail "expected ten artifact uploads (nine SARIF, one bill of materials), found $uploads"
+  names="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | .with.name] | join("\n")' "$f")"
+  while IFS= read -r name; do
+    [[ "$name" == '${{ needs.settings.outputs.artifact-prefix }}security-'* ]] \
+      || fail "the upload '$name' is not named after artifact-prefix"
+  done <<<"$names"
+  bad="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("upload-artifact")) | select(.with.overwrite != true) | .with.name] | join(",")' "$f")"
+  [ -z "$bad" ] || fail "uploads without overwrite: true, which fail on a re-run: $bad"
+  uploaders="$(yq -r '.jobs | to_entries[] | select([.value.steps[]? | select((.uses // "") | test("upload-artifact"))] | length > 0) | .key' "$f")"
+  for job in $uploaders; do
+    [ "$(yq -r ".jobs.\"$job\".needs" "$f")" = "settings" ] || fail "the $job job uploads but does not need settings, where the prefix comes from"
+  done
+  downloads="$(yq -r '[.jobs[].steps[]? | select((.uses // "") | test("download-artifact")) | (.with.pattern // .with.name)] | join(",")' "$f")"
+  [ "$downloads" = '${{ needs.settings.outputs.artifact-prefix }}security-sarif-*' ] \
+    || fail "a download in check-security.yml is not anchored to the prefix: $downloads"
 }
 
 # The provider keys are the only secrets here besides the consumer token, and

@@ -40,13 +40,13 @@ waits on a dependency install. It folds together:
 
 | Cache | Key | Produced by | Used in |
 | --- | --- | --- | --- |
-| iOS app (`.app` + `ios/*.xcworkspace`) | `ios-app-{ver}-{os}-{arch}-xcode{x}-{hash}[-env{8hex}]-{configuration}` (exact; `{x}` is the `xcode-version` input or `default`; `-env{8hex}` is a digest of `environment-variables` and is absent when that input is empty, because the `.app` embeds `EXPO_PUBLIC_*` at bundle time; `test-e2e.yml` appends `ios-configuration`) | `native-key` action → `scripts/ci/native-keys.sh` (`ios-key` output) | `test-e2e.yml` job `build-ios`, `actions/cache/restore@v6` + `actions/cache/save@v6` |
-| Android debug APK | `android-apk-{ver}-{hash}` (exact) | `native-key` action → `scripts/ci/native-keys.sh` (`android-key` output) | `test-e2e.yml` job `build-android`, restore + save |
-| CocoaPods (`ios/Pods`, `~/Library/Caches/CocoaPods`) | `pods-{ver}-{os}-xcode{xcode}-{hash}`, restore-keys prefix `pods-{ver}-{os}-xcode{xcode}-` | `native-key` action → `scripts/ci/native-keys.sh` (`pods-key` and `pods-restore-key` outputs) | `test-e2e.yml` job `build-ios` and `build-ios.yml` job `build`, `actions/cache@v6` (a prefix hit is fine: `pod install` reconciles) |
+| iOS app (`.app` + `ios/*.xcworkspace`) | `ios-app-{ver}-{os}-{arch}-xcode{x}-{hash}[-env{8hex}]-{configuration}` (exact; `{x}` is the `xcode-version` input or `default`; `-env{8hex}` is a digest of `environment-variables` and is absent when that input is empty, because the `.app` embeds `EXPO_PUBLIC_*` at bundle time; `test-e2e.yml` appends `ios-configuration`) | `native-key` action → `scripts/ci/native-keys.sh` (`ios-key` output) | `test-e2e.yml` job `build-ios`, `actions/cache/restore@v6` + `actions/cache/save@v6`; saved on the default branch only |
+| Android debug APK | `android-apk-{ver}-{hash}` (exact) | `native-key` action → `scripts/ci/native-keys.sh` (`android-key` output) | `test-e2e.yml` job `build-android`, restore + save; saved on the default branch only |
+| CocoaPods (`ios/Pods`, `~/Library/Caches/CocoaPods`) | `pods-{ver}-{os}-xcode{xcode}-{hash}`, restore-keys prefix `pods-{ver}-{os}-xcode{xcode}-` | `native-key` action → `scripts/ci/native-keys.sh` (`pods-key` and `pods-restore-key` outputs) | `test-e2e.yml` job `build-ios` (restore, then save on the default branch only) and `build-ios.yml` job `build` (`actions/cache@v6`); a prefix hit is fine: `pod install` reconciles |
 | pnpm store | `pnpm-{os}-{sha256 of the consumer's own pnpm-lock.yaml}` (`none` without one), restore-keys prefix `pnpm-{os}-` | `setup` action (path and `lock-hash` from `scripts/ci/pnpm-store-path.sh`) | every workflow that runs `setup` with `install: 'true'`; a job that does not install neither restores nor saves it |
-| Maestro CLI (`~/.maestro`, excluding `tests/` and `logs/`) | `maestro-{os}-{version}-v2` | `maestro` action (version = its `version` input, pinned to `MAESTRO_VERSION`) | `test-e2e.yml` jobs `ios`, `android` |
-| Android system image | `sysimg-{ver}-{api}-default-x86_64` | `test-e2e.yml` job `android` (`{api}` = `android-api-level`) | `actions/cache@v6` over `$ANDROID_SDK_DIR/system-images/android-{api}` |
-| AVD + adb keys | `avd-{ver}-{api}-x86_64-default-hidedialogs` | `test-e2e.yml` job `android` | `actions/cache@v6` over `~/.android/avd/*`, `~/.android/adb*`; a miss bakes a snapshot via `scripts/e2e/android-emulator.sh snapshot-bake` |
+| Maestro CLI (`~/.maestro`, excluding `tests/` and `logs/`) | `maestro-{os}-{version}-v2` | `maestro` action (version = its `version` input, pinned to `MAESTRO_VERSION`) | `test-e2e.yml` jobs `ios`, `android`; the action's `save-cache` input, which `test-e2e.yml` sets to save on the default branch only |
+| Android system image | `sysimg-{ver}-{api}-default-x86_64` | `test-e2e.yml` job `android` (`{api}` = `android-api-level`) | restore + save over `$ANDROID_SDK_DIR/system-images/android-{api}`; saved on the default branch only |
+| AVD + adb keys | `avd-{ver}-{api}-x86_64-default-hidedialogs` | `test-e2e.yml` job `android` | restore + save over `~/.android/avd/*`, `~/.android/adb*`, saved on the default branch only; a miss bakes a snapshot via `scripts/e2e/android-emulator.sh snapshot-bake` |
 | Playwright browsers | `playwright-{os}-{pwversion}` | `build-web.yml` job `e2e` (version from `scripts/web/playwright-cache-key.sh`, which wraps `scripts/web/playwright-version.sh`) | `build-web.yml` e2e job |
 | Gradle | managed by `gradle/actions/setup-gradle`, transforms excluded (`gradle-home-cache-excludes`, see below) | that action | `test-e2e.yml` job `build-android` and `build-android.yml`; only the `default-branch` ref writes it, every other ref reads it |
 | mise tools | managed by `jdx/mise-action` (`cache: true`) | that action | `setup` and `native-key` actions |
@@ -94,3 +94,13 @@ Notes:
   `cache-cleanup: never` was tried too: it stopped the dependencies entry from
   being saved again but not the transforms, and kept every file it had ever
   restored.
+- `test-e2e.yml` saves its caches only on the default branch (`github.ref ==
+  inputs.default-branch`, the rule the Gradle cache already followed); every
+  branch still restores from them. GitHub keeps a branch's entries in that
+  branch's own scope, which the default branch never reads, inside the same
+  10 GB per repository. The template's release PR CI, dispatched on every push
+  to main, saved the iOS app, CocoaPods and a pnpm store there each time (0.7
+  to 1.4 GB a run), and `pr-closed.yml` does not delete a branch's caches, so
+  they pushed the default branch's own iOS app out. A PR that changes native
+  code now rebuilds it on each of its pushes. The `setup` action's caches
+  (mise, Ruby gems, the pnpm store) still save on every branch.

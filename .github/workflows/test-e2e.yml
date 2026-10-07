@@ -261,9 +261,10 @@ jobs:
       - name: Prebuild (ios)
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
         run: bash "$WORKFLOWS_DIR/scripts/native/prebuild.sh" ios
-      - name: Cache CocoaPods
+      - name: Restore CocoaPods
+        id: pods
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ inputs.working-directory }}/ios/Pods
@@ -280,14 +281,26 @@ jobs:
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
         timeout-minutes: 45
         run: bash "$WORKFLOWS_DIR/scripts/native/ios-build.sh"
+      # Saves only on the default branch: a branch's entries land in that
+      # branch's own cache scope, which the default branch never reads, and
+      # count against the same 10 GB (docs/cache-keys.md). Restores above
+      # still read the default branch's entries from any branch.
       - name: Save iOS app cache
-        if: ${{ steps.restore.outputs.cache-hit != 'true' }}
+        if: ${{ steps.restore.outputs.cache-hit != 'true' && github.ref == inputs.default-branch }}
         uses: actions/cache/save@v6
         with:
           path: |
             ${{ inputs.working-directory }}/ios/build/Build/Products/${{ inputs.ios-configuration }}-iphonesimulator
             ${{ inputs.working-directory }}/ios/*.xcworkspace
           key: ${{ steps.keys.outputs.ios-key }}-${{ inputs.ios-configuration }}
+      - name: Save CocoaPods
+        if: ${{ steps.restore.outputs.cache-hit != 'true' && steps.pods.outputs.cache-hit != 'true' && github.ref == inputs.default-branch }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ inputs.working-directory }}/ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ steps.keys.outputs.pods-key }}
       # Not `always()`: when the build itself failed there is no .app and no
       # workspace, so ios-pack.sh dies and the upload's `if-no-files-found:
       # error` dies after it - two misleading red steps stacked on the real
@@ -360,6 +373,7 @@ jobs:
         uses: ./.workflows/.github/actions/maestro
         with:
           version: ${{ inputs.maestro-version }}
+          save-cache: ${{ github.ref == inputs.default-branch }}
           sha256: ${{ inputs.maestro-sha256 }}
       # A Release build embeds its bundle and never asks Metro for one, so
       # starting it - and prewarming a bundle nothing reads - is pure wall clock.
@@ -492,7 +506,7 @@ jobs:
         if: ${{ steps.restore.outputs.cache-hit != 'true' }}
         run: bash "$WORKFLOWS_DIR/scripts/native/android-build.sh"
       - name: Save APK cache
-        if: ${{ steps.restore.outputs.cache-hit != 'true' }}
+        if: ${{ steps.restore.outputs.cache-hit != 'true' && github.ref == inputs.default-branch }}
         uses: actions/cache/save@v6
         with:
           path: ${{ inputs.working-directory }}/android/app/build/outputs/apk/debug/app-debug.apk
@@ -561,6 +575,7 @@ jobs:
         uses: ./.workflows/.github/actions/maestro
         with:
           version: ${{ inputs.maestro-version }}
+          save-cache: ${{ github.ref == inputs.default-branch }}
           sha256: ${{ inputs.maestro-sha256 }}
       - name: Enable KVM
         run: bash "$WORKFLOWS_DIR/scripts/ci/enable-kvm.sh"
@@ -591,8 +606,9 @@ jobs:
       - name: Install Android emulator package
         timeout-minutes: 15
         run: bash "$WORKFLOWS_DIR/scripts/ci/android-sdk-install.sh" emulator
-      - name: Cache Android system image
-        uses: actions/cache@v6
+      - name: Restore Android system image
+        id: sysimg
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.ANDROID_SDK_DIR || env.ANDROID_SDK_ROOT || env.ANDROID_HOME }}/system-images/android-${{ inputs.android-api-level }}
           # The version comes from the input, not a literal: the input's own
@@ -601,9 +617,9 @@ jobs:
           # With `v1` baked in, someone chasing a stale-AVD failure bumped it,
           # these two caches stayed warm, and the failure survived the fix.
           key: sysimg-${{ inputs.native-cache-version }}-${{ inputs.android-api-level }}-default-x86_64
-      - name: Cache AVD
+      - name: Restore AVD
         id: avd
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.android/avd/*
@@ -637,6 +653,22 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: bash "$WORKFLOWS_DIR/scripts/e2e/android-maestro.sh"
+      # After the suite, on success, where actions/cache's post-job save ran,
+      # and only on the default branch (see the iOS app cache above).
+      - name: Save Android system image
+        if: ${{ steps.sysimg.outputs.cache-hit != 'true' && github.ref == inputs.default-branch }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.ANDROID_SDK_DIR || env.ANDROID_SDK_ROOT || env.ANDROID_HOME }}/system-images/android-${{ inputs.android-api-level }}
+          key: sysimg-${{ inputs.native-cache-version }}-${{ inputs.android-api-level }}-default-x86_64
+      - name: Save AVD
+        if: ${{ steps.avd.outputs.cache-hit != 'true' && github.ref == inputs.default-branch }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ inputs.native-cache-version }}-${{ inputs.android-api-level }}-x86_64-default-hidedialogs
       - name: E2E teardown script
         if: ${{ always() && inputs.e2e-teardown-script != '' }}
         env:
