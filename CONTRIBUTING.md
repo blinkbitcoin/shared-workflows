@@ -317,4 +317,7 @@ component (the workflows and `@blinkbitcoin/app-tooling`), and every push to
 `main` rebuilds each open one on that `main` (`always-update` in
 `release-please-config.json`), so merging one never leaves the other
 conflicting. Each rebuild dismisses an approval: approve a release PR right
-before merging it.
+before merging it. When `@blinkbitcoin/app-tooling` releases, the
+`Publish app-tooling` job in `self-release.yml` runs `make test-package` and
+`make test-fastlane` before `npm publish`: the release PR's CI is the gate, and
+this is the one that still holds when a merge skipped it.

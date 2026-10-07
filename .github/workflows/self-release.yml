@@ -73,13 +73,29 @@ jobs:
     # job summary, so a path spelled wrong here shows up there.
     if: ${{ contains(fromJSON(needs.release-pr.outputs.paths-released || '[]'), 'packages/app-tooling') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The package's suites take about a minute on a warm runner; the rest is
+    # headroom for mise installing the toolchain cold, as self-unit.yml allows.
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: write # publish @blinkbitcoin/app-tooling to GitHub Packages
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+
+      # The release PR's CI already ran these, but a merge that skipped or
+      # bypassed it would otherwise publish code no test has seen. The same
+      # toolchain and targets as self-unit.yml's Package and Ruby jobs: the
+      # node:test suites at 100% coverage (package.test.mjs also holds every
+      # export to the `files` list), then the fastlane lanes the package ships.
+      - name: Set up the toolchain
+        uses: jdx/mise-action@v4
+
+      - name: Test the package
+        run: make test-package
+
+      - name: Test the fastlane lanes the package ships
+        run: make test-fastlane
 
       # registry-url + scope write the .npmrc that routes @blinkbitcoin to
       # GitHub Packages, which is where the org's other @blinkbitcoin packages
