@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.11.0...app-tooling-v0.12.0) (2026-10-08)
+
+
+### Features
+
+* **app-tooling:** run msw 3 under the Expo Jest preset ([#253](https://github.com/blinkbitcoin/shared-workflows/issues/253)) ([0c692f9](https://github.com/blinkbitcoin/shared-workflows/commit/0c692f9cc1b9c234920f5b70cdc4f83e8244d225))
+
 ## [0.11.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.10.0...app-tooling-v0.11.0) (2026-10-08)
 
 
