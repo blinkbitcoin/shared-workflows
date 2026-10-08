@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.11.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.10.0...app-tooling-v0.11.0) (2026-10-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **app-tooling:** these subpaths are no longer importable; run each as the program of the same name instead: check-tool-versions, check-contract, check-docs-tables, check-diagrams, check-shell-locale, check-make-target-names, check-workflow-names, check-coverage-empty, check-lockfile, fix-tooling-pin, check-make-recipes, gen-badges, gen-coverage-badge, gen-status-badge, gen-store-notes, check-test-siblings, check-ignored-directories, check-docs, check-licenses, check-skills, check-release, install-gems, test-app, check-code-scanning, resolve-code-scanning-config, check-security, doctor, serve-dist, build-web, check-prebuild, test-scripts and help. check-ports exports only main, and llm no longer exports ADAPTERS.
+
+### Features
+
+* **app-tooling:** --help on every program ([#220](https://github.com/blinkbitcoin/shared-workflows/issues/220)) ([7ae0b62](https://github.com/blinkbitcoin/shared-workflows/commit/7ae0b62f23e9c840a0c8e1b0a3d4ad0d4df24de1))
+* **app-tooling:** trace-run shows where a GitHub Actions run spent its time ([#245](https://github.com/blinkbitcoin/shared-workflows/issues/245)) ([12377f6](https://github.com/blinkbitcoin/shared-workflows/commit/12377f6acf22e10892fad77a603e767043baeb90))
+* **lib:** time every grouped phase in the scripts, in the log and the job summary ([#243](https://github.com/blinkbitcoin/shared-workflows/issues/243)) ([374b128](https://github.com/blinkbitcoin/shared-workflows/commit/374b1285cf5f333ec5d2c8570dffec761de6ab99))
+* **workflows:** let check-security run twice in one workflow run ([#217](https://github.com/blinkbitcoin/shared-workflows/issues/217)) ([c4473bb](https://github.com/blinkbitcoin/shared-workflows/commit/c4473bb9837cf8d2aa35efc4203abb288c13f964))
+
+
+### Bug Fixes
+
+* **app-tooling:** ship LICENSE and CHANGELOG in the package ([#218](https://github.com/blinkbitcoin/shared-workflows/issues/218)) ([d97d84f](https://github.com/blinkbitcoin/shared-workflows/commit/d97d84ffea4c149b4724f6a5d31f357c8b2adaf6))
+* close review batch 1 gaps in env validation, the contract check, caches and slow tests ([#212](https://github.com/blinkbitcoin/shared-workflows/issues/212)) ([c9be4d5](https://github.com/blinkbitcoin/shared-workflows/commit/c9be4d5ef89d53409190d5d1075247bf824d7395))
+* **e2e:** never nap longer than a second in the Maestro watchdog ([#248](https://github.com/blinkbitcoin/shared-workflows/issues/248)) ([debe6ec](https://github.com/blinkbitcoin/shared-workflows/commit/debe6ece2d3108e4d881fe6f06e8ba1cb4d3e48a))
+* **release:** take first matches without piping into head -1 ([#235](https://github.com/blinkbitcoin/shared-workflows/issues/235)) ([b1399eb](https://github.com/blinkbitcoin/shared-workflows/commit/b1399eb32c3bd805f1206bd8131335ba225ef46b))
+* stop failures reading as success, and share the helpers scripts rewrote ([#227](https://github.com/blinkbitcoin/shared-workflows/issues/227)) ([90a465a](https://github.com/blinkbitcoin/shared-workflows/commit/90a465a4f6b52b3316985344a34b5560f9d50763))
+
+
+### Refactoring
+
+* **app-tooling:** narrow what program subpaths export ([#223](https://github.com/blinkbitcoin/shared-workflows/issues/223)) ([3f7716d](https://github.com/blinkbitcoin/shared-workflows/commit/3f7716db86f62043087c61a429cc4354a991ea9a))
+
 ## [0.10.0](https://github.com/blinkbitcoin/shared-workflows/compare/app-tooling-v0.9.1...app-tooling-v0.10.0) (2026-10-03)
 
 
