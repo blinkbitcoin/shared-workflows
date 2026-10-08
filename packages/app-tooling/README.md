@@ -578,7 +578,7 @@ scope list.
 
 | Import | What it gives | The app keeps |
 | --- | --- | --- |
-| `@blinkbitcoin/app-tooling/expo/jest` | `createJestConfig(options)`: the app and plugins projects, the ignored directories,<br>transforms, the console guard, the Expo stand-ins, 100% thresholds, `json-summary` | setup files, aliases, generated and zero-statement paths |
+| `@blinkbitcoin/app-tooling/expo/jest` | `createJestConfig(options)`: the app and plugins projects, the ignored directories,<br>transforms, the console guard, the Expo stand-ins, what msw 3 needs, 100% thresholds, `json-summary` | setup files, aliases, generated and zero-statement paths |
 | `@blinkbitcoin/app-tooling/expo/jest/console` | `allowConsole`, and the recorder behind the silent-tests guard | nothing |
 | `@blinkbitcoin/app-tooling/expo/jest/mocks/*` | stand-ins for `expo-secure-store`, `expo-sqlite/kv-store`, `expo-updates`,<br>mapped by the Jest preset | nothing |
 | `@blinkbitcoin/app-tooling/expo/eslint` | `createEslintConfig(options)`: generic ignores, Expo's preset, every rule Biome owns<br>switched off, Node globals | generated paths, extra Node files |
@@ -607,8 +607,11 @@ installs the ones for the presets it uses and pnpm links them to this package;
 a repository that uses none of the presets installs none of them. Two presets
 import a peer themselves (ESLint's imports `eslint/config`,
 `eslint-config-expo` and `globals`; commitlint's base extends
-`@commitlint/config-conventional`); the rest are plain data or take what the
-app passes in. The lower bounds are a real floor where one exists (`eslint`
+`@commitlint/config-conventional`); Jest's reads two packages as the app has
+them installed, from the working directory, and needs neither (jest-expo's
+script transform, which it extends with one Babel plugin, and the layout of
+msw's interceptors, which says whether msw 3's `fetch` needs mapping); the
+rest are plain data or take what the app passes in. The lower bounds are a real floor where one exists (`eslint`
 9.22 for `eslint/config`, TypeScript 5.0 for an `extends` array, lefthook 2.0
 for the hooks file) and otherwise the version the template runs today.
 

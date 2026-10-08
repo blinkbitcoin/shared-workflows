@@ -3439,6 +3439,24 @@ leaves the guard out, for an adopting repository whose suites are not silent
 yet; `transformPackages` and `testPathIgnorePatterns` extend the generic lists,
 and `collectCoverageFrom` replaces the generic one.
 
+The preset runs msw 2 and msw 3 alike, with no change to the app's file. msw 3
+breaks under jest-expo in four places, and the app project carries a fix for
+each:
+
+| msw 3 under jest-expo | What the preset does |
+| --- | --- |
+| Its CommonJS build requires `@msw/url`, which ships only ES modules: "Must use import to load ES Module" | `@msw/.*` is in `TRANSFORM_PACKAGES` |
+| Its interceptors find a WebAssembly parser with `new URL("./llhttp/llhttp.wasm", import.meta.url)`, and babel-preset-expo turns `import.meta.url` into the bundle's URL, empty under Jest: "Invalid URL" | jest-expo's `.[jt]sx?` transform, its options read from the app's jest-expo and kept, gains a Babel plugin (`expo/jest/import-meta-url.cjs`) that makes `import.meta.url` in a file under `node_modules` that file's own URL. The app's code keeps babel-preset-expo's rewrite |
+| Its Node `fetch` interceptor intercepts at the socket instead of replacing `globalThis.fetch`, and jest-expo's `fetch` is Expo's, which opens no socket: no request reaches msw, and Expo fails with "Unsupported BodyInit type" | `moduleNameMapper` maps `@mswjs/interceptors/fetch` to the interceptor's browser build, which replaces `fetch` as msw 2 did. Only when the installed msw is 3's: there is no mapping under msw 2 or without msw. The app's own `moduleNameMapper` comes after it, so the same key overrides it |
+| It finishes each request by emitting its response event from a `queueMicrotask` callback, which Jest's fake timers fake, and expo-router's `renderRouter` turns fake timers on: `response:mocked` never fires, every request after the first waits for ever, and a screen test stays on its loading state | `fakeTimers: { doNotFake: ['queueMicrotask'] }` |
+
+The last one changes what fake timers fake for every app, msw or not: Jest
+applies the project's `fakeTimers` to a bare `jest.useFakeTimers()` as well, so
+a `queueMicrotask` callback is never held back for `jest.runAllTicks()` or
+`jest.advanceTimersByTime()`; it runs when the current task ends, as it does
+outside a test. jest-expo and msw are read from the working directory, where
+Jest and jest-expo run; `appRoot` names another directory.
+
 ### ESLint
 
 ```js
