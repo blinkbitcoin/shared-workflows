@@ -38,7 +38,7 @@ runs:
         RUBY_ENABLED: ${{ inputs.ruby-enabled }}
       run: bash "${{ github.action_path }}/../../../scripts/ci/mise-skip-tools.sh"
     - name: Install mise-managed tools
-      uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
       with:
         working_directory: ${{ inputs.working-directory }}
         cache: true
@@ -56,7 +56,7 @@ runs:
       run: bash "${{ github.action_path }}/../../../scripts/ci/ruby-version.sh"
     - name: Install Ruby
       if: inputs.ruby-enabled == 'true'
-      uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+      uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
       with:
         ruby-version: ${{ steps.rb.outputs.version }}
         bundler-cache: true
